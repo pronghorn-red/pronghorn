@@ -2,10 +2,11 @@ import { useState } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectCard } from "@/components/dashboard/ProjectCard";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
-import { Button } from "@/components/ui/button";
+import { CreateProjectDialog } from "@/components/dashboard/CreateProjectDialog";
 import { Input } from "@/components/ui/input";
-import { Plus, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 // Mock data
 const mockProjects = [
@@ -85,6 +86,12 @@ export default function Dashboard() {
     navigate(`/project/${projectId}/canvas`);
   };
 
+  const handleCreateProject = (data: { name: string; description: string; file?: File }) => {
+    // TODO: Implement actual project creation with Supabase
+    toast.success("Project created successfully!");
+    console.log("Creating project:", data);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
@@ -98,10 +105,7 @@ export default function Dashboard() {
               Manage and monitor your application development projects
             </p>
           </div>
-          <Button size="lg" className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create New Project
-          </Button>
+          <CreateProjectDialog onCreateProject={handleCreateProject} />
         </div>
 
         {/* Search */}
