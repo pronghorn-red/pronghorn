@@ -12,29 +12,71 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Upload } from "lucide-react";
+import { Plus, Upload, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
-interface CreateProjectDialogProps {
-  onCreateProject?: (data: { name: string; description: string; file?: File }) => void;
-}
-
-export function CreateProjectDialog({ onCreateProject }: CreateProjectDialogProps) {
+export function CreateProjectDialog() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
-  const handleSubmit = () => {
-    if (name.trim()) {
-      onCreateProject?.({
-        name: name.trim(),
-        description: description.trim(),
-        file: file || undefined,
-      });
+  const handleSubmit = async () => {
+    if (!name.trim()) {
+      toast.error("Project name is required");
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      // Get or create default organization
+      let { data: orgs } = await supabase.from('organizations').select('id').limit(1);
+      
+      let orgId: string;
+      if (!orgs || orgs.length === 0) {
+        const { data: newOrg, error: orgError } = await supabase
+          .from('organizations')
+          .insert({ name: 'Default Organization' })
+          .select('id')
+          .single();
+        
+        if (orgError) throw orgError;
+        orgId = newOrg.id;
+      } else {
+        orgId = orgs[0].id;
+      }
+
+      const { data: project, error } = await supabase
+        .from('projects')
+        .insert({
+          name: name.trim(),
+          description: description.trim() || null,
+          org_id: orgId,
+          status: 'DESIGN'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success("Project created successfully!");
       setOpen(false);
       setName("");
       setDescription("");
       setFile(null);
+      
+      // Navigate to the new project
+      navigate(`/project/${project.id}/canvas`);
+    } catch (error) {
+      console.error("Error creating project:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to create project");
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -111,11 +153,18 @@ export function CreateProjectDialog({ onCreateProject }: CreateProjectDialogProp
         </div>
         
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={isCreating}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={!name.trim()}>
-            Create Project
+          <Button onClick={handleSubmit} disabled={!name.trim() || isCreating}>
+            {isCreating ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              "Create Project"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
