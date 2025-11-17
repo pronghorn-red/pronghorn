@@ -2,13 +2,11 @@ import { useState, useEffect } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { Standard } from "@/components/standards/StandardsTree";
 import { CategoryCard } from "@/components/standards/CategoryCard";
-import { ManageCategoriesDialog } from "@/components/standards/ManageCategoriesDialog";
-import { ManageTechStacksDialog } from "@/components/standards/ManageTechStacksDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, FolderCog, Layers, LogOut, Plus } from "lucide-react";
+import { Search, LogOut, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdmin } from "@/contexts/AdminContext";
 import { toast } from "sonner";
@@ -18,8 +16,6 @@ export default function Standards() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categories, setCategories] = useState<any[]>([]);
   const [standardsByCategory, setStandardsByCategory] = useState<Record<string, Standard[]>>({});
-  const [showManageCategories, setShowManageCategories] = useState(false);
-  const [showManageTechStacks, setShowManageTechStacks] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 
   useEffect(() => {
@@ -143,35 +139,27 @@ export default function Standards() {
     }
   };
 
-  const handleManageCategories = async () => {
-    if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required to manage categories");
-        return;
-      }
+  const filteredCategories = categories.filter((cat) => {
+    const searchLower = searchQuery.toLowerCase();
+    
+    // Check if category name matches
+    if (cat.name.toLowerCase().includes(searchLower)) {
+      return true;
     }
-    setShowManageCategories(true);
-  };
-
-  const handleManageTechStacks = async () => {
-    if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required to manage tech stacks");
-        return;
-      }
-    }
-    setShowManageTechStacks(true);
-  };
-
-  const filteredCategories = categories.filter((cat) =>
-    cat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (standardsByCategory[cat.id] || []).some((s) =>
-      s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.code.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  );
+    
+    // Check if any standards in this category match (including nested standards)
+    const categoryStandards = standardsByCategory[cat.id] || [];
+    const hasMatchingStandard = (standards: Standard[]): boolean => {
+      return standards.some(s => 
+        s.title.toLowerCase().includes(searchLower) ||
+        s.code.toLowerCase().includes(searchLower) ||
+        (s.description && s.description.toLowerCase().includes(searchLower)) ||
+        (s.children && hasMatchingStandard(s.children))
+      );
+    };
+    
+    return hasMatchingStandard(categoryStandards);
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -187,20 +175,10 @@ export default function Standards() {
             </div>
             <div className="flex items-center gap-2">
               {isAdmin && (
-                <>
-                  <Button onClick={handleManageTechStacks} variant="outline" size="sm">
-                    <Layers className="h-4 w-4 mr-2" />
-                    Manage Tech Stacks
-                  </Button>
-                  <Button onClick={handleManageCategories} variant="outline" size="sm">
-                    <FolderCog className="h-4 w-4 mr-2" />
-                    Manage Categories
-                  </Button>
-                  <Button onClick={logout} variant="outline" size="sm">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Exit Admin Mode
-                  </Button>
-                </>
+                <Button onClick={logout} variant="outline" size="sm">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Exit Admin Mode
+                </Button>
               )}
             </div>
           </div>
@@ -255,10 +233,6 @@ export default function Standards() {
           })}
         </div>
       </div>
-
-      {/* Dialogs */}
-      <ManageCategoriesDialog open={showManageCategories} onClose={() => { setShowManageCategories(false); loadCategories(); }} />
-      <ManageTechStacksDialog open={showManageTechStacks} onClose={() => { setShowManageTechStacks(false); }} />
     </div>
   );
 }
