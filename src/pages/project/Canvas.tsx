@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useMemo } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { NodePalette, NodeType } from "@/components/canvas/NodePalette";
@@ -50,12 +50,22 @@ const initialEdges: Edge[] = [
   { id: "e2-3", source: "2", target: "3", label: "queries" },
 ];
 
+// All node types that can be visible
+const ALL_NODE_TYPES: NodeType[] = [
+  "PROJECT", "PAGE", "COMPONENT", "API", "DATABASE", 
+  "SERVICE", "WEBHOOK", "FIREWALL", "SECURITY", 
+  "REQUIREMENT", "STANDARD", "TECH_STACK"
+];
+
 function CanvasFlow() {
   const { projectId } = useParams<{ projectId: string }>();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [showProperties, setShowProperties] = useState(false);
+  const [visibleNodeTypes, setVisibleNodeTypes] = useState<Set<NodeType>>(
+    new Set(ALL_NODE_TYPES)
+  );
 
   const {
     nodes,
@@ -67,6 +77,30 @@ function CanvasFlow() {
     saveNode,
     saveEdge,
   } = useRealtimeCanvas(projectId!, initialNodes, initialEdges);
+
+  // Filter nodes and edges based on visibility
+  const visibleNodes = useMemo(() => {
+    return nodes.filter((node) => visibleNodeTypes.has(node.data.type));
+  }, [nodes, visibleNodeTypes]);
+
+  const visibleEdges = useMemo(() => {
+    const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
+    return edges.filter(
+      (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
+    );
+  }, [edges, visibleNodes]);
+
+  const handleToggleVisibility = useCallback((type: NodeType) => {
+    setVisibleNodeTypes((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(type)) {
+        newSet.delete(type);
+      } else {
+        newSet.add(type);
+      }
+      return newSet;
+    });
+  }, []);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -157,12 +191,15 @@ function CanvasFlow() {
         <ProjectSidebar projectId={projectId!} />
         
         <div className="flex flex-1">
-          <NodePalette />
+          <NodePalette 
+            visibleNodeTypes={visibleNodeTypes}
+            onToggleVisibility={handleToggleVisibility}
+          />
           
           <div className="flex-1 relative" ref={reactFlowWrapper}>
             <ReactFlow
-              nodes={nodes}
-              edges={edges}
+              nodes={visibleNodes}
+              edges={visibleEdges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}

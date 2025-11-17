@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { 
   Box, 
   Database, 
@@ -11,7 +12,9 @@ import {
   ListChecks, 
   Code,
   FolderKanban,
-  FileCode
+  FileCode,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 export type NodeType = 
@@ -45,9 +48,11 @@ const nodeTypes = [
 
 interface NodePaletteProps {
   onDragStart?: (type: NodeType) => void;
+  visibleNodeTypes: Set<NodeType>;
+  onToggleVisibility: (type: NodeType) => void;
 }
 
-export function NodePalette({ onDragStart }: NodePaletteProps) {
+export function NodePalette({ onDragStart, visibleNodeTypes, onToggleVisibility }: NodePaletteProps) {
   const handleDragStart = (e: React.DragEvent, type: NodeType) => {
     e.dataTransfer.setData("application/reactflow", type);
     e.dataTransfer.effectAllowed = "move";
@@ -65,19 +70,43 @@ export function NodePalette({ onDragStart }: NodePaletteProps) {
       <CardContent className="p-0">
         <ScrollArea className="h-[calc(100vh-12rem)]">
           <div className="p-4 space-y-2">
-            {nodeTypes.map((node) => (
-              <div
-                key={node.type}
-                draggable
-                onDragStart={(e) => handleDragStart(e, node.type)}
-                className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-muted cursor-move transition-colors"
-              >
-                <div className={`p-2 rounded ${node.color} bg-current/10`}>
-                  <node.icon className="h-4 w-4" />
+            {nodeTypes.map((node) => {
+              const isVisible = visibleNodeTypes.has(node.type);
+              return (
+                <div
+                  key={node.type}
+                  className="flex items-center gap-2"
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 flex-shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleVisibility(node.type);
+                    }}
+                  >
+                    {isVisible ? (
+                      <Eye className="h-4 w-4" />
+                    ) : (
+                      <EyeOff className="h-4 w-4 opacity-50" />
+                    )}
+                  </Button>
+                  <div
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, node.type)}
+                    className={`flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-muted cursor-move transition-colors flex-1 ${
+                      !isVisible ? "opacity-50" : ""
+                    }`}
+                  >
+                    <div className={`p-2 rounded ${node.color} bg-current/10`}>
+                      <node.icon className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium">{node.label}</span>
+                  </div>
                 </div>
-                <span className="text-sm font-medium">{node.label}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </ScrollArea>
       </CardContent>
