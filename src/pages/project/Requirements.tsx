@@ -17,6 +17,17 @@ export default function Requirements() {
   const [showAIDialog, setShowAIDialog] = useState(false);
   const [linkReq, setLinkReq] = useState<{ id: string; title: string } | null>(null);
 
+  // Log projectId for debugging
+  console.log("Requirements page - projectId:", projectId);
+
+  if (!projectId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-destructive">Invalid project ID</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
@@ -38,7 +49,7 @@ export default function Requirements() {
           </div>
         </main>
       </div>
-      <AIDecomposeDialog open={showAIDialog} onClose={() => setShowAIDialog(false)} projectId={projectId!} />
+      <AIDecomposeDialog open={showAIDialog} onClose={() => setShowAIDialog(false)} projectId={projectId} />
       {linkReq && <LinkStandardsDialog open={!!linkReq} onClose={() => setLinkReq(null)} requirementId={linkReq.id} requirementTitle={linkReq.title} />}
     </div>
   );
