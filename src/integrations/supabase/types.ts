@@ -413,6 +413,7 @@ export type Database = {
       }
       requirements: {
         Row: {
+          code: string | null
           content: string | null
           created_at: string
           id: string
@@ -424,6 +425,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          code?: string | null
           content?: string | null
           created_at?: string
           id?: string
@@ -435,6 +437,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          code?: string | null
           content?: string | null
           created_at?: string
           id?: string
@@ -592,7 +595,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_requirement_code: {
+        Args: { p_parent_id: string; p_project_id: string; p_type: string }
+        Returns: string
+      }
     }
     Enums: {
       audit_severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
