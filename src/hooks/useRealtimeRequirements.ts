@@ -61,6 +61,7 @@ export function useRealtimeRequirements(projectId: string) {
     flatList.forEach((item) => {
       map.set(item.id, {
         id: item.id,
+        code: item.code,
         type: item.type,
         title: item.title,
         content: item.content,

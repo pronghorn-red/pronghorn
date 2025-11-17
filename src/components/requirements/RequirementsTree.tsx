@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { RequirementStandardsBadges } from "./RequirementStandardsBadges";
+import { SourceRequirementsUpload } from "./SourceRequirementsUpload";
 
 export type RequirementType = "EPIC" | "FEATURE" | "STORY" | "ACCEPTANCE_CRITERIA";
 
@@ -103,14 +105,22 @@ function RequirementNode({ requirement, level = 0, projectId, onUpdate, onDelete
         <div className="group flex items-center gap-2 py-2 px-2 rounded-md hover:bg-muted/50" style={{ paddingLeft: `${level * 20 + 8}px` }}>
           {hasChildren ? <Button variant="ghost" size="icon" className="h-5 w-5 p-0" onClick={() => setIsExpanded(!isExpanded)}>{isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}</Button> : <div className="h-5 w-5" />}
           <div className={`p-1 rounded ${typeColors[requirement.type]}`}><Icon className="h-3 w-3" /></div>
-          <div className="flex gap-2">{requirement.code && <Badge variant="outline" className="font-mono text-xs">{requirement.code}</Badge>}<Badge variant="outline" className={typeColors[requirement.type]}>{requirement.type.replace("_", " ")}</Badge></div>
-          <div className="flex-1 min-w-0"><span className="text-sm font-medium">{requirement.title}</span>{requirement.content && <p className="text-xs text-muted-foreground mt-1">{requirement.content}</p>}</div>
+          {requirement.code && <Badge variant="outline" className="font-mono text-xs font-semibold">{requirement.code}</Badge>}
+          <Badge variant="outline" className={typeColors[requirement.type]}>{requirement.type.replace("_", " ")}</Badge>
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-medium">{requirement.title}</span>
+            {requirement.content && <p className="text-xs text-muted-foreground mt-1">{requirement.content}</p>}
+            <div className="mt-1">
+              <RequirementStandardsBadges requirementId={requirement.id} />
+            </div>
+          </div>
           <div className="flex gap-1 opacity-0 group-hover:opacity-100">
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsEditing(true)}><Edit2 className="h-3 w-3" /></Button>
+            <SourceRequirementsUpload requirementId={requirement.id} requirementTitle={requirement.title} />
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleAIExpand} disabled={isExpanding}>{isExpanding ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}</Button>
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onLinkStandard?.(requirement.id, requirement.title)}><LinkIcon className="h-3 w-3" /></Button>
             {getNextType(requirement.type) && <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onAdd?.(requirement.id, getNextType(requirement.type)!)}><Plus className="h-3 w-3" /></Button>}
-            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => onDelete?.(requirement.id)}><Trash2 className="h-3 w-3" /></Button>
+            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/10" onClick={() => onDelete?.(requirement.id)}><Trash2 className="h-3 w-3" /></Button>
           </div>
         </div>
       )}
