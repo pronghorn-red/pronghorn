@@ -68,6 +68,14 @@ function RequirementNode({ requirement, level = 0, projectId, onUpdate, onDelete
     }
   };
 
+  const handleAddChild = () => {
+    const nextType = getNextType(requirement.type);
+    if (nextType && onAdd) {
+      console.log("Adding child:", requirement.id, nextType);
+      onAdd(requirement.id, nextType);
+    }
+  };
+
   return (
     <div className="select-none">
       {isEditing ? (
@@ -119,7 +127,16 @@ function RequirementNode({ requirement, level = 0, projectId, onUpdate, onDelete
             <SourceRequirementsUpload requirementId={requirement.id} requirementTitle={requirement.title} />
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleAIExpand} disabled={isExpanding}>{isExpanding ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}</Button>
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onLinkStandard?.(requirement.id, requirement.title)}><LinkIcon className="h-3 w-3" /></Button>
-            {getNextType(requirement.type) && <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onAdd?.(requirement.id, getNextType(requirement.type)!)}><Plus className="h-3 w-3" /></Button>}
+            {getNextType(requirement.type) && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6" 
+                onClick={handleAddChild}
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/10" onClick={() => onDelete?.(requirement.id)}><Trash2 className="h-3 w-3" /></Button>
           </div>
         </div>
@@ -130,5 +147,21 @@ function RequirementNode({ requirement, level = 0, projectId, onUpdate, onDelete
 }
 
 export function RequirementsTree(props: RequirementsTreeProps) {
-  return <div className="space-y-1">{props.requirements.map((req) => <RequirementNode key={req.id} requirement={req} {...props} />)}</div>;
+  return (
+    <div className="space-y-1">
+      {props.requirements.map((req) => (
+        <RequirementNode 
+          key={req.id} 
+          requirement={req} 
+          level={0}
+          projectId={props.projectId}
+          onUpdate={props.onNodeUpdate}
+          onDelete={props.onNodeDelete}
+          onAdd={props.onNodeAdd}
+          onExpand={props.onExpand}
+          onLinkStandard={props.onLinkStandard}
+        />
+      ))}
+    </div>
+  );
 }

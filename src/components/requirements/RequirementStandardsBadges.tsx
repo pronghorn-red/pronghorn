@@ -12,6 +12,27 @@ export function RequirementStandardsBadges({ requirementId }: RequirementStandar
 
   useEffect(() => {
     loadStandards();
+
+    // Set up real-time subscription for standard links
+    const channel = supabase
+      .channel(`requirement-standards-${requirementId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "requirement_standards",
+          filter: `requirement_id=eq.${requirementId}`,
+        },
+        () => {
+          loadStandards();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [requirementId]);
 
   const loadStandards = async () => {

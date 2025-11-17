@@ -43,7 +43,21 @@ export default function Requirements() {
             </div>
             {isLoading ? <p className="text-center py-12 text-muted-foreground">Loading...</p> : requirements.length > 0 ? (
               <div className="bg-card border rounded-lg p-4">
-                <RequirementsTree requirements={requirements} projectId={projectId!} onNodeUpdate={(id, u) => updateRequirement(id, u).then(() => toast.success("Updated"))} onNodeDelete={(id) => deleteRequirement(id).then(() => toast.success("Deleted"))} onNodeAdd={(p, t) => addRequirement(p, t, `New ${t}`).then(() => toast.success("Added"))} onExpand={refresh} onLinkStandard={(id, title) => setLinkReq({ id, title })} />
+                <RequirementsTree 
+                  requirements={requirements} 
+                  projectId={projectId!} 
+                  onNodeUpdate={(id, u) => {
+                    updateRequirement(id, u).then(() => toast.success("Updated"));
+                  }} 
+                  onNodeDelete={(id) => {
+                    deleteRequirement(id).then(() => toast.success("Deleted"));
+                  }} 
+                  onNodeAdd={(p, t) => {
+                    addRequirement(p, t, `New ${t}`).then(() => toast.success("Added"));
+                  }} 
+                  onExpand={refresh} 
+                  onLinkStandard={(id, title) => setLinkReq({ id, title })} 
+                />
               </div>
             ) : <div className="text-center py-12"><p className="text-muted-foreground mb-4">No requirements yet</p><Button onClick={() => addRequirement(null, "EPIC", "First Epic")}><Plus className="h-4 w-4 mr-2" />Add First Epic</Button></div>}
           </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, FileText, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,12 @@ export function SourceRequirementsUpload({
   const [uploading, setUploading] = useState(false);
   const [files, setFiles] = useState<any[]>([]);
   const { isAdmin } = useAdmin();
+
+  useEffect(() => {
+    if (open) {
+      loadFiles();
+    }
+  }, [open, requirementId]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
@@ -82,10 +88,11 @@ export function SourceRequirementsUpload({
         variant="ghost"
         size="icon"
         className="h-6 w-6"
-        onClick={() => {
-          loadFiles();
+        onClick={(e) => {
+          e.stopPropagation();
           setOpen(true);
         }}
+        title="Upload source requirements"
       >
         <Upload className="h-3 w-3" />
       </Button>
