@@ -166,10 +166,9 @@ export function LinkSelector({ type, projectId, selectedIds, onSelect, onUnselec
                 flattenHierarchy(items).map((item) => (
                   <CommandItem
                     key={item.id}
-                    value={getDisplayLabel(item)}
-                    onSelect={() => {
-                      handleSelect(item.id);
-                      setOpen(false);
+                    value={item.id}
+                    onSelect={(currentValue) => {
+                      handleSelect(currentValue);
                     }}
                     className="cursor-pointer"
                   >
