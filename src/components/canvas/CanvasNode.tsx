@@ -61,10 +61,14 @@ export const CanvasNode = memo(({ data, selected }: NodeProps) => {
       
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 flex-shrink-0" />
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="font-medium text-sm">{data.label || "New Node"}</div>
           {data.subtitle && (
-            <div className="text-xs opacity-70 mt-0.5">{data.subtitle}</div>
+            <div className="text-xs opacity-70 mt-0.5 break-words whitespace-pre-wrap max-w-[200px]">
+              {data.subtitle.length > 200 
+                ? data.subtitle.slice(0, 200) + "..." 
+                : data.subtitle}
+            </div>
           )}
         </div>
       </div>
