@@ -84,6 +84,13 @@ function CanvasFlow() {
     setShowProperties(true);
   }, []);
 
+  const onNodeDragStop = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      saveNode(node);
+    },
+    [saveNode]
+  );
+
   const handleNodeUpdate = useCallback(
     (nodeId: string, updates: Partial<Node>) => {
       setNodes((nds) =>
@@ -152,6 +159,7 @@ function CanvasFlow() {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onNodeClick={onNodeClick}
+              onNodeDragStop={onNodeDragStop}
               onInit={setReactFlowInstance}
               onDrop={onDrop}
               onDragOver={onDragOver}

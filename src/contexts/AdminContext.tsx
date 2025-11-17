@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AdminContextType {
   isAdmin: boolean;
@@ -15,14 +16,21 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     const key = prompt("Enter admin key:");
     if (!key) return false;
 
-    // Verify against the ADMIN_KEY environment variable
-    const expectedKey = import.meta.env.VITE_ADMIN_KEY;
-    
-    if (key === expectedKey) {
+    // Verify against the backend
+    try {
+      const { data, error } = await supabase.functions.invoke("verify-admin", {
+        body: { key },
+      });
+
+      if (error || !data?.valid) {
+        alert("Invalid admin key");
+        return false;
+      }
+
       setIsAdmin(true);
       sessionStorage.setItem("admin_access", "true");
       return true;
-    } else {
+    } catch (error) {
       alert("Invalid admin key");
       return false;
     }
@@ -36,7 +44,9 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   // Check session storage on mount
   useState(() => {
     const hasAccess = sessionStorage.getItem("admin_access") === "true";
-    setIsAdmin(hasAccess);
+    if (hasAccess) {
+      setIsAdmin(true);
+    }
   });
 
   return (

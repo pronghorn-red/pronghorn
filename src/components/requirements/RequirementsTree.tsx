@@ -77,7 +77,25 @@ function RequirementNode({ requirement, level = 0, projectId, onUpdate, onDelete
           <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} autoFocus />
           <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={4} />
           <div className="flex gap-2">
-            <Button size="sm" onClick={() => { onUpdate?.(requirement.id, { title: editTitle, content: editContent }); setIsEditing(false); }}>Save</Button>
+            <Button 
+              size="sm" 
+              onClick={async () => { 
+                const { error } = await supabase
+                  .from("requirements")
+                  .update({ title: editTitle, content: editContent })
+                  .eq("id", requirement.id);
+                
+                if (error) {
+                  toast.error("Failed to save changes");
+                } else {
+                  toast.success("Changes saved");
+                  onUpdate?.(requirement.id, { title: editTitle, content: editContent }); 
+                  setIsEditing(false);
+                }
+              }}
+            >
+              Save
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
           </div>
         </div>
