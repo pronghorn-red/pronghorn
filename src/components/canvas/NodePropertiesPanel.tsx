@@ -32,12 +32,15 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
       setLabel(node.data.label || "");
       setSubtitle(node.data.subtitle || "");
       setDescription(node.data.description || "");
+      // Load linked items and auto-populate subtitle if needed
       loadLinkedItems();
     }
-  }, [node]);
+  }, [node?.id]); // Only re-run when node ID changes, not on every node update
 
   const loadLinkedItems = async () => {
     if (!node) return;
+
+    let autoSubtitle = "";
 
     // Load linked standards
     if (node.data.standardIds && node.data.standardIds.length > 0) {
@@ -70,6 +73,47 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
       setLinkedTechStacks(data || []);
     } else {
       setLinkedTechStacks([]);
+    }
+
+    // For specific node types, load single linked item and auto-populate subtitle
+    if (node.data.type === "REQUIREMENT" && node.data.requirementId) {
+      const { data } = await supabase
+        .from("requirements")
+        .select("code, title")
+        .eq("id", node.data.requirementId)
+        .single();
+      if (data) {
+        autoSubtitle = `${data.code} - ${data.title}`;
+      }
+    } else if (node.data.type === "STANDARD" && node.data.standardId) {
+      const { data } = await supabase
+        .from("standards")
+        .select("code, title")
+        .eq("id", node.data.standardId)
+        .single();
+      if (data) {
+        autoSubtitle = `${data.code} - ${data.title}`;
+      }
+    } else if (node.data.type === "TECH_STACK" && node.data.techStackId) {
+      const { data } = await supabase
+        .from("tech_stacks")
+        .select("name")
+        .eq("id", node.data.techStackId)
+        .single();
+      if (data) {
+        autoSubtitle = data.name;
+      }
+    }
+
+    // Auto-update subtitle if we have one and current subtitle is empty
+    if (autoSubtitle && !subtitle) {
+      setSubtitle(autoSubtitle);
+      onUpdate(node.id, {
+        data: {
+          ...node.data,
+          subtitle: autoSubtitle,
+        },
+      });
     }
   };
 
