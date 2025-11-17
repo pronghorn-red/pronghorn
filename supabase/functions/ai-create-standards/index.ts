@@ -42,21 +42,24 @@ serve(async (req) => {
     console.log('Calling Lovable AI for standards generation...');
     console.log('Input length:', input.length, 'characters');
 
-    // Create prompt for AI - extract key principles only
-    const prompt = `You are a standards architect. Analyze the following content and extract ONLY the key principles and main standards.
+    // Create prompt for AI - extract comprehensive structure matching source
+    const prompt = `You are a standards architect. Analyze the following content and extract ALL major standards and their hierarchical structure.
 
 INPUT CONTENT:
 ${input}
 
 INSTRUCTIONS:
-1. Extract ONLY the key principles and core standards - do NOT create comprehensive hierarchies
-2. Focus on main concepts and top-level requirements only
-3. Create 5-10 key standards maximum with optional 1-2 sub-standards each
-4. Keep descriptions brief (under 200 characters)
-5. Keep content focused (under 500 characters)
-6. Assign standard codes (e.g., SEC-001, SEC-001.1)
-7. Avoid duplicating these existing codes: ${existingCodes.join(', ')}
-8. Avoid duplicating these existing titles: ${existingTitles.join(', ')}
+1. Extract ALL major categories, principles, and standards from the content
+2. Maintain the hierarchical structure present in the source material (multiple levels if needed)
+3. Create as many standards as necessary to accurately represent the content
+4. Match the depth and breadth of the original material's organization
+5. Keep descriptions clear and focused (under 300 characters)
+6. Keep content informative (under 1000 characters per standard)
+7. Assign hierarchical standard codes (e.g., SEC-001, SEC-001.1, SEC-001.1.1)
+8. Avoid duplicating these existing codes: ${existingCodes.join(', ')}
+9. Avoid duplicating these existing titles: ${existingTitles.join(', ')}
+
+IMPORTANT: Generate a comprehensive hierarchy that reflects the full scope and structure of the source material.
 
 Return ONLY a valid JSON array with this structure (no markdown, no code blocks, just pure JSON):
 [
@@ -64,13 +67,21 @@ Return ONLY a valid JSON array with this structure (no markdown, no code blocks,
     "code": "STD-001",
     "title": "Standard Title",
     "description": "Brief description",
-    "content": "Key details",
+    "content": "Detailed explanation",
     "children": [
       {
         "code": "STD-001.1",
         "title": "Sub-Standard",
         "description": "Brief description",
-        "content": "Key details"
+        "content": "Details",
+        "children": [
+          {
+            "code": "STD-001.1.1",
+            "title": "Sub-Sub-Standard",
+            "description": "Brief description",
+            "content": "Details"
+          }
+        ]
       }
     ]
   }
