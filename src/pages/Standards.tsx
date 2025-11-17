@@ -1,16 +1,14 @@
 import { useState, useEffect } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
-import { StandardsTree, Standard } from "@/components/standards/StandardsTree";
+import { Standard } from "@/components/standards/StandardsTree";
 import { StandardsTreeManager } from "@/components/standards/StandardsTreeManager";
 import { ManageCategoriesDialog } from "@/components/standards/ManageCategoriesDialog";
-import { EditStandardDialog } from "@/components/standards/EditStandardDialog";
 import { ManageTechStacksDialog } from "@/components/standards/ManageTechStacksDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, FolderCog, Plus, Layers, Shield, LogOut } from "lucide-react";
+import { Search, FolderCog, Layers, LogOut, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdmin } from "@/contexts/AdminContext";
 import { toast } from "sonner";
@@ -19,12 +17,10 @@ export default function Standards() {
   const { isAdmin, requestAdminAccess, logout } = useAdmin();
   const [searchQuery, setSearchQuery] = useState("");
   const [categories, setCategories] = useState<any[]>([]);
-  const [standards, setStandards] = useState<Standard[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [standardsByCategory, setStandardsByCategory] = useState<Record<string, Standard[]>>({});
   const [showManageCategories, setShowManageCategories] = useState(false);
   const [showManageTechStacks, setShowManageTechStacks] = useState(false);
-  const [editStandardId, setEditStandardId] = useState<string | undefined>();
-  const [showEditStandard, setShowEditStandard] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
 
   useEffect(() => {
     loadCategories();
@@ -39,17 +35,26 @@ export default function Standards() {
   const loadStandards = async () => {
     const { data } = await supabase.from("standards").select(`*, attachments:standard_attachments(*)`).order("code");
     if (data) {
-      const tree = data.filter((s) => !s.parent_id).map((s) => ({
-        id: s.id,
-        code: s.code,
-        title: s.title,
-        description: s.description,
-        content: s.content,
-        category_id: s.category_id,
-        children: buildTree(data, s.id),
-        attachments: s.attachments?.map((a: any) => ({ id: a.id, type: a.type, name: a.name, url: a.url, description: a.description })),
-      }));
-      setStandards(tree);
+      const grouped: Record<string, Standard[]> = {};
+      
+      data.filter((s) => !s.parent_id).forEach((s) => {
+        const standard: Standard = {
+          id: s.id,
+          code: s.code,
+          title: s.title,
+          description: s.description,
+          content: s.content,
+          children: buildTree(data, s.id),
+          attachments: s.attachments?.map((a: any) => ({ id: a.id, type: a.type, name: a.name, url: a.url, description: a.description })),
+        };
+        
+        if (!grouped[s.category_id]) {
+          grouped[s.category_id] = [];
+        }
+        grouped[s.category_id].push(standard);
+      });
+      
+      setStandardsByCategory(grouped);
     }
   };
 
@@ -60,27 +65,38 @@ export default function Standards() {
       title: s.title,
       description: s.description,
       content: s.content,
-      category_id: s.category_id,
       children: buildTree(all, s.id),
       attachments: s.attachments?.map((a: any) => ({ id: a.id, type: a.type, name: a.name, url: a.url, description: a.description })),
     }));
   };
 
-  const handleStandardClick = (standard: Standard) => {
-    setEditStandardId(standard.id);
-    setShowEditStandard(true);
-  };
-
-  const handleCreateStandard = async () => {
+  const handleAddCategory = async () => {
     if (!isAdmin) {
       const granted = await requestAdminAccess();
       if (!granted) {
-        toast.error("Admin access required to create standards");
+        toast.error("Admin access required");
         return;
       }
     }
-    setEditStandardId(undefined);
-    setShowEditStandard(true);
+    
+    if (!newCategoryName.trim()) return;
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: profile } = await supabase.from("profiles").select("org_id").eq("user_id", user?.id).single();
+    
+    const { error } = await supabase.from("standard_categories").insert({
+      name: newCategoryName,
+      org_id: profile?.org_id,
+      created_by: user?.id,
+    });
+    
+    if (error) {
+      toast.error("Failed to create category");
+    } else {
+      toast.success("Category created");
+      setNewCategoryName("");
+      loadCategories();
+    }
   };
 
   const handleManageCategories = async () => {
@@ -105,107 +121,104 @@ export default function Standards() {
     setShowManageTechStacks(true);
   };
 
-  const filteredStandards = selectedCategory ? standards.filter((s) => s.id === selectedCategory) : standards;
+  const filteredCategories = categories.filter((cat) =>
+    cat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (standardsByCategory[cat.id] || []).some((s) =>
+      s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.code.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  );
 
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
 
-      <main className="container px-6 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
+      <div className="flex-1 overflow-auto p-8">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
               <h1 className="text-3xl font-bold">Standards Library</h1>
-              {isAdmin ? (
-                <Badge variant="default" className="flex items-center gap-1">
-                  <Shield className="h-3 w-3" />
-                  Admin Mode
-                </Badge>
-              ) : (
-                <Button variant="outline" size="sm" onClick={requestAdminAccess}>
-                  <Shield className="h-4 w-4 mr-2" />
-                  Admin Mode
-                </Button>
+              {isAdmin && <Badge variant="secondary">Admin Mode</Badge>}
+            </div>
+            <div className="flex items-center gap-2">
+              {isAdmin && (
+                <>
+                  <Button onClick={handleManageTechStacks} variant="outline" size="sm">
+                    <Layers className="h-4 w-4 mr-2" />
+                    Manage Tech Stacks
+                  </Button>
+                  <Button onClick={handleManageCategories} variant="outline" size="sm">
+                    <FolderCog className="h-4 w-4 mr-2" />
+                    Manage Categories
+                  </Button>
+                  <Button onClick={logout} variant="outline" size="sm">
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Exit Admin Mode
+                  </Button>
+                </>
               )}
             </div>
-            <p className="text-muted-foreground">Manage your organization's standards and requirements</p>
           </div>
-          <div className="flex gap-2">
-            {isAdmin && (
-              <>
-                <Button variant="outline" onClick={handleManageTechStacks}><Layers className="h-4 w-4 mr-2" />Tech Stacks</Button>
-                <Button variant="outline" onClick={handleManageCategories}><FolderCog className="h-4 w-4 mr-2" />Categories</Button>
-                <Button onClick={handleCreateStandard}><Plus className="h-4 w-4 mr-2" />New Standard</Button>
-                <Button variant="ghost" size="icon" onClick={logout} title="Exit Admin Mode"><LogOut className="h-4 w-4" /></Button>
-              </>
-            )}
-          </div>
-        </div>
 
-        <Tabs defaultValue="browse" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="browse">Browse Standards</TabsTrigger>
-            <TabsTrigger value="categories">By Category</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="browse" className="space-y-4">
-            <div className="relative max-w-md">
+          {/* Search */}
+          <div className="flex items-center gap-4">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search standards..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+              <Input
+                placeholder="Search standards and categories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
             </div>
+          </div>
 
+          {/* Add New Category (inline) */}
+          {isAdmin && (
             <Card>
-              <CardHeader>
-                <CardTitle>Standards Library</CardTitle>
-                <CardDescription>
-                  Manage organizational standards with AI-powered expansion and knowledge management
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {categories.map((category) => {
-                  const categoryStandards = filteredStandards.filter(
-                    (s: any) => s.category_id === category.id
-                  );
-                  if (categoryStandards.length === 0) return null;
-
-                  return (
-                    <div key={category.id} className="mb-6">
-                      <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                        <Badge variant="outline">{category.name}</Badge>
-                      </h3>
-                      <StandardsTreeManager
-                        standards={categoryStandards}
-                        categoryId={category.id}
-                        onRefresh={loadStandards}
-                      />
-                    </div>
-                  );
-                })}
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="New category name..."
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
+                  />
+                  <Button onClick={handleAddCategory} size="sm">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Category
+                  </Button>
+                </div>
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          <TabsContent value="categories" className="space-y-4">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {categories.map((cat) => (
-                <div key={cat.id} className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer" onClick={() => setSelectedCategory(cat.id)}>
-                  <div className="flex items-center gap-3">
-                    {cat.icon && <span className="text-3xl">{cat.icon}</span>}
-                    <div>
-                      <div className="font-medium">{cat.name}</div>
-                      {cat.description && <div className="text-sm text-muted-foreground">{cat.description}</div>}
-                    </div>
+          {/* Categories and Standards */}
+          {filteredCategories.map((category) => {
+            const categoryStandards = standardsByCategory[category.id] || [];
+
+            return (
+              <Card key={category.id}>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    {category.icon && <span className="text-2xl">{category.icon}</span>}
+                    <CardTitle>{category.name}</CardTitle>
                   </div>
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-        </Tabs>
-      </main>
+                  {category.description && <CardDescription>{category.description}</CardDescription>}
+                </CardHeader>
+                <CardContent>
+                  <StandardsTreeManager standards={categoryStandards} categoryId={category.id} onRefresh={loadStandards} />
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
 
+      {/* Dialogs */}
       <ManageCategoriesDialog open={showManageCategories} onClose={() => { setShowManageCategories(false); loadCategories(); }} />
-      <ManageTechStacksDialog open={showManageTechStacks} onClose={() => setShowManageTechStacks(false)} />
-      <EditStandardDialog open={showEditStandard} onClose={() => { setShowEditStandard(false); loadStandards(); }} standardId={editStandardId} />
+      <ManageTechStacksDialog open={showManageTechStacks} onClose={() => { setShowManageTechStacks(false); }} />
     </div>
   );
 }

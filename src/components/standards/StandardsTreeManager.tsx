@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, ChevronDown, Plus, Edit, Trash2, Sparkles, Link2, Paperclip } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Edit, Trash2, Sparkles, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,7 +27,7 @@ interface StandardsTreeManagerProps {
 export function StandardsTreeManager({ standards, categoryId, onRefresh }: StandardsTreeManagerProps) {
   const { isAdmin, requestAdminAccess } = useAdmin();
 
-  const handleAdd = async (parentId: string | null) => {
+  const handleAdd = async (parentId: string | null, title: string) => {
     if (!isAdmin) {
       const granted = await requestAdminAccess();
       if (!granted) {
@@ -35,9 +35,6 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
         return;
       }
     }
-
-    const title = prompt("Enter standard title:");
-    if (!title) return;
 
     const { error } = await supabase.from("standards").insert({
       category_id: categoryId,
@@ -75,7 +72,7 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
     }
   };
 
-  const handleAIExpand = async (parentId: string) => {
+  const handleAIExpand = async (parentId: string, parentTitle: string) => {
     if (!isAdmin) {
       const granted = await requestAdminAccess();
       if (!granted) {
@@ -84,7 +81,23 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
       }
     }
 
-    toast.info("AI expansion coming soon");
+    toast.promise(
+      (async () => {
+        const { data, error } = await supabase.functions.invoke("expand-requirement", {
+          body: { parentId, parentTitle, isStandard: true, categoryId },
+        });
+
+        if (error) throw error;
+        
+        onRefresh();
+        return data;
+      })(),
+      {
+        loading: "AI expanding standard...",
+        success: "Standard expanded successfully",
+        error: "Failed to expand standard",
+      }
+    );
   };
 
   const handleAttachFile = async (standardId: string) => {
@@ -96,7 +109,50 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
       }
     }
 
-    toast.info("File attachment coming soon");
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "*/*";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      toast.promise(
+        (async () => {
+          const fileExt = file.name.split(".").pop();
+          const fileName = `${standardId}-${Date.now()}.${fileExt}`;
+          const filePath = `${fileName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from("standard-attachments")
+            .upload(filePath, file);
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage
+            .from("standard-attachments")
+            .getPublicUrl(filePath);
+
+          const { error: attachError } = await supabase
+            .from("standard_attachments")
+            .insert({
+              standard_id: standardId,
+              name: file.name,
+              type: file.type || "application/octet-stream",
+              url: publicUrl,
+            });
+
+          if (attachError) throw attachError;
+
+          onRefresh();
+        })(),
+        {
+          loading: "Uploading file...",
+          success: "File attached successfully",
+          error: "Failed to attach file",
+        }
+      );
+    };
+    input.click();
   };
 
   return (
@@ -112,10 +168,46 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
           onRefresh={onRefresh}
         />
       ))}
-      <Button variant="outline" size="sm" onClick={() => handleAdd(null)} className="w-full">
+      <AddStandardInline onAdd={(title) => handleAdd(null, title)} />
+    </div>
+  );
+}
+
+function AddStandardInline({ onAdd }: { onAdd: (title: string) => void }) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [title, setTitle] = useState("");
+
+  const handleSubmit = () => {
+    if (title.trim()) {
+      onAdd(title);
+      setTitle("");
+      setIsAdding(false);
+    }
+  };
+
+  if (!isAdding) {
+    return (
+      <Button variant="outline" size="sm" onClick={() => setIsAdding(true)} className="w-full">
         <Plus className="h-3 w-3 mr-2" />
-        Add Root Standard
+        Add Standard
       </Button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        placeholder="Standard title..."
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") handleSubmit();
+          if (e.key === "Escape") setIsAdding(false);
+        }}
+        autoFocus
+      />
+      <Button size="sm" onClick={handleSubmit}>Add</Button>
+      <Button size="sm" variant="outline" onClick={() => setIsAdding(false)}>Cancel</Button>
     </div>
   );
 }
@@ -129,9 +221,9 @@ function StandardNode({
   onRefresh,
 }: {
   standard: Standard;
-  onAdd: (parentId: string | null) => void;
+  onAdd: (parentId: string | null, title: string) => void;
   onDelete: (id: string) => void;
-  onAIExpand: (parentId: string) => void;
+  onAIExpand: (parentId: string, parentTitle: string) => void;
   onAttachFile: (standardId: string) => void;
   onRefresh: () => void;
 }) {
@@ -204,56 +296,35 @@ function StandardNode({
                 </div>
 
                 <div className="flex gap-1 flex-shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => setIsEditing(true)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit">
                     <Edit className="h-3 w-3" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => onAttachFile(standard.id)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => onAttachFile(standard.id)} title="Attach file">
                     <Paperclip className="h-3 w-3" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => onAIExpand(standard.id)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => onAIExpand(standard.id, standard.title)} title="AI expand">
                     <Sparkles className="h-3 w-3" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => onAdd(standard.id)}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => onDelete(standard.id)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => onDelete(standard.id)} title="Delete">
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
 
+              {/* Attachments */}
               {standard.attachments && standard.attachments.length > 0 && (
-                <div className="flex gap-1 flex-wrap">
-                  {standard.attachments.map((att) => (
-                    <Badge key={att.id} variant="secondary" className="text-xs">
-                      <Paperclip className="h-2 w-2 mr-1" />
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {standard.attachments.map((att: any) => (
+                    <a
+                      key={att.id}
+                      href={att.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                    >
+                      <Paperclip className="h-3 w-3" />
                       {att.name}
-                    </Badge>
+                    </a>
                   ))}
                 </div>
               )}
@@ -262,19 +333,13 @@ function StandardNode({
         </div>
       </div>
 
-      {isExpanded && standard.children && standard.children.length > 0 && (
-        <div className="ml-6 space-y-2 border-l-2 border-border pl-3">
-          {standard.children.map((child) => (
-            <StandardNode
-              key={child.id}
-              standard={child}
-              onAdd={onAdd}
-              onDelete={onDelete}
-              onAIExpand={onAIExpand}
-              onAttachFile={onAttachFile}
-              onRefresh={onRefresh}
-            />
+      {/* Children */}
+      {isExpanded && (
+        <div className="ml-6 mt-2 space-y-2 border-l-2 border-border pl-4">
+          {standard.children && standard.children.length > 0 && standard.children.map((child) => (
+            <StandardNode key={child.id} standard={child} onAdd={onAdd} onDelete={onDelete} onAIExpand={onAIExpand} onAttachFile={onAttachFile} onRefresh={onRefresh} />
           ))}
+          <AddStandardInline onAdd={(title) => onAdd(standard.id, title)} />
         </div>
       )}
     </div>
