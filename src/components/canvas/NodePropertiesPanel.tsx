@@ -203,111 +203,120 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
 
           <Separator />
 
-          {/* Linked Requirements */}
-          <div className="space-y-3">
-            <Label>Linked Requirements</Label>
-            <LinkSelector
-              type="requirement"
-              projectId={projectId}
-              selectedIds={node.data.requirementIds || []}
-              onSelect={handleLinkRequirement}
-              onUnselect={handleUnlinkRequirement}
-            />
-            {linkedRequirements.length > 0 && (
-              <div className="space-y-2 mt-2">
-                {linkedRequirements.map((requirement) => (
-                  <div
-                    key={requirement.id}
-                    className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/50"
-                  >
-                    <div className="text-xs">
-                      <div className="font-medium">{requirement.code}</div>
-                      <div className="text-muted-foreground">{requirement.title}</div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => handleUnlinkRequirement(requirement.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+          {/* Linked Requirements - Only for REQUIREMENT nodes */}
+          {node.type === "REQUIREMENT" && (
+            <>
+              <div className="space-y-3">
+                <Label>Linked Requirements</Label>
+                <LinkSelector
+                  type="requirement"
+                  projectId={projectId}
+                  selectedIds={node.data.requirementIds || []}
+                  onSelect={handleLinkRequirement}
+                  onUnselect={handleUnlinkRequirement}
+                />
+                {linkedRequirements.length > 0 && (
+                  <div className="space-y-2 mt-2">
+                    {linkedRequirements.map((requirement) => (
+                      <div
+                        key={requirement.id}
+                        className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/50"
+                      >
+                        <div className="text-xs">
+                          <div className="font-medium">{requirement.code}</div>
+                          <div className="text-muted-foreground">{requirement.title}</div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleUnlinkRequirement(requirement.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            )}
-          </div>
+              <Separator />
+            </>
+          )}
 
-          <Separator />
-
-          {/* Linked Standards */}
-          <div className="space-y-3">
-            <Label>Linked Standards</Label>
-            <LinkSelector
-              type="standard"
-              selectedIds={node.data.standardIds || []}
-              onSelect={handleLinkStandard}
-              onUnselect={handleUnlinkStandard}
-            />
-            {linkedStandards.length > 0 && (
-              <div className="space-y-2 mt-2">
-                {linkedStandards.map((standard) => (
-                  <div
-                    key={standard.id}
-                    className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/50"
-                  >
-                    <div className="text-xs">
-                      <div className="font-medium">{standard.code}</div>
-                      <div className="text-muted-foreground">{standard.title}</div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => handleUnlinkStandard(standard.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+          {/* Linked Standards - Only for STANDARD nodes */}
+          {node.type === "STANDARD" && (
+            <>
+              <div className="space-y-3">
+                <Label>Linked Standards</Label>
+                <LinkSelector
+                  type="standard"
+                  selectedIds={node.data.standardIds || []}
+                  onSelect={handleLinkStandard}
+                  onUnselect={handleUnlinkStandard}
+                />
+                {linkedStandards.length > 0 && (
+                  <div className="space-y-2 mt-2">
+                    {linkedStandards.map((standard) => (
+                      <div
+                        key={standard.id}
+                        className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/50"
+                      >
+                        <div className="text-xs">
+                          <div className="font-medium">{standard.code}</div>
+                          <div className="text-muted-foreground">{standard.title}</div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleUnlinkStandard(standard.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            )}
-          </div>
+              <Separator />
+            </>
+          )}
 
-          <Separator />
-
-          {/* Linked Tech Stacks */}
-          <div className="space-y-3">
-            <Label>Linked Tech Stacks</Label>
-            <LinkSelector
-              type="tech_stack"
-              selectedIds={node.data.techStackIds || []}
-              onSelect={handleLinkTechStack}
-              onUnselect={handleUnlinkTechStack}
-            />
-            {linkedTechStacks.length > 0 && (
-              <div className="space-y-2 mt-2">
-                {linkedTechStacks.map((techStack) => (
-                  <div
-                    key={techStack.id}
-                    className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/50"
-                  >
-                    <div className="text-xs font-medium">{techStack.name}</div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => handleUnlinkTechStack(techStack.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+          {/* Linked Tech Stacks - Only for TECH_STACK nodes */}
+          {node.type === "TECH_STACK" && (
+            <>
+              <div className="space-y-3">
+                <Label>Linked Tech Stacks</Label>
+                <LinkSelector
+                  type="tech_stack"
+                  selectedIds={node.data.techStackIds || []}
+                  onSelect={handleLinkTechStack}
+                  onUnselect={handleUnlinkTechStack}
+                />
+                {linkedTechStacks.length > 0 && (
+                  <div className="space-y-2 mt-2">
+                    {linkedTechStacks.map((techStack) => (
+                      <div
+                        key={techStack.id}
+                        className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/50"
+                      >
+                        <div className="text-xs font-medium">{techStack.name}</div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleUnlinkTechStack(techStack.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            )}
-          </div>
-
-          <Separator />
+              <Separator />
+            </>
+          )}
 
           {/* Node Info */}
           <div className="space-y-2 text-xs text-muted-foreground">
