@@ -83,8 +83,8 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
 
     toast.promise(
       (async () => {
-        const { data, error } = await supabase.functions.invoke("expand-requirement", {
-          body: { parentId, parentTitle, isStandard: true, categoryId },
+        const { data, error } = await supabase.functions.invoke("expand-standards", {
+          body: { standardId: parentId },
         });
 
         if (error) throw error;
