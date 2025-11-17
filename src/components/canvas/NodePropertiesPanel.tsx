@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Trash2 } from "lucide-react";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,10 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Node } from "reactflow";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { LinkSelector } from "./LinkSelector";
 
 interface NodePropertiesPanelProps {
   node: Node | null;
@@ -23,97 +23,48 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
   const [label, setLabel] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [description, setDescription] = useState("");
-  const [linkedStandards, setLinkedStandards] = useState<any[]>([]);
-  const [linkedRequirements, setLinkedRequirements] = useState<any[]>([]);
-  const [linkedTechStacks, setLinkedTechStacks] = useState<any[]>([]);
+  const [requirements, setRequirements] = useState<any[]>([]);
+  const [standards, setStandards] = useState<any[]>([]);
+  const [techStacks, setTechStacks] = useState<any[]>([]);
 
   useEffect(() => {
     if (node) {
       setLabel(node.data.label || "");
       setSubtitle(node.data.subtitle || "");
       setDescription(node.data.description || "");
-      // Load linked items and auto-populate subtitle if needed
-      loadLinkedItems();
+      loadDropdownData();
     }
-  }, [node?.id]); // Only re-run when node ID changes, not on every node update
+  }, [node?.id]);
 
-  const loadLinkedItems = async () => {
+  const loadDropdownData = async () => {
     if (!node) return;
 
-    let autoSubtitle = "";
-
-    // Load linked standards
-    if (node.data.standardIds && node.data.standardIds.length > 0) {
-      const { data } = await supabase
-        .from("standards")
-        .select("id, code, title")
-        .in("id", node.data.standardIds);
-      setLinkedStandards(data || []);
-    } else {
-      setLinkedStandards([]);
-    }
-
-    // Load linked requirements
-    if (node.data.requirementIds && node.data.requirementIds.length > 0) {
+    // Load requirements for dropdown
+    if (node.data.type === "REQUIREMENT") {
       const { data } = await supabase
         .from("requirements")
         .select("id, code, title")
-        .in("id", node.data.requirementIds);
-      setLinkedRequirements(data || []);
-    } else {
-      setLinkedRequirements([]);
+        .eq("project_id", projectId)
+        .order("code");
+      setRequirements(data || []);
     }
 
-    // Load linked tech stacks
-    if (node.data.techStackIds && node.data.techStackIds.length > 0) {
+    // Load standards for dropdown
+    if (node.data.type === "STANDARD") {
+      const { data } = await supabase
+        .from("standards")
+        .select("id, code, title")
+        .order("code");
+      setStandards(data || []);
+    }
+
+    // Load tech stacks for dropdown
+    if (node.data.type === "TECH_STACK") {
       const { data } = await supabase
         .from("tech_stacks")
         .select("id, name")
-        .in("id", node.data.techStackIds);
-      setLinkedTechStacks(data || []);
-    } else {
-      setLinkedTechStacks([]);
-    }
-
-    // For specific node types, load single linked item and auto-populate subtitle
-    if (node.data.type === "REQUIREMENT" && node.data.requirementId) {
-      const { data } = await supabase
-        .from("requirements")
-        .select("code, title")
-        .eq("id", node.data.requirementId)
-        .single();
-      if (data) {
-        autoSubtitle = `${data.code} - ${data.title}`;
-      }
-    } else if (node.data.type === "STANDARD" && node.data.standardId) {
-      const { data } = await supabase
-        .from("standards")
-        .select("code, title")
-        .eq("id", node.data.standardId)
-        .single();
-      if (data) {
-        autoSubtitle = `${data.code} - ${data.title}`;
-      }
-    } else if (node.data.type === "TECH_STACK" && node.data.techStackId) {
-      const { data } = await supabase
-        .from("tech_stacks")
-        .select("name")
-        .eq("id", node.data.techStackId)
-        .single();
-      if (data) {
-        autoSubtitle = data.name;
-      }
-    }
-
-    // Auto-update subtitle if we have one and current subtitle is empty
-    if (autoSubtitle && !subtitle) {
-      setSubtitle(autoSubtitle);
-      onUpdate(node.id, {
-        data: {
-          ...node.data,
-          subtitle: autoSubtitle,
-        },
-      });
+        .order("name");
+      setTechStacks(data || []);
     }
   };
 
@@ -131,64 +82,73 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
     toast.success("Node updated");
   };
 
-  const handleLinkStandard = async (standardId: string) => {
+  const handleRequirementChange = async (requirementId: string) => {
     if (!node) return;
-    const currentIds = node.data.standardIds || [];
-    const newIds = [...currentIds, standardId];
+    
+    // Load the requirement to get its label
+    const { data } = await supabase
+      .from("requirements")
+      .select("code, title")
+      .eq("id", requirementId)
+      .single();
+    
+    const newSubtitle = data ? `${data.code} - ${data.title}` : subtitle;
+    
     onUpdate(node.id, {
-      data: { ...node.data, standardIds: newIds },
+      data: { 
+        ...node.data, 
+        requirementId,
+        subtitle: newSubtitle
+      },
     });
-    loadLinkedItems();
+    setSubtitle(newSubtitle);
+    toast.success("Requirement linked");
   };
 
-  const handleUnlinkStandard = (standardId: string) => {
+  const handleStandardChange = async (standardId: string) => {
     if (!node) return;
-    const currentIds = node.data.standardIds || [];
-    const newIds = currentIds.filter((id: string) => id !== standardId);
+    
+    // Load the standard to get its label
+    const { data } = await supabase
+      .from("standards")
+      .select("code, title")
+      .eq("id", standardId)
+      .single();
+    
+    const newSubtitle = data ? `${data.code} - ${data.title}` : subtitle;
+    
     onUpdate(node.id, {
-      data: { ...node.data, standardIds: newIds },
+      data: { 
+        ...node.data, 
+        standardId,
+        subtitle: newSubtitle
+      },
     });
-    loadLinkedItems();
+    setSubtitle(newSubtitle);
+    toast.success("Standard linked");
   };
 
-  const handleLinkRequirement = async (requirementId: string) => {
+  const handleTechStackChange = async (techStackId: string) => {
     if (!node) return;
-    const currentIds = node.data.requirementIds || [];
-    const newIds = [...currentIds, requirementId];
+    
+    // Load the tech stack to get its name
+    const { data } = await supabase
+      .from("tech_stacks")
+      .select("name")
+      .eq("id", techStackId)
+      .single();
+    
+    const newSubtitle = data ? data.name : subtitle;
+    
     onUpdate(node.id, {
-      data: { ...node.data, requirementIds: newIds },
+      data: { 
+        ...node.data, 
+        techStackId,
+        subtitle: newSubtitle
+      },
     });
-    loadLinkedItems();
-  };
-
-  const handleUnlinkRequirement = (requirementId: string) => {
-    if (!node) return;
-    const currentIds = node.data.requirementIds || [];
-    const newIds = currentIds.filter((id: string) => id !== requirementId);
-    onUpdate(node.id, {
-      data: { ...node.data, requirementIds: newIds },
-    });
-    loadLinkedItems();
-  };
-
-  const handleLinkTechStack = async (techStackId: string) => {
-    if (!node) return;
-    const currentIds = node.data.techStackIds || [];
-    const newIds = [...currentIds, techStackId];
-    onUpdate(node.id, {
-      data: { ...node.data, techStackIds: newIds },
-    });
-    loadLinkedItems();
-  };
-
-  const handleUnlinkTechStack = (techStackId: string) => {
-    if (!node) return;
-    const currentIds = node.data.techStackIds || [];
-    const newIds = currentIds.filter((id: string) => id !== techStackId);
-    onUpdate(node.id, {
-      data: { ...node.data, techStackIds: newIds },
-    });
-    loadLinkedItems();
+    setSubtitle(newSubtitle);
+    toast.success("Tech stack linked");
   };
 
   if (!node) return null;
@@ -251,24 +211,22 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
           {node.data.type === "REQUIREMENT" && (
             <>
               <div className="space-y-3">
-                <Label>Select Requirement</Label>
-                <LinkSelector
-                  type="requirement"
-                  projectId={projectId}
-                  selectedIds={node.data.requirementId ? [node.data.requirementId] : []}
-                  onSelect={(id) => {
-                    onUpdate(node.id, {
-                      data: { ...node.data, requirementId: id }
-                    });
-                    loadLinkedItems();
-                  }}
-                  onUnselect={() => {
-                    onUpdate(node.id, {
-                      data: { ...node.data, requirementId: null }
-                    });
-                    loadLinkedItems();
-                  }}
-                />
+                <Label>Link to Requirement</Label>
+                <Select
+                  value={node.data.requirementId || ""}
+                  onValueChange={handleRequirementChange}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a requirement..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {requirements.map((req) => (
+                      <SelectItem key={req.id} value={req.id}>
+                        {req.code} - {req.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <Separator />
             </>
@@ -278,23 +236,22 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
           {node.data.type === "STANDARD" && (
             <>
               <div className="space-y-3">
-                <Label>Select Standard</Label>
-                <LinkSelector
-                  type="standard"
-                  selectedIds={node.data.standardId ? [node.data.standardId] : []}
-                  onSelect={(id) => {
-                    onUpdate(node.id, {
-                      data: { ...node.data, standardId: id }
-                    });
-                    loadLinkedItems();
-                  }}
-                  onUnselect={() => {
-                    onUpdate(node.id, {
-                      data: { ...node.data, standardId: null }
-                    });
-                    loadLinkedItems();
-                  }}
-                />
+                <Label>Link to Standard</Label>
+                <Select
+                  value={node.data.standardId || ""}
+                  onValueChange={handleStandardChange}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a standard..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {standards.map((std) => (
+                      <SelectItem key={std.id} value={std.id}>
+                        {std.code} - {std.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <Separator />
             </>
@@ -304,23 +261,22 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
           {node.data.type === "TECH_STACK" && (
             <>
               <div className="space-y-3">
-                <Label>Select Tech Stack</Label>
-                <LinkSelector
-                  type="tech_stack"
-                  selectedIds={node.data.techStackId ? [node.data.techStackId] : []}
-                  onSelect={(id) => {
-                    onUpdate(node.id, {
-                      data: { ...node.data, techStackId: id }
-                    });
-                    loadLinkedItems();
-                  }}
-                  onUnselect={() => {
-                    onUpdate(node.id, {
-                      data: { ...node.data, techStackId: null }
-                    });
-                    loadLinkedItems();
-                  }}
-                />
+                <Label>Link to Tech Stack</Label>
+                <Select
+                  value={node.data.techStackId || ""}
+                  onValueChange={handleTechStackChange}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a tech stack..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {techStacks.map((stack) => (
+                      <SelectItem key={stack.id} value={stack.id}>
+                        {stack.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <Separator />
             </>
