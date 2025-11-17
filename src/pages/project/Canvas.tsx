@@ -3,14 +3,14 @@ import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { NodePalette, NodeType } from "@/components/canvas/NodePalette";
 import { CanvasNode } from "@/components/canvas/CanvasNode";
+import { NodePropertiesPanel } from "@/components/canvas/NodePropertiesPanel";
 import { useParams } from "react-router-dom";
+import { useRealtimeCanvas } from "@/hooks/useRealtimeCanvas";
 import ReactFlow, {
   Background,
   Controls,
   MiniMap,
   addEdge,
-  useNodesState,
-  useEdgesState,
   Connection,
   Edge,
   Node,
@@ -53,13 +53,51 @@ const initialEdges: Edge[] = [
 function CanvasFlow() {
   const { projectId } = useParams<{ projectId: string }>();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [showProperties, setShowProperties] = useState(false);
+
+  const {
+    nodes,
+    edges,
+    setNodes,
+    setEdges,
+    onNodesChange,
+    onEdgesChange,
+    saveNode,
+    saveEdge,
+  } = useRealtimeCanvas(projectId!, initialNodes, initialEdges);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
+    (params: Connection) => {
+      const newEdge = addEdge(params, edges)[edges.length];
+      setEdges((eds) => addEdge(params, eds));
+      if (newEdge) {
+        saveEdge(newEdge as Edge);
+      }
+    },
+    [setEdges, edges, saveEdge]
+  );
+
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setSelectedNode(node);
+    setShowProperties(true);
+  }, []);
+
+  const handleNodeUpdate = useCallback(
+    (nodeId: string, updates: Partial<Node>) => {
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id === nodeId) {
+            const updatedNode = { ...node, ...updates };
+            saveNode(updatedNode);
+            return updatedNode;
+          }
+          return node;
+        })
+      );
+    },
+    [setNodes, saveNode]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -91,8 +129,9 @@ function CanvasFlow() {
       };
 
       setNodes((nds) => nds.concat(newNode));
+      saveNode(newNode);
     },
-    [reactFlowInstance, setNodes]
+    [reactFlowInstance, setNodes, saveNode]
   );
 
   return (
@@ -112,6 +151,7 @@ function CanvasFlow() {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
+              onNodeClick={onNodeClick}
               onInit={setReactFlowInstance}
               onDrop={onDrop}
               onDragOver={onDragOver}
@@ -134,23 +174,16 @@ function CanvasFlow() {
                 className="bg-card border border-border"
               />
             </ReactFlow>
-            
-            {/* Toolbar */}
-            <div className="absolute top-4 left-4 flex gap-2">
-              <Button variant="secondary" size="sm" className="gap-2">
-                <ZoomIn className="h-3 w-3" />
-                Zoom In
-              </Button>
-              <Button variant="secondary" size="sm" className="gap-2">
-                <ZoomOut className="h-3 w-3" />
-                Zoom Out
-              </Button>
-              <Button variant="secondary" size="sm" className="gap-2">
-                <Maximize className="h-3 w-3" />
-                Fit View
-              </Button>
-            </div>
           </div>
+
+          {showProperties && (
+            <NodePropertiesPanel
+              node={selectedNode}
+              onClose={() => setShowProperties(false)}
+              onUpdate={handleNodeUpdate}
+              projectId={projectId!}
+            />
+          )}
         </div>
       </div>
     </div>

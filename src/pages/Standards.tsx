@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { StandardsTree, Standard } from "@/components/standards/StandardsTree";
+import { StandardsTreeManager } from "@/components/standards/StandardsTreeManager";
 import { ManageCategoriesDialog } from "@/components/standards/ManageCategoriesDialog";
 import { EditStandardDialog } from "@/components/standards/EditStandardDialog";
 import { ManageTechStacksDialog } from "@/components/standards/ManageTechStacksDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Search, FolderCog, Plus, Layers, Shield, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,6 +45,7 @@ export default function Standards() {
         title: s.title,
         description: s.description,
         content: s.content,
+        category_id: s.category_id,
         children: buildTree(data, s.id),
         attachments: s.attachments?.map((a: any) => ({ id: a.id, type: a.type, name: a.name, url: a.url, description: a.description })),
       }));
@@ -57,7 +60,9 @@ export default function Standards() {
       title: s.title,
       description: s.description,
       content: s.content,
+      category_id: s.category_id,
       children: buildTree(all, s.id),
+      attachments: s.attachments?.map((a: any) => ({ id: a.id, type: a.type, name: a.name, url: a.url, description: a.description })),
     }));
   };
 
@@ -149,9 +154,35 @@ export default function Standards() {
               <Input placeholder="Search standards..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
             </div>
 
-            <div className="bg-card border rounded-lg p-4">
-              <StandardsTree standards={filteredStandards} onStandardSelect={handleStandardClick} />
-            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Standards Library</CardTitle>
+                <CardDescription>
+                  Manage organizational standards with AI-powered expansion and knowledge management
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {categories.map((category) => {
+                  const categoryStandards = filteredStandards.filter(
+                    (s: any) => s.category_id === category.id
+                  );
+                  if (categoryStandards.length === 0) return null;
+
+                  return (
+                    <div key={category.id} className="mb-6">
+                      <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                        <Badge variant="outline">{category.name}</Badge>
+                      </h3>
+                      <StandardsTreeManager
+                        standards={categoryStandards}
+                        categoryId={category.id}
+                        onRefresh={loadStandards}
+                      />
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="categories" className="space-y-4">
