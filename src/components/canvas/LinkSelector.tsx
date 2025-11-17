@@ -120,11 +120,18 @@ export function LinkSelector({ type, projectId, selectedIds, onSelect, onUnselec
     return `${item.code} - ${item.title}`;
   };
 
-  const handleSelect = (itemId: string) => {
-    if (selectedIds.includes(itemId)) {
-      onUnselect(itemId);
-    } else {
-      onSelect(itemId);
+  const handleSelect = (searchValue: string) => {
+    // Find the item by matching the display label (case-insensitive)
+    const item = flattenHierarchy(items).find(
+      (i) => getDisplayLabel(i).toLowerCase() === searchValue.toLowerCase()
+    );
+    
+    if (item) {
+      if (selectedIds.includes(item.id)) {
+        onUnselect(item.id);
+      } else {
+        onSelect(item.id);
+      }
     }
   };
 
@@ -166,10 +173,8 @@ export function LinkSelector({ type, projectId, selectedIds, onSelect, onUnselec
                 flattenHierarchy(items).map((item) => (
                   <CommandItem
                     key={item.id}
-                    value={item.id}
-                    onSelect={(currentValue) => {
-                      handleSelect(currentValue);
-                    }}
+                    value={getDisplayLabel(item)}
+                    onSelect={handleSelect}
                     className="cursor-pointer"
                   >
                     <Check
