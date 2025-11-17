@@ -203,116 +203,80 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
 
           <Separator />
 
-          {/* Linked Requirements - Only for REQUIREMENT nodes */}
+          {/* Select Requirement - Only for REQUIREMENT nodes */}
           {node.type === "REQUIREMENT" && (
             <>
               <div className="space-y-3">
-                <Label>Linked Requirements</Label>
+                <Label>Select Requirement</Label>
                 <LinkSelector
                   type="requirement"
                   projectId={projectId}
-                  selectedIds={node.data.requirementIds || []}
-                  onSelect={handleLinkRequirement}
-                  onUnselect={handleUnlinkRequirement}
+                  selectedIds={node.data.requirementId ? [node.data.requirementId] : []}
+                  onSelect={(id) => {
+                    onUpdate(node.id, {
+                      data: { ...node.data, requirementId: id }
+                    });
+                    loadLinkedItems();
+                  }}
+                  onUnselect={() => {
+                    onUpdate(node.id, {
+                      data: { ...node.data, requirementId: null }
+                    });
+                    loadLinkedItems();
+                  }}
                 />
-                {linkedRequirements.length > 0 && (
-                  <div className="space-y-2 mt-2">
-                    {linkedRequirements.map((requirement) => (
-                      <div
-                        key={requirement.id}
-                        className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/50"
-                      >
-                        <div className="text-xs">
-                          <div className="font-medium">{requirement.code}</div>
-                          <div className="text-muted-foreground">{requirement.title}</div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleUnlinkRequirement(requirement.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
               <Separator />
             </>
           )}
 
-          {/* Linked Standards - Only for STANDARD nodes */}
+          {/* Select Standard - Only for STANDARD nodes */}
           {node.type === "STANDARD" && (
             <>
               <div className="space-y-3">
-                <Label>Linked Standards</Label>
+                <Label>Select Standard</Label>
                 <LinkSelector
                   type="standard"
-                  selectedIds={node.data.standardIds || []}
-                  onSelect={handleLinkStandard}
-                  onUnselect={handleUnlinkStandard}
+                  selectedIds={node.data.standardId ? [node.data.standardId] : []}
+                  onSelect={(id) => {
+                    onUpdate(node.id, {
+                      data: { ...node.data, standardId: id }
+                    });
+                    loadLinkedItems();
+                  }}
+                  onUnselect={() => {
+                    onUpdate(node.id, {
+                      data: { ...node.data, standardId: null }
+                    });
+                    loadLinkedItems();
+                  }}
                 />
-                {linkedStandards.length > 0 && (
-                  <div className="space-y-2 mt-2">
-                    {linkedStandards.map((standard) => (
-                      <div
-                        key={standard.id}
-                        className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/50"
-                      >
-                        <div className="text-xs">
-                          <div className="font-medium">{standard.code}</div>
-                          <div className="text-muted-foreground">{standard.title}</div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleUnlinkStandard(standard.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
               <Separator />
             </>
           )}
 
-          {/* Linked Tech Stacks - Only for TECH_STACK nodes */}
+          {/* Select Tech Stack - Only for TECH_STACK nodes */}
           {node.type === "TECH_STACK" && (
             <>
               <div className="space-y-3">
-                <Label>Linked Tech Stacks</Label>
+                <Label>Select Tech Stack</Label>
                 <LinkSelector
                   type="tech_stack"
-                  selectedIds={node.data.techStackIds || []}
-                  onSelect={handleLinkTechStack}
-                  onUnselect={handleUnlinkTechStack}
+                  selectedIds={node.data.techStackId ? [node.data.techStackId] : []}
+                  onSelect={(id) => {
+                    onUpdate(node.id, {
+                      data: { ...node.data, techStackId: id }
+                    });
+                    loadLinkedItems();
+                  }}
+                  onUnselect={() => {
+                    onUpdate(node.id, {
+                      data: { ...node.data, techStackId: null }
+                    });
+                    loadLinkedItems();
+                  }}
                 />
-                {linkedTechStacks.length > 0 && (
-                  <div className="space-y-2 mt-2">
-                    {linkedTechStacks.map((techStack) => (
-                      <div
-                        key={techStack.id}
-                        className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/50"
-                      >
-                        <div className="text-xs font-medium">{techStack.name}</div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleUnlinkTechStack(techStack.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
               <Separator />
             </>
