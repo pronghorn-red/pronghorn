@@ -12,10 +12,21 @@ serve(async (req) => {
   }
 
   try {
-    const { text, projectId } = await req.json();
+    const body = await req.json();
+    console.log("Received request body:", JSON.stringify(body));
+    
+    const { text, projectId } = body;
     
     if (!text || !projectId) {
+      console.error("Missing parameters - text:", !!text, "projectId:", !!projectId);
       throw new Error("Missing required parameters: text and projectId");
+    }
+
+    // Validate projectId is a valid UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(projectId)) {
+      console.error("Invalid projectId format:", projectId);
+      throw new Error(`Invalid projectId format. Received: ${projectId}. Expected a valid UUID.`);
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");

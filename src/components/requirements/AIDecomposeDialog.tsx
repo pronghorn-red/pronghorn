@@ -31,16 +31,30 @@ export function AIDecomposeDialog({ projectId, open, onClose }: AIDecomposeDialo
       return;
     }
 
+    if (!projectId) {
+      toast.error("Project ID is missing");
+      console.error("ProjectId is undefined or null");
+      return;
+    }
+
+    console.log("Calling decompose-requirements with projectId:", projectId);
     setIsProcessing(true);
 
     try {
       const { data, error } = await supabase.functions.invoke("decompose-requirements", {
-        body: { text: text.trim(), projectId },
+        body: { 
+          text: text.trim(), 
+          projectId: projectId 
+        },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Edge function error:", error);
+        throw error;
+      }
 
       if (data.error) {
+        console.error("Data error:", data.error);
         throw new Error(data.error);
       }
 
