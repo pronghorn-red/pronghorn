@@ -56,7 +56,7 @@ export function ProjectCard({
     <Card
       className="card-hover group relative"
     >
-      <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+      <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-background/80 backdrop-blur-sm rounded-md p-1">
         <EditProjectDialog
           projectId={projectId}
           currentName={projectName}

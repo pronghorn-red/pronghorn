@@ -13,19 +13,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Loader2, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function EnhancedCreateProjectDialog() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [useAI, setUseAI] = useState(false);
 
   // Basic fields
   const [name, setName] = useState("");
@@ -40,8 +41,40 @@ export function EnhancedCreateProjectDialog() {
   const [priority, setPriority] = useState("medium");
   const [tags, setTags] = useState("");
 
+  // Standards & Tech Stacks
+  const [selectedStandards, setSelectedStandards] = useState<string[]>([]);
+  const [selectedTechStacks, setSelectedTechStacks] = useState<string[]>([]);
+
   // AI fields
-  const [aiPrompt, setAiPrompt] = useState("");
+  const [requirements, setRequirements] = useState("");
+
+  // Load real standards from database
+  const { data: standardCategories = [] } = useQuery({
+    queryKey: ['standard-categories-wizard'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('standard_categories')
+        .select('id, name, description')
+        .order('order_index');
+      if (error) throw error;
+      return data;
+    },
+    enabled: open
+  });
+
+  // Load real tech stacks from database
+  const { data: techStacks = [] } = useQuery({
+    queryKey: ['tech-stacks-wizard'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tech_stacks')
+        .select('id, name, description')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+    enabled: open
+  });
 
   const resetForm = () => {
     setName("");
@@ -53,8 +86,25 @@ export function EnhancedCreateProjectDialog() {
     setTimelineEnd("");
     setPriority("medium");
     setTags("");
-    setAiPrompt("");
-    setUseAI(false);
+    setRequirements("");
+    setSelectedStandards([]);
+    setSelectedTechStacks([]);
+  };
+
+  const toggleStandard = (standardId: string) => {
+    setSelectedStandards(prev =>
+      prev.includes(standardId)
+        ? prev.filter(id => id !== standardId)
+        : [...prev, standardId]
+    );
+  };
+
+  const toggleTechStack = (techStackId: string) => {
+    setSelectedTechStacks(prev =>
+      prev.includes(techStackId)
+        ? prev.filter(id => id !== techStackId)
+        : [...prev, techStackId]
+    );
   };
 
   const handleSubmit = async () => {
@@ -103,11 +153,27 @@ export function EnhancedCreateProjectDialog() {
 
       if (error) throw error;
 
-      // If AI is enabled and there's a prompt, decompose requirements
-      if (useAI && aiPrompt.trim()) {
+      // Link selected tech stacks
+      if (selectedTechStacks.length > 0) {
+        const techStackLinks = selectedTechStacks.map(techStackId => ({
+          project_id: project.id,
+          tech_stack_id: techStackId
+        }));
+        
+        const { error: techStackError } = await supabase
+          .from('project_tech_stacks')
+          .insert(techStackLinks);
+        
+        if (techStackError) {
+          console.error("Error linking tech stacks:", techStackError);
+        }
+      }
+
+      // If there are requirements, decompose them with AI
+      if (requirements.trim()) {
         const { error: aiError } = await supabase.functions.invoke("decompose-requirements", {
           body: { 
-            text: aiPrompt.trim(), 
+            text: requirements.trim(), 
             projectId: project.id 
           },
         });
@@ -146,7 +212,7 @@ export function EnhancedCreateProjectDialog() {
           Create New Project
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>
           <DialogDescription>
@@ -154,151 +220,208 @@ export function EnhancedCreateProjectDialog() {
           </DialogDescription>
         </DialogHeader>
         
-        <Tabs defaultValue="basic" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="basic">Basic Info</TabsTrigger>
-            <TabsTrigger value="metadata">Metadata</TabsTrigger>
+        <Tabs defaultValue="basic" className="w-full flex-1 overflow-hidden flex flex-col">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="basic">Basic</TabsTrigger>
+            <TabsTrigger value="metadata">Details</TabsTrigger>
+            <TabsTrigger value="standards">Standards</TabsTrigger>
             <TabsTrigger value="ai">
               <Sparkles className="h-3 w-3 mr-1" />
-              AI Setup
+              AI
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="basic" className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Project Name *</Label>
-              <Input
-                id="name"
-                placeholder="Enterprise Portal"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="Brief description of your project..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="organization">Organization</Label>
-              <Input
-                id="organization"
-                placeholder="Acme Corp"
-                value={organization}
-                onChange={(e) => setOrganization(e.target.value)}
-              />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="metadata" className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          <ScrollArea className="flex-1 pr-4">
+            <TabsContent value="basic" className="space-y-4 mt-4">
               <div className="space-y-2">
-                <Label htmlFor="budget">Budget ($)</Label>
+                <Label htmlFor="name">Project Name *</Label>
                 <Input
-                  id="budget"
-                  type="number"
-                  placeholder="100000"
-                  value={budget}
-                  onChange={(e) => setBudget(e.target.value)}
+                  id="name"
+                  placeholder="Enterprise Portal"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Brief description of your project..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="priority">Priority</Label>
-                <Select value={priority} onValueChange={setPriority}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="scope">Scope</Label>
-              <Textarea
-                id="scope"
-                placeholder="Define the project scope..."
-                value={scope}
-                onChange={(e) => setScope(e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="timelineStart">Start Date</Label>
+                <Label htmlFor="organization">Organization</Label>
                 <Input
-                  id="timelineStart"
-                  type="date"
-                  value={timelineStart}
-                  onChange={(e) => setTimelineStart(e.target.value)}
+                  id="organization"
+                  placeholder="Acme Corp"
+                  value={organization}
+                  onChange={(e) => setOrganization(e.target.value)}
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="metadata" className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="budget">Budget ($)</Label>
+                  <Input
+                    id="budget"
+                    type="number"
+                    placeholder="100000"
+                    value={budget}
+                    onChange={(e) => setBudget(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="priority">Priority</Label>
+                  <Select value={priority} onValueChange={setPriority}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="critical">Critical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="scope">Scope</Label>
+                <Textarea
+                  id="scope"
+                  placeholder="Project scope and boundaries..."
+                  value={scope}
+                  onChange={(e) => setScope(e.target.value)}
+                  rows={2}
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="timeline-start">Timeline Start</Label>
+                  <Input
+                    id="timeline-start"
+                    type="date"
+                    value={timelineStart}
+                    onChange={(e) => setTimelineStart(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="timeline-end">Timeline End</Label>
+                  <Input
+                    id="timeline-end"
+                    type="date"
+                    value={timelineEnd}
+                    onChange={(e) => setTimelineEnd(e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="timelineEnd">End Date</Label>
+                <Label htmlFor="tags">Tags (comma-separated)</Label>
                 <Input
-                  id="timelineEnd"
-                  type="date"
-                  value={timelineEnd}
-                  onChange={(e) => setTimelineEnd(e.target.value)}
+                  id="tags"
+                  placeholder="frontend, api, mobile"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
                 />
               </div>
-            </div>
+            </TabsContent>
 
-            <div className="space-y-2">
-              <Label htmlFor="tags">Tags (comma-separated)</Label>
-              <Input
-                id="tags"
-                placeholder="web, api, mobile"
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-              />
-            </div>
-          </TabsContent>
+            <TabsContent value="standards" className="space-y-4 mt-4">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-3">Select Standards</h3>
+                  <div className="space-y-2">
+                    {standardCategories.map((category) => (
+                      <div key={category.id} className="flex items-start gap-2 p-2 rounded-md hover:bg-muted/50">
+                        <Checkbox
+                          id={`standard-${category.id}`}
+                          checked={selectedStandards.includes(category.id)}
+                          onCheckedChange={() => toggleStandard(category.id)}
+                        />
+                        <div className="flex-1">
+                          <label
+                            htmlFor={`standard-${category.id}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                          >
+                            {category.name}
+                          </label>
+                          {category.description && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {category.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-          <TabsContent value="ai" className="space-y-4">
-            <div className="space-y-2">
-              <Label>AI Requirements Generation</Label>
-              <p className="text-sm text-muted-foreground">
-                Paste your requirements document or project description below. AI will automatically decompose it into a structured hierarchy of Epics, Features, Stories, and Acceptance Criteria.
-              </p>
-            </div>
+                <div>
+                  <h3 className="font-semibold mb-3">Select Tech Stacks</h3>
+                  <div className="space-y-2">
+                    {techStacks.map((techStack) => (
+                      <div key={techStack.id} className="flex items-start gap-2 p-2 rounded-md hover:bg-muted/50">
+                        <Checkbox
+                          id={`tech-${techStack.id}`}
+                          checked={selectedTechStacks.includes(techStack.id)}
+                          onCheckedChange={() => toggleTechStack(techStack.id)}
+                        />
+                        <div className="flex-1">
+                          <label
+                            htmlFor={`tech-${techStack.id}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                          >
+                            {techStack.name}
+                          </label>
+                          {techStack.description && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {techStack.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
 
-            <div className="space-y-2">
-              <Label htmlFor="aiPrompt">Requirements Text</Label>
-              <Textarea
-                id="aiPrompt"
-                placeholder="Paste your requirements document, meeting notes, or project brief here..."
-                value={aiPrompt}
-                onChange={(e) => {
-                  setAiPrompt(e.target.value);
-                  setUseAI(e.target.value.trim().length > 0);
-                }}
-                rows={12}
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground">
-                Example: "Build a user authentication system with email/password login, password reset, and OAuth integration..."
-              </p>
-            </div>
-          </TabsContent>
+            <TabsContent value="ai" className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="requirements">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    <span>Requirements Text (Optional)</span>
+                  </div>
+                </Label>
+                <Textarea
+                  id="requirements"
+                  placeholder="Paste your requirements document or describe your project needs here. AI will automatically break it down into structured requirements..."
+                  value={requirements}
+                  onChange={(e) => setRequirements(e.target.value)}
+                  rows={12}
+                />
+                <p className="text-xs text-muted-foreground">
+                  If provided, AI will automatically decompose this text into structured epics, features, and stories.
+                </p>
+              </div>
+            </TabsContent>
+          </ScrollArea>
         </Tabs>
         
-        <DialogFooter>
+        <DialogFooter className="mt-4">
           <Button variant="outline" onClick={() => setOpen(false)} disabled={isCreating}>
             Cancel
           </Button>
@@ -307,11 +430,6 @@ export function EnhancedCreateProjectDialog() {
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 Creating...
-              </>
-            ) : useAI ? (
-              <>
-                <Sparkles className="h-4 w-4 mr-2" />
-                Create with AI
               </>
             ) : (
               "Create Project"

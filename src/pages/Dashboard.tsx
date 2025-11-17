@@ -2,10 +2,8 @@ import { useState } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectCard } from "@/components/dashboard/ProjectCard";
 import { EnhancedCreateProjectDialog } from "@/components/dashboard/EnhancedCreateProjectDialog";
-import { ProjectSetupWizard } from "@/components/requirements/ProjectSetupWizard";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Search, Sparkles } from "lucide-react";
+import { Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -13,7 +11,6 @@ import { useQuery } from "@tanstack/react-query";
 export default function Dashboard() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
-  const [showWizard, setShowWizard] = useState(false);
 
   const { data: projects = [], isLoading, refetch } = useQuery({
     queryKey: ['projects'],
@@ -45,10 +42,7 @@ export default function Dashboard() {
       <main className="container px-6 py-8">
         <div className="flex justify-between mb-8">
           <div><h1 className="text-3xl font-bold mb-2">Projects</h1><p className="text-muted-foreground">Manage projects</p></div>
-          <div className="flex gap-2">
-            <Button onClick={() => setShowWizard(true)}><Sparkles className="h-4 w-4 mr-2" />Setup Wizard</Button>
-            <EnhancedCreateProjectDialog />
-          </div>
+          <EnhancedCreateProjectDialog />
         </div>
         <div className="mb-6"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 max-w-md" /></div>
         {isLoading ? (
@@ -63,7 +57,6 @@ export default function Dashboard() {
           </div>
         )}
       </main>
-      <ProjectSetupWizard open={showWizard} onClose={() => setShowWizard(false)} />
     </div>
   );
 }
