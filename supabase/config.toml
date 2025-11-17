@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.expand-requirement]
 verify_jwt = false
+
+[functions.verify-admin]
+verify_jwt = false
