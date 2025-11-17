@@ -325,6 +325,42 @@ export type Database = {
           },
         ]
       }
+      project_tech_stacks: {
+        Row: {
+          created_at: string
+          id: string
+          project_id: string
+          tech_stack_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          project_id: string
+          tech_stack_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          project_id?: string
+          tech_stack_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_tech_stacks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tech_stacks_tech_stack_id_fkey"
+            columns: ["tech_stack_id"]
+            isOneToOne: false
+            referencedRelation: "tech_stacks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           created_at: string
@@ -507,34 +543,51 @@ export type Database = {
         Row: {
           color: string | null
           created_at: string
+          created_by: string | null
           description: string | null
           icon: string | null
           id: string
+          is_system: boolean | null
           name: string
           order_index: number
+          org_id: string | null
           updated_at: string
         }
         Insert: {
           color?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           icon?: string | null
           id?: string
+          is_system?: boolean | null
           name: string
           order_index?: number
+          org_id?: string | null
           updated_at?: string
         }
         Update: {
           color?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           icon?: string | null
           id?: string
+          is_system?: boolean | null
           name?: string
           order_index?: number
+          org_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "standard_categories_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       standards: {
         Row: {
@@ -542,9 +595,12 @@ export type Database = {
           code: string
           content: string | null
           created_at: string
+          created_by: string | null
           description: string | null
           id: string
+          is_system: boolean | null
           order_index: number
+          org_id: string | null
           parent_id: string | null
           title: string
           updated_at: string
@@ -554,9 +610,12 @@ export type Database = {
           code: string
           content?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           id?: string
+          is_system?: boolean | null
           order_index?: number
+          org_id?: string | null
           parent_id?: string | null
           title: string
           updated_at?: string
@@ -566,9 +625,12 @@ export type Database = {
           code?: string
           content?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           id?: string
+          is_system?: boolean | null
           order_index?: number
+          org_id?: string | null
           parent_id?: string | null
           title?: string
           updated_at?: string
@@ -582,10 +644,97 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "standards_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "standards_parent_id_fkey"
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "standards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tech_stack_standards: {
+        Row: {
+          created_at: string
+          id: string
+          standard_id: string
+          tech_stack_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          standard_id: string
+          tech_stack_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          standard_id?: string
+          tech_stack_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tech_stack_standards_standard_id_fkey"
+            columns: ["standard_id"]
+            isOneToOne: false
+            referencedRelation: "standards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tech_stack_standards_tech_stack_id_fkey"
+            columns: ["tech_stack_id"]
+            isOneToOne: false
+            referencedRelation: "tech_stacks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tech_stacks: {
+        Row: {
+          color: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tech_stacks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
