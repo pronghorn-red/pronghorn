@@ -204,7 +204,7 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
           <Separator />
 
           {/* Select Requirement - Only for REQUIREMENT nodes */}
-          {node.type === "REQUIREMENT" && (
+          {node.data.type === "REQUIREMENT" && (
             <>
               <div className="space-y-3">
                 <Label>Select Requirement</Label>
@@ -231,7 +231,7 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
           )}
 
           {/* Select Standard - Only for STANDARD nodes */}
-          {node.type === "STANDARD" && (
+          {node.data.type === "STANDARD" && (
             <>
               <div className="space-y-3">
                 <Label>Select Standard</Label>
@@ -257,7 +257,7 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
           )}
 
           {/* Select Tech Stack - Only for TECH_STACK nodes */}
-          {node.type === "TECH_STACK" && (
+          {node.data.type === "TECH_STACK" && (
             <>
               <div className="space-y-3">
                 <Label>Select Tech Stack</Label>
