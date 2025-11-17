@@ -41,20 +41,26 @@ serve(async (req) => {
 
     console.log('Calling Lovable AI for standards generation...');
 
-    // Create comprehensive prompt for AI
-    const prompt = `You are a standards architect. Analyze the following content and create comprehensive, hierarchical standards.
+    // Create comprehensive prompt for AI - limit input size if needed
+    const maxInputLength = 15000; // Reduced to prevent provider timeouts
+    const truncatedInput = input.length > maxInputLength 
+      ? input.substring(0, maxInputLength) + "\n\n[Content truncated - processing first 15000 characters]"
+      : input;
+
+    const prompt = `You are a standards architect. Analyze the following content and create hierarchical standards.
 
 INPUT CONTENT:
-${input}
+${truncatedInput}
 
 INSTRUCTIONS:
 1. Extract or create logical standards from this content
-2. Organize them hierarchically (parent standards with child standards up to 2 levels deep)
-3. Create comprehensive descriptions for each standard
+2. Organize hierarchically with parent standards and child standards (max 2 levels deep)
+3. Create clear, concise descriptions for each standard
 4. Assign appropriate standard codes (e.g., SEC-001, SEC-001.1, SEC-001.2)
 5. Avoid duplicating these existing codes: ${existingCodes.join(', ')}
 6. Avoid duplicating these existing titles: ${existingTitles.join(', ')}
-7. Limit to maximum 10 top-level standards to ensure response fits within token limits
+7. Limit to maximum 8 top-level standards with up to 4 children each
+8. Keep descriptions focused and under 300 characters
 
 Generate a well-structured hierarchy of standards based on this content.`;
 
@@ -86,9 +92,9 @@ Generate a well-structured hierarchy of standards based on this content.`;
                       type: "object",
                       properties: {
                         code: { type: "string", description: "Unique standard code (e.g., SEC-001)" },
-                        title: { type: "string", description: "Standard title" },
-                        description: { type: "string", description: "Brief description" },
-                        content: { type: "string", description: "Detailed content explaining the standard" },
+                        title: { type: "string", description: "Standard title (max 100 chars)" },
+                        description: { type: "string", description: "Brief description (max 300 chars)" },
+                        content: { type: "string", description: "Detailed content (max 1000 chars)" },
                         children: {
                           type: "array",
                           items: {
@@ -97,20 +103,7 @@ Generate a well-structured hierarchy of standards based on this content.`;
                               code: { type: "string" },
                               title: { type: "string" },
                               description: { type: "string" },
-                              content: { type: "string" },
-                              children: {
-                                type: "array",
-                                items: {
-                                  type: "object",
-                                  properties: {
-                                    code: { type: "string" },
-                                    title: { type: "string" },
-                                    description: { type: "string" },
-                                    content: { type: "string" }
-                                  },
-                                  required: ["code", "title", "description", "content"]
-                                }
-                              }
+                              content: { type: "string" }
                             },
                             required: ["code", "title", "description", "content"]
                           }
@@ -128,7 +121,7 @@ Generate a well-structured hierarchy of standards based on this content.`;
           }
         ],
         tool_choice: { type: "function", function: { name: "create_standards" } },
-        max_completion_tokens: 8000,
+        max_completion_tokens: 4000,
       }),
     });
 
@@ -148,9 +141,23 @@ Generate a well-structured hierarchy of standards based on this content.`;
     
     console.log('AI Response received, parsing...');
 
+    // Check for AI gateway errors
+    if (aiData.error) {
+      console.error('AI gateway returned error:', JSON.stringify(aiData.error));
+      if (aiData.error.code === 502) {
+        throw new Error('AI provider temporarily unavailable. Please try again with a smaller document or simpler request.');
+      }
+      throw new Error(`AI gateway error: ${aiData.error.message || 'Unknown error'}`);
+    }
+
     // Extract structured output from tool call
     let standardsData;
     try {
+      if (!aiData.choices || !aiData.choices[0]) {
+        console.error('AI response missing choices:', JSON.stringify(aiData, null, 2).substring(0, 1000));
+        throw new Error('Invalid AI response format');
+      }
+
       const toolCall = aiData.choices[0].message.tool_calls?.[0];
       if (!toolCall || toolCall.function.name !== 'create_standards') {
         throw new Error('AI did not use the create_standards tool');
