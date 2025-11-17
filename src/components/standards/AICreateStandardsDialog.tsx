@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Sparkles, Loader2, Upload, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -28,7 +29,9 @@ export function AICreateStandardsDialog({ categories, onSuccess }: AICreateStand
   const [open, setOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [categoryMode, setCategoryMode] = useState<"existing" | "new">("existing");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
   const [files, setFiles] = useState<File[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,8 +52,13 @@ export function AICreateStandardsDialog({ categories, onSuccess }: AICreateStand
       }
     }
 
-    if (!selectedCategory) {
+    if (categoryMode === "existing" && !selectedCategory) {
       toast.error("Please select a category");
+      return;
+    }
+
+    if (categoryMode === "new" && !newCategoryName.trim()) {
+      toast.error("Please enter a category name");
       return;
     }
 
@@ -61,6 +69,30 @@ export function AICreateStandardsDialog({ categories, onSuccess }: AICreateStand
 
     setIsGenerating(true);
     try {
+      let categoryId = selectedCategory;
+
+      // Create new category if needed
+      if (categoryMode === "new") {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: profile } = await supabase.from("profiles").select("org_id").eq("user_id", user?.id).single();
+        
+        const { data: newCategory, error: categoryError } = await supabase
+          .from("standard_categories")
+          .insert({
+            name: newCategoryName.trim(),
+            org_id: profile?.org_id,
+            created_by: user?.id,
+          })
+          .select()
+          .single();
+
+        if (categoryError) {
+          throw new Error(`Failed to create category: ${categoryError.message}`);
+        }
+
+        categoryId = newCategory.id;
+        toast.success(`Created category: ${newCategoryName}`);
+      }
       // Process files if any
       let parsedContent = "";
       
@@ -116,6 +148,8 @@ export function AICreateStandardsDialog({ categories, onSuccess }: AICreateStand
       setPrompt("");
       setFiles([]);
       setSelectedCategory("");
+      setNewCategoryName("");
+      setCategoryMode("existing");
       onSuccess();
     } catch (error) {
       console.error("Error generating standards:", error);
@@ -142,20 +176,43 @@ export function AICreateStandardsDialog({ categories, onSuccess }: AICreateStand
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="category">Target Category *</Label>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-3">
+            <Label>Category Option *</Label>
+            <RadioGroup value={categoryMode} onValueChange={(value: "existing" | "new") => setCategoryMode(value)}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="existing" id="existing" />
+                <Label htmlFor="existing" className="font-normal cursor-pointer">
+                  Use existing category
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="new" id="new" />
+                <Label htmlFor="new" className="font-normal cursor-pointer">
+                  Create new category
+                </Label>
+              </div>
+            </RadioGroup>
+
+            {categoryMode === "existing" ? (
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                placeholder="Enter new category name..."
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+              />
+            )}
           </div>
 
           <div className="space-y-2">
