@@ -57,8 +57,15 @@ export function useRealtimeRequirements(projectId: string) {
     const map = new Map<string, Requirement>();
     const roots: Requirement[] = [];
 
+    // Sort by code first
+    const sorted = [...flatList].sort((a, b) => {
+      const codeA = a.code || "";
+      const codeB = b.code || "";
+      return codeA.localeCompare(codeB, undefined, { numeric: true });
+    });
+
     // First pass: create all nodes
-    flatList.forEach((item) => {
+    sorted.forEach((item) => {
       map.set(item.id, {
         id: item.id,
         code: item.code,
@@ -71,7 +78,7 @@ export function useRealtimeRequirements(projectId: string) {
     });
 
     // Second pass: build tree
-    flatList.forEach((item) => {
+    sorted.forEach((item) => {
       const node = map.get(item.id)!;
       if (item.parent_id) {
         const parent = map.get(item.parent_id);

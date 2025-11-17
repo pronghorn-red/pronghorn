@@ -40,16 +40,20 @@ export function LinkSelector({ type, projectId, selectedIds, onSelect, onUnselec
       if (type === "requirement" && projectId) {
         const { data } = await supabase
           .from("requirements")
-          .select("id, code, title, type")
-          .eq("project_id", projectId)
-          .order("order_index");
-        setItems(data || []);
+          .select("id, code, title, type, parent_id")
+          .eq("project_id", projectId);
+        
+        // Build hierarchy and sort by code
+        const hierarchical = buildHierarchy(data || []);
+        setItems(hierarchical);
       } else if (type === "standard") {
         const { data } = await supabase
           .from("standards")
-          .select("id, code, title, category_id")
-          .order("order_index");
-        setItems(data || []);
+          .select("id, code, title, category_id, parent_id")
+          .order("code");
+        
+        const hierarchical = buildHierarchy(data || []);
+        setItems(hierarchical);
       } else if (type === "tech_stack") {
         const { data } = await supabase
           .from("tech_stacks")
@@ -62,6 +66,51 @@ export function LinkSelector({ type, projectId, selectedIds, onSelect, onUnselec
     } finally {
       setLoading(false);
     }
+  };
+
+  const buildHierarchy = (flatList: any[]): any[] => {
+    const map = new Map<string, any>();
+    const roots: any[] = [];
+
+    // Sort by code first
+    const sorted = [...flatList].sort((a, b) => {
+      const codeA = a.code || "";
+      const codeB = b.code || "";
+      return codeA.localeCompare(codeB, undefined, { numeric: true });
+    });
+
+    // Create nodes
+    sorted.forEach((item) => {
+      map.set(item.id, { ...item, children: [] });
+    });
+
+    // Build tree
+    sorted.forEach((item) => {
+      const node = map.get(item.id)!;
+      if (item.parent_id) {
+        const parent = map.get(item.parent_id);
+        if (parent) {
+          parent.children.push(node);
+        } else {
+          roots.push(node);
+        }
+      } else {
+        roots.push(node);
+      }
+    });
+
+    return roots;
+  };
+
+  const flattenHierarchy = (items: any[], level = 0): any[] => {
+    let result: any[] = [];
+    items.forEach((item) => {
+      result.push({ ...item, level });
+      if (item.children && item.children.length > 0) {
+        result = result.concat(flattenHierarchy(item.children, level + 1));
+      }
+    });
+    return result;
   };
 
   const getDisplayLabel = (item: any) => {
@@ -114,19 +163,23 @@ export function LinkSelector({ type, projectId, selectedIds, onSelect, onUnselec
               {loading ? (
                 <div className="p-4 text-sm text-muted-foreground">Loading...</div>
               ) : (
-                items.map((item) => (
+                flattenHierarchy(items).map((item) => (
                   <CommandItem
                     key={item.id}
                     value={getDisplayLabel(item)}
-                    onSelect={() => handleSelect(item.id)}
+                    onSelect={() => {
+                      handleSelect(item.id);
+                      setOpen(false);
+                    }}
+                    className="cursor-pointer"
                   >
                     <Check
                       className={cn(
-                        "mr-2 h-4 w-4",
+                        "mr-2 h-4 w-4 shrink-0",
                         selectedIds.includes(item.id) ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    <div className="flex flex-col">
+                    <div className="flex flex-col" style={{ paddingLeft: `${item.level * 16}px` }}>
                       <span className="text-sm font-medium">
                         {getDisplayLabel(item)}
                       </span>
