@@ -1,7 +1,9 @@
-import { Clock, TrendingUp } from "lucide-react";
+import { Clock, TrendingUp, Pencil } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
+import { EditProjectDialog } from "./EditProjectDialog";
 
 interface ProjectCardProps {
   projectId: string;
@@ -9,7 +11,12 @@ interface ProjectCardProps {
   lastUpdated: Date;
   status: "DESIGN" | "AUDIT" | "BUILD";
   coverage?: number;
+  description?: string | null;
+  organization?: string | null;
+  budget?: number | null;
+  scope?: string | null;
   onClick?: (projectId: string) => void;
+  onUpdate?: () => void;
 }
 
 const statusConfig = {
@@ -33,16 +40,35 @@ export function ProjectCard({
   lastUpdated,
   status,
   coverage,
+  description,
+  organization,
+  budget,
+  scope,
   onClick,
+  onUpdate,
 }: ProjectCardProps) {
   const statusInfo = statusConfig[status];
 
   return (
     <Card
-      className="card-hover cursor-pointer group"
-      onClick={() => onClick?.(projectId)}
+      className="card-hover group relative"
     >
-      <CardHeader className="pb-3">
+      <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+        <EditProjectDialog
+          projectId={projectId}
+          currentName={projectName}
+          currentDescription={description}
+          currentOrganization={organization}
+          currentBudget={budget}
+          currentScope={scope}
+          onUpdate={onUpdate}
+        />
+      </div>
+      <div 
+        className="cursor-pointer"
+        onClick={() => onClick?.(projectId)}
+      >
+        <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <CardTitle className="text-lg group-hover:text-primary transition-colors">
             {projectName}
@@ -75,6 +101,7 @@ export function ProjectCard({
           </div>
         )}
       </CardContent>
+      </div>
     </Card>
   );
 }

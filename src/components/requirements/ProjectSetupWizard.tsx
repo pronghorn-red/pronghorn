@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,19 +9,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 
 interface ProjectSetupWizardProps {
   open: boolean;
   onClose: () => void;
 }
-
-const STANDARD_TEMPLATES = [
-  { id: 'security', name: 'Security (OWASP, ISO 27001)', category: 'Security' },
-  { id: 'accessibility', name: 'Accessibility (WCAG 2.1)', category: 'Accessibility' },
-  { id: 'gdpr', name: 'Data Privacy (GDPR)', category: 'Privacy' },
-  { id: 'performance', name: 'Performance Standards', category: 'Performance' },
-  { id: 'usability', name: 'Usability (ISO 9241)', category: 'Usability' },
-];
 
 export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
   const [step, setStep] = useState(1);
@@ -32,8 +25,40 @@ export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
   // Form state
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [budget, setBudget] = useState("");
+  const [scope, setScope] = useState("");
   const [selectedStandards, setSelectedStandards] = useState<string[]>([]);
+  const [selectedTechStacks, setSelectedTechStacks] = useState<string[]>([]);
   const [requirements, setRequirements] = useState("");
+
+  // Load real standards from database
+  const { data: standardCategories = [] } = useQuery({
+    queryKey: ['standard-categories-wizard'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('standard_categories')
+        .select('id, name, description')
+        .order('order_index');
+      if (error) throw error;
+      return data;
+    },
+    enabled: open
+  });
+
+  // Load real tech stacks from database
+  const { data: techStacks = [] } = useQuery({
+    queryKey: ['tech-stacks-wizard'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tech_stacks')
+        .select('id, name, description')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+    enabled: open
+  });
 
   const handleNext = () => {
     if (step === 1 && !projectName.trim()) {
@@ -54,6 +79,14 @@ export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
       prev.includes(standardId)
         ? prev.filter(id => id !== standardId)
         : [...prev, standardId]
+    );
+  };
+
+  const toggleTechStack = (techStackId: string) => {
+    setSelectedTechStacks(prev =>
+      prev.includes(techStackId)
+        ? prev.filter(id => id !== techStackId)
+        : [...prev, techStackId]
     );
   };
 
@@ -83,6 +116,9 @@ export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
         .insert({
           name: projectName,
           description: projectDescription,
+          organization,
+          budget: budget ? parseFloat(budget) : null,
+          scope,
           org_id: orgId,
           status: 'DESIGN'
         })
@@ -90,6 +126,35 @@ export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
         .single();
 
       if (projectError) throw projectError;
+
+      // Link selected standard categories to project
+      if (selectedStandards.length > 0) {
+        // Get all standards from selected categories
+        const { data: standardsData } = await supabase
+          .from('standards')
+          .select('id')
+          .in('category_id', selectedStandards);
+
+        if (standardsData && standardsData.length > 0) {
+          // Create requirement_standards links for each
+          const links = standardsData.map(std => ({
+            requirement_id: project.id,
+            standard_id: std.id
+          }));
+          
+          await supabase.from('requirement_standards').insert(links);
+        }
+      }
+
+      // Link selected tech stacks to project
+      if (selectedTechStacks.length > 0) {
+        const links = selectedTechStacks.map(tsId => ({
+          project_id: project.id,
+          tech_stack_id: tsId
+        }));
+        
+        await supabase.from('project_tech_stacks').insert(links);
+      }
 
       // If unstructured requirements provided, decompose them
       if (requirements.trim()) {
@@ -114,14 +179,8 @@ export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
       }
 
       // Link selected standards (would need to fetch actual standard IDs)
-      // This is a simplified version - in production, you'd fetch matching standards
-      if (selectedStandards.length > 0) {
-        toast({
-          title: "Project created",
-          description: `Standards templates selected: ${selectedStandards.length}. You can link specific standards from the Standards Library.`
-        });
-      }
-
+      // Standards are now linked above via requirement_standards table
+      
       toast({
         title: "Project created successfully",
         description: requirements.trim() 
@@ -148,7 +207,7 @@ export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Project Setup Wizard - Step {step} of 3</DialogTitle>
+          <DialogTitle>Project Setup Wizard - Step {step} of 4</DialogTitle>
         </DialogHeader>
 
         {step === 1 && (
@@ -172,30 +231,67 @@ export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
                 rows={4}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="organization">Organization</Label>
+              <Input
+                id="organization"
+                value={organization}
+                onChange={(e) => setOrganization(e.target.value)}
+                placeholder="Your organization name"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="budget">Budget</Label>
+                <Input
+                  id="budget"
+                  type="number"
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                  placeholder="Project budget"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="scope">Scope</Label>
+                <Input
+                  id="scope"
+                  value={scope}
+                  onChange={(e) => setScope(e.target.value)}
+                  placeholder="Project scope"
+                />
+              </div>
+            </div>
           </div>
         )}
 
         {step === 2 && (
           <div className="space-y-4">
             <div>
-              <h3 className="font-medium mb-3">Select Standard Templates</h3>
+              <h3 className="font-medium mb-3">Select Standard Categories</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Choose common enterprise standards to include non-functional requirements
+                Choose standard categories to include non-functional requirements
               </p>
-              <div className="space-y-3">
-                {STANDARD_TEMPLATES.map((standard) => (
-                  <div key={standard.id} className="flex items-center space-x-2">
+              <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                {standardCategories.map((category) => (
+                  <div key={category.id} className="flex items-start space-x-2">
                     <Checkbox
-                      id={standard.id}
-                      checked={selectedStandards.includes(standard.id)}
-                      onCheckedChange={() => toggleStandard(standard.id)}
+                      id={category.id}
+                      checked={selectedStandards.includes(category.id)}
+                      onCheckedChange={() => toggleStandard(category.id)}
                     />
-                    <Label
-                      htmlFor={standard.id}
-                      className="text-sm font-normal cursor-pointer"
-                    >
-                      {standard.name}
-                    </Label>
+                    <div className="flex-1">
+                      <Label
+                        htmlFor={category.id}
+                        className="text-sm font-medium cursor-pointer"
+                      >
+                        {category.name}
+                      </Label>
+                      {category.description && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {category.description}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -204,6 +300,41 @@ export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
         )}
 
         {step === 3 && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-medium mb-3">Select Tech Stacks</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Choose technology stacks for your project
+              </p>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                {techStacks.map((stack) => (
+                  <div key={stack.id} className="flex items-start space-x-2">
+                    <Checkbox
+                      id={stack.id}
+                      checked={selectedTechStacks.includes(stack.id)}
+                      onCheckedChange={() => toggleTechStack(stack.id)}
+                    />
+                    <div className="flex-1">
+                      <Label
+                        htmlFor={stack.id}
+                        className="text-sm font-medium cursor-pointer"
+                      >
+                        {stack.name}
+                      </Label>
+                      {stack.description && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {stack.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 4 && (
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="requirements">Unstructured Requirements (Optional)</Label>
@@ -231,7 +362,7 @@ export function ProjectSetupWizard({ open, onClose }: ProjectSetupWizardProps) {
             Back
           </Button>
           <div className="flex gap-2">
-            {step < 3 ? (
+            {step < 4 ? (
               <Button onClick={handleNext}>Next</Button>
             ) : (
               <Button onClick={handleComplete} disabled={loading}>

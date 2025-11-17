@@ -1,25 +1,21 @@
 import { useState } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectCard } from "@/components/dashboard/ProjectCard";
-import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { EnhancedCreateProjectDialog } from "@/components/dashboard/EnhancedCreateProjectDialog";
 import { ProjectSetupWizard } from "@/components/requirements/ProjectSetupWizard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-
-const mockActivities = [{ id: "1", type: "build" as const, message: "Build completed", project: "Enterprise Portal", timestamp: new Date(), status: "success" as const }];
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [showWizard, setShowWizard] = useState(false);
 
-  const { data: projects = [], isLoading } = useQuery({
+  const { data: projects = [], isLoading, refetch } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -34,7 +30,11 @@ export default function Dashboard() {
         projectName: p.name,
         lastUpdated: new Date(p.updated_at),
         status: p.status,
-        coverage: undefined
+        coverage: undefined,
+        description: p.description,
+        organization: p.organization,
+        budget: p.budget,
+        scope: p.scope
       }));
     }
   });
@@ -54,15 +54,14 @@ export default function Dashboard() {
         {isLoading ? (
           <p className="text-center py-12 text-muted-foreground">Loading projects...</p>
         ) : projects.length > 0 ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
-            {projects.map((p) => <ProjectCard key={p.projectId} {...p} onClick={(id) => navigate(`/project/${id}/canvas`)} />)}
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {projects.map((p) => <ProjectCard key={p.projectId} {...p} onClick={(id) => navigate(`/project/${id}/canvas`)} onUpdate={refetch} />)}
           </div>
         ) : (
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">No projects yet. Create your first project to get started.</p>
           </div>
         )}
-        <ActivityFeed activities={mockActivities} />
       </main>
       <ProjectSetupWizard open={showWizard} onClose={() => setShowWizard(false)} />
     </div>

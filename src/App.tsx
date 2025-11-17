@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
+import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Standards from "./pages/Standards";
 import TechStacks from "./pages/TechStacks";
@@ -13,7 +14,7 @@ import NotFound from "./pages/NotFound";
 
 const App = () => (
   <Routes>
-    <Route path="/" element={<Navigate to="/dashboard" replace />} />
+    <Route path="/" element={<Landing />} />
     <Route path="/dashboard" element={<Dashboard />} />
     <Route path="/standards" element={<Standards />} />
     <Route path="/tech-stacks" element={<TechStacks />} />
