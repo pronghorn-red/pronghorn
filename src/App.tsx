@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Standards from "./pages/Standards";
+import TechStacks from "./pages/TechStacks";
 import Settings from "./pages/Settings";
 import Requirements from "./pages/project/Requirements";
 import Canvas from "./pages/project/Canvas";
@@ -15,6 +16,7 @@ const App = () => (
     <Route path="/" element={<Navigate to="/dashboard" replace />} />
     <Route path="/dashboard" element={<Dashboard />} />
     <Route path="/standards" element={<Standards />} />
+    <Route path="/tech-stacks" element={<TechStacks />} />
     <Route path="/settings/organization" element={<Settings />} />
     <Route path="/settings/profile" element={<Settings />} />
     

@@ -724,8 +724,9 @@ export type Database = {
           description: string | null
           icon: string | null
           id: string
+          metadata: Json | null
           name: string
-          org_id: string
+          org_id: string | null
           updated_at: string
         }
         Insert: {
@@ -735,8 +736,9 @@ export type Database = {
           description?: string | null
           icon?: string | null
           id?: string
+          metadata?: Json | null
           name: string
-          org_id: string
+          org_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -746,8 +748,9 @@ export type Database = {
           description?: string | null
           icon?: string | null
           id?: string
+          metadata?: Json | null
           name?: string
-          org_id?: string
+          org_id?: string | null
           updated_at?: string
         }
         Relationships: [

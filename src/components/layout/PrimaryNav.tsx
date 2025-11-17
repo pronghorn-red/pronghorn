@@ -1,4 +1,4 @@
-import { Home, Library, Settings, User } from "lucide-react";
+import { Home, Library, Settings, User, Layers } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
 import { AdminAccessButton } from "@/components/layout/AdminAccessButton";
@@ -31,7 +31,15 @@ export function PrimaryNav() {
             activeClassName="bg-muted text-foreground"
           >
             <Library className="h-4 w-4" />
-            Standards Library
+            Standards
+          </NavLink>
+          <NavLink
+            to="/tech-stacks"
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            activeClassName="bg-muted text-foreground"
+          >
+            <Layers className="h-4 w-4" />
+            Tech Stacks
           </NavLink>
         </nav>
 
