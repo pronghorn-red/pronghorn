@@ -13,36 +13,49 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
-    const authHeader = req.headers.get('Authorization');
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    // Use service role to bypass RLS for project creation
+    // This is safe because we're handling the creation logic server-side
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
       },
-      global: {
-        headers: authHeader ? { Authorization: authHeader } : {},
-      },
     });
+    
+    // Get user from auth header if present for attribution
+    const authHeader = req.headers.get('Authorization');
+    let userId = null;
+    if (authHeader) {
+      const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+        global: {
+          headers: { Authorization: authHeader },
+        },
+      });
+      const { data: { user } } = await userClient.auth.getUser();
+      userId = user?.id || null;
+    }
 
     const { projectData, techStackIds, requirementsText } = await req.json();
     
     console.log('[create-project] Starting project creation:', { 
-      isAnonymous: !authHeader,
+      isAnonymous: !userId,
       projectName: projectData.name 
     });
+    
+    console.log('[create-project] User:', userId || 'anonymous');
 
-    // Get user from auth header if present
-    const { data: { user } } = await supabase.auth.getUser();
-    console.log('[create-project] User:', user ? user.id : 'anonymous');
-
-    // Create the project
+    // Create the project (using service role to bypass RLS)
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
         ...projectData,
-        created_by: user?.id || null,
+        created_by: userId,
       })
       .select('id, share_token')
       .single();
@@ -54,14 +67,9 @@ serve(async (req) => {
 
     console.log('[create-project] Project created:', { 
       id: project.id, 
-      shareToken: project.share_token 
+      shareToken: project.share_token,
+      createdBy: userId || 'anonymous'
     });
-
-    // Set share token in session for subsequent queries
-    if (project.share_token) {
-      await supabase.rpc('set_share_token', { token: project.share_token });
-      console.log('[create-project] Share token set in session');
-    }
 
     // Link tech stacks
     if (techStackIds && techStackIds.length > 0) {
