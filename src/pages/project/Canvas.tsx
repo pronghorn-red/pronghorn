@@ -24,31 +24,9 @@ const nodeTypes = {
   custom: CanvasNode,
 };
 
-const initialNodes: Node[] = [
-  {
-    id: "1",
-    type: "custom",
-    data: { label: "Login Component", type: "COMPONENT", subtitle: "React" },
-    position: { x: 250, y: 100 },
-  },
-  {
-    id: "2",
-    type: "custom",
-    data: { label: "Auth API", type: "API", subtitle: "/api/auth" },
-    position: { x: 500, y: 100 },
-  },
-  {
-    id: "3",
-    type: "custom",
-    data: { label: "User Database", type: "DATABASE", subtitle: "PostgreSQL" },
-    position: { x: 750, y: 100 },
-  },
-];
+const initialNodes: Node[] = [];
 
-const initialEdges: Edge[] = [
-  { id: "e1-2", source: "1", target: "2", label: "calls", animated: true },
-  { id: "e2-3", source: "2", target: "3", label: "queries" },
-];
+const initialEdges: Edge[] = [];
 
 // All node types that can be visible
 const ALL_NODE_TYPES: NodeType[] = [
