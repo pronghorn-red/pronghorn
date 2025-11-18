@@ -245,30 +245,29 @@ export default function Standards() {
 
   if (loading) {
     return (
-      <div className="flex h-screen">
+      <div className="min-h-screen bg-background">
         <PrimaryNav />
-        <ProjectSidebar projectId={projectId!} />
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="flex">
+          <ProjectSidebar projectId={projectId!} />
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen">
+    <div className="min-h-screen bg-background">
       <PrimaryNav />
-      <ProjectSidebar projectId={projectId!} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="border-b bg-background px-6 py-4">
-          <h1 className="text-2xl font-bold">Project Standards</h1>
-          <p className="text-sm text-muted-foreground">
-            Select applicable standards and tech stacks for this project
-          </p>
-        </header>
-
-        <div className="flex-1 overflow-auto p-6">
-          <div className="grid gap-6 max-w-6xl mx-auto">
+      <div className="flex">
+        <ProjectSidebar projectId={projectId!} />
+        <main className="flex-1 overflow-auto">
+          <div className="container px-6 py-8 max-w-6xl">
+            <h1 className="text-3xl font-bold mb-2">Project Standards</h1>
+            <p className="text-sm text-muted-foreground mb-6">
+              Select applicable standards and tech stacks for this project
+            </p>
             {/* Tech Stacks Section */}
             <Card>
               <CardHeader>
@@ -370,7 +369,7 @@ export default function Standards() {
               </Button>
             </div>
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );
