@@ -11,11 +11,11 @@ interface ProjectSidebarProps {
 }
 
 const activeNavItems = [
+  { icon: SettingsIcon, label: "Settings", path: "settings" },
   { icon: ListTree, label: "Requirements", path: "requirements" },
   { icon: ShieldCheck, label: "Standards", path: "standards" },
   { icon: Layout, label: "Canvas", path: "canvas" },
   { icon: FileText, label: "Specifications", path: "specifications" },
-  { icon: SettingsIcon, label: "Settings", path: "settings" },
 ];
 
 const comingSoonItems = [

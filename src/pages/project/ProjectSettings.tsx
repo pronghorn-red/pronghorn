@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
-import { TechStackSelector } from "@/components/standards/TechStackSelector";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Layers, RefreshCw, Copy, Share2 } from "lucide-react";
+import { RefreshCw, Copy, Share2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -15,7 +14,6 @@ import { useShareToken } from "@/hooks/useShareToken";
 
 export default function ProjectSettings() {
   const { projectId } = useParams<{ projectId: string }>();
-  const [showTechStacks, setShowTechStacks] = useState(false);
   const shareToken = useShareToken(projectId);
   const queryClient = useQueryClient();
 
@@ -133,25 +131,6 @@ export default function ProjectSettings() {
                   </CardContent>
                 </Card>
 
-                {/* Tech Stack */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Layers className="h-5 w-5" />
-                      Tech Stack
-                    </CardTitle>
-                    <CardDescription>
-                      Select tech stacks to automatically link relevant standards to your project.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button onClick={() => setShowTechStacks(true)}>
-                      <Layers className="h-4 w-4 mr-2" />
-                      Manage Tech Stacks
-                    </Button>
-                  </CardContent>
-                </Card>
-
                 {/* Project Details */}
                 <Card>
                   <CardHeader>
@@ -182,8 +161,6 @@ export default function ProjectSettings() {
           </div>
         </main>
       </div>
-
-      <TechStackSelector projectId={projectId!} open={showTechStacks} onClose={() => setShowTechStacks(false)} />
     </div>
   );
 }
