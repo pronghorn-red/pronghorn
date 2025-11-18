@@ -205,7 +205,7 @@ export function EnhancedCreateProjectDialog() {
         setCreatedProject({ id: project.id, shareToken: project.share_token });
         setShowWarning(true);
       } else {
-        // Navigate to the new project
+        // Navigate to the new project (authenticated users don't need token in URL)
         navigate(`/project/${project.id}/requirements`);
       }
     } catch (error) {

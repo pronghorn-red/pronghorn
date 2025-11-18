@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useProjectUrl } from "@/hooks/useProjectUrl";
 
 interface ProjectSidebarProps {
   projectId: string;
@@ -24,6 +25,7 @@ const comingSoonItems = [
 
 export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { buildUrl } = useProjectUrl(projectId);
 
   return (
     <aside
@@ -54,7 +56,7 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
             {activeNavItems.map((item) => (
               <NavLink
                 key={item.path}
-                to={`/project/${projectId}/${item.path}`}
+                to={buildUrl(`/${item.path}`)}
                 className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 activeClassName="bg-muted text-foreground"
               >
