@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +38,8 @@ interface TechStack {
 
 export default function Standards() {
   const { projectId } = useParams();
+  const [searchParams] = useSearchParams();
+  const shareToken = searchParams.get("token");
   const [categories, setCategories] = useState<Category[]>([]);
   const [techStacks, setTechStacks] = useState<TechStack[]>([]);
   const [selectedStandards, setSelectedStandards] = useState<Set<string>>(new Set());
@@ -86,15 +88,15 @@ export default function Standards() {
       setTechStacks(techStacksData || []);
 
       // Load selected standards and tech stacks for this project
-      const { data: projectStandards } = await supabase
-        .from("project_standards")
-        .select("standard_id")
-        .eq("project_id", projectId);
+      const { data: projectStandards } = await supabase.rpc("get_project_standards_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
 
-      const { data: projectTechStacks } = await supabase
-        .from("project_tech_stacks")
-        .select("tech_stack_id")
-        .eq("project_id", projectId);
+      const { data: projectTechStacks } = await supabase.rpc("get_project_tech_stacks_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
 
       setSelectedStandards(new Set(projectStandards?.map((ps) => ps.standard_id) || []));
       setSelectedTechStacks(new Set(projectTechStacks?.map((pts) => pts.tech_stack_id) || []));
@@ -161,32 +163,57 @@ export default function Standards() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Save standards
-      await supabase
-        .from("project_standards")
-        .delete()
-        .eq("project_id", projectId);
+      // Get existing project standards and tech stacks to delete
+      const { data: existingStandards } = await supabase.rpc("get_project_standards_with_token", {
+        p_project_id: projectId!,
+        p_token: shareToken || null
+      });
 
-      if (selectedStandards.size > 0) {
-        const standardsToInsert = Array.from(selectedStandards).map((standard_id) => ({
-          project_id: projectId,
-          standard_id,
-        }));
-        await supabase.from("project_standards").insert(standardsToInsert);
+      const { data: existingTechStacks } = await supabase.rpc("get_project_tech_stacks_with_token", {
+        p_project_id: projectId!,
+        p_token: shareToken || null
+      });
+
+      // Delete all existing project standards
+      if (existingStandards && existingStandards.length > 0) {
+        for (const existing of existingStandards) {
+          await supabase.rpc("delete_project_standard_with_token", {
+            p_id: existing.id,
+            p_token: shareToken || null
+          });
+        }
       }
 
-      // Save tech stacks
-      await supabase
-        .from("project_tech_stacks")
-        .delete()
-        .eq("project_id", projectId);
+      // Insert new selections for standards
+      if (selectedStandards.size > 0) {
+        for (const standardId of Array.from(selectedStandards)) {
+          await supabase.rpc("insert_project_standard_with_token", {
+            p_project_id: projectId!,
+            p_token: shareToken || null,
+            p_standard_id: standardId
+          });
+        }
+      }
 
+      // Delete all existing project tech stacks
+      if (existingTechStacks && existingTechStacks.length > 0) {
+        for (const existing of existingTechStacks) {
+          await supabase.rpc("delete_project_tech_stack_with_token", {
+            p_id: existing.id,
+            p_token: shareToken || null
+          });
+        }
+      }
+
+      // Insert new selections for tech stacks
       if (selectedTechStacks.size > 0) {
-        const techStacksToInsert = Array.from(selectedTechStacks).map((tech_stack_id) => ({
-          project_id: projectId,
-          tech_stack_id,
-        }));
-        await supabase.from("project_tech_stacks").insert(techStacksToInsert);
+        for (const techStackId of Array.from(selectedTechStacks)) {
+          await supabase.rpc("insert_project_tech_stack_with_token", {
+            p_project_id: projectId!,
+            p_token: shareToken || null,
+            p_tech_stack_id: techStackId
+          });
+        }
       }
 
       toast.success("Project standards saved successfully");

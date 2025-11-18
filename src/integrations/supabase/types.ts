@@ -831,6 +831,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_project_standard_with_token: {
+        Args: { p_id: string; p_token: string }
+        Returns: undefined
+      }
+      delete_project_tech_stack_with_token: {
+        Args: { p_id: string; p_token: string }
+        Returns: undefined
+      }
+      delete_requirement_standard_with_token: {
+        Args: { p_id: string; p_token: string }
+        Returns: undefined
+      }
       delete_requirement_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
@@ -874,6 +886,36 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_project_standards_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          created_at: string
+          id: string
+          project_id: string
+          standard_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_standards"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_project_tech_stacks_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          created_at: string
+          id: string
+          project_id: string
+          tech_stack_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_tech_stacks"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_project_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
@@ -903,6 +945,22 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_requirement_standards_with_token: {
+        Args: { p_requirement_id: string; p_token: string }
+        Returns: {
+          created_at: string
+          id: string
+          notes: string | null
+          requirement_id: string
+          standard_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "requirement_standards"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_requirements_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
@@ -930,6 +988,57 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      insert_project_standard_with_token: {
+        Args: { p_project_id: string; p_standard_id: string; p_token: string }
+        Returns: {
+          created_at: string
+          id: string
+          project_id: string
+          standard_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_standards"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_project_tech_stack_with_token: {
+        Args: { p_project_id: string; p_tech_stack_id: string; p_token: string }
+        Returns: {
+          created_at: string
+          id: string
+          project_id: string
+          tech_stack_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_tech_stacks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_requirement_standard_with_token: {
+        Args: {
+          p_notes?: string
+          p_requirement_id: string
+          p_standard_id: string
+          p_token: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          notes: string | null
+          requirement_id: string
+          standard_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "requirement_standards"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       insert_requirement_with_token: {
         Args: {
@@ -990,6 +1099,22 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_requirement_standard_with_token: {
+        Args: { p_id: string; p_notes: string; p_token: string }
+        Returns: {
+          created_at: string
+          id: string
+          notes: string | null
+          requirement_id: string
+          standard_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "requirement_standards"
           isOneToOne: true
           isSetofReturn: false
         }

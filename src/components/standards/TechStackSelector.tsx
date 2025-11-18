@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 interface TechStack {
   id: string;
@@ -15,6 +16,8 @@ interface TechStack {
 }
 
 export function TechStackSelector({ projectId, open, onClose }: { projectId: string; open: boolean; onClose: () => void }) {
+  const [searchParams] = useSearchParams();
+  const shareToken = searchParams.get("token");
   const [stacks, setStacks] = useState<TechStack[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -32,21 +35,40 @@ export function TechStackSelector({ projectId, open, onClose }: { projectId: str
   };
 
   const loadSelected = async () => {
-    const { data } = await supabase.from("project_tech_stacks").select("tech_stack_id").eq("project_id", projectId);
-    setSelectedIds(data?.map((d) => d.tech_stack_id) || []);
+    const { data } = await supabase.rpc("get_project_tech_stacks_with_token", {
+      p_project_id: projectId,
+      p_token: shareToken || null
+    });
+    setSelectedIds(data?.map((d: any) => d.tech_stack_id) || []);
   };
 
   const handleSave = async () => {
     setLoading(true);
     try {
-      // Remove unselected
-      const { error: deleteError } = await supabase.from("project_tech_stacks").delete().eq("project_id", projectId).not("tech_stack_id", "in", `(${selectedIds.join(",")})`);
-      if (deleteError) throw deleteError;
+      // Get existing tech stacks
+      const { data: existing } = await supabase.rpc("get_project_tech_stacks_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
 
-      // Add new selections
-      const toAdd = selectedIds.map((sid) => ({ project_id: projectId, tech_stack_id: sid }));
-      const { error: insertError } = await supabase.from("project_tech_stacks").upsert(toAdd, { onConflict: "project_id,tech_stack_id" });
-      if (insertError) throw insertError;
+      // Delete all existing
+      if (existing && existing.length > 0) {
+        for (const item of existing) {
+          await supabase.rpc("delete_project_tech_stack_with_token", {
+            p_id: item.id,
+            p_token: shareToken || null
+          });
+        }
+      }
+
+      // Insert new selections
+      for (const techStackId of selectedIds) {
+        await supabase.rpc("insert_project_tech_stack_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken || null,
+          p_tech_stack_id: techStackId
+        });
+      }
 
       // Auto-link all standards from selected tech stacks
       await linkStandardsFromStacks();
@@ -67,17 +89,29 @@ export function TechStackSelector({ projectId, open, onClose }: { projectId: str
 
       if (!stackStandards || stackStandards.length === 0) return;
 
-      // Get all requirements for this project
-      const { data: requirements } = await supabase.from("requirements").select("id").eq("project_id", projectId);
+      // Get all requirements for this project (use RPC with token)
+      const { data: requirements } = await supabase.rpc("get_requirements_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
 
       if (!requirements || requirements.length === 0) return;
 
       // Link each standard to each requirement (this creates the linkage)
       // In a real system, you might want more granular control
-      const links = requirements.flatMap((req) => stackStandards.map((ss) => ({ requirement_id: req.id, standard_id: ss.standard_id })));
-
-      if (links.length > 0) {
-        await supabase.from("requirement_standards").upsert(links, { onConflict: "requirement_id,standard_id", ignoreDuplicates: true });
+      for (const req of requirements) {
+        for (const ss of stackStandards) {
+          try {
+            await supabase.rpc("insert_requirement_standard_with_token", {
+              p_requirement_id: req.id,
+              p_token: shareToken || null,
+              p_standard_id: ss.standard_id,
+              p_notes: null
+            });
+          } catch (err) {
+            // Ignore duplicate errors (already linked)
+          }
+        }
       }
     } catch (error) {
       console.error("Error linking standards:", error);

@@ -2,12 +2,15 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { ListChecks } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 interface RequirementStandardsBadgesProps {
   requirementId: string;
 }
 
 export function RequirementStandardsBadges({ requirementId }: RequirementStandardsBadgesProps) {
+  const [searchParams] = useSearchParams();
+  const shareToken = searchParams.get("token");
   const [standards, setStandards] = useState<any[]>([]);
 
   useEffect(() => {
@@ -37,25 +40,28 @@ export function RequirementStandardsBadges({ requirementId }: RequirementStandar
 
   const loadStandards = async () => {
     try {
-      const { data, error } = await supabase
-        .from("requirement_standards")
-        .select(`
-          standard_id,
-          standards (
-            id,
-            code,
-            title
-          )
-        `)
-        .eq("requirement_id", requirementId);
+      const { data: reqStandards, error } = await supabase.rpc("get_requirement_standards_with_token", {
+        p_requirement_id: requirementId,
+        p_token: shareToken || null
+      });
 
       if (error) throw error;
-      
-      const standardsList = (data || [])
-        .map((item: any) => item.standards)
-        .filter(Boolean);
-      
-      setStandards(standardsList);
+
+      // Now fetch the standards details for the linked standard_ids
+      if (!reqStandards || reqStandards.length === 0) {
+        setStandards([]);
+        return;
+      }
+
+      const standardIds = reqStandards.map((rs: any) => rs.standard_id);
+      const { data: standardsData, error: standardsError } = await supabase
+        .from("standards")
+        .select("id, code, title")
+        .in("id", standardIds);
+
+      if (standardsError) throw standardsError;
+
+      setStandards(standardsData || []);
     } catch (error) {
       console.error("Error loading standards:", error);
     }

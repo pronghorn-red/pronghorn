@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronRight, ChevronDown, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 
 interface LinkStandardsDialogProps {
   open: boolean;
@@ -30,6 +31,8 @@ interface Category {
 }
 
 export function LinkStandardsDialog({ open, onClose, requirementId, requirementTitle }: LinkStandardsDialogProps) {
+  const [searchParams] = useSearchParams();
+  const shareToken = searchParams.get("token");
   const [categories, setCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -53,13 +56,13 @@ export function LinkStandardsDialog({ open, onClose, requirementId, requirementT
       .select("id, code, title, category_id, parent_id")
       .order("code");
 
-    const { data: linkedData } = await supabase
-      .from("requirement_standards")
-      .select("standard_id")
-      .eq("requirement_id", requirementId);
+    const { data: linkedData } = await supabase.rpc("get_requirement_standards_with_token", {
+      p_requirement_id: requirementId,
+      p_token: shareToken || null
+    });
 
     if (linkedData) {
-      setLinkedStandards(new Set(linkedData.map((l) => l.standard_id)));
+      setLinkedStandards(new Set(linkedData.map((l: any) => l.standard_id)));
     }
 
     if (categoriesData && standardsData) {
@@ -119,35 +122,44 @@ export function LinkStandardsDialog({ open, onClose, requirementId, requirementT
   const handleLinkStandard = async (standardId: string) => {
     const isLinked = linkedStandards.has(standardId);
 
-    if (isLinked) {
-      const { error } = await supabase
-        .from("requirement_standards")
-        .delete()
-        .eq("requirement_id", requirementId)
-        .eq("standard_id", standardId);
+    try {
+      if (isLinked) {
+        // Find the link to delete
+        const { data: existingLinks } = await supabase.rpc("get_requirement_standards_with_token", {
+          p_requirement_id: requirementId,
+          p_token: shareToken || null
+        });
 
-      if (error) {
-        toast.error("Failed to unlink standard");
-      } else {
+        const linkToDelete = existingLinks?.find((l: any) => l.standard_id === standardId);
+        if (!linkToDelete) {
+          toast.error("Link not found");
+          return;
+        }
+
+        await supabase.rpc("delete_requirement_standard_with_token", {
+          p_id: linkToDelete.id,
+          p_token: shareToken || null
+        });
+
         setLinkedStandards((prev) => {
           const next = new Set(prev);
           next.delete(standardId);
           return next;
         });
         toast.success("Standard unlinked");
-      }
-    } else {
-      const { error } = await supabase.from("requirement_standards").insert({
-        requirement_id: requirementId,
-        standard_id: standardId,
-      });
-
-      if (error) {
-        toast.error("Failed to link standard");
       } else {
+        await supabase.rpc("insert_requirement_standard_with_token", {
+          p_requirement_id: requirementId,
+          p_token: shareToken || null,
+          p_standard_id: standardId,
+          p_notes: null
+        });
+
         setLinkedStandards((prev) => new Set(prev).add(standardId));
         toast.success("Standard linked");
       }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update standard link");
     }
   };
 
