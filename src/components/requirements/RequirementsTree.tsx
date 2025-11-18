@@ -88,16 +88,34 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
   return (
     <div className="select-none">
       {isEditing ? (
-        <div className="p-4 bg-muted/30 rounded-md space-y-3 border" style={{ marginLeft: `${level * 20}px` }}>
-          <div className="flex gap-2">
-            {requirement.code && <Badge variant="outline" className="font-mono text-xs">{requirement.code}</Badge>}
-            <Badge variant="outline" className={typeColors[requirement.type]}>{requirement.type.replace("_", " ")}</Badge>
+        <div className="p-3 md:p-4 bg-muted/30 rounded-md space-y-3 border" style={{ marginLeft: `${level * 20}px` }}>
+          <div className="flex flex-wrap gap-2">
+            {requirement.code && (
+              <Badge variant="outline" className="font-mono text-xs">
+                {requirement.code}
+              </Badge>
+            )}
+            <Badge variant="outline" className={typeColors[requirement.type]}>
+              {requirement.type.replace("_", " ")}
+            </Badge>
           </div>
-          <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} autoFocus />
-          <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={4} />
-          <div className="flex gap-2">
+          <Input 
+            value={editTitle} 
+            onChange={(e) => setEditTitle(e.target.value)} 
+            placeholder="Title"
+            autoFocus 
+            className="text-sm md:text-base"
+          />
+          <Textarea 
+            value={editContent} 
+            onChange={(e) => setEditContent(e.target.value)} 
+            rows={4} 
+            className="text-sm md:text-base"
+          />
+          <div className="flex flex-wrap gap-2">
             <Button 
               size="sm" 
+              className="flex-1 min-w-[80px]"
               onClick={async () => { 
                 const { error } = await supabase
                   .from("requirements")
@@ -115,37 +133,82 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
             >
               Save
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="flex-1 min-w-[80px]"
+              onClick={() => setIsEditing(false)}
+            >
+              Cancel
+            </Button>
           </div>
         </div>
       ) : (
-        <div className="group flex items-center gap-2 py-2 px-2 rounded-md hover:bg-muted/50" style={{ paddingLeft: `${level * 20 + 8}px` }}>
-          {hasChildren ? <Button variant="ghost" size="icon" className="h-5 w-5 p-0" onClick={() => setIsExpanded(!isExpanded)}>{isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}</Button> : <div className="h-5 w-5" />}
-          <div className={`p-1 rounded ${typeColors[requirement.type]}`}><Icon className="h-3 w-3" /></div>
-          {requirement.code && <Badge variant="outline" className="font-mono text-xs font-semibold">{requirement.code}</Badge>}
-          <Badge variant="outline" className={typeColors[requirement.type]}>{requirement.type.replace("_", " ")}</Badge>
-          <div className="flex-1 min-w-0">
-            <span className="text-sm font-medium">{requirement.title}</span>
-            {requirement.content && <p className="text-xs text-muted-foreground mt-1">{requirement.content}</p>}
-            <div className="mt-1 flex items-center gap-2">
-              <RequirementStandardsBadges requirementId={requirement.id} />
-              {fileCount > 0 && (
-                <Badge 
-                  variant="secondary" 
-                  className="text-xs gap-1 cursor-pointer hover:bg-secondary/80"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenFileModal(true);
-                  }}
+        <div className="group py-2 px-2 rounded-md hover:bg-muted/50" style={{ paddingLeft: `${level * 20 + 8}px` }}>
+          <div className="flex items-start gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {hasChildren ? (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6 p-0 flex-shrink-0" 
+                  onClick={() => setIsExpanded(!isExpanded)}
                 >
-                  <Paperclip className="h-3 w-3" />
-                  {fileCount} {fileCount === 1 ? "file" : "files"}
-                </Badge>
+                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                </Button>
+              ) : (
+                <div className="h-6 w-6 flex-shrink-0" />
               )}
+              <div className={`p-1 rounded flex-shrink-0 ${typeColors[requirement.type]}`}>
+                <Icon className="h-3 w-3" />
+              </div>
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                {requirement.code && (
+                  <Badge variant="outline" className="font-mono text-xs font-semibold flex-shrink-0">
+                    {requirement.code}
+                  </Badge>
+                )}
+                <Badge variant="outline" className={`text-xs flex-shrink-0 ${typeColors[requirement.type]}`}>
+                  {requirement.type.replace("_", " ")}
+                </Badge>
+              </div>
+              <div className="text-sm font-medium break-words">{requirement.title}</div>
+              {requirement.content && (
+                <p className="text-xs text-muted-foreground mt-1 break-words">{requirement.content}</p>
+              )}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <RequirementStandardsBadges requirementId={requirement.id} />
+                {fileCount > 0 && (
+                  <Badge 
+                    variant="secondary" 
+                    className="text-xs gap-1 cursor-pointer hover:bg-secondary/80 flex-shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenFileModal(true);
+                    }}
+                  >
+                    <Paperclip className="h-3 w-3" />
+                    {fileCount} {fileCount === 1 ? "file" : "files"}
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100">
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsEditing(true)}><Edit2 className="h-3 w-3" /></Button>
+          
+          {/* Action buttons - always visible on mobile, hover on desktop */}
+          <div className="flex flex-wrap gap-1 mt-2 pl-14 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-7 w-7 flex-shrink-0" 
+              onClick={() => setIsEditing(true)}
+              aria-label="Edit"
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+            </Button>
             <SourceRequirementsUpload 
               requirementId={requirement.id} 
               requirementTitle={requirement.title} 
@@ -153,19 +216,45 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
               open={openFileModal}
               onOpenChange={setOpenFileModal}
             />
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleAIExpand} disabled={isExpanding}>{isExpanding ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}</Button>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onLinkStandard?.(requirement.id, requirement.title)}><LinkIcon className="h-3 w-3" /></Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-7 w-7 flex-shrink-0" 
+              onClick={handleAIExpand} 
+              disabled={isExpanding}
+              aria-label="AI Expand"
+            >
+              {isExpanding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-7 w-7 flex-shrink-0" 
+              onClick={() => onLinkStandard?.(requirement.id, requirement.title)}
+              aria-label="Link Standards"
+            >
+              <LinkIcon className="h-3.5 w-3.5" />
+            </Button>
             {getNextType(requirement.type) && (
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-6 w-6" 
+                className="h-7 w-7 flex-shrink-0" 
                 onClick={handleAddChild}
+                aria-label="Add Child"
               >
-                <Plus className="h-3 w-3" />
+                <Plus className="h-3.5 w-3.5" />
               </Button>
             )}
-            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/10" onClick={() => onDelete?.(requirement.id)}><Trash2 className="h-3 w-3" /></Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-7 w-7 flex-shrink-0 text-destructive hover:bg-destructive/10" 
+              onClick={() => onDelete?.(requirement.id)}
+              aria-label="Delete"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
         </div>
       )}
