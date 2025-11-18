@@ -114,21 +114,12 @@ export default function ProjectSettings() {
                           className="font-mono text-sm"
                         />
                         <Button
-                          variant="outline"
-                          size="icon"
                           onClick={copyFullUrl}
-                          title="Copy full URL"
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={copyShareLink}
-                          title="Copy share link"
                           disabled={!project?.share_token}
+                          className="shrink-0"
                         >
                           <Copy className="h-4 w-4" />
+                          Copy Full URL
                         </Button>
                       </div>
                     </div>
