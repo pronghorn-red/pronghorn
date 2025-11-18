@@ -31,13 +31,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // Periodic refresh as a safety net if realtime drops
-    const refreshInterval = setInterval(() => {
-      console.log("Periodic canvas refresh");
-      loadCanvasData();
-    }, 15000);
-
-    // Set up real-time subscriptions
+    // Set up real-time subscriptions with connection monitoring
     const nodesChannel = supabase
       .channel(`canvas-nodes-${projectId}`)
       .on(
@@ -83,7 +77,18 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Nodes channel status:", status);
+        if (status === 'SUBSCRIBED') {
+          console.log("✅ Nodes realtime connected");
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error("❌ Nodes realtime connection failed:", status);
+          // Refresh data immediately when connection fails
+          loadCanvasData();
+        } else if (status === 'CLOSED') {
+          console.warn("⚠️ Nodes realtime connection closed");
+        }
+      });
 
     const edgesChannel = supabase
       .channel(`canvas-edges-${projectId}`)
@@ -122,11 +127,21 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Edges channel status:", status);
+        if (status === 'SUBSCRIBED') {
+          console.log("✅ Edges realtime connected");
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error("❌ Edges realtime connection failed:", status);
+          // Refresh data immediately when connection fails
+          loadCanvasData();
+        } else if (status === 'CLOSED') {
+          console.warn("⚠️ Edges realtime connection closed");
+        }
+      });
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      clearInterval(refreshInterval);
       supabase.removeChannel(nodesChannel);
       supabase.removeChannel(edgesChannel);
       if (saveTimeoutRef.current) {
