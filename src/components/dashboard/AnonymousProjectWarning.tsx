@@ -26,7 +26,7 @@ export function AnonymousProjectWarning({
   projectId,
   shareToken,
 }: AnonymousProjectWarningProps) {
-  const shareUrl = `${window.location.origin}/project/${projectId}/canvas?token=${shareToken}`;
+  const shareUrl = `https://pronghorn.red/project/${projectId}/canvas?token=${shareToken}`;
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
