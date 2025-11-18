@@ -21,6 +21,16 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
     // Load canvas data
     loadCanvasData();
 
+    // Refresh canvas when tab becomes visible again
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log("Tab visible again, refreshing canvas data");
+        loadCanvasData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Set up real-time subscriptions
     const nodesChannel = supabase
       .channel(`canvas-nodes-${projectId}`)
@@ -109,6 +119,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
       .subscribe();
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       supabase.removeChannel(nodesChannel);
       supabase.removeChannel(edgesChannel);
       if (saveTimeoutRef.current) {
