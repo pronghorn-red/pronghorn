@@ -12,6 +12,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const draggedNodeRef = useRef<string | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const clientId = useRef(crypto.randomUUID());
 
   useEffect(() => {
     if (!projectId || !isTokenSet) {
@@ -32,8 +33,9 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     // Set up real-time subscriptions with connection monitoring
+    // Each client needs a unique channel name to receive all broadcasts
     const nodesChannel = supabase
-      .channel(`canvas-nodes-${projectId}`)
+      .channel(`canvas-nodes-${projectId}-${clientId.current}`)
       .on(
         "postgres_changes",
         {
@@ -91,7 +93,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
       });
 
     const edgesChannel = supabase
-      .channel(`canvas-edges-${projectId}`)
+      .channel(`canvas-edges-${projectId}-${clientId.current}`)
       .on(
         "postgres_changes",
         {
