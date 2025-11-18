@@ -411,6 +411,7 @@ export type Database = {
           organization: string | null
           priority: string | null
           scope: string | null
+          share_token: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
           timeline_end: string | null
@@ -430,6 +431,7 @@ export type Database = {
           organization?: string | null
           priority?: string | null
           scope?: string | null
+          share_token?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           tags?: string[] | null
           timeline_end?: string | null
@@ -449,6 +451,7 @@ export type Database = {
           organization?: string | null
           priority?: string | null
           scope?: string | null
+          share_token?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           tags?: string[] | null
           timeline_end?: string | null
@@ -839,6 +842,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      set_share_token: { Args: { token: string }; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "user"

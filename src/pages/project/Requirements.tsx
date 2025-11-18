@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Search, Plus } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { useRealtimeRequirements } from "@/hooks/useRealtimeRequirements";
+import { useShareToken } from "@/hooks/useShareToken";
 import { toast } from "sonner";
 
 export default function Requirements() {
   const { projectId } = useParams<{ projectId: string }>();
+  const shareToken = useShareToken(projectId);
   const { requirements, isLoading, addRequirement, updateRequirement, deleteRequirement, refresh } = useRealtimeRequirements(projectId!);
   const [showAIDialog, setShowAIDialog] = useState(false);
   const [linkReq, setLinkReq] = useState<{ id: string; title: string } | null>(null);

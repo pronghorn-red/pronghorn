@@ -21,12 +21,17 @@ import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAuth } from "@/contexts/AuthContext";
+import { AnonymousProjectWarning } from "./AnonymousProjectWarning";
 
 export function EnhancedCreateProjectDialog() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
+  const [createdProject, setCreatedProject] = useState<{ id: string; shareToken: string } | null>(null);
 
   // Basic fields
   const [name, setName] = useState("");
@@ -146,9 +151,10 @@ export function EnhancedCreateProjectDialog() {
           priority: priority,
           tags: tags ? tags.split(',').map(t => t.trim()) : null,
           org_id: orgId,
-          status: 'DESIGN'
+          status: 'DESIGN',
+          created_by: user?.id || null
         })
-        .select()
+        .select('id, share_token')
         .single();
 
       if (error) throw error;
@@ -169,7 +175,6 @@ export function EnhancedCreateProjectDialog() {
         }
       }
 
-      // If there are requirements, decompose them with AI
       if (requirements.trim()) {
         const { error: aiError } = await supabase.functions.invoke("decompose-requirements", {
           body: { 
@@ -194,8 +199,14 @@ export function EnhancedCreateProjectDialog() {
       // Invalidate projects query to refresh the list
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       
-      // Navigate to the new project
-      navigate(`/project/${project.id}/requirements`);
+      // If anonymous user, show warning modal with share link
+      if (!user) {
+        setCreatedProject({ id: project.id, shareToken: project.share_token });
+        setShowWarning(true);
+      } else {
+        // Navigate to the new project
+        navigate(`/project/${project.id}/requirements`);
+      }
     } catch (error) {
       console.error("Error creating project:", error);
       toast.error(error instanceof Error ? error.message : "Failed to create project");
@@ -205,6 +216,7 @@ export function EnhancedCreateProjectDialog() {
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="lg" className="gap-2">
@@ -438,5 +450,18 @@ export function EnhancedCreateProjectDialog() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {createdProject && (
+      <AnonymousProjectWarning
+        open={showWarning}
+        onClose={() => {
+          setShowWarning(false);
+          navigate(`/project/${createdProject.id}/requirements?token=${createdProject.shareToken}`);
+        }}
+        projectId={createdProject.id}
+        shareToken={createdProject.shareToken}
+      />
+    )}
+    </>
   );
 }
