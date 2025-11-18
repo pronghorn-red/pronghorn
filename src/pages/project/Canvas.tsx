@@ -6,8 +6,8 @@ import { CanvasNode } from "@/components/canvas/CanvasNode";
 import { NodePropertiesPanel } from "@/components/canvas/NodePropertiesPanel";
 import { useParams } from "react-router-dom";
 import { useRealtimeCanvas } from "@/hooks/useRealtimeCanvas";
-import { useShareToken } from "@/hooks/useShareToken";
 import ReactFlow, {
+
   Background,
   Controls,
   MiniMap,
@@ -38,7 +38,6 @@ const ALL_NODE_TYPES: NodeType[] = [
 
 function CanvasFlow() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { token: shareToken, isTokenSet } = useShareToken(projectId);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -46,9 +45,6 @@ function CanvasFlow() {
   const [visibleNodeTypes, setVisibleNodeTypes] = useState<Set<NodeType>>(
     new Set(ALL_NODE_TYPES)
   );
-
-  // Don't load data until token is set (if needed)
-  const shouldLoadData = !shareToken || isTokenSet;
 
   const {
     nodes,
@@ -60,11 +56,6 @@ function CanvasFlow() {
     saveNode,
     saveEdge,
   } = useRealtimeCanvas(projectId!, initialNodes, initialEdges);
-
-  // Show loading state while token is being set
-  if (!shouldLoadData) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
-  }
 
   // Filter nodes and edges based on visibility
   const visibleNodes = useMemo(() => {
