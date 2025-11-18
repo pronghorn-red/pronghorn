@@ -21,16 +21,19 @@ export function AdminAccessButton() {
   const [adminKey, setAdminKey] = useState("");
 
   const handleLogin = async () => {
-    const expectedKey = import.meta.env.VITE_ADMIN_KEY;
-    
-    if (adminKey === expectedKey) {
-      sessionStorage.setItem("admin_access", "true");
-      toast.success("Admin access granted!");
-      setShowDialog(false);
-      setAdminKey("");
-      window.location.reload(); // Reload to update admin state
-    } else {
-      toast.error("Invalid admin key");
+    try {
+      const success = await requestAdminAccess(adminKey);
+      if (success) {
+        toast.success("Admin access granted!");
+        setShowDialog(false);
+        setAdminKey("");
+        window.location.reload();
+      } else {
+        toast.error("Invalid admin key");
+        setAdminKey("");
+      }
+    } catch (error) {
+      toast.error("Failed to verify admin key");
       setAdminKey("");
     }
   };
