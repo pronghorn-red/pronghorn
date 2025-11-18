@@ -60,9 +60,21 @@ export default function ProjectSettings() {
       return;
     }
     
-    const url = `${window.location.origin}/project/${projectId}/requirements?token=${token}`;
+    const url = `https://pronghorn.red/project/${projectId}/requirements?token=${token}`;
     navigator.clipboard.writeText(url);
     toast.success('Share link copied to clipboard');
+  };
+
+  const copyFullUrl = () => {
+    const token = project?.share_token;
+    if (!token) {
+      toast.error('No share token available');
+      return;
+    }
+    
+    const url = `https://pronghorn.red/project/${projectId}/settings?token=${token}`;
+    navigator.clipboard.writeText(url);
+    toast.success('Full URL copied to clipboard');
   };
 
   return (
@@ -104,7 +116,16 @@ export default function ProjectSettings() {
                         <Button
                           variant="outline"
                           size="icon"
+                          onClick={copyFullUrl}
+                          title="Copy full URL"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
                           onClick={copyShareLink}
+                          title="Copy share link"
                           disabled={!project?.share_token}
                         >
                           <Copy className="h-4 w-4" />
