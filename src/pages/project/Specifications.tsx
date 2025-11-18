@@ -96,9 +96,59 @@ export default function Specifications() {
         `)
         .in('requirement_id', requirements?.map(r => r.id) || []);
 
+      // Fetch attached files for all requirements
+      const requirementFiles: Record<string, any[]> = {};
+      
+      if (requirements && requirements.length > 0) {
+        for (const req of requirements) {
+          try {
+            const { data: files } = await supabase.storage
+              .from('requirement-sources')
+              .list(req.id);
+
+            if (files && files.length > 0) {
+              const filesWithContent = await Promise.all(
+                files.map(async (file) => {
+                  try {
+                    const { data: fileData } = await supabase.storage
+                      .from('requirement-sources')
+                      .download(`${req.id}/${file.name}`);
+
+                    if (fileData) {
+                      // Try to read as text for text files
+                      const text = await fileData.text();
+                      return {
+                        name: file.name,
+                        content: text,
+                        size: file.metadata?.size,
+                        created_at: file.created_at,
+                        updated_at: file.updated_at
+                      };
+                    }
+                  } catch (err) {
+                    console.error(`Error reading file ${file.name}:`, err);
+                    return {
+                      name: file.name,
+                      content: "[Binary file - content not included]",
+                      size: file.metadata?.size,
+                      created_at: file.created_at,
+                      updated_at: file.updated_at
+                    };
+                  }
+                })
+              );
+              requirementFiles[req.id] = filesWithContent;
+            }
+          } catch (err) {
+            console.error(`Error loading files for requirement ${req.id}:`, err);
+          }
+        }
+      }
+
       const exportData = {
         project,
         requirements: requirements || [],
+        requirementFiles,
         canvas: {
           nodes: canvasNodes || [],
           edges: canvasEdges || []
