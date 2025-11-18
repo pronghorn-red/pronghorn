@@ -23,11 +23,10 @@ export default function ProjectSettings() {
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', projectId)
-        .single();
+      const { data, error } = await supabase.rpc('get_project_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
       
       if (error) throw error;
       return data;
@@ -45,16 +44,13 @@ export default function ProjectSettings() {
 
   const updateProjectMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase
-        .from('projects')
-        .update({ 
-          name: projectName,
-          description: projectDescription,
-          github_repo: githubRepo
-        })
-        .eq('id', projectId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('update_project_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_name: projectName,
+        p_description: projectDescription,
+        p_github_repo: githubRepo
+      });
       
       if (error) throw error;
       return data;
