@@ -35,12 +35,15 @@ export function PrimaryNav() {
     <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center px-4 md:px-6">
         {/* Logo */}
-        <div className="flex items-center gap-2 mr-4 md:mr-8">
-          <div className="rounded-lg text-primary">
+        <NavLink 
+          to="/" 
+          className="flex items-center gap-2 mr-4 md:mr-8 hover:opacity-80 transition-opacity cursor-pointer"
+        >
+          <div className="rounded-lg">
             <PronghornLogo className="h-8 w-8" />
           </div>
           <span className="font-bold text-xl">Pronghorn</span>
-        </div>
+        </NavLink>
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-1 flex-1">
