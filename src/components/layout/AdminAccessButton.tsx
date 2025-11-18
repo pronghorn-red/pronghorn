@@ -11,37 +11,53 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Shield, ShieldCheck, LogOut } from "lucide-react";
+import { Shield, ShieldCheck, LogOut, Loader2 } from "lucide-react";
 import { useAdmin } from "@/contexts/AdminContext";
 import { toast } from "sonner";
 
 export function AdminAccessButton() {
-  const { isAdmin, requestAdminAccess, logout } = useAdmin();
+  const { isAdmin, isLoading, user, requestAdminAccess, logout } = useAdmin();
   const [showDialog, setShowDialog] = useState(false);
   const [adminKey, setAdminKey] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleLogin = async () => {
+    if (!user) {
+      toast.error("You must be logged in first");
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       const success = await requestAdminAccess(adminKey);
       if (success) {
         toast.success("Admin access granted!");
         setShowDialog(false);
         setAdminKey("");
-        window.location.reload();
       } else {
         toast.error("Invalid admin key");
         setAdminKey("");
       }
-    } catch (error) {
-      toast.error("Failed to verify admin key");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to verify admin key");
       setAdminKey("");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    toast.info("Logged out of admin mode");
+  const handleLogout = async () => {
+    await logout();
+    toast.info("Signed out");
   };
+
+  if (isLoading) {
+    return (
+      <Button variant="ghost" size="sm" disabled>
+        <Loader2 className="h-4 w-4 animate-spin" />
+      </Button>
+    );
+  }
 
   if (isAdmin) {
     return (
@@ -54,6 +70,15 @@ export function AdminAccessButton() {
           <LogOut className="h-4 w-4" />
         </Button>
       </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Button variant="outline" size="sm" onClick={() => toast.info("Please sign in first")}>
+        <Shield className="h-4 w-4 mr-2" />
+        Admin Login
+      </Button>
     );
   }
 
@@ -70,6 +95,7 @@ export function AdminAccessButton() {
             <DialogTitle>Admin Access</DialogTitle>
             <DialogDescription>
               Enter the admin key to access standards management and advanced features.
+              You are logged in as {user.email}.
             </DialogDescription>
           </DialogHeader>
           
@@ -82,16 +108,18 @@ export function AdminAccessButton() {
                 placeholder="Enter admin key..."
                 value={adminKey}
                 onChange={(e) => setAdminKey(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                onKeyDown={(e) => e.key === "Enter" && !isSubmitting && handleLogin()}
+                disabled={isSubmitting}
               />
             </div>
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>
+            <Button variant="outline" onClick={() => setShowDialog(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button onClick={handleLogin} disabled={!adminKey.trim()}>
+            <Button onClick={handleLogin} disabled={!adminKey.trim() || isSubmitting}>
+              {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Login
             </Button>
           </DialogFooter>

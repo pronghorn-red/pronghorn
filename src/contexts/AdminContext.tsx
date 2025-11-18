@@ -1,33 +1,51 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, ReactNode } from "react";
+import { useAdminRole } from "@/hooks/useAdminRole";
 import { supabase } from "@/integrations/supabase/client";
 
 interface AdminContextType {
   isAdmin: boolean;
+  isLoading: boolean;
+  user: any;
   requestAdminAccess: (key?: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
+  refreshRole: () => Promise<void>;
 }
 
 const AdminContext = createContext<AdminContextType | undefined>(undefined);
 
 export function AdminProvider({ children }: { children: ReactNode }) {
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { isAdmin, isLoading, user, refreshRole } = useAdminRole();
 
   const requestAdminAccess = async (key?: string): Promise<boolean> => {
     const adminKey = key || prompt("Enter admin key:");
     if (!adminKey) return false;
 
-    // Verify against the backend
     try {
+      // User must be authenticated
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      
+      if (!user) {
+        throw new Error("You must be logged in to request admin access");
+      }
+
+      // Verify admin key and grant role
       const { data, error } = await supabase.functions.invoke("verify-admin", {
         body: { key: adminKey },
       });
 
-      if (error || !data?.valid) {
+      if (error) {
+        console.error("Admin verification error:", error);
         return false;
       }
 
-      setIsAdmin(true);
-      sessionStorage.setItem("admin_access", "true");
+      if (!data?.valid) {
+        return false;
+      }
+
+      // Refresh role status
+      await refreshRole();
       return true;
     } catch (error) {
       console.error("Admin verification error:", error);
@@ -35,21 +53,14 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = () => {
-    setIsAdmin(false);
-    sessionStorage.removeItem("admin_access");
+  const logout = async () => {
+    await supabase.auth.signOut();
   };
 
-  // Check session storage on mount
-  useEffect(() => {
-    const hasAccess = sessionStorage.getItem("admin_access") === "true";
-    if (hasAccess) {
-      setIsAdmin(true);
-    }
-  }, []);
-
   return (
-    <AdminContext.Provider value={{ isAdmin, requestAdminAccess, logout }}>
+    <AdminContext.Provider
+      value={{ isAdmin, isLoading, user, requestAdminAccess, logout, refreshRole }}
+    >
       {children}
     </AdminContext.Provider>
   );
