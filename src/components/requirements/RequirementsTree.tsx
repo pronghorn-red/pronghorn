@@ -52,6 +52,7 @@ function RequirementNode({ requirement, level = 0, projectId, onUpdate, onDelete
   const [editContent, setEditContent] = useState(requirement.content || "");
   const [isExpanding, setIsExpanding] = useState(false);
   const { fileCount, refresh: refreshFiles } = useRequirementFiles(requirement.id);
+  const [openFileModal, setOpenFileModal] = useState(false);
   const Icon = typeIcons[requirement.type];
   const hasChildren = requirement.children?.length > 0;
 
@@ -123,7 +124,14 @@ function RequirementNode({ requirement, level = 0, projectId, onUpdate, onDelete
             <div className="mt-1 flex items-center gap-2">
               <RequirementStandardsBadges requirementId={requirement.id} />
               {fileCount > 0 && (
-                <Badge variant="secondary" className="text-xs gap-1">
+                <Badge 
+                  variant="secondary" 
+                  className="text-xs gap-1 cursor-pointer hover:bg-secondary/80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenFileModal(true);
+                  }}
+                >
                   <Paperclip className="h-3 w-3" />
                   {fileCount} {fileCount === 1 ? "file" : "files"}
                 </Badge>
@@ -132,7 +140,13 @@ function RequirementNode({ requirement, level = 0, projectId, onUpdate, onDelete
           </div>
           <div className="flex gap-1 opacity-0 group-hover:opacity-100">
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsEditing(true)}><Edit2 className="h-3 w-3" /></Button>
-            <SourceRequirementsUpload requirementId={requirement.id} requirementTitle={requirement.title} onUploadComplete={refreshFiles} />
+            <SourceRequirementsUpload 
+              requirementId={requirement.id} 
+              requirementTitle={requirement.title} 
+              onUploadComplete={refreshFiles}
+              open={openFileModal}
+              onOpenChange={setOpenFileModal}
+            />
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleAIExpand} disabled={isExpanding}>{isExpanding ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}</Button>
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onLinkStandard?.(requirement.id, requirement.title)}><LinkIcon className="h-3 w-3" /></Button>
             {getNextType(requirement.type) && (

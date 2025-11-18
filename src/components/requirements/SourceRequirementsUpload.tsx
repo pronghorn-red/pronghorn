@@ -19,14 +19,18 @@ interface SourceRequirementsUploadProps {
   requirementId: string;
   requirementTitle: string;
   onUploadComplete?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function SourceRequirementsUpload({
   requirementId,
   requirementTitle,
   onUploadComplete,
+  open: externalOpen,
+  onOpenChange: externalOnOpenChange,
 }: SourceRequirementsUploadProps) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [files, setFiles] = useState<any[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -35,6 +39,10 @@ export function SourceRequirementsUpload({
   const [editedContent, setEditedContent] = useState("");
   const [activeTab, setActiveTab] = useState("files");
   const { isAdmin } = useAdmin();
+
+  // Use external open state if provided, otherwise use internal state
+  const open = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setOpen = externalOnOpenChange || setInternalOpen;
 
   useEffect(() => {
     if (open) {
