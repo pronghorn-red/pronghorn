@@ -68,10 +68,12 @@ function CanvasFlow() {
 
   // Filter nodes and edges based on visibility
   const visibleNodes = useMemo(() => {
-    return nodes.filter((node) => visibleNodeTypes.has(node.data.type));
+    if (!nodes || !Array.isArray(nodes)) return [];
+    return nodes.filter((node) => node?.data?.type && visibleNodeTypes.has(node.data.type));
   }, [nodes, visibleNodeTypes]);
 
   const visibleEdges = useMemo(() => {
+    if (!edges || !Array.isArray(edges)) return [];
     const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
     return edges.filter(
       (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
