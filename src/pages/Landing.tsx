@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PronghornLogo } from "@/components/layout/PronghornLogo";
 import { useNavigate } from "react-router-dom";
 import { 
   FileText, 
@@ -63,8 +64,8 @@ export default function Landing() {
       <nav className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <ListChecks className="h-5 w-5 text-primary" />
+            <div className="text-primary">
+              <PronghornLogo className="h-8 w-8" />
             </div>
             <span className="text-xl font-bold">Pronghorn</span>
           </div>

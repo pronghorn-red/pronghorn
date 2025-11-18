@@ -3,6 +3,7 @@ import { Home, Library, Settings, User, Layers, LogIn, LogOut, Menu } from "luci
 import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
 import { AdminAccessButton } from "@/components/layout/AdminAccessButton";
+import { PronghornLogo } from "@/components/layout/PronghornLogo";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -35,8 +36,8 @@ export function PrimaryNav() {
       <div className="container flex h-14 items-center px-4 md:px-6">
         {/* Logo */}
         <div className="flex items-center gap-2 mr-4 md:mr-8">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <span className="text-white font-bold text-lg">P</span>
+          <div className="rounded-lg text-primary">
+            <PronghornLogo className="h-8 w-8" />
           </div>
           <span className="font-bold text-xl">Pronghorn</span>
         </div>
