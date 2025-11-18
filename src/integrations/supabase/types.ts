@@ -835,6 +835,35 @@ export type Database = {
         Args: { p_parent_id: string; p_project_id: string; p_type: string }
         Returns: string
       }
+      get_project_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          budget: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          github_branch: string | null
+          github_repo: string | null
+          id: string
+          name: string
+          org_id: string
+          organization: string | null
+          priority: string | null
+          scope: string | null
+          share_token: string | null
+          status: Database["public"]["Enums"]["project_status"]
+          tags: string[] | null
+          timeline_end: string | null
+          timeline_start: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -843,6 +872,41 @@ export type Database = {
         Returns: boolean
       }
       set_share_token: { Args: { token: string }; Returns: undefined }
+      update_project_with_token: {
+        Args: {
+          p_description: string
+          p_github_repo: string
+          p_name: string
+          p_project_id: string
+          p_token: string
+        }
+        Returns: {
+          budget: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          github_branch: string | null
+          github_repo: string | null
+          id: string
+          name: string
+          org_id: string
+          organization: string | null
+          priority: string | null
+          scope: string | null
+          share_token: string | null
+          status: Database["public"]["Enums"]["project_status"]
+          tags: string[] | null
+          timeline_end: string | null
+          timeline_start: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       app_role: "admin" | "user"
