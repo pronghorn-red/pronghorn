@@ -2,16 +2,22 @@ import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Node, Edge, useNodesState, useEdgesState } from "reactflow";
 import { useSearchParams } from "react-router-dom";
+import { useShareToken } from "@/hooks/useShareToken";
 
 export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initialEdges: Edge[]) {
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
+  const { isTokenSet } = useShareToken(projectId);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const draggedNodeRef = useRef<string | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    if (!projectId || !isTokenSet) {
+      return;
+    }
+
     // Load canvas data
     loadCanvasData();
 
@@ -109,7 +115,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [projectId]);
+  }, [projectId, isTokenSet]);
 
   const loadCanvasData = async () => {
     try {
