@@ -60,15 +60,17 @@ export default function Dashboard() {
             <EnhancedCreateProjectDialog />
           </div>
         </div>
-        <div className="relative mb-6">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search..." 
-            value={searchQuery} 
-            onChange={(e) => setSearchQuery(e.target.value)} 
-            className="pl-9 w-full md:max-w-md text-sm md:text-base" 
-          />
-        </div>
+        {user && projects.length > 0 && (
+          <div className="relative mb-6">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Search..." 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+              className="pl-9 w-full md:max-w-md text-sm md:text-base" 
+            />
+          </div>
+        )}
         {!user ? (
           <div className="text-center py-12 space-y-4">
             <p className="text-muted-foreground">Sign in to see your projects</p>
