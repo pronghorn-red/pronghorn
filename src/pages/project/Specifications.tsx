@@ -10,9 +10,11 @@ import { Download, FileText, FileJson, Loader2, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
+import { useShareToken } from "@/hooks/useShareToken";
 
 export default function Specifications() {
   const { projectId } = useParams();
+  const shareToken = useShareToken(projectId);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedSpec, setGeneratedSpec] = useState<string>("");
   const [rawData, setRawData] = useState<any>(null);
@@ -23,7 +25,10 @@ export default function Specifications() {
     setIsGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke("generate-specification", {
-        body: { projectId }
+        body: { 
+          projectId,
+          shareToken 
+        }
       });
 
       if (error) throw error;

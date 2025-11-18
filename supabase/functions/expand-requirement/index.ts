@@ -13,14 +13,31 @@ serve(async (req) => {
   }
 
   try {
-    const { requirementId, useGemini = true } = await req.json();
+    const { requirementId, useGemini = true, shareToken } = await req.json();
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const geminiKey = Deno.env.get('GEMINI_API_KEY');
     const grokKey = Deno.env.get('GROK_API_KEY');
     
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Get auth header for authenticated users
+    const authHeader = req.headers.get('Authorization');
+    
+    // Create client with anon key (respects RLS)
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: authHeader ? { Authorization: authHeader } : {},
+      },
+    });
+
+    // Set share token if provided (for anonymous users)
+    if (shareToken) {
+      const { error: tokenError } = await supabase.rpc('set_share_token', { token: shareToken });
+      if (tokenError) {
+        console.error('Error setting share token:', tokenError);
+        throw new Error('Invalid share token');
+      }
+    }
 
     // Fetch the requirement and its context
     const { data: requirement, error: reqError } = await supabase

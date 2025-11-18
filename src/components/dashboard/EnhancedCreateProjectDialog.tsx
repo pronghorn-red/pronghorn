@@ -179,7 +179,8 @@ export function EnhancedCreateProjectDialog() {
         const { error: aiError } = await supabase.functions.invoke("decompose-requirements", {
           body: { 
             text: requirements.trim(), 
-            projectId: project.id 
+            projectId: project.id,
+            shareToken: project.share_token 
           },
         });
 

@@ -15,7 +15,7 @@ serve(async (req) => {
     const body = await req.json();
     console.log("Received request body:", JSON.stringify(body));
     
-    const { text, projectId } = body;
+    const { text, projectId, shareToken } = body;
     
     if (!text || !projectId) {
       console.error("Missing parameters - text:", !!text, "projectId:", !!projectId);
@@ -32,6 +32,29 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
+    }
+
+    // Create Supabase client to store the requirements
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    
+    // Get auth header for authenticated users
+    const authHeader = req.headers.get('Authorization');
+    
+    // Create client with anon key (respects RLS)
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: authHeader ? { Authorization: authHeader } : {},
+      },
+    });
+
+    // Set share token if provided (for anonymous users)
+    if (shareToken) {
+      const { error: tokenError } = await supabase.rpc('set_share_token', { token: shareToken });
+      if (tokenError) {
+        console.error('Error setting share token:', tokenError);
+        throw new Error('Invalid share token');
+      }
     }
 
     console.log("Decomposing requirements for project:", projectId);
@@ -136,10 +159,6 @@ Return format:
     }
 
     // Insert requirements into database
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
     console.log("Inserting requirements into database...");
 
     let orderIndex = 0;

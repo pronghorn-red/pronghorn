@@ -48,6 +48,7 @@ export default function Requirements() {
                 <RequirementsTree 
                   requirements={requirements} 
                   projectId={projectId!} 
+                  shareToken={shareToken}
                   onNodeUpdate={(id, u) => {
                     updateRequirement(id, u).then(() => toast.success("Updated"));
                   }} 
@@ -65,7 +66,7 @@ export default function Requirements() {
           </div>
         </main>
       </div>
-      <AIDecomposeDialog open={showAIDialog} onClose={() => setShowAIDialog(false)} projectId={projectId} />
+      <AIDecomposeDialog open={showAIDialog} onClose={() => setShowAIDialog(false)} projectId={projectId} shareToken={shareToken} />
       {linkReq && <LinkStandardsDialog open={!!linkReq} onClose={() => setLinkReq(null)} requirementId={linkReq.id} requirementTitle={linkReq.title} />}
     </div>
   );

@@ -17,11 +17,12 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface AIDecomposeDialogProps {
   projectId: string;
+  shareToken?: string | null;
   open: boolean;
   onClose: () => void;
 }
 
-export function AIDecomposeDialog({ projectId, open, onClose }: AIDecomposeDialogProps) {
+export function AIDecomposeDialog({ projectId, shareToken, open, onClose }: AIDecomposeDialogProps) {
   const [text, setText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -44,7 +45,8 @@ export function AIDecomposeDialog({ projectId, open, onClose }: AIDecomposeDialo
       const { data, error } = await supabase.functions.invoke("decompose-requirements", {
         body: { 
           text: text.trim(), 
-          projectId: projectId 
+          projectId: projectId,
+          shareToken 
         },
       });
 

@@ -25,6 +25,7 @@ export interface Requirement {
 interface RequirementsTreeProps {
   requirements: Requirement[];
   projectId: string;
+  shareToken?: string | null;
   onNodeUpdate?: (id: string, updates: Partial<Requirement>) => void;
   onNodeDelete?: (id: string) => void;
   onNodeAdd?: (parentId: string | null, type: RequirementType) => void;
@@ -45,7 +46,7 @@ function getNextType(type: RequirementType): RequirementType | null {
   return (map[type] as RequirementType) || null;
 }
 
-function RequirementNode({ requirement, level = 0, projectId, onUpdate, onDelete, onAdd, onExpand, onLinkStandard }: any) {
+function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpdate, onDelete, onAdd, onExpand, onLinkStandard }: any) {
   const [isExpanded, setIsExpanded] = useState(level < 2);
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(requirement.title);
@@ -60,7 +61,12 @@ function RequirementNode({ requirement, level = 0, projectId, onUpdate, onDelete
     if (requirement.type === "ACCEPTANCE_CRITERIA") return toast.error("Cannot expand further");
     setIsExpanding(true);
     try {
-      const { data, error } = await supabase.functions.invoke("expand-requirement", { body: { requirementId: requirement.id } });
+      const { data, error } = await supabase.functions.invoke("expand-requirement", { 
+        body: { 
+          requirementId: requirement.id,
+          shareToken 
+        } 
+      });
       if (error) throw error;
       toast.success(`Added ${data.count} sub-requirements`);
       onExpand?.();
@@ -163,7 +169,7 @@ function RequirementNode({ requirement, level = 0, projectId, onUpdate, onDelete
           </div>
         </div>
       )}
-      {isExpanded && hasChildren && <div>{requirement.children!.map((child: any) => <RequirementNode key={child.id} requirement={child} level={level + 1} projectId={projectId} onUpdate={onUpdate} onDelete={onDelete} onAdd={onAdd} onExpand={onExpand} onLinkStandard={onLinkStandard} />)}</div>}
+      {isExpanded && hasChildren && <div>{requirement.children!.map((child: any) => <RequirementNode key={child.id} requirement={child} level={level + 1} projectId={projectId} shareToken={shareToken} onUpdate={onUpdate} onDelete={onDelete} onAdd={onAdd} onExpand={onExpand} onLinkStandard={onLinkStandard} />)}</div>}
     </div>
   );
 }
@@ -177,6 +183,7 @@ export function RequirementsTree(props: RequirementsTreeProps) {
           requirement={req} 
           level={0}
           projectId={props.projectId}
+          shareToken={props.shareToken}
           onUpdate={props.onNodeUpdate}
           onDelete={props.onNodeDelete}
           onAdd={props.onNodeAdd}

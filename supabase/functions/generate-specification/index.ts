@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { projectId } = await req.json();
+    const { projectId, shareToken } = await req.json();
     console.log('Generating specification for project:', projectId);
 
     if (!projectId) {
@@ -21,14 +21,31 @@ serve(async (req) => {
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error("Supabase configuration missing");
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // Get auth header for authenticated users
+    const authHeader = req.headers.get('Authorization');
+    
+    // Create client with anon key (respects RLS)
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: authHeader ? { Authorization: authHeader } : {},
+      },
+    });
+
+    // Set share token if provided (for anonymous users)
+    if (shareToken) {
+      const { error: tokenError } = await supabase.rpc('set_share_token', { token: shareToken });
+      if (tokenError) {
+        console.error('Error setting share token:', tokenError);
+        throw new Error('Invalid share token');
+      }
+    }
 
     // Fetch all project data
     console.log('Fetching project data...');
