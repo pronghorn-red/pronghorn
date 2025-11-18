@@ -1211,6 +1211,7 @@ export type Database = {
         | "STANDARD"
         | "TECH_STACK"
         | "PAGE"
+        | "PROJECT"
       project_status: "DESIGN" | "AUDIT" | "BUILD"
       requirement_type: "EPIC" | "FEATURE" | "STORY" | "ACCEPTANCE_CRITERIA"
     }
@@ -1355,6 +1356,7 @@ export const Constants = {
         "STANDARD",
         "TECH_STACK",
         "PAGE",
+        "PROJECT",
       ],
       project_status: ["DESIGN", "AUDIT", "BUILD"],
       requirement_type: ["EPIC", "FEATURE", "STORY", "ACCEPTANCE_CRITERIA"],
