@@ -5,7 +5,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.verify-admin]
-verify_jwt = true
+verify_jwt = false
 
 [functions.expand-standards]
 verify_jwt = false

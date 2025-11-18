@@ -4,7 +4,6 @@ import Dashboard from "./pages/Dashboard";
 import Standards from "./pages/Standards";
 import TechStacks from "./pages/TechStacks";
 import Settings from "./pages/Settings";
-import Auth from "./pages/Auth";
 import Requirements from "./pages/project/Requirements";
 import Canvas from "./pages/project/Canvas";
 import Audit from "./pages/project/Audit";
@@ -17,7 +16,6 @@ import NotFound from "./pages/NotFound";
 const App = () => (
   <Routes>
     <Route path="/" element={<Landing />} />
-    <Route path="/auth" element={<Auth />} />
     <Route path="/dashboard" element={<Dashboard />} />
     <Route path="/standards" element={<Standards />} />
     <Route path="/tech-stacks" element={<TechStacks />} />

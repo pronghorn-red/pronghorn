@@ -1,66 +1,65 @@
-import { createContext, useContext, ReactNode } from "react";
-import { useAdminRole } from "@/hooks/useAdminRole";
-import { supabase } from "@/integrations/supabase/client";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 interface AdminContextType {
   isAdmin: boolean;
-  isLoading: boolean;
-  user: any;
+  adminToken: string | null;
   requestAdminAccess: (key?: string) => Promise<boolean>;
-  logout: () => Promise<void>;
-  refreshRole: () => Promise<void>;
+  logout: () => void;
 }
 
 const AdminContext = createContext<AdminContextType | undefined>(undefined);
 
+// Encrypt/decrypt admin token in localStorage (basic obfuscation)
+const STORAGE_KEY = "_embly_admin_token";
+
+function encodeToken(token: string): string {
+  return btoa(token);
+}
+
+function decodeToken(encoded: string): string | null {
+  try {
+    return atob(encoded);
+  } catch {
+    return null;
+  }
+}
+
 export function AdminProvider({ children }: { children: ReactNode }) {
-  const { isAdmin, isLoading, user, refreshRole } = useAdminRole();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminToken, setAdminToken] = useState<string | null>(null);
+
+  // Load token on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const decoded = decodeToken(stored);
+      if (decoded) {
+        setAdminToken(decoded);
+        setIsAdmin(true);
+      }
+    }
+  }, []);
 
   const requestAdminAccess = async (key?: string): Promise<boolean> => {
     const adminKey = key || prompt("Enter admin key:");
     if (!adminKey) return false;
 
-    try {
-      // User must be authenticated
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      
-      if (!user) {
-        throw new Error("You must be logged in to request admin access");
-      }
-
-      // Verify admin key and grant role
-      const { data, error } = await supabase.functions.invoke("verify-admin", {
-        body: { key: adminKey },
-      });
-
-      if (error) {
-        console.error("Admin verification error:", error);
-        return false;
-      }
-
-      if (!data?.valid) {
-        return false;
-      }
-
-      // Refresh role status
-      await refreshRole();
-      return true;
-    } catch (error) {
-      console.error("Admin verification error:", error);
-      return false;
-    }
+    // Store the key - it will be validated on every admin operation
+    const encoded = encodeToken(adminKey);
+    localStorage.setItem(STORAGE_KEY, encoded);
+    setAdminToken(adminKey);
+    setIsAdmin(true);
+    return true;
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
+  const logout = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setAdminToken(null);
+    setIsAdmin(false);
   };
 
   return (
-    <AdminContext.Provider
-      value={{ isAdmin, isLoading, user, requestAdminAccess, logout, refreshRole }}
-    >
+    <AdminContext.Provider value={{ isAdmin, adminToken, requestAdminAccess, logout }}>
       {children}
     </AdminContext.Provider>
   );
