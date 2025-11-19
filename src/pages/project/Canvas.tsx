@@ -20,6 +20,8 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
+import { AIArchitectDialog } from "@/components/canvas/AIArchitectDialog";
+import { useToast } from "@/hooks/use-toast";
 
 const nodeTypes = {
   custom: CanvasNode,
@@ -45,6 +47,7 @@ function CanvasFlow() {
   const [visibleNodeTypes, setVisibleNodeTypes] = useState<Set<NodeType>>(
     new Set(ALL_NODE_TYPES)
   );
+  const { toast } = useToast();
 
   const {
     nodes,
@@ -170,6 +173,75 @@ function CanvasFlow() {
     [reactFlowInstance, setNodes, saveNode]
   );
 
+  const handleArchitectureGenerated = useCallback(
+    async (generatedNodes: any[], generatedEdges: any[]) => {
+      try {
+        // Create a map to track generated node UUIDs
+        const nodeIdMap = new Map<string, string>();
+        
+        // Insert all nodes
+        const newNodes: Node[] = [];
+        for (const genNode of generatedNodes) {
+          const nodeId = crypto.randomUUID();
+          nodeIdMap.set(genNode.label, nodeId);
+          
+          const newNode: Node = {
+            id: nodeId,
+            type: "custom",
+            position: { x: genNode.x || 0, y: genNode.y || 0 },
+            data: {
+              label: genNode.label,
+              type: genNode.type,
+              subtitle: genNode.subtitle,
+              description: genNode.description,
+            },
+          };
+          
+          newNodes.push(newNode);
+          await saveNode(newNode, true, false);
+        }
+        
+        // Add nodes to state
+        setNodes((nds) => [...nds, ...newNodes]);
+        
+        // Create edges based on the mapping
+        const newEdges: Edge[] = [];
+        for (const genEdge of generatedEdges) {
+          const sourceId = nodeIdMap.get(genEdge.source);
+          const targetId = nodeIdMap.get(genEdge.target);
+          
+          if (sourceId && targetId) {
+            const edge: Edge = {
+              id: crypto.randomUUID(),
+              source: sourceId,
+              target: targetId,
+              label: genEdge.relationship,
+            };
+            
+            newEdges.push(edge);
+            await saveEdge(edge);
+          }
+        }
+        
+        // Add edges to state
+        setEdges((eds) => [...eds, ...newEdges]);
+        
+        toast({
+          title: "Architecture created!",
+          description: `Added ${newNodes.length} nodes and ${newEdges.length} connections to canvas.`,
+        });
+      } catch (error) {
+        console.error('Error creating architecture:', error);
+        toast({
+          title: "Error",
+          description: "Failed to create some nodes or edges. Check console for details.",
+          variant: "destructive",
+        });
+      }
+    },
+    [setNodes, setEdges, saveNode, saveEdge, toast]
+  );
+
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
@@ -184,6 +256,13 @@ function CanvasFlow() {
           />
           
           <div className="flex-1 relative" ref={reactFlowWrapper}>
+            <div className="absolute top-4 left-4 z-10">
+              <AIArchitectDialog
+                projectId={projectId!}
+                existingNodes={nodes}
+                onArchitectureGenerated={handleArchitectureGenerated}
+              />
+            </div>
             <ReactFlow
               nodes={visibleNodes}
               edges={visibleEdges}
