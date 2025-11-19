@@ -513,44 +513,44 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                 placeholder="Click 'Run AI Critic' to analyze your current architecture and receive recommendations..."
                 className="resize-none flex-1 min-h-0"
               />
-            </div>
 
-            <div className="flex justify-between gap-2 pt-4 border-t shrink-0">
-              <Button variant="outline" onClick={() => setOpen(false)}>
-                Close
-              </Button>
-              <Button 
-                onClick={handleCritic} 
-                disabled={isCriticizing || existingNodes.length === 0 || isGenerating}
-              >
-                {isCriticizing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <FileSearch className="h-4 w-4 mr-2" />
-                    Run AI Critic
-                  </>
-                )}
-              </Button>
-              <Button 
-                onClick={() => handleGenerate(true)} 
-                disabled={!criticFeedback || isGenerating || isCriticizing}
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Refining...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Refine Architecture
-                  </>
-                )}
-              </Button>
+              <div className="flex justify-between gap-2 pt-4 border-t shrink-0 mt-4">
+                <Button variant="outline" onClick={() => setOpen(false)}>
+                  Close
+                </Button>
+                <Button 
+                  onClick={handleCritic} 
+                  disabled={isCriticizing || existingNodes.length === 0 || isGenerating}
+                >
+                  {isCriticizing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <FileSearch className="h-4 w-4 mr-2" />
+                      Run AI Critic
+                    </>
+                  )}
+                </Button>
+                <Button 
+                  onClick={() => handleGenerate(true)} 
+                  disabled={!criticFeedback || isGenerating || isCriticizing}
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Refining...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Refine Architecture
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </TabsContent>
         </Tabs>
