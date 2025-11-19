@@ -182,26 +182,32 @@ export type Database = {
       canvas_edges: {
         Row: {
           created_at: string
+          edge_type: string | null
           id: string
           label: string | null
           project_id: string
           source_id: string
+          style: Json | null
           target_id: string
         }
         Insert: {
           created_at?: string
+          edge_type?: string | null
           id?: string
           label?: string | null
           project_id: string
           source_id: string
+          style?: Json | null
           target_id: string
         }
         Update: {
           created_at?: string
+          edge_type?: string | null
           id?: string
           label?: string | null
           project_id?: string
           source_id?: string
+          style?: Json | null
           target_id?: string
         }
         Relationships: [
@@ -855,10 +861,12 @@ export type Database = {
         Args: { p_project_id: string; p_token: string }
         Returns: {
           created_at: string
+          edge_type: string | null
           id: string
           label: string | null
           project_id: string
           source_id: string
+          style: Json | null
           target_id: string
         }[]
         SetofOptions: {
@@ -1145,30 +1153,61 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      upsert_canvas_edge_with_token: {
-        Args: {
-          p_id: string
-          p_label: string
-          p_project_id: string
-          p_source_id: string
-          p_target_id: string
-          p_token: string
-        }
-        Returns: {
-          created_at: string
-          id: string
-          label: string | null
-          project_id: string
-          source_id: string
-          target_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "canvas_edges"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      upsert_canvas_edge_with_token:
+        | {
+            Args: {
+              p_id: string
+              p_label: string
+              p_project_id: string
+              p_source_id: string
+              p_target_id: string
+              p_token: string
+            }
+            Returns: {
+              created_at: string
+              edge_type: string | null
+              id: string
+              label: string | null
+              project_id: string
+              source_id: string
+              style: Json | null
+              target_id: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "canvas_edges"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_edge_type?: string
+              p_id: string
+              p_label: string
+              p_project_id: string
+              p_source_id: string
+              p_style?: Json
+              p_target_id: string
+              p_token: string
+            }
+            Returns: {
+              created_at: string
+              edge_type: string | null
+              id: string
+              label: string | null
+              project_id: string
+              source_id: string
+              style: Json | null
+              target_id: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "canvas_edges"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       upsert_canvas_node_with_token: {
         Args: {
           p_data: Json

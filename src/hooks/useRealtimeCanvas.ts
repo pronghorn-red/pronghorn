@@ -185,32 +185,17 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
         data: node.data,
       }));
 
-      const loadedEdges: Edge[] = (edgesResult.data || []).map((edge) => ({
+      const loadedEdges: Edge[] = (edgesResult.data || []).map((edge: any) => ({
         id: edge.id,
         source: edge.source_id,
         target: edge.target_id,
         label: edge.label,
+        type: edge.edge_type || 'default',
+        style: edge.style || {},
       }));
 
       setNodes(loadedNodes);
-      // Preserve any visual-only properties (type, style, animation) we may have set locally
-      setEdges((previousEdges) => {
-        const previousById = new Map(previousEdges.map((e) => [e.id, e] as const));
-
-        return loadedEdges.map((edge) => {
-          const previous = previousById.get(edge.id);
-          if (!previous) return edge;
-
-          return {
-            ...edge,
-            type: previous.type,
-            style: previous.style,
-            animated: previous.animated,
-            markerEnd: previous.markerEnd,
-            markerStart: previous.markerStart,
-          };
-        });
-      });
+      setEdges(loadedEdges);
     } catch (error) {
       console.error("Error loading canvas data:", error);
     }
@@ -283,6 +268,8 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
         source_id: edge.source,
         target_id: edge.target,
         label: (edge.label as string) || null,
+        edge_type: edge.type || 'default',
+        style: edge.style || {},
       };
 
       const { data, error } = await supabase.rpc("upsert_canvas_edge_with_token", {
@@ -291,7 +278,9 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
         p_token: shareToken || null,
         p_source_id: edge.source,
         p_target_id: edge.target,
-        p_label: (edge.label as string) || null
+        p_label: (edge.label as string) || null,
+        p_edge_type: edge.type || 'default',
+        p_style: edge.style || {}
       });
 
       if (error) {
