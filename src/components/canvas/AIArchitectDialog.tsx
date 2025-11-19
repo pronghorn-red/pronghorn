@@ -281,12 +281,12 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
         </DialogHeader>
 
         <Tabs defaultValue="generate" className="flex-1 flex flex-col min-h-0">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-2 shrink-0">
             <TabsTrigger value="generate">Generate</TabsTrigger>
             <TabsTrigger value="critic">Critic</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="generate" className="flex-1 flex gap-4 min-h-0">
+          <TabsContent value="generate" className="flex-1 flex gap-4 min-h-0 data-[state=active]:flex data-[state=inactive]:hidden">
             <div className="w-64 flex flex-col border-r pr-4 min-h-0">
               <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
                 <div className="space-y-2">
@@ -419,7 +419,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
             </div>
           </TabsContent>
 
-          <TabsContent value="critic" className="flex-1 flex flex-col min-h-0">
+          <TabsContent value="critic" className="flex-1 flex flex-col min-h-0 data-[state=active]:flex data-[state=inactive]:hidden">
             <div className="flex-1 flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-4">
                 <label className="text-sm font-medium">Architecture Critique</label>
