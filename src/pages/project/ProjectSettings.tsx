@@ -4,6 +4,7 @@ import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCw, Copy, Share2 } from "lucide-react";
@@ -192,11 +193,14 @@ export default function ProjectSettings() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="description">Description</Label>
-                      <Input 
+                      <Label htmlFor="description">Project Description</Label>
+                      <Textarea 
                         id="description" 
                         value={projectDescription}
                         onChange={(e) => setProjectDescription(e.target.value)}
+                        placeholder="Enter detailed project description that can be used for AI context..."
+                        rows={8}
+                        className="resize-none"
                       />
                     </div>
 

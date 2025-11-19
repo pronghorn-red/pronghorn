@@ -12,7 +12,18 @@ serve(async (req) => {
   }
 
   try {
-    const { description, existingNodes } = await req.json();
+    const body = await req.json();
+    const { 
+      description, 
+      existingNodes, 
+      existingEdges, 
+      drawEdges = true,
+      standards,
+      techStacks,
+      requirements,
+      projectDescription
+    } = body;
+    
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     if (!LOVABLE_API_KEY) {
@@ -53,10 +64,10 @@ VERTICAL LAYERING BY TYPE (top to bottom):
 8. FIREWALL (y=50-150)
 9. SECURITY (y=200-300)
 
-EDGES: Define connections between nodes. Include:
+${drawEdges ? `EDGES: Define connections between nodes. Include:
 - source: source node label
 - target: target node label
-- relationship: brief description of connection
+- relationship: brief description of connection` : 'DO NOT return any edges in your response. The user has disabled edge generation.'}
 
 Return ONLY valid JSON with this structure:
 {
@@ -69,22 +80,62 @@ Return ONLY valid JSON with this structure:
       "x": 100,
       "y": 100
     }
-  ],
+  ]${drawEdges ? `,
   "edges": [
     {
       "source": "Source Node Label",
       "target": "Target Node Label",
       "relationship": "fetches data from"
     }
-  ]
+  ]` : ''}
 }
 
 Be comprehensive. Include all major components, pages, APIs, databases, and external services.
 Use clear, descriptive names. Be specific about what each component does.`;
 
-    const userPrompt = `Generate a complete application architecture for: ${description}
+    // Build context string
+    let contextInfo = '';
+    
+    if (existingNodes && existingNodes.length > 0) {
+      const nodesList = existingNodes.map((n: any) => 
+        `${n.data.label} (${n.data.type}): ${n.data.description || 'No description'}`
+      ).join('\n');
+      contextInfo += `\n\nEXISTING NODES (${existingNodes.length}):\n${nodesList}\n\nAdd complementary nodes that augment this architecture without duplicating existing nodes.`;
+    }
 
-${existingNodes && existingNodes.length > 0 ? `Existing nodes on canvas: ${existingNodes.map((n: any) => n.data.label).join(', ')}. Add complementary nodes that don't duplicate these.` : ''}`;
+    if (existingEdges && existingEdges.length > 0) {
+      const edgesList = existingEdges.map((e: any) => 
+        `${e.source} → ${e.target}${e.data?.label ? ` (${e.data.label})` : ''}`
+      ).join('\n');
+      contextInfo += `\n\nEXISTING CONNECTIONS (${existingEdges.length}):\n${edgesList}`;
+    }
+
+    if (standards && standards.length > 0) {
+      const standardsList = standards.map((s: any) => 
+        `${s.code}: ${s.title} - ${s.description || ''}`
+      ).join('\n');
+      contextInfo += `\n\nPROJECT STANDARDS:\n${standardsList}`;
+    }
+
+    if (techStacks && techStacks.length > 0) {
+      const techStacksList = techStacks.map((ts: any) => 
+        `${ts.name}: ${ts.description || ''}`
+      ).join('\n');
+      contextInfo += `\n\nTECH STACKS:\n${techStacksList}`;
+    }
+
+    if (requirements && requirements.length > 0) {
+      const requirementsList = requirements.map((r: any) => 
+        `${r.code || ''}: ${r.title} (${r.type})${r.content ? ` - ${r.content}` : ''}`
+      ).join('\n');
+      contextInfo += `\n\nREQUIREMENTS:\n${requirementsList}`;
+    }
+
+    if (projectDescription) {
+      contextInfo += `\n\nPROJECT DESCRIPTION:\n${projectDescription}`;
+    }
+
+    const userPrompt = `Generate a complete application architecture for: ${description}${contextInfo}`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',

@@ -330,6 +330,7 @@ function CanvasFlow() {
               <AIArchitectDialog
                 projectId={projectId!}
                 existingNodes={nodes}
+                existingEdges={edges}
                 onArchitectureGenerated={handleArchitectureGenerated}
               />
             </div>
