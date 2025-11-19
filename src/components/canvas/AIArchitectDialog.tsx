@@ -286,116 +286,119 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
             <TabsTrigger value="critic">Critic</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="generate" className="flex-1 flex gap-4 overflow-hidden">
-            <div className="w-64 space-y-4 overflow-y-auto border-r pr-4">
-              <div className="space-y-2">
-                <h3 className="font-medium text-sm">Context Options</h3>
-                
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="existingNodes" 
-                    checked={includeExistingNodes}
-                    onCheckedChange={(checked) => setIncludeExistingNodes(checked as boolean)}
-                  />
-                  <label htmlFor="existingNodes" className="text-sm cursor-pointer">
-                    Include Existing Nodes
-                  </label>
+          <TabsContent value="generate" className="flex-1 flex gap-4 overflow-hidden h-full">
+            <div className="w-64 flex flex-col border-r pr-4">
+              <div className="flex-1 overflow-y-auto space-y-4">
+                <div className="space-y-2">
+                  <h3 className="font-medium text-sm">Context Options</h3>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="existingNodes" 
+                      checked={includeExistingNodes}
+                      onCheckedChange={(checked) => setIncludeExistingNodes(checked as boolean)}
+                    />
+                    <label htmlFor="existingNodes" className="text-sm cursor-pointer">
+                      Include Existing Nodes
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="existingEdges" 
+                      checked={includeExistingEdges}
+                      onCheckedChange={(checked) => setIncludeExistingEdges(checked as boolean)}
+                    />
+                    <label htmlFor="existingEdges" className="text-sm cursor-pointer">
+                      Include Existing Edges
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="standards" 
+                      checked={includeStandards}
+                      onCheckedChange={(checked) => setIncludeStandards(checked as boolean)}
+                    />
+                    <label htmlFor="standards" className="text-sm cursor-pointer">
+                      Include Standards ({standards.length})
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="techStack" 
+                      checked={includeTechStack}
+                      onCheckedChange={(checked) => setIncludeTechStack(checked as boolean)}
+                    />
+                    <label htmlFor="techStack" className="text-sm cursor-pointer">
+                      Include Tech Stack ({techStacks.length})
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="requirements" 
+                      checked={includeRequirements}
+                      onCheckedChange={(checked) => setIncludeRequirements(checked as boolean)}
+                    />
+                    <label htmlFor="requirements" className="text-sm cursor-pointer">
+                      Include Requirements ({requirements.length})
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="projectDesc" 
+                      checked={includeProjectDescription}
+                      onCheckedChange={(checked) => setIncludeProjectDescription(checked as boolean)}
+                    />
+                    <label htmlFor="projectDesc" className="text-sm cursor-pointer">
+                      Include Project Description
+                    </label>
+                  </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="existingEdges" 
-                    checked={includeExistingEdges}
-                    onCheckedChange={(checked) => setIncludeExistingEdges(checked as boolean)}
-                  />
-                  <label htmlFor="existingEdges" className="text-sm cursor-pointer">
-                    Include Existing Edges
-                  </label>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="standards" 
-                    checked={includeStandards}
-                    onCheckedChange={(checked) => setIncludeStandards(checked as boolean)}
-                  />
-                  <label htmlFor="standards" className="text-sm cursor-pointer">
-                    Include Standards ({standards.length})
-                  </label>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="techStack" 
-                    checked={includeTechStack}
-                    onCheckedChange={(checked) => setIncludeTechStack(checked as boolean)}
-                  />
-                  <label htmlFor="techStack" className="text-sm cursor-pointer">
-                    Include Tech Stack ({techStacks.length})
-                  </label>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="requirements" 
-                    checked={includeRequirements}
-                    onCheckedChange={(checked) => setIncludeRequirements(checked as boolean)}
-                  />
-                  <label htmlFor="requirements" className="text-sm cursor-pointer">
-                    Include Requirements ({requirements.length})
-                  </label>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="projectDesc" 
-                    checked={includeProjectDescription}
-                    onCheckedChange={(checked) => setIncludeProjectDescription(checked as boolean)}
-                  />
-                  <label htmlFor="projectDesc" className="text-sm cursor-pointer">
-                    Include Project Description
-                  </label>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-4 border-t">
-                <h3 className="font-medium text-sm">Generation Options</h3>
-                
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="drawEdges" 
-                    checked={drawEdges}
-                    onCheckedChange={(checked) => setDrawEdges(checked as boolean)}
-                  />
-                  <label htmlFor="drawEdges" className="text-sm cursor-pointer">
-                    Draw Edges
-                  </label>
+                <div className="space-y-2 pt-4 border-t">
+                  <h3 className="font-medium text-sm">Generation Options</h3>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="drawEdges" 
+                      checked={drawEdges}
+                      onCheckedChange={(checked) => setDrawEdges(checked as boolean)}
+                    />
+                    <label htmlFor="drawEdges" className="text-sm cursor-pointer">
+                      Draw Edges
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex-1 flex flex-col space-y-4 overflow-y-auto">
-              <div className="space-y-2">
-                <label htmlFor="description" className="text-sm font-medium">
-                  Application Description
-                </label>
-                <Textarea
-                  id="description"
-                  placeholder="Example: A social media platform with user authentication, post creation, comments, real-time notifications, and image uploads. Users can follow each other and see a personalized feed."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={12}
-                  className="resize-none"
-                />
+            <div className="flex-1 flex flex-col h-full">
+              <div className="flex-1 overflow-y-auto space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="description" className="text-sm font-medium">
+                    Application Description
+                  </label>
+                  <Textarea
+                    id="description"
+                    placeholder="Example: A social media platform with user authentication, post creation, comments, real-time notifications, and image uploads. Users can follow each other and see a personalized feed."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="resize-none min-h-[400px]"
+                  />
+                </div>
+                
+                {existingNodes.length > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Note: {existingNodes.length} existing node(s) on canvas
+                  </p>
+                )}
               </div>
-              
-              {existingNodes.length > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Note: {existingNodes.length} existing node(s) on canvas
-                </p>
-              )}
 
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-2 pt-4 border-t mt-4">
                 <Button variant="outline" onClick={() => setOpen(false)} disabled={isGenerating}>
                   Cancel
                 </Button>
@@ -416,9 +419,9 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
             </div>
           </TabsContent>
 
-          <TabsContent value="critic" className="flex-1 flex flex-col space-y-4 overflow-y-auto">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
+          <TabsContent value="critic" className="flex-1 flex flex-col h-full overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
                 <label className="text-sm font-medium">Architecture Critique</label>
                 <Button 
                   onClick={handleCritic} 
@@ -443,12 +446,11 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                 value={criticFeedback}
                 readOnly
                 placeholder="Click 'AI Critic' to analyze your current architecture and receive recommendations..."
-                rows={15}
-                className="resize-none"
+                className="resize-none flex-1 min-h-0"
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-4 border-t mt-4">
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Close
               </Button>
