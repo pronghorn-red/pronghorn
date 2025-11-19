@@ -1,9 +1,10 @@
-import { useCallback, useRef, useState, useMemo } from "react";
+import { useCallback, useRef, useState, useMemo, useEffect } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { NodePalette, NodeType } from "@/components/canvas/NodePalette";
 import { CanvasNode } from "@/components/canvas/CanvasNode";
 import { NodePropertiesPanel } from "@/components/canvas/NodePropertiesPanel";
+import { EdgePropertiesPanel } from "@/components/canvas/EdgePropertiesPanel";
 import { useParams } from "react-router-dom";
 import { useRealtimeCanvas } from "@/hooks/useRealtimeCanvas";
 import ReactFlow, {
@@ -43,6 +44,7 @@ function CanvasFlow() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
   const [showProperties, setShowProperties] = useState(false);
   const [visibleNodeTypes, setVisibleNodeTypes] = useState<Set<NodeType>>(
     new Set(ALL_NODE_TYPES)
@@ -105,6 +107,13 @@ function CanvasFlow() {
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNode(node);
+    setSelectedEdge(null);
+    setShowProperties(true);
+  }, []);
+
+  const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
+    setSelectedEdge(edge);
+    setSelectedNode(null);
     setShowProperties(true);
   }, []);
 
@@ -138,6 +147,52 @@ function CanvasFlow() {
     },
     [setNodes, saveNode]
   );
+
+  const handleEdgeUpdate = useCallback(
+    (edgeId: string, updates: Partial<Edge>) => {
+      setEdges((eds) =>
+        eds.map((edge) => {
+          if (edge.id === edgeId) {
+            const updatedEdge = { ...edge, ...updates };
+            saveEdge(updatedEdge);
+            return updatedEdge;
+          }
+          return edge;
+        })
+      );
+    },
+    [setEdges, saveEdge]
+  );
+
+  const handleEdgeDelete = useCallback(
+    (edgeId: string) => {
+      setEdges((eds) => eds.filter((edge) => edge.id !== edgeId));
+      // Delete from database via RPC or direct delete
+      const edgeToDelete = edges.find((e) => e.id === edgeId);
+      if (edgeToDelete) {
+        // This will be handled by the real-time subscription
+        import("@/integrations/supabase/client").then(({ supabase }) => {
+          supabase.from("canvas_edges").delete().eq("id", edgeId).then();
+        });
+      }
+    },
+    [setEdges, edges]
+  );
+
+  // Handle keyboard delete for edges
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedEdge) {
+        event.preventDefault();
+        handleEdgeDelete(selectedEdge.id);
+        setSelectedEdge(null);
+        setShowProperties(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedEdge, handleEdgeDelete]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -270,6 +325,7 @@ function CanvasFlow() {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onNodeClick={onNodeClick}
+              onEdgeClick={onEdgeClick}
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
               onInit={setReactFlowInstance}
@@ -296,12 +352,21 @@ function CanvasFlow() {
             </ReactFlow>
           </div>
 
-          {showProperties && (
+          {showProperties && selectedNode && (
             <NodePropertiesPanel
               node={selectedNode}
               onClose={() => setShowProperties(false)}
               onUpdate={handleNodeUpdate}
               projectId={projectId!}
+            />
+          )}
+
+          {showProperties && selectedEdge && (
+            <EdgePropertiesPanel
+              edge={selectedEdge}
+              onClose={() => setShowProperties(false)}
+              onUpdate={handleEdgeUpdate}
+              onDelete={handleEdgeDelete}
             />
           )}
         </div>
