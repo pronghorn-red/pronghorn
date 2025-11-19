@@ -12,7 +12,14 @@ serve(async (req) => {
   }
 
   try {
-    const { nodes, edges } = await req.json();
+    const { 
+      nodes, 
+      edges,
+      standards,
+      techStacks,
+      requirements,
+      projectDescription
+    } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     if (!LOVABLE_API_KEY) {
@@ -44,6 +51,34 @@ Provide specific, actionable recommendations for improvement. Be constructive an
       `${e.source} → ${e.target}${e.data?.label ? ` (${e.data.label})` : ''}`
     ).join('\n');
 
+    // Build context string
+    let contextInfo = '';
+    
+    if (standards && standards.length > 0) {
+      const standardsList = standards.map((s: any) => 
+        `${s.code}: ${s.title} - ${s.description || ''}`
+      ).join('\n');
+      contextInfo += `\n\nPROJECT STANDARDS:\n${standardsList}`;
+    }
+
+    if (techStacks && techStacks.length > 0) {
+      const techStacksList = techStacks.map((ts: any) => 
+        `${ts.name}: ${ts.description || ''}`
+      ).join('\n');
+      contextInfo += `\n\nTECH STACKS:\n${techStacksList}`;
+    }
+
+    if (requirements && requirements.length > 0) {
+      const reqsList = requirements.map((r: any) => 
+        `${r.code}: ${r.title} (${r.type}) - ${r.content || ''}`
+      ).join('\n');
+      contextInfo += `\n\nREQUIREMENTS:\n${reqsList}`;
+    }
+
+    if (projectDescription) {
+      contextInfo += `\n\nPROJECT DESCRIPTION:\n${projectDescription}`;
+    }
+
     const userPrompt = `Analyze this application architecture:
 
 NODES (${nodes.length}):
@@ -51,6 +86,7 @@ ${nodesSummary}
 
 CONNECTIONS (${edges.length}):
 ${edgesSummary}
+${contextInfo}
 
 Provide a comprehensive critique with specific recommendations for improvement.`;
 

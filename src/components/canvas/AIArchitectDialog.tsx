@@ -198,16 +198,46 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
     setCriticFeedback("");
     
     try {
+      const context: any = {
+        nodes: existingNodes.map(n => ({ data: n.data, position: n.position })),
+        edges: existingEdges.map(e => ({ source: e.source, target: e.target, data: e.data })),
+      };
+
+      if (includeStandards && standards.length > 0) {
+        context.standards = standards.map(s => ({ 
+          title: s.title, 
+          code: s.code, 
+          description: s.description 
+        }));
+      }
+
+      if (includeTechStack && techStacks.length > 0) {
+        context.techStacks = techStacks.map(ts => ({ 
+          name: ts.name, 
+          description: ts.description 
+        }));
+      }
+
+      if (includeRequirements && requirements.length > 0) {
+        context.requirements = requirements.map(r => ({ 
+          code: r.code, 
+          title: r.title, 
+          type: r.type, 
+          content: r.content 
+        }));
+      }
+
+      if (includeProjectDescription && projectData?.description) {
+        context.projectDescription = projectData.description;
+      }
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-architect-critic`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({
-          nodes: existingNodes.map(n => ({ data: n.data, position: n.position })),
-          edges: existingEdges.map(e => ({ source: e.source, target: e.target, data: e.data })),
-        }),
+        body: JSON.stringify(context),
       });
 
       if (!response.ok || !response.body) {
@@ -420,7 +450,59 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
             </div>
           </TabsContent>
 
-          <TabsContent value="critic" className="flex-1 flex flex-col min-h-0 data-[state=active]:flex data-[state=inactive]:hidden">
+          <TabsContent value="critic" className="flex-1 flex gap-4 min-h-0 data-[state=active]:flex data-[state=inactive]:hidden">
+            <div className="w-64 flex flex-col border-r pr-4 min-h-0">
+              <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
+                <div className="space-y-2">
+                  <h3 className="font-medium text-sm">Context Options</h3>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="critic-standards" 
+                      checked={includeStandards}
+                      onCheckedChange={(checked) => setIncludeStandards(checked as boolean)}
+                    />
+                    <label htmlFor="critic-standards" className="text-sm cursor-pointer">
+                      Include Standards ({standards.length})
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="critic-techStack" 
+                      checked={includeTechStack}
+                      onCheckedChange={(checked) => setIncludeTechStack(checked as boolean)}
+                    />
+                    <label htmlFor="critic-techStack" className="text-sm cursor-pointer">
+                      Include Tech Stack ({techStacks.length})
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="critic-requirements" 
+                      checked={includeRequirements}
+                      onCheckedChange={(checked) => setIncludeRequirements(checked as boolean)}
+                    />
+                    <label htmlFor="critic-requirements" className="text-sm cursor-pointer">
+                      Include Requirements ({requirements.length})
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="critic-projectDesc" 
+                      checked={includeProjectDescription}
+                      onCheckedChange={(checked) => setIncludeProjectDescription(checked as boolean)}
+                    />
+                    <label htmlFor="critic-projectDesc" className="text-sm cursor-pointer">
+                      Include Project Description
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex-1 flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-4">
                 <label className="text-sm font-medium">Architecture Critique</label>

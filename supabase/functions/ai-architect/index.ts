@@ -100,7 +100,7 @@ Use clear, descriptive names. Be specific about what each component does.`;
       const nodesList = existingNodes.map((n: any) => 
         `${n.data.label} (${n.data.type}): ${n.data.description || 'No description'}`
       ).join('\n');
-      contextInfo += `\n\nEXISTING NODES (${existingNodes.length}):\n${nodesList}\n\nAdd complementary nodes that augment this architecture without duplicating existing nodes.`;
+      contextInfo += `\n\nEXISTING NODES (${existingNodes.length}):\n${nodesList}\n\n⚠️ CRITICAL: DO NOT recreate any of the existing nodes listed above. ONLY generate NEW nodes that complement and augment the existing architecture. If a node with similar functionality already exists, DO NOT create a duplicate. Focus on filling gaps and adding missing components.`;
     }
 
     if (existingEdges && existingEdges.length > 0) {
