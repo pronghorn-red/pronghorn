@@ -2,64 +2,36 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PronghornLogo } from "@/components/layout/PronghornLogo";
 import { useNavigate } from "react-router-dom";
-import { 
-  FileText, 
-  ListChecks, 
-  GitBranch, 
-  Shield, 
-  Zap, 
-  Users,
-  ArrowRight,
-  CheckCircle2
-} from "lucide-react";
-
+import { FileText, ListChecks, GitBranch, Shield, Zap, Users, ArrowRight, CheckCircle2 } from "lucide-react";
 export default function Landing() {
   const navigate = useNavigate();
-
-  const features = [
-    {
-      icon: FileText,
-      title: "Standards-First Traceability",
-      description: "Standards embedded by design—every requirement traces back to organizational standards, ensuring compliance from day one."
-    },
-    {
-      icon: ListChecks,
-      title: "Validate While Building",
-      description: "Continuous validation catches compliance gaps instantly, eliminating costly late-stage rework and technical debt."
-    },
-    {
-      icon: GitBranch,
-      title: "Visual Architecture",
-      description: "Design robust architectures with an interactive canvas that links standards, requirements, and components in real-time."
-    },
-    {
-      icon: Shield,
-      title: "Proof of Compliance",
-      description: "Automated auditing provides traceable evidence that your application meets every standard and requirement."
-    },
-    {
-      icon: Zap,
-      title: "Autonomous Build-Audit-Fix",
-      description: "AI agents work together to build, audit, and automatically remediate gaps—all changes remain fully traceable."
-    },
-    {
-      icon: Users,
-      title: "Developer Support System",
-      description: "Guides your team like an architect, accelerates work like a contractor, ensures quality like an inspector."
-    }
-  ];
-
-  const benefits = [
-    "Eliminate compliance debt before it starts",
-    "Reduce 12-month projects to weeks",
-    "Proof of compliance built into every line of code",
-    "Complete traceability from standards to code",
-    "Build trust and confidence with stakeholders",
-    "Accelerate delivery without sacrificing quality"
-  ];
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted">
+  const features = [{
+    icon: FileText,
+    title: "Standards-First Traceability",
+    description: "Standards embedded by design—every requirement traces back to organizational standards, ensuring compliance from day one."
+  }, {
+    icon: ListChecks,
+    title: "Validate While Building",
+    description: "Continuous validation catches compliance gaps instantly, eliminating costly late-stage rework and technical debt."
+  }, {
+    icon: GitBranch,
+    title: "Visual Architecture",
+    description: "Design robust architectures with an interactive canvas that links standards, requirements, and components in real-time."
+  }, {
+    icon: Shield,
+    title: "Proof of Compliance",
+    description: "Automated auditing provides traceable evidence that your application meets every standard and requirement."
+  }, {
+    icon: Zap,
+    title: "Autonomous Build-Audit-Fix",
+    description: "AI agents work together to build, audit, and automatically remediate gaps—all changes remain fully traceable."
+  }, {
+    icon: Users,
+    title: "Developer Support System",
+    description: "Guides your team like an architect, accelerates work like a contractor, ensures quality like an inspector."
+  }];
+  const benefits = ["Eliminate compliance debt before it starts", "Reduce 12-month projects to weeks", "Proof of compliance built into every line of code", "Complete traceability from standards to code", "Build trust and confidence with stakeholders", "Accelerate delivery without sacrificing quality"];
+  return <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted">
       {/* Navigation */}
       <nav className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-6 py-4 flex justify-between items-center">
@@ -81,7 +53,7 @@ export default function Landing() {
           {/* Left Column - Text Content */}
           <div className="text-center md:text-left order-2 md:order-1">
             <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold mb-4 md:mb-6 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-              Autonomous Compliance-Driven Development
+              Standards Driven AI Development            
             </h1>
             <p className="text-base md:text-xl text-muted-foreground mb-6 md:mb-8">
               The alternative to unclear "vibe" coding. Build enterprise applications that are provably compliant 
@@ -100,13 +72,7 @@ export default function Landing() {
           {/* Right Column - Video */}
           <div className="order-1 md:order-2">
             <div className="relative rounded-lg overflow-hidden shadow-2xl border border-border">
-              <video 
-                autoPlay 
-                loop 
-                muted 
-                playsInline
-                className="w-full h-auto"
-              >
+              <video autoPlay loop muted playsInline className="w-full h-auto">
                 <source src="/pronghorn-hero.mp4" type="video/mp4" />
                 Your browser does not support the video tag.
               </video>
@@ -125,15 +91,13 @@ export default function Landing() {
           </p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map((feature, index) => (
-            <Card key={index} className="p-6 hover:shadow-lg transition-shadow border-border">
+          {features.map((feature, index) => <Card key={index} className="p-6 hover:shadow-lg transition-shadow border-border">
               <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
                 <feature.icon className="h-6 w-6 text-primary" />
               </div>
               <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
               <p className="text-muted-foreground">{feature.description}</p>
-            </Card>
-          ))}
+            </Card>)}
         </div>
       </section>
 
@@ -187,12 +151,10 @@ export default function Landing() {
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
-            {benefits.map((benefit, index) => (
-              <div key={index} className="flex items-start gap-3 p-4 rounded-lg hover:bg-muted/50 transition-colors">
+            {benefits.map((benefit, index) => <div key={index} className="flex items-start gap-3 p-4 rounded-lg hover:bg-muted/50 transition-colors">
                 <CheckCircle2 className="h-6 w-6 text-primary flex-shrink-0 mt-0.5" />
                 <span className="text-lg">{benefit}</span>
-              </div>
-            ))}
+              </div>)}
           </div>
         </div>
       </section>
@@ -222,6 +184,5 @@ export default function Landing() {
           </p>
         </div>
       </footer>
-    </div>
-  );
+    </div>;
 }
