@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Search, LogIn, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAnonymousProjects } from "@/hooks/useAnonymousProjects";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import { toast } from "sonner";
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { projects: anonymousProjects, removeProject } = useAnonymousProjects();
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -81,16 +82,25 @@ export default function Dashboard() {
         .eq('id', projectId)
         .eq('share_token', shareToken);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error saving project:", error);
+        throw error;
+      }
 
-      // Remove from anonymous projects in sessionStorage
+      // Wait a moment for the database to propagate the update
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Invalidate and refetch the projects query
+      await queryClient.invalidateQueries({ queryKey: ['projects', user.id] });
+      await refetch();
+
+      // Only remove from anonymous projects after confirming the update worked
       removeProject(projectId);
 
       toast.success("Project saved to your account!");
-      refetch();
     } catch (error) {
       console.error("Error saving project:", error);
-      toast.error("Failed to save project to account");
+      toast.error("Failed to save project to account. Please try again.");
     }
   };
 
