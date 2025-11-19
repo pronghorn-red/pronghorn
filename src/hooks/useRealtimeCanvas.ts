@@ -167,11 +167,11 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
       const [nodesResult, edgesResult] = await Promise.all([
         supabase.rpc("get_canvas_nodes_with_token", {
           p_project_id: projectId,
-          p_token: shareToken || null
+          p_token: shareToken || null,
         }),
         supabase.rpc("get_canvas_edges_with_token", {
           p_project_id: projectId,
-          p_token: shareToken || null
+          p_token: shareToken || null,
         }),
       ]);
 
@@ -193,7 +193,24 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
       }));
 
       setNodes(loadedNodes);
-      setEdges(loadedEdges);
+      // Preserve any visual-only properties (type, style, animation) we may have set locally
+      setEdges((previousEdges) => {
+        const previousById = new Map(previousEdges.map((e) => [e.id, e] as const));
+
+        return loadedEdges.map((edge) => {
+          const previous = previousById.get(edge.id);
+          if (!previous) return edge;
+
+          return {
+            ...edge,
+            type: previous.type,
+            style: previous.style,
+            animated: previous.animated,
+            markerEnd: previous.markerEnd,
+            markerStart: previous.markerStart,
+          };
+        });
+      });
     } catch (error) {
       console.error("Error loading canvas data:", error);
     }

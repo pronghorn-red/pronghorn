@@ -29,9 +29,10 @@ export function EdgePropertiesPanel({
 
   useEffect(() => {
     if (edge) {
-      setLabel(edge.label as string || "");
-      setLineType(edge.type || "straight");
-      setColor(edge.style?.stroke as string || "#64748b");
+      setLabel((edge.label as string) || "");
+      // Default to React Flow's default edge type (Bezier) when not explicitly set
+      setLineType(edge.type || "default");
+      setColor((edge.style?.stroke as string) || "#64748b");
       setThickness((edge.style?.strokeWidth as number) || 2);
     }
   }, [edge]);
