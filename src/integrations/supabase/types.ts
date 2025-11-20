@@ -1150,41 +1150,84 @@ export type Database = {
         }
       }
       set_share_token: { Args: { token: string }; Returns: undefined }
-      update_project_with_token: {
-        Args: {
-          p_description: string
-          p_github_repo: string
-          p_name: string
-          p_project_id: string
-          p_token: string
-        }
-        Returns: {
-          budget: number | null
-          created_at: string
-          created_by: string | null
-          description: string | null
-          github_branch: string | null
-          github_repo: string | null
-          id: string
-          name: string
-          org_id: string
-          organization: string | null
-          priority: string | null
-          scope: string | null
-          share_token: string | null
-          status: Database["public"]["Enums"]["project_status"]
-          tags: string[] | null
-          timeline_end: string | null
-          timeline_start: string | null
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "projects"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      update_project_with_token:
+        | {
+            Args: {
+              p_description: string
+              p_github_repo: string
+              p_name: string
+              p_project_id: string
+              p_token: string
+            }
+            Returns: {
+              budget: number | null
+              created_at: string
+              created_by: string | null
+              description: string | null
+              github_branch: string | null
+              github_repo: string | null
+              id: string
+              name: string
+              org_id: string
+              organization: string | null
+              priority: string | null
+              scope: string | null
+              share_token: string | null
+              status: Database["public"]["Enums"]["project_status"]
+              tags: string[] | null
+              timeline_end: string | null
+              timeline_start: string | null
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "projects"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_budget?: number
+              p_description?: string
+              p_github_repo?: string
+              p_name: string
+              p_organization?: string
+              p_priority?: string
+              p_project_id: string
+              p_scope?: string
+              p_tags?: string[]
+              p_timeline_end?: string
+              p_timeline_start?: string
+              p_token: string
+            }
+            Returns: {
+              budget: number | null
+              created_at: string
+              created_by: string | null
+              description: string | null
+              github_branch: string | null
+              github_repo: string | null
+              id: string
+              name: string
+              org_id: string
+              organization: string | null
+              priority: string | null
+              scope: string | null
+              share_token: string | null
+              status: Database["public"]["Enums"]["project_status"]
+              tags: string[] | null
+              timeline_end: string | null
+              timeline_start: string | null
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "projects"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       update_requirement_standard_with_token: {
         Args: { p_id: string; p_notes: string; p_token: string }
         Returns: {
