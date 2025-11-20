@@ -6,6 +6,7 @@ import { CanvasNode } from "@/components/canvas/CanvasNode";
 import { NodePropertiesPanel } from "@/components/canvas/NodePropertiesPanel";
 import { EdgePropertiesPanel } from "@/components/canvas/EdgePropertiesPanel";
 import { useParams } from "react-router-dom";
+import { useShareToken } from "@/hooks/useShareToken";
 import { useRealtimeCanvas } from "@/hooks/useRealtimeCanvas";
 import ReactFlow, {
 
@@ -42,6 +43,7 @@ const ALL_NODE_TYPES: NodeType[] = [
 
 function CanvasFlow() {
   const { projectId } = useParams<{ projectId: string }>();
+  const { token } = useShareToken(projectId);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -182,32 +184,53 @@ function CanvasFlow() {
   );
 
   const handleEdgeDelete = useCallback(
-    (edgeId: string) => {
+    async (edgeId: string) => {
       setEdges((eds) => eds.filter((edge) => edge.id !== edgeId));
-      // Delete from database via RPC or direct delete
-      const edgeToDelete = edges.find((e) => e.id === edgeId);
-      if (edgeToDelete) {
-        // This will be handled by the real-time subscription
-        import("@/integrations/supabase/client").then(({ supabase }) => {
-          supabase.from("canvas_edges").delete().eq("id", edgeId).then();
+      
+      // Delete from database using RPC with token validation
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { error } = await supabase.rpc("delete_canvas_edge_with_token", {
+        p_id: edgeId,
+        p_token: token,
+      });
+      
+      if (error) {
+        console.error("Error deleting edge:", error);
+        toast({
+          title: "Error",
+          description: "Failed to delete edge from database",
+          variant: "destructive",
         });
       }
     },
-    [setEdges, edges]
+    [setEdges, token, toast]
   );
 
   const handleNodeDelete = useCallback(
-    (nodeId: string) => {
+    async (nodeId: string) => {
       setNodes((nds) => nds.filter((node) => node.id !== nodeId));
-      // Delete from database
-      import("@/integrations/supabase/client").then(({ supabase }) => {
-        supabase.from("canvas_nodes").delete().eq("id", nodeId).then();
+      
+      // Delete from database using RPC with token validation
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { error } = await supabase.rpc("delete_canvas_node_with_token", {
+        p_id: nodeId,
+        p_token: token,
       });
-      toast({
-        title: "Node deleted",
-      });
+      
+      if (error) {
+        console.error("Error deleting node:", error);
+        toast({
+          title: "Error",
+          description: "Failed to delete node from database",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Node deleted",
+        });
+      }
     },
-    [setNodes, toast]
+    [setNodes, token, toast]
   );
 
   // Handle keyboard shortcuts for copy/paste/delete
