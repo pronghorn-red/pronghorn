@@ -46,6 +46,7 @@ function CanvasFlow() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
   const [showProperties, setShowProperties] = useState(false);
+  const [copiedNode, setCopiedNode] = useState<Node | null>(null);
   const [visibleNodeTypes, setVisibleNodeTypes] = useState<Set<NodeType>>(
     new Set(ALL_NODE_TYPES)
   );
@@ -194,20 +195,77 @@ function CanvasFlow() {
     [setEdges, edges]
   );
 
-  // Handle keyboard delete for edges
+  const handleNodeDelete = useCallback(
+    (nodeId: string) => {
+      setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+      // Delete from database
+      import("@/integrations/supabase/client").then(({ supabase }) => {
+        supabase.from("canvas_nodes").delete().eq("id", nodeId).then();
+      });
+      toast({
+        title: "Node deleted",
+      });
+    },
+    [setNodes, toast]
+  );
+
+  // Handle keyboard shortcuts for copy/paste/delete
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Delete key for edges
       if ((event.key === "Delete" || event.key === "Backspace") && selectedEdge) {
         event.preventDefault();
         handleEdgeDelete(selectedEdge.id);
         setSelectedEdge(null);
         setShowProperties(false);
       }
+      
+      // Delete key for nodes
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedNode) {
+        event.preventDefault();
+        handleNodeDelete(selectedNode.id);
+        setSelectedNode(null);
+        setShowProperties(false);
+      }
+      
+      // Copy node (Ctrl+C or Cmd+C)
+      if ((event.ctrlKey || event.metaKey) && event.key === "c" && selectedNode) {
+        event.preventDefault();
+        setCopiedNode(selectedNode);
+        toast({
+          title: "Node copied",
+          description: "Press Ctrl+V to paste",
+        });
+      }
+      
+      // Paste node (Ctrl+V or Cmd+V)
+      if ((event.ctrlKey || event.metaKey) && event.key === "v" && copiedNode) {
+        event.preventDefault();
+        
+        const newNode: Node = {
+          id: crypto.randomUUID(),
+          type: "custom",
+          position: {
+            x: copiedNode.position.x + 50,
+            y: copiedNode.position.y + 50,
+          },
+          data: {
+            ...copiedNode.data,
+          },
+        };
+        
+        setNodes((nds) => [...nds, newNode]);
+        saveNode(newNode, true, false);
+        
+        toast({
+          title: "Node pasted",
+        });
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedEdge, handleEdgeDelete]);
+  }, [selectedEdge, selectedNode, copiedNode, handleEdgeDelete, handleNodeDelete, setNodes, saveNode, toast]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -373,6 +431,7 @@ function CanvasFlow() {
               node={selectedNode}
               onClose={() => setShowProperties(false)}
               onUpdate={handleNodeUpdate}
+              onDelete={handleNodeDelete}
               projectId={projectId!}
             />
           )}

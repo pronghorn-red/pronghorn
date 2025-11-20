@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,10 +16,11 @@ interface NodePropertiesPanelProps {
   node: Node | null;
   onClose: () => void;
   onUpdate: (nodeId: string, updates: Partial<Node>) => void;
+  onDelete?: (nodeId: string) => void;
   projectId: string;
 }
 
-export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: NodePropertiesPanelProps) {
+export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete, projectId }: NodePropertiesPanelProps) {
   const [label, setLabel] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [description, setDescription] = useState("");
@@ -80,6 +81,12 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
       },
     });
     toast.success("Node updated");
+  };
+
+  const handleDelete = () => {
+    if (!node || !onDelete) return;
+    onDelete(node.id);
+    onClose();
   };
 
   const handleRequirementChange = async (requirementId: string) => {
@@ -294,10 +301,16 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, projectId }: Node
         </div>
       </ScrollArea>
 
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border space-y-2">
         <Button onClick={handleSave} className="w-full">
           Save Changes
         </Button>
+        {onDelete && (
+          <Button onClick={handleDelete} variant="destructive" className="w-full">
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete Node
+          </Button>
+        )}
       </div>
     </div>
   );
