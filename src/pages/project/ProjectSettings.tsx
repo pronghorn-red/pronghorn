@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RefreshCw, Copy, Share2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -20,6 +21,13 @@ export default function ProjectSettings() {
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
   const [githubRepo, setGithubRepo] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [budget, setBudget] = useState("");
+  const [scope, setScope] = useState("");
+  const [timelineStart, setTimelineStart] = useState("");
+  const [timelineEnd, setTimelineEnd] = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [tags, setTags] = useState("");
 
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
@@ -40,6 +48,13 @@ export default function ProjectSettings() {
       setProjectName(project.name || "");
       setProjectDescription(project.description || "");
       setGithubRepo(project.github_repo || "");
+      setOrganization(project.organization || "");
+      setBudget(project.budget?.toString() || "");
+      setScope(project.scope || "");
+      setTimelineStart(project.timeline_start || "");
+      setTimelineEnd(project.timeline_end || "");
+      setPriority(project.priority || "medium");
+      setTags(project.tags?.join(", ") || "");
     }
   }, [project]);
 
@@ -50,7 +65,14 @@ export default function ProjectSettings() {
         p_token: shareToken || null,
         p_name: projectName,
         p_description: projectDescription,
-        p_github_repo: githubRepo
+        p_github_repo: githubRepo,
+        p_organization: organization,
+        p_budget: budget ? parseFloat(budget) : null,
+        p_scope: scope,
+        p_timeline_start: timelineStart || null,
+        p_timeline_end: timelineEnd || null,
+        p_priority: priority,
+        p_tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : null
       });
       
       if (error) throw error;
@@ -212,6 +234,91 @@ export default function ProjectSettings() {
                         value={githubRepo}
                         onChange={(e) => setGithubRepo(e.target.value)}
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="organization">Organization</Label>
+                      <Input 
+                        id="organization" 
+                        placeholder="Organization name"
+                        value={organization}
+                        onChange={(e) => setOrganization(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="budget">Budget</Label>
+                        <Input 
+                          id="budget" 
+                          type="number"
+                          placeholder="0.00"
+                          value={budget}
+                          onChange={(e) => setBudget(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="priority">Priority</Label>
+                        <Select value={priority} onValueChange={setPriority}>
+                          <SelectTrigger id="priority">
+                            <SelectValue placeholder="Select priority" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">Low</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                            <SelectItem value="critical">Critical</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="scope">Scope</Label>
+                      <Textarea 
+                        id="scope" 
+                        placeholder="Define project scope and boundaries..."
+                        value={scope}
+                        onChange={(e) => setScope(e.target.value)}
+                        rows={3}
+                        className="resize-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="timeline-start">Timeline Start</Label>
+                        <Input 
+                          id="timeline-start" 
+                          type="date"
+                          value={timelineStart}
+                          onChange={(e) => setTimelineStart(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="timeline-end">Timeline End</Label>
+                        <Input 
+                          id="timeline-end" 
+                          type="date"
+                          value={timelineEnd}
+                          onChange={(e) => setTimelineEnd(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="tags">Tags</Label>
+                      <Input 
+                        id="tags" 
+                        placeholder="tag1, tag2, tag3"
+                        value={tags}
+                        onChange={(e) => setTags(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Comma-separated tags for project categorization
+                      </p>
                     </div>
 
                     <Button 
