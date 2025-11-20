@@ -82,15 +82,25 @@ export function StandardsTreeSelector({
 
   const toggleStandard = (standard: Standard) => {
     const newSelected = new Set(selectedStandards);
-    const descendants = getAllDescendants(standard);
-    const allSelected = areAllDescendantsSelected(standard);
-
-    if (allSelected) {
-      // Unselect all descendants
-      descendants.forEach((id) => newSelected.delete(id));
+    const hasChildren = standard.children && standard.children.length > 0;
+    
+    if (!hasChildren) {
+      // Leaf node - just toggle the standard itself
+      if (newSelected.has(standard.id)) {
+        newSelected.delete(standard.id);
+      } else {
+        newSelected.add(standard.id);
+      }
     } else {
-      // Select all descendants
-      descendants.forEach((id) => newSelected.add(id));
+      // Has children - toggle all descendants
+      const descendants = getAllDescendants(standard);
+      const allSelected = areAllDescendantsSelected(standard);
+
+      if (allSelected) {
+        descendants.forEach((id) => newSelected.delete(id));
+      } else {
+        descendants.forEach((id) => newSelected.add(id));
+      }
     }
 
     onSelectionChange(newSelected);
@@ -135,8 +145,10 @@ export function StandardsTreeSelector({
   const renderStandard = (standard: Standard, level: number = 0) => {
     const isExpanded = expandedStandards.has(standard.id);
     const hasChildren = standard.children && standard.children.length > 0;
-    const isChecked = areAllDescendantsSelected(standard);
-    const isIndeterminate = !isChecked && areSomeDescendantsSelected(standard);
+    const isChecked = hasChildren 
+      ? areAllDescendantsSelected(standard)
+      : selectedStandards.has(standard.id);
+    const isIndeterminate = hasChildren && !isChecked && areSomeDescendantsSelected(standard);
 
     return (
       <div key={standard.id} className="space-y-1">
