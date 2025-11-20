@@ -20,9 +20,10 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Camera } from "lucide-react";
 import { AIArchitectDialog } from "@/components/canvas/AIArchitectDialog";
 import { useToast } from "@/hooks/use-toast";
+import { toPng, toSvg } from "html-to-image";
 
 const nodeTypes = {
   custom: CanvasNode,
@@ -376,6 +377,44 @@ function CanvasFlow() {
     [setNodes, setEdges, saveNode, saveEdge, toast]
   );
 
+  const handleDownloadSnapshot = useCallback(
+    async (format: 'png' | 'svg') => {
+      const viewport = document.querySelector('.react-flow__viewport') as HTMLElement;
+      if (!viewport) {
+        toast({
+          title: "Error",
+          description: "Canvas not found",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
+        const dataUrl = format === 'png' 
+          ? await toPng(viewport, { backgroundColor: '#ffffff' })
+          : await toSvg(viewport, { backgroundColor: '#ffffff' });
+        
+        const link = document.createElement('a');
+        link.download = `canvas-snapshot.${format}`;
+        link.href = dataUrl;
+        link.click();
+        
+        toast({
+          title: "Snapshot downloaded",
+          description: `Canvas exported as ${format.toUpperCase()}`,
+        });
+      } catch (error) {
+        console.error('Error downloading snapshot:', error);
+        toast({
+          title: "Error",
+          description: "Failed to export canvas",
+          variant: "destructive",
+        });
+      }
+    },
+    [toast]
+  );
+
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
@@ -390,13 +429,31 @@ function CanvasFlow() {
           />
           
           <div className="flex-1 relative" ref={reactFlowWrapper}>
-            <div className="absolute top-4 left-4 z-10">
+            <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
               <AIArchitectDialog
                 projectId={projectId!}
                 existingNodes={nodes}
                 existingEdges={edges}
                 onArchitectureGenerated={handleArchitectureGenerated}
               />
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => handleDownloadSnapshot('png')}
+                  variant="secondary"
+                  className="shadow-lg"
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  PNG
+                </Button>
+                <Button
+                  onClick={() => handleDownloadSnapshot('svg')}
+                  variant="secondary"
+                  className="shadow-lg"
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  SVG
+                </Button>
+              </div>
             </div>
             <ReactFlow
               nodes={visibleNodes}
@@ -414,6 +471,8 @@ function CanvasFlow() {
               nodeTypes={nodeTypes}
               deleteKeyCode={null}
               fitView
+              minZoom={0.05}
+              maxZoom={4}
               className="bg-background"
             >
               <Background />
