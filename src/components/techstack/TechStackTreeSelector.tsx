@@ -39,7 +39,7 @@ export function TechStackTreeSelector({
 
   useEffect(() => {
     loadTechStackItems();
-  }, [initialTechStacks]);
+  }, [initialTechStacks.map(ts => ts.id).join(',')]);
 
   const loadTechStackItems = async () => {
     setLoading(true);
