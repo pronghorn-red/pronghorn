@@ -872,6 +872,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_canvas_edge_with_token: {
+        Args: { p_id: string; p_token: string }
+        Returns: undefined
+      }
+      delete_canvas_node_with_token: {
+        Args: { p_id: string; p_token: string }
+        Returns: undefined
+      }
       delete_project_standard_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
