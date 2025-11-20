@@ -264,10 +264,11 @@ export function EnhancedCreateProjectDialog() {
         </DialogHeader>
         
         <Tabs defaultValue="basic" className="w-full flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="basic">Basic</TabsTrigger>
             <TabsTrigger value="metadata">Details</TabsTrigger>
             <TabsTrigger value="standards">Standards</TabsTrigger>
+            <TabsTrigger value="techstacks">Tech Stacks</TabsTrigger>
             <TabsTrigger value="ai">
               <Sparkles className="h-3 w-3 mr-1" />
               AI
@@ -382,30 +383,28 @@ export function EnhancedCreateProjectDialog() {
             </TabsContent>
 
             <TabsContent value="standards" className="space-y-4 mt-4">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-semibold mb-3">Select Standards</h3>
-                  <ScrollArea className="h-[300px] border rounded-lg p-4">
-                    <StandardsTreeSelector
-                      categories={standardCategories}
-                      selectedStandards={selectedStandards}
-                      onSelectionChange={setSelectedStandards}
-                    />
-                  </ScrollArea>
-                </div>
+              <div>
+                <h3 className="font-semibold mb-3">Select Standards</h3>
+                <ScrollArea className="h-[400px] border rounded-lg p-4">
+                  <StandardsTreeSelector
+                    categories={standardCategories}
+                    selectedStandards={selectedStandards}
+                    onSelectionChange={setSelectedStandards}
+                  />
+                </ScrollArea>
+              </div>
+            </TabsContent>
 
-                <Separator />
-
-                <div>
-                  <h3 className="font-semibold mb-3">Select Tech Stacks</h3>
-                  <ScrollArea className="h-[300px] border rounded-lg p-4">
-                    <TechStackTreeSelector
-                      techStacks={techStacks.map(ts => ({ ...ts, items: [] }))}
-                      selectedItems={selectedTechStacks}
-                      onSelectionChange={setSelectedTechStacks}
-                    />
-                  </ScrollArea>
-                </div>
+            <TabsContent value="techstacks" className="space-y-4 mt-4">
+              <div>
+                <h3 className="font-semibold mb-3">Select Tech Stacks</h3>
+                <ScrollArea className="h-[400px] border rounded-lg p-4">
+                  <TechStackTreeSelector
+                    techStacks={techStacks.map(ts => ({ ...ts, items: [] }))}
+                    selectedItems={selectedTechStacks}
+                    onSelectionChange={setSelectedTechStacks}
+                  />
+                </ScrollArea>
               </div>
             </TabsContent>
 
