@@ -41,7 +41,7 @@ serve(async (req) => {
       userId = user?.id || null;
     }
 
-    const { projectData, techStackIds, requirementsText } = await req.json();
+    const { projectData, techStackIds, standardIds, requirementsText } = await req.json();
     
     console.log('[create-project] Starting project creation:', { 
       isAnonymous: !userId,
@@ -86,6 +86,24 @@ serve(async (req) => {
         console.error('[create-project] Tech stack linking error:', techStackError);
       } else {
         console.log('[create-project] Tech stacks linked:', techStackIds.length);
+      }
+    }
+
+    // Link standards
+    if (standardIds && standardIds.length > 0) {
+      const standardLinks = standardIds.map((standardId: string) => ({
+        project_id: project.id,
+        standard_id: standardId
+      }));
+
+      const { error: standardError } = await supabase
+        .from('project_standards')
+        .insert(standardLinks);
+
+      if (standardError) {
+        console.error('[create-project] Standards linking error:', standardError);
+      } else {
+        console.log('[create-project] Standards linked:', standardIds.length);
       }
     }
 

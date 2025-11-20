@@ -152,17 +152,28 @@ export function TechStackTreeSelector({
     onSelectionChange(newSelected);
   };
 
-  const toggleTechStack = (items: TechStackItem[]) => {
+  const toggleTechStack = (stackId: string, items: TechStackItem[]) => {
     const newSelected = new Set(selectedItems);
-    const allIds = getAllTechStackItems(items);
-    const allSelected = areAllTechStackItemsSelected(items);
-
-    if (allSelected) {
-      // Unselect all
-      allIds.forEach((id) => newSelected.delete(id));
+    
+    if (items.length === 0) {
+      // If no items, toggle the tech stack ID itself
+      if (newSelected.has(stackId)) {
+        newSelected.delete(stackId);
+      } else {
+        newSelected.add(stackId);
+      }
     } else {
-      // Select all
-      allIds.forEach((id) => newSelected.add(id));
+      // If has items, toggle all item IDs
+      const allIds = getAllTechStackItems(items);
+      const allSelected = areAllTechStackItemsSelected(items);
+
+      if (allSelected) {
+        // Unselect all
+        allIds.forEach((id) => newSelected.delete(id));
+      } else {
+        // Select all
+        allIds.forEach((id) => newSelected.add(id));
+      }
     }
 
     onSelectionChange(newSelected);
@@ -246,8 +257,10 @@ export function TechStackTreeSelector({
       {techStacksWithItems.map((stack) => {
         const isExpanded = expandedTechStacks.has(stack.id);
         const hasItems = stack.items.length > 0;
-        const allSelected = areAllTechStackItemsSelected(stack.items);
-        const someSelected = areSomeTechStackItemsSelected(stack.items);
+        const allSelected = hasItems 
+          ? areAllTechStackItemsSelected(stack.items)
+          : selectedItems.has(stack.id);
+        const someSelected = hasItems && areSomeTechStackItemsSelected(stack.items);
 
         return (
           <div key={stack.id} className="border rounded-lg p-3 space-y-2">
@@ -271,8 +284,7 @@ export function TechStackTreeSelector({
                 id={`stack-${stack.id}`}
                 checked={allSelected}
                 className={someSelected && !allSelected ? "data-[state=checked]:bg-primary/50" : ""}
-                onCheckedChange={() => toggleTechStack(stack.items)}
-                disabled={!hasItems}
+                onCheckedChange={() => toggleTechStack(stack.id, stack.items)}
               />
               <Label
                 htmlFor={`stack-${stack.id}`}
