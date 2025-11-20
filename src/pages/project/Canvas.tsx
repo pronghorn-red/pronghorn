@@ -219,7 +219,7 @@ function CanvasFlow() {
                        target.isContentEditable;
       
       // Delete key for edges (only if not typing)
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedEdge && !isTyping) {
+      if (event.key === "Delete" && selectedEdge && !isTyping) {
         event.preventDefault();
         handleEdgeDelete(selectedEdge.id);
         setSelectedEdge(null);
@@ -227,7 +227,7 @@ function CanvasFlow() {
       }
       
       // Delete key for nodes (only if not typing)
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedNode && !isTyping) {
+      if (event.key === "Delete" && selectedNode && !isTyping) {
         event.preventDefault();
         handleNodeDelete(selectedNode.id);
         setSelectedNode(null);
