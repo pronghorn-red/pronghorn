@@ -212,16 +212,22 @@ function CanvasFlow() {
   // Handle keyboard shortcuts for copy/paste/delete
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Delete key for edges
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedEdge) {
+      // Check if user is typing in an input field
+      const target = event.target as HTMLElement;
+      const isTyping = target.tagName === 'INPUT' || 
+                       target.tagName === 'TEXTAREA' || 
+                       target.isContentEditable;
+      
+      // Delete key for edges (only if not typing)
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedEdge && !isTyping) {
         event.preventDefault();
         handleEdgeDelete(selectedEdge.id);
         setSelectedEdge(null);
         setShowProperties(false);
       }
       
-      // Delete key for nodes
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedNode) {
+      // Delete key for nodes (only if not typing)
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedNode && !isTyping) {
         event.preventDefault();
         handleNodeDelete(selectedNode.id);
         setSelectedNode(null);
