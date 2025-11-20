@@ -50,7 +50,10 @@ export default function Dashboard() {
         budget: p.budget,
         scope: p.scope
       }));
-    }
+    },
+    enabled: !!user,
+    staleTime: 0,
+    gcTime: 0
   });
 
   // Map anonymous projects to the same format
