@@ -77,40 +77,48 @@ export function Lasso({
     ctx.current.fill(path);
     ctx.current.stroke(path);
 
+    if (nextPoints.length < 2) return;
+
+    const xs = nextPoints.map(([px]) => px);
+    const ys = nextPoints.map(([, py]) => py);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+
     const nodesToSelect = new Set<string>();
+    const canvasRect = canvas.current?.getBoundingClientRect();
+    if (!canvasRect) return;
 
     for (const [nodeId, points] of Object.entries(nodePoints.current)) {
-      const canvasRect = canvas.current?.getBoundingClientRect();
-      if (!canvasRect) continue;
-
       if (partial) {
+        // Partial selection: any corner inside lasso bounding box
         for (const point of points) {
           const screenPos = flowToScreenPosition({ x: point[0], y: point[1] });
           const localX = screenPos.x - canvasRect.left;
           const localY = screenPos.y - canvasRect.top;
-          if (ctx.current.isPointInPath(path, localX, localY)) {
+          if (localX >= minX && localX <= maxX && localY >= minY && localY <= maxY) {
             nodesToSelect.add(nodeId);
             break;
           }
         }
       } else {
-        let allPointsInPath = true;
+        // Full selection: all corners inside lasso bounding box
+        let allPointsInBox = true;
         for (const point of points) {
           const screenPos = flowToScreenPosition({ x: point[0], y: point[1] });
           const localX = screenPos.x - canvasRect.left;
           const localY = screenPos.y - canvasRect.top;
-          if (!ctx.current.isPointInPath(path, localX, localY)) {
-            allPointsInPath = false;
+          if (localX < minX || localX > maxX || localY < minY || localY > maxY) {
+            allPointsInBox = false;
             break;
           }
         }
-        if (allPointsInPath) {
+        if (allPointsInBox) {
           nodesToSelect.add(nodeId);
         }
       }
     }
-
-    console.log("Lasso.handlePointerMove nodesToSelect", Array.from(nodesToSelect));
 
     setNodes((nodes) =>
       nodes.map((node) => ({
