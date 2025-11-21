@@ -130,12 +130,21 @@ function CanvasFlow() {
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     // Shift+Click for multi-select
     if (event.shiftKey) {
+      event.stopPropagation();
+      event.preventDefault();
       setNodes((nds) =>
         nds.map((n) =>
           n.id === node.id ? { ...n, selected: !n.selected } : n
         )
       );
     } else {
+      // Single select - deselect all others and select this one
+      setNodes((nds) =>
+        nds.map((n) => ({
+          ...n,
+          selected: n.id === node.id,
+        }))
+      );
       setSelectedNode(node);
       setSelectedEdge(null);
       setShowProperties(true);
@@ -596,6 +605,16 @@ function CanvasFlow() {
               className="bg-background"
               defaultEdgeOptions={{
                 style: { strokeWidth: 2 },
+              }}
+              selectionOnDrag={!isLassoActive}
+              panOnDrag={!isLassoActive}
+              multiSelectionKeyCode="Shift"
+              onPaneClick={() => {
+                // Only clear selection if not in lasso mode
+                if (!isLassoActive) {
+                  setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
+                  setShowProperties(false);
+                }
               }}
             >
               <Background />
