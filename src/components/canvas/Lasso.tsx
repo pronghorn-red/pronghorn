@@ -2,61 +2,63 @@ import { useRef, type PointerEvent } from 'react';
 import { useReactFlow, useStore, type Node } from 'reactflow';
 import { pointsToPath } from '@/lib/lassoUtils';
 
-type NodePoints = ([number, number] | [number, number, number])[];
+type NodePoints = [number, number][];
 type NodePointObject = Record<string, NodePoints>;
 
-export function Lasso({ 
-  partial, 
-  setNodes 
-}: { 
+export function Lasso({
+  partial,
+  setNodes,
+}: {
   partial: boolean;
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
 }) {
-  const { flowToScreenPosition, getNodes } = useReactFlow();
+  const { getNodes } = useReactFlow();
   const { width, height } = useStore((state) => ({
     width: state.width,
     height: state.height,
   }));
+
   const canvas = useRef<HTMLCanvasElement>(null);
-  const ctx = useRef<CanvasRenderingContext2D | undefined | null>(null);
+  const ctx = useRef<CanvasRenderingContext2D | null>(null);
 
   const nodePoints = useRef<NodePointObject>({});
   const pointRef = useRef<[number, number][]>([]);
 
   function handlePointerDown(e: PointerEvent) {
-    (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+    const c = canvas.current;
+    if (!c) return;
 
-    const rect = canvas.current?.getBoundingClientRect();
-    if (!rect) return;
+    c.setPointerCapture(e.pointerId);
 
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    const nextPoints = [[x, y]] satisfies [number, number][];
+    const rect = c.getBoundingClientRect();
+    const nextPoints: [number, number][] = [[
+      e.clientX - rect.left,
+      e.clientY - rect.top,
+    ]];
     pointRef.current = nextPoints;
 
     nodePoints.current = {};
     const nodes = getNodes();
 
     for (const node of nodes) {
-      const nodeElement = document.querySelector(
+      const el = document.querySelector(
         `[data-id="${node.id}"]`,
       ) as HTMLDivElement | null;
-      if (!nodeElement) continue;
+      if (!el) continue;
 
-      const nodeRect = nodeElement.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
 
-      const points = [
-        [nodeRect.left - rect.left, nodeRect.top - rect.top],
-        [nodeRect.right - rect.left, nodeRect.top - rect.top],
-        [nodeRect.right - rect.left, nodeRect.bottom - rect.top],
-        [nodeRect.left - rect.left, nodeRect.bottom - rect.top],
-      ] satisfies NodePoints;
+      const localPoints: [number, number][] = [
+        [r.left - rect.left, r.top - rect.top],
+        [r.right - rect.left, r.top - rect.top],
+        [r.right - rect.left, r.bottom - rect.top],
+        [r.left - rect.left, r.bottom - rect.top],
+      ];
 
-      nodePoints.current[node.id] = points;
+      nodePoints.current[node.id] = localPoints;
     }
 
-    ctx.current = canvas.current?.getContext('2d');
+    ctx.current = c.getContext('2d');
     if (!ctx.current) return;
     ctx.current.lineWidth = 1;
     ctx.current.fillStyle = 'rgba(0, 89, 220, 0.08)';
@@ -66,44 +68,32 @@ export function Lasso({
   function handlePointerMove(e: PointerEvent) {
     if (e.buttons !== 1) return;
 
-    const rect = canvas.current?.getBoundingClientRect();
-    if (!rect) return;
+    const c = canvas.current;
+    if (!c || !ctx.current) return;
 
+    const rect = c.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
     const points = pointRef.current;
-    const nextPoints = [...points, [x, y]] satisfies [number, number][];
+    const nextPoints = [...points, [x, y]] as [number, number][];
     pointRef.current = nextPoints;
 
     const path = new Path2D(pointsToPath(nextPoints));
 
-    if (!ctx.current) return;
     ctx.current.clearRect(0, 0, width, height);
     ctx.current.fill(path);
     ctx.current.stroke(path);
 
     const nodesToSelect = new Set<string>();
 
-    for (const [nodeId, points] of Object.entries(nodePoints.current)) {
+    for (const [nodeId, pts] of Object.entries(nodePoints.current)) {
       if (partial) {
-        // Partial selection: any corner inside lasso path
-        for (const [px, py] of points) {
-          if (ctx.current.isPointInPath(path, px, py)) {
-            nodesToSelect.add(nodeId);
-            break;
-          }
+        if (pts.some(([px, py]) => ctx.current!.isPointInPath(path, px, py))) {
+          nodesToSelect.add(nodeId);
         }
       } else {
-        // Full selection: all corners inside lasso path
-        let allPointsInPath = true;
-        for (const [px, py] of points) {
-          if (!ctx.current.isPointInPath(path, px, py)) {
-            allPointsInPath = false;
-            break;
-          }
-        }
-        if (allPointsInPath) {
+        if (pts.every(([px, py]) => ctx.current!.isPointInPath(path, px, py))) {
           nodesToSelect.add(nodeId);
         }
       }
@@ -118,7 +108,10 @@ export function Lasso({
   }
 
   function handlePointerUp(e: PointerEvent) {
-    (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+    const c = canvas.current;
+    if (c) {
+      c.releasePointerCapture(e.pointerId);
+    }
     pointRef.current = [];
     if (ctx.current) {
       ctx.current.clearRect(0, 0, width, height);
