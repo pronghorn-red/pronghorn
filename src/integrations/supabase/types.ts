@@ -915,7 +915,7 @@ export type Database = {
         Returns: undefined
       }
       delete_canvas_layer_with_token: {
-        Args: { p_id: string; p_token: string }
+        Args: { p_id: string; p_token?: string }
         Returns: undefined
       }
       delete_canvas_node_with_token: {
@@ -962,7 +962,7 @@ export type Database = {
         }
       }
       get_canvas_layers_with_token: {
-        Args: { p_project_id: string; p_token: string }
+        Args: { p_project_id: string; p_token?: string }
         Returns: {
           created_at: string
           id: string
@@ -1396,11 +1396,11 @@ export type Database = {
       upsert_canvas_layer_with_token: {
         Args: {
           p_id: string
-          p_name: string
-          p_node_ids: string[]
+          p_name?: string
+          p_node_ids?: string[]
           p_project_id: string
-          p_token: string
-          p_visible: boolean
+          p_token?: string
+          p_visible?: boolean
         }
         Returns: {
           created_at: string
