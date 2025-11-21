@@ -72,6 +72,21 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
   }, [projectId]);
 
   const saveLayer = async (layer: Partial<Layer> & { id: string }) => {
+    // Optimistic update: Update UI immediately
+    setLayers((prev) => {
+      const existingIndex = prev.findIndex((l) => l.id === layer.id);
+      if (existingIndex >= 0) {
+        // Update existing layer
+        const updated = [...prev];
+        updated[existingIndex] = { ...updated[existingIndex], ...layer };
+        return updated;
+      } else {
+        // Add new layer
+        return [...prev, { ...layer, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as Layer];
+      }
+    });
+
+    // Save to server in background
     const { error } = await supabase.rpc("upsert_canvas_layer_with_token", {
       p_id: layer.id,
       p_project_id: projectId,
@@ -83,10 +98,20 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
 
     if (error) {
       console.error("Error saving layer:", error);
+      // Revert on error by refetching
+      const { data } = await supabase.rpc("get_canvas_layers_with_token", {
+        p_project_id: projectId,
+        p_token: token || null,
+      });
+      if (data) setLayers(data);
     }
   };
 
   const deleteLayer = async (layerId: string) => {
+    // Optimistic update: Remove from UI immediately
+    setLayers((prev) => prev.filter((l) => l.id !== layerId));
+
+    // Delete from server in background
     const { error } = await supabase.rpc("delete_canvas_layer_with_token", {
       p_id: layerId,
       p_token: token || null,
@@ -94,6 +119,12 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
 
     if (error) {
       console.error("Error deleting layer:", error);
+      // Revert on error by refetching
+      const { data } = await supabase.rpc("get_canvas_layers_with_token", {
+        p_project_id: projectId,
+        p_token: token || null,
+      });
+      if (data) setLayers(data);
     }
   };
 
