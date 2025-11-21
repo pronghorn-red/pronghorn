@@ -571,7 +571,7 @@ function CanvasFlow() {
                     <Button
                       onClick={() => setIsLassoActive(!isLassoActive)}
                       variant={isLassoActive ? "default" : "outline"}
-                      className="bg-card/80"
+                      className={isLassoActive ? "" : "bg-card/80"}
                       size="icon"
                     >
                       <LassoIcon className="w-4 h-4" />
