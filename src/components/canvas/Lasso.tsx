@@ -110,6 +110,8 @@ export function Lasso({
       }
     }
 
+    console.log("Lasso.handlePointerMove nodesToSelect", Array.from(nodesToSelect));
+
     setNodes((nodes) =>
       nodes.map((node) => ({
         ...node,

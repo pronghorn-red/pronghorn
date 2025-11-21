@@ -512,7 +512,9 @@ function CanvasFlow() {
   );
 
   const selectedNodesList = useMemo(() => {
-    return nodes.filter((n) => n.selected);
+    const selected = nodes.filter((n) => (n as any).selected);
+    console.log("Canvas.selectedNodesList", selected.map((n) => ({ id: n.id, selected: (n as any).selected })));
+    return selected;
   }, [nodes]);
 
   return (

@@ -24,6 +24,7 @@ export function LayersManager({
   const [editName, setEditName] = useState("");
 
   const handleCreateLayer = () => {
+    console.log("LayersManager.handleCreateLayer selectedNodes", selectedNodes.map(n => ({ id: n.id, selected: (n as any).selected })));
     if (selectedNodes.length === 0) return;
 
     const newLayer = {
@@ -33,6 +34,7 @@ export function LayersManager({
       visible: true,
     };
 
+    console.log("LayersManager.handleCreateLayer newLayer", newLayer);
     onSaveLayer(newLayer);
   };
 
