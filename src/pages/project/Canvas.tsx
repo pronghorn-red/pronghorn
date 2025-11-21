@@ -23,11 +23,12 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image } from "lucide-react";
 import { AIArchitectDialog } from "@/components/canvas/AIArchitectDialog";
 import { useToast } from "@/hooks/use-toast";
 import { toPng, toSvg } from "html-to-image";
 import { Lasso } from "@/components/canvas/Lasso";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const nodeTypes = {
   custom: CanvasNode,
@@ -562,38 +563,61 @@ function CanvasFlow() {
           />
           
           <div className="flex-1 relative" ref={reactFlowWrapper}>
-            <div className="absolute top-4 left-4 z-10 flex gap-2">
-              <AIArchitectDialog
-                projectId={projectId!}
-                existingNodes={nodes}
-                existingEdges={edges}
-                onArchitectureGenerated={handleArchitectureGenerated}
-              />
-              <Button
-                onClick={() => setIsLassoActive(!isLassoActive)}
-                variant={isLassoActive ? "default" : "outline"}
-                className="shadow-lg"
-              >
-                <LassoIcon className="w-4 h-4 mr-2" />
-                Lasso
-              </Button>
-              <Button
-                onClick={() => handleDownloadSnapshot('png')}
-                size="sm"
-                variant="outline"
-                className="shadow-lg bg-background"
-              >
-                <Camera className="w-3 h-3" />
-              </Button>
-              <Button
-                onClick={() => handleDownloadSnapshot('svg')}
-                size="sm"
-                variant="outline"
-                className="shadow-lg bg-background"
-              >
-                <Camera className="w-3 h-3" />
-              </Button>
-            </div>
+            <TooltipProvider>
+              <div className="absolute top-4 left-4 z-10 flex gap-2">
+                <AIArchitectDialog
+                  projectId={projectId!}
+                  existingNodes={nodes}
+                  existingEdges={edges}
+                  onArchitectureGenerated={handleArchitectureGenerated}
+                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={() => setIsLassoActive(!isLassoActive)}
+                      variant={isLassoActive ? "default" : "outline"}
+                      className="shadow-lg"
+                      size="icon"
+                    >
+                      <LassoIcon className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p>Lasso Select</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={() => handleDownloadSnapshot('png')}
+                      size="sm"
+                      variant="outline"
+                      className="shadow-lg bg-background"
+                    >
+                      <Image className="w-3 h-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p>Export PNG</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={() => handleDownloadSnapshot('svg')}
+                      size="sm"
+                      variant="outline"
+                      className="shadow-lg bg-background"
+                    >
+                      <Camera className="w-3 h-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p>Export SVG</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
             <ReactFlow
               nodes={visibleNodes}
               edges={visibleEdges}
