@@ -1,12 +1,18 @@
 import { useRef, type PointerEvent } from 'react';
-import { useReactFlow, useStore } from 'reactflow';
+import { useReactFlow, useStore, type Node } from 'reactflow';
 import { getSvgPathFromStroke } from '@/lib/lassoUtils';
 
 type NodePoints = ([number, number] | [number, number, number])[];
 type NodePointObject = Record<string, NodePoints>;
 
-export function Lasso({ partial }: { partial: boolean }) {
-  const { getNodes, setNodes, flowToScreenPosition } = useReactFlow();
+export function Lasso({ 
+  partial, 
+  setNodes 
+}: { 
+  partial: boolean;
+  setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+}) {
+  const { getNodes, flowToScreenPosition } = useReactFlow();
   const { width, height } = useStore((state) => ({
     width: state.width,
     height: state.height,

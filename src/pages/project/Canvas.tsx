@@ -127,29 +127,15 @@ function CanvasFlow() {
     [setEdges, saveEdge]
   );
 
-  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    // Shift+Click for multi-select
-    if (event.shiftKey) {
-      event.stopPropagation();
-      event.preventDefault();
-      setNodes((nds) =>
-        nds.map((n) =>
-          n.id === node.id ? { ...n, selected: !n.selected } : n
-        )
-      );
-    } else {
-      // Single select - deselect all others and select this one
-      setNodes((nds) =>
-        nds.map((n) => ({
-          ...n,
-          selected: n.id === node.id,
-        }))
-      );
+  const onNodeClick = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      // Let React Flow handle selection state
       setSelectedNode(node);
       setSelectedEdge(null);
       setShowProperties(true);
-    }
-  }, [setNodes]);
+    },
+    [],
+  );
 
   const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
     setSelectedEdge(edge);
@@ -606,16 +592,11 @@ function CanvasFlow() {
               defaultEdgeOptions={{
                 style: { strokeWidth: 2 },
               }}
-              elementsSelectable={false}
               selectionOnDrag={!isLassoActive}
               panOnDrag={!isLassoActive}
               multiSelectionKeyCode="Shift"
               onPaneClick={() => {
-                // Only clear selection if not in lasso mode
-                if (!isLassoActive) {
-                  setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
-                  setShowProperties(false);
-                }
+                setShowProperties(false);
               }}
             >
               <Background />
@@ -632,7 +613,7 @@ function CanvasFlow() {
                 }}
                 className="bg-card border border-border"
               />
-              {isLassoActive && <Lasso partial={false} />}
+              {isLassoActive && <Lasso partial={false} setNodes={setNodes} />}
             </ReactFlow>
           </div>
 
