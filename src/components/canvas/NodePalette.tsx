@@ -48,15 +48,24 @@ const nodeTypes = [
 
 interface NodePaletteProps {
   onDragStart?: (type: NodeType) => void;
+  onNodeClick?: (type: NodeType) => void;
   visibleNodeTypes: Set<NodeType>;
   onToggleVisibility: (type: NodeType) => void;
 }
 
-export function NodePalette({ onDragStart, visibleNodeTypes, onToggleVisibility }: NodePaletteProps) {
+export function NodePalette({ onDragStart, onNodeClick, visibleNodeTypes, onToggleVisibility }: NodePaletteProps) {
   const handleDragStart = (e: React.DragEvent, type: NodeType) => {
     e.dataTransfer.setData("application/reactflow", type);
     e.dataTransfer.effectAllowed = "move";
     onDragStart?.(type);
+  };
+
+  const handleNodeClick = (e: React.MouseEvent, type: NodeType) => {
+    // Only trigger click-to-add on mobile/touch devices
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      e.preventDefault();
+      onNodeClick?.(type);
+    }
   };
 
   return (
@@ -95,6 +104,7 @@ export function NodePalette({ onDragStart, visibleNodeTypes, onToggleVisibility 
                   <div
                     draggable
                     onDragStart={(e) => handleDragStart(e, node.type)}
+                    onClick={(e) => handleNodeClick(e, node.type)}
                     className={`flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-muted cursor-move transition-colors flex-1 ${
                       !isVisible ? "opacity-50" : ""
                     }`}

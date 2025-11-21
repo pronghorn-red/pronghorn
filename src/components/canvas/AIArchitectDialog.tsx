@@ -303,25 +303,25 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
           AI Architect
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-[80vw] h-[80vh] w-full flex flex-col">
-        <DialogHeader>
-          <DialogTitle>AI Application Architect</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="max-w-[95vw] md:max-w-[80vw] h-[90vh] md:h-[80vh] w-full flex flex-col p-3 md:p-6">
+        <DialogHeader className="pb-2 md:pb-4">
+          <DialogTitle className="text-base md:text-lg">AI Application Architect</DialogTitle>
+          <DialogDescription className="text-xs md:text-sm">
             Generate and critique application architecture using AI
           </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="generate" className="flex-1 flex flex-col min-h-0">
           <TabsList className="grid w-full grid-cols-2 shrink-0">
-            <TabsTrigger value="generate">Generate</TabsTrigger>
-            <TabsTrigger value="critic">Critic</TabsTrigger>
+            <TabsTrigger value="generate" className="text-xs md:text-sm">Generate</TabsTrigger>
+            <TabsTrigger value="critic" className="text-xs md:text-sm">Critic</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="generate" className="flex-1 flex gap-4 min-h-0 data-[state=active]:flex data-[state=inactive]:hidden">
-            <div className="w-64 flex flex-col border-r pr-4 min-h-0">
-              <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
-                <div className="space-y-2">
-                  <h3 className="font-medium text-sm">Context Options</h3>
+          <TabsContent value="generate" className="flex-1 flex flex-col md:flex-row gap-2 md:gap-4 min-h-0 data-[state=active]:flex data-[state=inactive]:hidden">
+            <div className="w-full md:w-64 flex flex-col md:border-r md:pr-4 min-h-0">
+              <div className="flex-1 overflow-y-auto space-y-2 md:space-y-4 min-h-0 max-h-32 md:max-h-none">
+                <div className="space-y-1 md:space-y-2">
+                  <h3 className="font-medium text-xs md:text-sm">Context Options</h3>
                   
                   <div className="flex items-center space-x-2">
                     <Checkbox 
@@ -329,7 +329,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                       checked={includeExistingNodes}
                       onCheckedChange={(checked) => setIncludeExistingNodes(checked as boolean)}
                     />
-                    <label htmlFor="existingNodes" className="text-sm cursor-pointer">
+                    <label htmlFor="existingNodes" className="text-xs md:text-sm cursor-pointer">
                       Include Existing Nodes
                     </label>
                   </div>
@@ -340,7 +340,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                       checked={includeExistingEdges}
                       onCheckedChange={(checked) => setIncludeExistingEdges(checked as boolean)}
                     />
-                    <label htmlFor="existingEdges" className="text-sm cursor-pointer">
+                    <label htmlFor="existingEdges" className="text-xs md:text-sm cursor-pointer">
                       Include Existing Edges
                     </label>
                   </div>
@@ -351,7 +351,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                       checked={includeStandards}
                       onCheckedChange={(checked) => setIncludeStandards(checked as boolean)}
                     />
-                    <label htmlFor="standards" className="text-sm cursor-pointer">
+                    <label htmlFor="standards" className="text-xs md:text-sm cursor-pointer">
                       Include Standards ({standards.length})
                     </label>
                   </div>
@@ -362,7 +362,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                       checked={includeTechStack}
                       onCheckedChange={(checked) => setIncludeTechStack(checked as boolean)}
                     />
-                    <label htmlFor="techStack" className="text-sm cursor-pointer">
+                    <label htmlFor="techStack" className="text-xs md:text-sm cursor-pointer">
                       Include Tech Stack ({techStacks.length})
                     </label>
                   </div>
@@ -373,7 +373,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                       checked={includeRequirements}
                       onCheckedChange={(checked) => setIncludeRequirements(checked as boolean)}
                     />
-                    <label htmlFor="requirements" className="text-sm cursor-pointer">
+                    <label htmlFor="requirements" className="text-xs md:text-sm cursor-pointer">
                       Include Requirements ({requirements.length})
                     </label>
                   </div>
@@ -384,14 +384,14 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                       checked={includeProjectDescription}
                       onCheckedChange={(checked) => setIncludeProjectDescription(checked as boolean)}
                     />
-                    <label htmlFor="projectDesc" className="text-sm cursor-pointer">
+                    <label htmlFor="projectDesc" className="text-xs md:text-sm cursor-pointer">
                       Include Project Description
                     </label>
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-4 border-t">
-                  <h3 className="font-medium text-sm">Generation Options</h3>
+                <div className="space-y-1 md:space-y-2 pt-2 md:pt-4 border-t">
+                  <h3 className="font-medium text-xs md:text-sm">Generation Options</h3>
                   
                   <div className="flex items-center space-x-2">
                     <Checkbox 
@@ -399,7 +399,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                       checked={drawEdges}
                       onCheckedChange={(checked) => setDrawEdges(checked as boolean)}
                     />
-                    <label htmlFor="drawEdges" className="text-sm cursor-pointer">
+                    <label htmlFor="drawEdges" className="text-xs md:text-sm cursor-pointer">
                       Draw Edges
                     </label>
                   </div>
@@ -408,9 +408,9 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
             </div>
 
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
-                <div className="space-y-2">
-                  <label htmlFor="description" className="text-sm font-medium">
+              <div className="flex-1 overflow-y-auto space-y-2 md:space-y-4 min-h-0">
+                <div className="space-y-1 md:space-y-2">
+                  <label htmlFor="description" className="text-xs md:text-sm font-medium">
                     Application Description
                   </label>
                   <Textarea
@@ -418,30 +418,30 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                     placeholder="Example: A social media platform with user authentication, post creation, comments, real-time notifications, and image uploads. Users can follow each other and see a personalized feed."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="resize-none min-h-[400px]"
+                    className="resize-none min-h-[200px] md:min-h-[400px] text-xs md:text-sm"
                   />
                 </div>
                 
                 {existingNodes.length > 0 && (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs md:text-sm text-muted-foreground">
                     Note: {existingNodes.length} existing node(s) on canvas
                   </p>
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t shrink-0">
-                <Button variant="outline" onClick={() => setOpen(false)} disabled={isGenerating}>
+              <div className="flex justify-end gap-2 pt-2 md:pt-4 border-t shrink-0">
+                <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={isGenerating} className="text-xs md:text-sm">
                   Cancel
                 </Button>
-                <Button onClick={() => handleGenerate(false)} disabled={isGenerating}>
+                <Button size="sm" onClick={() => handleGenerate(false)} disabled={isGenerating} className="text-xs md:text-sm">
                   {isGenerating ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin mr-1 md:mr-2" />
                       Generating...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="h-4 w-4 mr-2" />
+                      <Sparkles className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
                       Generate Architecture
                     </>
                   )}
@@ -450,11 +450,11 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
             </div>
           </TabsContent>
 
-          <TabsContent value="critic" className="flex-1 flex gap-4 min-h-0 data-[state=active]:flex data-[state=inactive]:hidden">
-            <div className="w-64 flex flex-col border-r pr-4 min-h-0">
-              <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
-                <div className="space-y-2">
-                  <h3 className="font-medium text-sm">Context Options</h3>
+          <TabsContent value="critic" className="flex-1 flex flex-col md:flex-row gap-2 md:gap-4 min-h-0 data-[state=active]:flex data-[state=inactive]:hidden">
+            <div className="w-full md:w-64 flex flex-col md:border-r md:pr-4 min-h-0">
+              <div className="flex-1 overflow-y-auto space-y-2 md:space-y-4 min-h-0 max-h-32 md:max-h-none">
+                <div className="space-y-1 md:space-y-2">
+                  <h3 className="font-medium text-xs md:text-sm">Context Options</h3>
                   
                   <div className="flex items-center space-x-2">
                     <Checkbox 
@@ -462,7 +462,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                       checked={includeStandards}
                       onCheckedChange={(checked) => setIncludeStandards(checked as boolean)}
                     />
-                    <label htmlFor="critic-standards" className="text-sm cursor-pointer">
+                    <label htmlFor="critic-standards" className="text-xs md:text-sm cursor-pointer">
                       Include Standards ({standards.length})
                     </label>
                   </div>
@@ -473,7 +473,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                       checked={includeTechStack}
                       onCheckedChange={(checked) => setIncludeTechStack(checked as boolean)}
                     />
-                    <label htmlFor="critic-techStack" className="text-sm cursor-pointer">
+                    <label htmlFor="critic-techStack" className="text-xs md:text-sm cursor-pointer">
                       Include Tech Stack ({techStacks.length})
                     </label>
                   </div>
@@ -484,7 +484,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                       checked={includeRequirements}
                       onCheckedChange={(checked) => setIncludeRequirements(checked as boolean)}
                     />
-                    <label htmlFor="critic-requirements" className="text-sm cursor-pointer">
+                    <label htmlFor="critic-requirements" className="text-xs md:text-sm cursor-pointer">
                       Include Requirements ({requirements.length})
                     </label>
                   </div>
@@ -495,7 +495,7 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
                       checked={includeProjectDescription}
                       onCheckedChange={(checked) => setIncludeProjectDescription(checked as boolean)}
                     />
-                    <label htmlFor="critic-projectDesc" className="text-sm cursor-pointer">
+                    <label htmlFor="critic-projectDesc" className="text-xs md:text-sm cursor-pointer">
                       Include Project Description
                     </label>
                   </div>
@@ -504,48 +504,52 @@ export function AIArchitectDialog({ projectId, existingNodes, existingEdges, onA
             </div>
 
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="mb-4">
-                <label className="text-sm font-medium">Architecture Critique</label>
+              <div className="mb-2 md:mb-4">
+                <label className="text-xs md:text-sm font-medium">Architecture Critique</label>
               </div>
               <Textarea
                 value={criticFeedback}
                 readOnly
                 placeholder="Click 'Run AI Critic' to analyze your current architecture and receive recommendations..."
-                className="resize-none flex-1 min-h-0"
+                className="resize-none flex-1 min-h-0 text-xs md:text-sm"
               />
 
-              <div className="flex justify-between gap-2 pt-4 border-t shrink-0 mt-4">
-                <Button variant="outline" onClick={() => setOpen(false)}>
+              <div className="flex justify-between gap-2 pt-2 md:pt-4 border-t shrink-0 mt-2 md:mt-4">
+                <Button variant="outline" size="sm" onClick={() => setOpen(false)} className="text-xs md:text-sm">
                   Close
                 </Button>
                 <Button 
+                  size="sm"
                   onClick={handleCritic} 
                   disabled={isCriticizing || existingNodes.length === 0 || isGenerating}
+                  className="text-xs md:text-sm"
                 >
                   {isCriticizing ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin mr-1 md:mr-2" />
                       Analyzing...
                     </>
                   ) : (
                     <>
-                      <FileSearch className="h-4 w-4 mr-2" />
+                      <FileSearch className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
                       Run AI Critic
                     </>
                   )}
                 </Button>
                 <Button 
+                  size="sm"
                   onClick={() => handleGenerate(true)} 
                   disabled={!criticFeedback || isGenerating || isCriticizing}
+                  className="text-xs md:text-sm"
                 >
                   {isGenerating ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin mr-1 md:mr-2" />
                       Refining...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="h-4 w-4 mr-2" />
+                      <Sparkles className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
                       Refine Architecture
                     </>
                   )}
