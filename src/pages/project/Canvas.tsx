@@ -409,6 +409,56 @@ function CanvasFlow() {
     [reactFlowInstance, setNodes, saveNode, activeLayerId, layers, saveLayer]
   );
 
+  // Mobile click-to-add handler: adds node to center of viewport
+  const handleNodeClickToAdd = useCallback(
+    async (type: NodeType) => {
+      if (!reactFlowInstance) return;
+
+      // Get the center of the viewport
+      const wrapper = reactFlowWrapper.current;
+      if (!wrapper) return;
+
+      const bounds = wrapper.getBoundingClientRect();
+      const centerX = bounds.left + bounds.width / 2;
+      const centerY = bounds.top + bounds.height / 2;
+
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: centerX,
+        y: centerY,
+      });
+
+      const newNode: Node = {
+        id: crypto.randomUUID(),
+        type: "custom",
+        position,
+        data: {
+          label: `New ${type}`,
+          type,
+        },
+      };
+
+      setNodes((nds) => nds.concat(newNode));
+      await saveNode(newNode);
+      
+      // Automatically add to active layer if one is set
+      if (activeLayerId) {
+        const activeLayer = layers.find((l) => l.id === activeLayerId);
+        if (activeLayer) {
+          await saveLayer({
+            ...activeLayer,
+            node_ids: [...activeLayer.node_ids, newNode.id],
+          });
+        }
+      }
+
+      toast({
+        title: "Node added",
+        description: `${type} node added to canvas`,
+      });
+    },
+    [reactFlowInstance, reactFlowWrapper, setNodes, saveNode, activeLayerId, layers, saveLayer, toast]
+  );
+
   const handleArchitectureGenerated = useCallback(
     async (generatedNodes: any[], generatedEdges: any[]) => {
       try {
@@ -562,6 +612,7 @@ function CanvasFlow() {
           <CanvasPalette
             visibleNodeTypes={visibleNodeTypes}
             onToggleVisibility={handleToggleVisibility}
+            onNodeClick={handleNodeClickToAdd}
             layers={layers}
             selectedNodes={selectedNodesList}
             onSaveLayer={saveLayer}

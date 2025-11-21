@@ -46,6 +46,7 @@ const nodeLabels: Record<NodeType, string> = {
 interface CanvasPaletteProps {
   visibleNodeTypes: Set<NodeType>;
   onToggleVisibility: (type: NodeType) => void;
+  onNodeClick?: (type: NodeType) => void;
   layers: Layer[];
   selectedNodes: Node[];
   onSaveLayer: (layer: Partial<Layer> & { id: string }) => void;
@@ -58,6 +59,7 @@ interface CanvasPaletteProps {
 export function CanvasPalette({
   visibleNodeTypes,
   onToggleVisibility,
+  onNodeClick,
   layers,
   selectedNodes,
   onSaveLayer,
@@ -71,6 +73,14 @@ export function CanvasPalette({
   const onDragStart = (event: React.DragEvent, nodeType: NodeType) => {
     event.dataTransfer.setData("application/reactflow", nodeType);
     event.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleNodeClick = (e: React.MouseEvent, type: NodeType) => {
+    // Only trigger click-to-add on mobile/touch devices
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      e.preventDefault();
+      onNodeClick?.(type);
+    }
   };
 
   const nodeTypes: NodeType[] = [
@@ -140,6 +150,7 @@ export function CanvasPalette({
                   <div
                     draggable
                     onDragStart={(e) => onDragStart(e, type)}
+                    onClick={(e) => handleNodeClick(e, type)}
                     className={`flex items-center gap-2 px-3 py-2 rounded cursor-move flex-1 transition-colors ${
                       visibleNodeTypes.has(type)
                         ? "bg-muted hover:bg-muted/80"
