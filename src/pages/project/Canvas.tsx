@@ -23,7 +23,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image, ChevronRight } from "lucide-react";
 import { AIArchitectDialog } from "@/components/canvas/AIArchitectDialog";
 import { useToast } from "@/hooks/use-toast";
 import { toPng, toSvg } from "html-to-image";
@@ -52,7 +52,6 @@ function CanvasFlow() {
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
-  const [showProperties, setShowProperties] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [userCollapsedPanel, setUserCollapsedPanel] = useState(false);
   const [copiedNode, setCopiedNode] = useState<Node | null>(null);
@@ -132,10 +131,8 @@ function CanvasFlow() {
 
   const onNodeClick = useCallback(
     (event: React.MouseEvent, node: Node) => {
-      // Let React Flow handle selection state
       setSelectedNode(node);
       setSelectedEdge(null);
-      setShowProperties(true);
       if (!userCollapsedPanel) {
         setIsPanelOpen(true); // Auto-open panel when selecting node, unless user manually collapsed
       }
@@ -146,7 +143,6 @@ function CanvasFlow() {
   const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
     setSelectedEdge(edge);
     setSelectedNode(null);
-    setShowProperties(true);
     if (!userCollapsedPanel) {
       setIsPanelOpen(true); // Auto-open panel when selecting edge, unless user manually collapsed
     }
@@ -307,7 +303,7 @@ function CanvasFlow() {
         event.preventDefault();
         handleEdgeDelete(selectedEdge.id);
         setSelectedEdge(null);
-        setShowProperties(false);
+        setIsPanelOpen(false); // Collapse panel when deleting
         return;
       }
       
@@ -319,11 +315,11 @@ function CanvasFlow() {
         if (selectedNodesList.length > 0) {
           handleMultiNodeDelete(selectedNodesList.map((n) => n.id));
           setSelectedNode(null);
-          setShowProperties(false);
+          setIsPanelOpen(false); // Collapse panel when deleting
         } else if (selectedNode) {
           handleNodeDelete(selectedNode.id);
           setSelectedNode(null);
-          setShowProperties(false);
+          setIsPanelOpen(false); // Collapse panel when deleting
         }
         return;
       }
@@ -521,7 +517,6 @@ function CanvasFlow() {
   );
 
   const handleClosePanel = () => {
-    setShowProperties(false);
     setIsPanelOpen(false);
     setSelectedNode(null);
     setSelectedEdge(null);
@@ -644,7 +639,9 @@ function CanvasFlow() {
               panOnDrag={!isLassoActive}
               multiSelectionKeyCode="Shift"
               onPaneClick={() => {
-                setShowProperties(false);
+                setSelectedNode(null);
+                setSelectedEdge(null);
+                setIsPanelOpen(false); // Collapse panel when clicking empty canvas
               }}
             >
               <Background />
@@ -665,7 +662,7 @@ function CanvasFlow() {
               </ReactFlow>
            </div>
 
-          {showProperties && selectedNode && (
+          {selectedNode ? (
             <NodePropertiesPanel
               node={selectedNode}
               onClose={handleClosePanel}
@@ -675,9 +672,7 @@ function CanvasFlow() {
               isOpen={isPanelOpen}
               onToggle={handleTogglePanel}
             />
-          )}
-
-          {showProperties && selectedEdge && (
+          ) : selectedEdge ? (
             <EdgePropertiesPanel
               edge={selectedEdge}
               onClose={handleClosePanel}
@@ -687,6 +682,17 @@ function CanvasFlow() {
               isOpen={isPanelOpen}
               onToggle={handleTogglePanel}
             />
+          ) : (
+            <div className="w-12 border-l border-border bg-card flex flex-col items-center py-4 h-full">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsPanelOpen(!isPanelOpen)}
+                className="h-8 w-8"
+              >
+                <ChevronRight className="h-4 w-4 rotate-180" />
+              </Button>
+            </div>
           )}
         </div>
       </div>
