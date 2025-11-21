@@ -52,6 +52,7 @@ function CanvasFlow() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
   const [showProperties, setShowProperties] = useState(false);
+  const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [copiedNode, setCopiedNode] = useState<Node | null>(null);
   const [visibleNodeTypes, setVisibleNodeTypes] = useState<Set<NodeType>>(
     new Set(ALL_NODE_TYPES)
@@ -133,6 +134,7 @@ function CanvasFlow() {
       setSelectedNode(node);
       setSelectedEdge(null);
       setShowProperties(true);
+      setIsPanelOpen(true); // Auto-open panel when selecting node
     },
     [],
   );
@@ -141,6 +143,7 @@ function CanvasFlow() {
     setSelectedEdge(edge);
     setSelectedNode(null);
     setShowProperties(true);
+    setIsPanelOpen(true); // Auto-open panel when selecting edge
   }, []);
 
   const onNodeDragStop = useCallback(
@@ -516,13 +519,13 @@ function CanvasFlow() {
   }, [visibleNodes]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <PrimaryNav />
       
-      <div className="flex relative">
+      <div className="flex flex-1 overflow-hidden">
         <ProjectSidebar projectId={projectId!} />
         
-        <div className="flex flex-1 w-full">
+        <div className="flex flex-1 h-full">
           <CanvasPalette
             visibleNodeTypes={visibleNodeTypes}
             onToggleVisibility={handleToggleVisibility}
@@ -624,6 +627,8 @@ function CanvasFlow() {
               onUpdate={handleNodeUpdate}
               onDelete={handleNodeDelete}
               projectId={projectId!}
+              isOpen={isPanelOpen}
+              onToggle={() => setIsPanelOpen(!isPanelOpen)}
             />
           )}
 
@@ -634,6 +639,8 @@ function CanvasFlow() {
               onUpdate={handleEdgeUpdate}
               onVisualUpdate={handleEdgeVisualUpdate}
               onDelete={handleEdgeDelete}
+              isOpen={isPanelOpen}
+              onToggle={() => setIsPanelOpen(!isPanelOpen)}
             />
           )}
         </div>

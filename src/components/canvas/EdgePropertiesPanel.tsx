@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { Edge } from "reactflow";
-import { X } from "lucide-react";
+import { X, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface EdgePropertiesPanelProps {
   edge: Edge | null;
@@ -13,6 +14,8 @@ interface EdgePropertiesPanelProps {
   onUpdate: (edgeId: string, updates: Partial<Edge>) => void;
   onVisualUpdate: (edgeId: string, updates: Partial<Edge>) => void;
   onDelete: (edgeId: string) => void;
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
 export function EdgePropertiesPanel({
@@ -21,6 +24,8 @@ export function EdgePropertiesPanel({
   onUpdate,
   onVisualUpdate,
   onDelete,
+  isOpen,
+  onToggle,
 }: EdgePropertiesPanelProps) {
   const [label, setLabel] = useState("");
   const [lineType, setLineType] = useState("default");
@@ -38,6 +43,21 @@ export function EdgePropertiesPanel({
   }, [edge]);
 
   if (!edge) return null;
+
+  if (!isOpen) {
+    return (
+      <div className="w-12 border-l border-border bg-card flex flex-col items-center py-4 h-full">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggle}
+          className="h-8 w-8"
+        >
+          <ChevronRight className="h-4 w-4 rotate-180" />
+        </Button>
+      </div>
+    );
+  }
 
   const handleLabelChange = (newLabel: string) => {
     setLabel(newLabel);
@@ -89,15 +109,21 @@ export function EdgePropertiesPanel({
   };
 
   return (
-    <div className="w-80 bg-card border-l border-border h-full overflow-y-auto">
-      <div className="p-4 border-b border-border flex items-center justify-between sticky top-0 bg-card z-10">
+    <div className="w-80 bg-card border-l border-border flex flex-col h-full">
+      <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
         <h3 className="font-semibold text-foreground">Edge Properties</h3>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={onToggle}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      <div className="p-4 space-y-6">
+      <ScrollArea className="flex-1">
+        <div className="p-4 space-y-6">
         <div className="space-y-2">
           <Label htmlFor="edge-label">Label</Label>
           <Input
@@ -157,22 +183,23 @@ export function EdgePropertiesPanel({
             className="w-full"
           />
         </div>
-
-        <div className="pt-4 border-t border-border space-y-2">
-          <Button
-            onClick={handleSave}
-            className="w-full"
-          >
-            Save Edge
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            className="w-full"
-          >
-            Delete Edge
-          </Button>
         </div>
+      </ScrollArea>
+
+      <div className="p-4 border-t border-border space-y-2 flex-shrink-0">
+        <Button
+          onClick={handleSave}
+          className="w-full"
+        >
+          Save Edge
+        </Button>
+        <Button
+          variant="destructive"
+          onClick={handleDelete}
+          className="w-full"
+        >
+          Delete Edge
+        </Button>
       </div>
     </div>
   );

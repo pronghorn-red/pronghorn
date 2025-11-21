@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,9 +18,11 @@ interface NodePropertiesPanelProps {
   onUpdate: (nodeId: string, updates: Partial<Node>) => void;
   onDelete?: (nodeId: string) => void;
   projectId: string;
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
-export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete, projectId }: NodePropertiesPanelProps) {
+export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete, projectId, isOpen, onToggle }: NodePropertiesPanelProps) {
   const [label, setLabel] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [description, setDescription] = useState("");
@@ -160,13 +162,33 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete, project
 
   if (!node) return null;
 
-  return (
-    <div className="w-80 border-l border-border bg-card h-full flex flex-col">
-      <div className="p-4 border-b border-border flex items-center justify-between">
-        <h3 className="font-semibold text-lg">Node Properties</h3>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-4 w-4" />
+  if (!isOpen) {
+    return (
+      <div className="w-12 border-l border-border bg-card flex flex-col items-center py-4 h-full">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggle}
+          className="h-8 w-8"
+        >
+          <ChevronRight className="h-4 w-4 rotate-180" />
         </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-80 border-l border-border bg-card flex flex-col h-full">
+      <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
+        <h3 className="font-semibold text-lg">Node Properties</h3>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={onToggle}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
@@ -301,7 +323,7 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete, project
         </div>
       </ScrollArea>
 
-      <div className="p-4 border-t border-border space-y-2">
+      <div className="p-4 border-t border-border space-y-2 flex-shrink-0">
         <Button onClick={handleSave} className="w-full">
           Save Changes
         </Button>
