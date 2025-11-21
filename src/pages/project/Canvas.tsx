@@ -562,7 +562,7 @@ function CanvasFlow() {
             onSelectLayer={handleSelectLayer}
           />
           
-          <div className="flex-1 relative h-full" ref={reactFlowWrapper}>
+          <div className="flex-1 relative" ref={reactFlowWrapper}>
             <TooltipProvider>
               <div className="absolute top-4 left-4 z-10 flex gap-2">
                 <AIArchitectDialog
@@ -666,7 +666,7 @@ function CanvasFlow() {
           </div>
 
           {showProperties && selectedNode && (
-            <div className="absolute right-0 top-0 bottom-0 z-20">
+            <div className="absolute right-0 top-0 h-full z-20 shadow-lg">
               <NodePropertiesPanel
                 node={selectedNode}
                 onClose={handleClosePanel}
@@ -680,7 +680,7 @@ function CanvasFlow() {
           )}
 
           {showProperties && selectedEdge && (
-            <div className="absolute right-0 top-0 bottom-0 z-20">
+            <div className="absolute right-0 top-0 h-full z-20 shadow-lg">
               <EdgePropertiesPanel
                 edge={selectedEdge}
                 onClose={handleClosePanel}
