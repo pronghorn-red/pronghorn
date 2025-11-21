@@ -28,7 +28,7 @@ export function LayersManager({
 
     const newLayer = {
       id: crypto.randomUUID(),
-      name: `Layer ${layers.length + 1}`,
+      name: `Layer_${layers.length + 1}`,
       node_ids: selectedNodes.map((n) => n.id),
       visible: true,
     };

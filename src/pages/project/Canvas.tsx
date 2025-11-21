@@ -602,19 +602,19 @@ function CanvasFlow() {
               <Background />
               <Controls />
               <MiniMap
-                nodeColor={(node) => {
-                  const colors: Record<string, string> = {
-                    COMPONENT: "#3b82f6",
-                    API: "#10b981",
-                    DATABASE: "#a855f7",
-                    SERVICE: "#f97316",
-                  };
-                  return colors[node.data.type] || "#6b7280";
-                }}
-                className="bg-card border border-border"
-              />
-              {isLassoActive && <Lasso partial={false} setNodes={setNodes} />}
-            </ReactFlow>
+                 nodeColor={(node) => {
+                   const colors: Record<string, string> = {
+                     COMPONENT: "#3b82f6",
+                     API: "#10b981",
+                     DATABASE: "#a855f7",
+                     SERVICE: "#f97316",
+                   };
+                   return colors[node.data.type] || "#6b7280";
+                 }}
+                 className="bg-card border border-border"
+               />
+               {isLassoActive && <Lasso partial={true} setNodes={setNodes} />}
+             </ReactFlow>
           </div>
 
           {showProperties && selectedNode && (
