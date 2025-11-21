@@ -21,10 +21,11 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize, Camera } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon } from "lucide-react";
 import { AIArchitectDialog } from "@/components/canvas/AIArchitectDialog";
 import { useToast } from "@/hooks/use-toast";
 import { toPng, toSvg } from "html-to-image";
+import { Lasso } from "@/components/canvas/Lasso";
 
 const nodeTypes = {
   custom: CanvasNode,
@@ -53,6 +54,7 @@ function CanvasFlow() {
   const [visibleNodeTypes, setVisibleNodeTypes] = useState<Set<NodeType>>(
     new Set(ALL_NODE_TYPES)
   );
+  const [isLassoActive, setIsLassoActive] = useState(false);
   const { toast } = useToast();
 
   const {
@@ -453,12 +455,22 @@ function CanvasFlow() {
           
           <div className="flex-1 relative" ref={reactFlowWrapper}>
             <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
-              <AIArchitectDialog
-                projectId={projectId!}
-                existingNodes={nodes}
-                existingEdges={edges}
-                onArchitectureGenerated={handleArchitectureGenerated}
-              />
+              <div className="flex gap-2">
+                <AIArchitectDialog
+                  projectId={projectId!}
+                  existingNodes={nodes}
+                  existingEdges={edges}
+                  onArchitectureGenerated={handleArchitectureGenerated}
+                />
+                <Button
+                  onClick={() => setIsLassoActive(!isLassoActive)}
+                  variant={isLassoActive ? "default" : "outline"}
+                  className="shadow-lg"
+                >
+                  <LassoIcon className="w-4 h-4 mr-2" />
+                  Lasso
+                </Button>
+              </div>
               <div className="flex gap-2">
                 <Button
                   onClick={() => handleDownloadSnapshot('png')}
@@ -512,6 +524,7 @@ function CanvasFlow() {
                 }}
                 className="bg-card border border-border"
               />
+              {isLassoActive && <Lasso partial={false} />}
             </ReactFlow>
           </div>
 
