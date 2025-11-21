@@ -76,10 +76,15 @@ export function Lasso({ partial }: { partial: boolean }) {
     const nodesToSelect = new Set<string>();
 
     for (const [nodeId, points] of Object.entries(nodePoints.current)) {
+      const rect = canvas.current?.getBoundingClientRect();
+      if (!rect) continue;
+
       if (partial) {
         for (const point of points) {
           const screenPos = flowToScreenPosition({ x: point[0], y: point[1] });
-          if (ctx.current.isPointInPath(path, screenPos.x, screenPos.y)) {
+          const localX = screenPos.x - rect.left;
+          const localY = screenPos.y - rect.top;
+          if (ctx.current.isPointInPath(path, localX, localY)) {
             nodesToSelect.add(nodeId);
             break;
           }
@@ -88,7 +93,9 @@ export function Lasso({ partial }: { partial: boolean }) {
         let allPointsInPath = true;
         for (const point of points) {
           const screenPos = flowToScreenPosition({ x: point[0], y: point[1] });
-          if (!ctx.current.isPointInPath(path, screenPos.x, screenPos.y)) {
+          const localX = screenPos.x - rect.left;
+          const localY = screenPos.y - rect.top;
+          if (!ctx.current.isPointInPath(path, localX, localY)) {
             allPointsInPath = false;
             break;
           }

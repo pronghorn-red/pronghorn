@@ -606,6 +606,7 @@ function CanvasFlow() {
               defaultEdgeOptions={{
                 style: { strokeWidth: 2 },
               }}
+              elementsSelectable={false}
               selectionOnDrag={!isLassoActive}
               panOnDrag={!isLassoActive}
               multiSelectionKeyCode="Shift"
