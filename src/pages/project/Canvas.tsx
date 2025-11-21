@@ -562,41 +562,37 @@ function CanvasFlow() {
           />
           
           <div className="flex-1 relative" ref={reactFlowWrapper}>
-            <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
-              <div className="flex gap-2">
-                <AIArchitectDialog
-                  projectId={projectId!}
-                  existingNodes={nodes}
-                  existingEdges={edges}
-                  onArchitectureGenerated={handleArchitectureGenerated}
-                />
-                <Button
-                  onClick={() => setIsLassoActive(!isLassoActive)}
-                  variant={isLassoActive ? "default" : "outline"}
-                  className="shadow-lg"
-                >
-                  <LassoIcon className="w-4 h-4 mr-2" />
-                  Lasso
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => handleDownloadSnapshot('png')}
-                  variant="secondary"
-                  className="shadow-lg"
-                >
-                  <Camera className="w-4 h-4 mr-2" />
-                  PNG
-                </Button>
-                <Button
-                  onClick={() => handleDownloadSnapshot('svg')}
-                  variant="secondary"
-                  className="shadow-lg"
-                >
-                  <Camera className="w-4 h-4 mr-2" />
-                  SVG
-                </Button>
-              </div>
+            <div className="absolute top-4 left-4 z-10 flex gap-2">
+              <AIArchitectDialog
+                projectId={projectId!}
+                existingNodes={nodes}
+                existingEdges={edges}
+                onArchitectureGenerated={handleArchitectureGenerated}
+              />
+              <Button
+                onClick={() => setIsLassoActive(!isLassoActive)}
+                variant={isLassoActive ? "default" : "outline"}
+                className="shadow-lg"
+              >
+                <LassoIcon className="w-4 h-4 mr-2" />
+                Lasso
+              </Button>
+              <Button
+                onClick={() => handleDownloadSnapshot('png')}
+                size="sm"
+                variant="outline"
+                className="shadow-lg bg-background"
+              >
+                <Camera className="w-3 h-3" />
+              </Button>
+              <Button
+                onClick={() => handleDownloadSnapshot('svg')}
+                size="sm"
+                variant="outline"
+                className="shadow-lg bg-background"
+              >
+                <Camera className="w-3 h-3" />
+              </Button>
             </div>
             <ReactFlow
               nodes={visibleNodes}
