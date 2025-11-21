@@ -662,35 +662,31 @@ function CanvasFlow() {
                 className="bg-card border border-border"
               />
                {isLassoActive && <Lasso partial={true} setNodes={setNodes} />}
-             </ReactFlow>
-          </div>
+              </ReactFlow>
+           </div>
 
           {showProperties && selectedNode && (
-            <div className="absolute right-0 top-0 h-full z-20 shadow-lg">
-              <NodePropertiesPanel
-                node={selectedNode}
-                onClose={handleClosePanel}
-                onUpdate={handleNodeUpdate}
-                onDelete={handleNodeDelete}
-                projectId={projectId!}
-                isOpen={isPanelOpen}
-                onToggle={handleTogglePanel}
-              />
-            </div>
+            <NodePropertiesPanel
+              node={selectedNode}
+              onClose={handleClosePanel}
+              onUpdate={handleNodeUpdate}
+              onDelete={handleNodeDelete}
+              projectId={projectId!}
+              isOpen={isPanelOpen}
+              onToggle={handleTogglePanel}
+            />
           )}
 
           {showProperties && selectedEdge && (
-            <div className="absolute right-0 top-0 h-full z-20 shadow-lg">
-              <EdgePropertiesPanel
-                edge={selectedEdge}
-                onClose={handleClosePanel}
-                onUpdate={handleEdgeUpdate}
-                onVisualUpdate={handleEdgeVisualUpdate}
-                onDelete={handleEdgeDelete}
-                isOpen={isPanelOpen}
-                onToggle={handleTogglePanel}
-              />
-            </div>
+            <EdgePropertiesPanel
+              edge={selectedEdge}
+              onClose={handleClosePanel}
+              onUpdate={handleEdgeUpdate}
+              onVisualUpdate={handleEdgeVisualUpdate}
+              onDelete={handleEdgeDelete}
+              isOpen={isPanelOpen}
+              onToggle={handleTogglePanel}
+            />
           )}
         </div>
       </div>
