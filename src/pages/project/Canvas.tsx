@@ -571,7 +571,7 @@ function CanvasFlow() {
                     <Button
                       onClick={() => setIsLassoActive(!isLassoActive)}
                       variant={isLassoActive ? "default" : "outline"}
-                      className="shadow-lg"
+                      className="bg-card/80"
                       size="icon"
                     >
                       <LassoIcon className="w-4 h-4" />
@@ -587,7 +587,7 @@ function CanvasFlow() {
                       onClick={() => handleDownloadSnapshot('png')}
                       size="sm"
                       variant="outline"
-                      className="shadow-lg bg-background"
+                      className="bg-card/80"
                     >
                       <Image className="w-3 h-3" />
                     </Button>
@@ -602,7 +602,7 @@ function CanvasFlow() {
                       onClick={() => handleDownloadSnapshot('svg')}
                       size="sm"
                       variant="outline"
-                      className="shadow-lg bg-background"
+                      className="bg-card/80"
                     >
                       <Camera className="w-3 h-3" />
                     </Button>
