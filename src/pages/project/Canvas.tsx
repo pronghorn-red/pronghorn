@@ -59,6 +59,7 @@ function CanvasFlow() {
     new Set(ALL_NODE_TYPES)
   );
   const [isLassoActive, setIsLassoActive] = useState(false);
+  const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Layers management
@@ -369,7 +370,7 @@ function CanvasFlow() {
   }, []);
 
   const onDrop = useCallback(
-    (event: React.DragEvent) => {
+    async (event: React.DragEvent) => {
       event.preventDefault();
 
       const type = event.dataTransfer.getData("application/reactflow") as NodeType;
@@ -392,9 +393,20 @@ function CanvasFlow() {
       };
 
       setNodes((nds) => nds.concat(newNode));
-      saveNode(newNode);
+      await saveNode(newNode);
+      
+      // Automatically add to active layer if one is set
+      if (activeLayerId) {
+        const activeLayer = layers.find((l) => l.id === activeLayerId);
+        if (activeLayer) {
+          await saveLayer({
+            ...activeLayer,
+            node_ids: [...activeLayer.node_ids, newNode.id],
+          });
+        }
+      }
     },
-    [reactFlowInstance, setNodes, saveNode]
+    [reactFlowInstance, setNodes, saveNode, activeLayerId, layers, saveLayer]
   );
 
   const handleArchitectureGenerated = useCallback(
@@ -555,6 +567,8 @@ function CanvasFlow() {
             onSaveLayer={saveLayer}
             onDeleteLayer={deleteLayer}
             onSelectLayer={handleSelectLayer}
+            activeLayerId={activeLayerId}
+            onSetActiveLayer={setActiveLayerId}
           />
           
           <div className="flex-1 relative" ref={reactFlowWrapper}>

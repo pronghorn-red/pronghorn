@@ -51,6 +51,8 @@ interface CanvasPaletteProps {
   onSaveLayer: (layer: Partial<Layer> & { id: string }) => void;
   onDeleteLayer: (layerId: string) => void;
   onSelectLayer: (nodeIds: string[]) => void;
+  activeLayerId: string | null;
+  onSetActiveLayer: (layerId: string | null) => void;
 }
 
 export function CanvasPalette({
@@ -61,6 +63,8 @@ export function CanvasPalette({
   onSaveLayer,
   onDeleteLayer,
   onSelectLayer,
+  activeLayerId,
+  onSetActiveLayer,
 }: CanvasPaletteProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -99,8 +103,15 @@ export function CanvasPalette({
     );
   }
 
+  const handleToggleAllLayers = () => {
+    const allVisible = layers.every((layer) => layer.visible);
+    layers.forEach((layer) => {
+      onSaveLayer({ ...layer, visible: !allVisible });
+    });
+  };
+
   return (
-    <div className="w-64 border-r border-border bg-card flex flex-col h-full overflow-hidden">
+    <div className="w-80 border-r border-border bg-card flex flex-col h-full overflow-hidden">
       <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
         <h3 className="text-sm font-semibold">Canvas Palette</h3>
         <Button
@@ -160,7 +171,25 @@ export function CanvasPalette({
 
           <AccordionItem value="layers" className="border rounded-lg px-3">
             <AccordionTrigger className="text-sm py-2 hover:no-underline">
-              Layers
+              <div className="flex items-center justify-between w-full pr-2">
+                <span>Layers</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="p-1 h-6 w-6"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleAllLayers();
+                  }}
+                  title="Toggle all layers visibility"
+                >
+                  {layers.every((l) => l.visible) ? (
+                    <Eye className="w-3 h-3" />
+                  ) : (
+                    <EyeOff className="w-3 h-3" />
+                  )}
+                </Button>
+              </div>
             </AccordionTrigger>
             <AccordionContent className="pb-2">
               <LayersManager
@@ -169,6 +198,8 @@ export function CanvasPalette({
                 onSaveLayer={onSaveLayer}
                 onDeleteLayer={onDeleteLayer}
                 onSelectLayer={onSelectLayer}
+                activeLayerId={activeLayerId}
+                onSetActiveLayer={onSetActiveLayer}
               />
             </AccordionContent>
           </AccordionItem>

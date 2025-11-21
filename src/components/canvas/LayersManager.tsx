@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, EyeOff, Trash2, Plus, Edit2, Check, X } from "lucide-react";
+import { Eye, EyeOff, Trash2, Plus, Edit2, Check, X, Circle, CheckCircle2 } from "lucide-react";
 import { Layer } from "@/hooks/useRealtimeLayers";
 import { Node } from "reactflow";
 
@@ -11,6 +11,8 @@ interface LayersManagerProps {
   onSaveLayer: (layer: Partial<Layer> & { id: string }) => void;
   onDeleteLayer: (layerId: string) => void;
   onSelectLayer: (nodeIds: string[]) => void;
+  activeLayerId: string | null;
+  onSetActiveLayer: (layerId: string | null) => void;
 }
 
 export function LayersManager({
@@ -19,6 +21,8 @@ export function LayersManager({
   onSaveLayer,
   onDeleteLayer,
   onSelectLayer,
+  activeLayerId,
+  onSetActiveLayer,
 }: LayersManagerProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -78,23 +82,41 @@ export function LayersManager({
       </div>
 
       <div className="space-y-1 max-h-[400px] overflow-y-auto">
-        {layers.map((layer) => (
-          <div
-            key={layer.id}
-            className="flex items-center gap-2 p-2 bg-muted/50 rounded-md group"
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              className="p-1 h-6 w-6"
-              onClick={() => handleToggleVisibility(layer)}
+        {layers.map((layer) => {
+          const isActive = layer.id === activeLayerId;
+          return (
+            <div
+              key={layer.id}
+              className={`flex items-center gap-2 p-2 rounded-md group transition-colors ${
+                isActive ? "bg-green-500/20 border border-green-500/50" : "bg-muted/50"
+              }`}
             >
-              {layer.visible ? (
-                <Eye className="w-3 h-3" />
-              ) : (
-                <EyeOff className="w-3 h-3 text-muted-foreground" />
-              )}
-            </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-1 h-6 w-6"
+                onClick={() => onSetActiveLayer(isActive ? null : layer.id)}
+                title={isActive ? "Deactivate layer" : "Set as active layer"}
+              >
+                {isActive ? (
+                  <CheckCircle2 className="w-3 h-3 text-green-500" />
+                ) : (
+                  <Circle className="w-3 h-3" />
+                )}
+              </Button>
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                className="p-1 h-6 w-6"
+                onClick={() => handleToggleVisibility(layer)}
+              >
+                {layer.visible ? (
+                  <Eye className="w-3 h-3" />
+                ) : (
+                  <EyeOff className="w-3 h-3 text-muted-foreground" />
+                )}
+              </Button>
 
             {editingId === layer.id ? (
               <>
@@ -150,8 +172,9 @@ export function LayersManager({
                 </Button>
               </>
             )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
 
         {layers.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-4">
