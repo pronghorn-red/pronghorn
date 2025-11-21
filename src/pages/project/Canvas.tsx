@@ -613,8 +613,8 @@ function CanvasFlow() {
                 }}
                 className="bg-card border border-border"
               />
-              {isLassoActive && <Lasso partial={false} setNodes={setNodes} />}
-            </ReactFlow>
+               {isLassoActive && <Lasso partial={true} setNodes={setNodes} />}
+             </ReactFlow>
           </div>
 
           {showProperties && selectedNode && (
