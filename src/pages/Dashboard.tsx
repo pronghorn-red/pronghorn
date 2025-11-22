@@ -48,7 +48,8 @@ export default function Dashboard() {
         description: p.description,
         organization: p.organization,
         budget: p.budget,
-        scope: p.scope
+        scope: p.scope,
+        shareToken: p.share_token
       }));
     },
     enabled: !!user,
@@ -192,7 +193,10 @@ export default function Dashboard() {
               <div>
                 {anonymousProjectCards.length > 0 && <h2 className="text-lg font-semibold mb-4">Your Projects</h2>}
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {projects.map((p) => <ProjectCard key={p.projectId} {...p} onClick={(id) => navigate(`/project/${id}/canvas`)} onUpdate={refetch} />)}
+                  {projects.map((p) => <ProjectCard key={p.projectId} {...p} onClick={(id) => {
+                    const token = (p as any).shareToken;
+                    navigate(`/project/${id}/canvas${token ? `?token=${token}` : ''}`);
+                  }} onUpdate={refetch} />)}
                 </div>
               </div>
             )}
