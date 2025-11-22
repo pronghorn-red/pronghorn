@@ -31,11 +31,96 @@ export function useRealtimeRequirements(
           filter: `project_id=eq.${projectId}`,
         },
         (payload) => {
-          console.log("Requirements change detected:", payload);
-          loadRequirements();
+          console.log("Requirements change:", payload);
+          
+          if (payload.eventType === "INSERT" && payload.new) {
+            setRequirements((prev) => {
+              // Add new requirement to correct position in hierarchy
+              if (payload.new.parent_id) {
+                // Add as child - recursive update
+                const addToParent = (items: Requirement[]): Requirement[] => {
+                  return items.map((item) => {
+                    if (item.id === payload.new.parent_id) {
+                      const newReq: Requirement = {
+                        id: payload.new.id,
+                        code: payload.new.code,
+                        type: payload.new.type,
+                        title: payload.new.title,
+                        content: payload.new.content,
+                        parentId: payload.new.parent_id,
+                        children: [],
+                      };
+                      return { ...item, children: [...(item.children || []), newReq] };
+                    }
+                    if (item.children?.length) {
+                      return { ...item, children: addToParent(item.children) };
+                    }
+                    return item;
+                  });
+                };
+                return addToParent(prev);
+              } else {
+                // Add as root
+                const newReq: Requirement = {
+                  id: payload.new.id,
+                  code: payload.new.code,
+                  type: payload.new.type,
+                  title: payload.new.title,
+                  content: payload.new.content,
+                  parentId: null,
+                  children: [],
+                };
+                return [...prev, newReq];
+              }
+            });
+          } else if (payload.eventType === "UPDATE" && payload.new) {
+            setRequirements((prev) => {
+              // Update requirement in-place
+              const updateInTree = (items: Requirement[]): Requirement[] => {
+                return items.map((item) => {
+                  if (item.id === payload.new.id) {
+                    return {
+                      ...item,
+                      code: payload.new.code,
+                      title: payload.new.title,
+                      content: payload.new.content,
+                    };
+                  }
+                  if (item.children?.length) {
+                    return { ...item, children: updateInTree(item.children) };
+                  }
+                  return item;
+                });
+              };
+              return updateInTree(prev);
+            });
+          } else if (payload.eventType === "DELETE" && payload.old) {
+            setRequirements((prev) => {
+              // Remove requirement from tree (CASCADE handles children)
+              const removeFromTree = (items: Requirement[]): Requirement[] => {
+                return items
+                  .filter((item) => item.id !== payload.old.id)
+                  .map((item) => ({
+                    ...item,
+                    children: item.children ? removeFromTree(item.children) : [],
+                  }));
+              };
+              return removeFromTree(prev);
+            });
+          }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Requirements channel status:", status);
+        if (status === 'SUBSCRIBED') {
+          console.log("✅ Requirements realtime connected");
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error("❌ Requirements realtime connection failed:", status);
+          loadRequirements(); // Fallback to full reload
+        } else if (status === 'CLOSED') {
+          console.warn("⚠️ Requirements realtime connection closed");
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);

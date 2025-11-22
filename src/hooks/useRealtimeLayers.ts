@@ -51,6 +51,8 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
           filter: `project_id=eq.${projectId}`,
         },
         (payload) => {
+          console.log("Canvas layers change:", payload);
+          
           if (payload.eventType === "INSERT") {
             setLayers((prev) => [...prev, payload.new as Layer]);
           } else if (payload.eventType === "UPDATE") {
@@ -64,7 +66,25 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Layers channel status:", status);
+        if (status === 'SUBSCRIBED') {
+          console.log("✅ Layers realtime connected");
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error("❌ Layers realtime connection failed:", status);
+          // Refetch data if connection fails
+          const refetch = async () => {
+            const { data } = await supabase.rpc("get_canvas_layers_with_token", {
+              p_project_id: projectId,
+              p_token: token || null,
+            });
+            if (data) setLayers(data);
+          };
+          refetch();
+        } else if (status === 'CLOSED') {
+          console.warn("⚠️ Layers realtime connection closed");
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
