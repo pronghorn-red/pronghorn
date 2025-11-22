@@ -16,10 +16,7 @@ export function useProjectUrl(projectId?: string) {
     
     const baseUrl = `/project/${projectId}${path}`;
     
-    // If user is authenticated, no token needed
-    if (user) return baseUrl;
-    
-    // If anonymous and we have a token, append it
+    // Always preserve token if present in URL (for both authenticated and anonymous)
     if (token) return `${baseUrl}?token=${token}`;
     
     return baseUrl;
