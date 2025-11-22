@@ -99,83 +99,104 @@ export default function Specifications() {
   };
 
   const downloadRawJSON = async () => {
-    if (!projectId) return;
+    if (!projectId || !shareToken) {
+      toast.error("Project ID and share token required");
+      return;
+    }
 
     try {
-      // Fetch all raw data directly without AI
-      const { data: project, error: projectError } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', projectId)
-        .single();
+      // CRITICAL: All project data must use token-based RPC functions
+      const { data: project, error: projectError } = await supabase.rpc('get_project_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken
+      });
 
       if (projectError) throw projectError;
 
-      const { data: requirements } = await supabase
-        .from('requirements')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('order_index');
+      const { data: requirements } = await supabase.rpc('get_requirements_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken
+      });
 
-      const { data: canvasNodes } = await supabase
-        .from('canvas_nodes')
-        .select('*')
-        .eq('project_id', projectId);
+      const { data: canvasNodes } = await supabase.rpc('get_canvas_nodes_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken
+      });
 
-      const { data: canvasEdges } = await supabase
-        .from('canvas_edges')
-        .select('*')
-        .eq('project_id', projectId);
+      const { data: canvasEdges } = await supabase.rpc('get_canvas_edges_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken
+      });
 
-      const { data: projectTechStacks } = await supabase
-        .from('project_tech_stacks')
-        .select(`
-          tech_stack_id,
-          tech_stacks (
-            id,
-            name,
-            description,
-            metadata
-          )
-        `)
-        .eq('project_id', projectId);
+      const { data: projectTechStacksRaw } = await supabase.rpc('get_project_tech_stacks_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken
+      });
 
-      const { data: reqStandards } = await supabase
-        .from('requirement_standards')
-        .select(`
-          requirement_id,
-          standard_id,
-          standards (
-            id,
-            title,
-            code,
-            description,
-            content
-          )
-        `)
-        .in('requirement_id', requirements?.map(r => r.id) || []);
+      // Enrich with tech stack details (tech_stacks is not project-scoped)
+      const projectTechStacks = await Promise.all(
+        (projectTechStacksRaw || []).map(async (pts: any) => {
+          const { data: techStack } = await supabase
+            .from('tech_stacks')
+            .select('id, name, description, metadata')
+            .eq('id', pts.tech_stack_id)
+            .single();
+          return { tech_stack_id: pts.tech_stack_id, tech_stacks: techStack };
+        })
+      );
 
-      // Fetch project-level standards
-      const { data: projectStandards } = await supabase
-        .from('project_standards')
-        .select(`
-          standard_id,
-          standards (
-            id,
-            code,
-            title,
-            description,
-            content,
-            parent_id,
-            category_id,
-            standard_categories (
+      // Fetch requirement standards for each requirement via RPC
+      const reqStandards = await Promise.all(
+        (requirements || []).map(async (req: any) => {
+          const { data } = await supabase.rpc('get_requirement_standards_with_token', {
+            p_requirement_id: req.id,
+            p_token: shareToken
+          });
+          
+          // Enrich with standard details
+          return await Promise.all(
+            (data || []).map(async (rs: any) => {
+              const { data: standard } = await supabase
+                .from('standards')
+                .select('id, title, code, description, content')
+                .eq('id', rs.standard_id)
+                .single();
+              return { ...rs, standards: standard };
+            })
+          );
+        })
+      );
+
+      // Fetch project-level standards via RPC
+      const { data: projectStandardsRaw } = await supabase.rpc('get_project_standards_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken
+      });
+
+      // Enrich with standard details and categories
+      const projectStandards = await Promise.all(
+        (projectStandardsRaw || []).map(async (ps: any) => {
+          const { data: standard } = await supabase
+            .from('standards')
+            .select(`
               id,
-              name,
-              description
-            )
-          )
-        `)
-        .eq('project_id', projectId);
+              code,
+              title,
+              description,
+              content,
+              parent_id,
+              category_id,
+              standard_categories (
+                id,
+                name,
+                description
+              )
+            `)
+            .eq('id', ps.standard_id)
+            .single();
+          return { standard_id: ps.standard_id, standards: standard };
+        })
+      );
 
       // Fetch attached files for all requirements
       const requirementFiles: Record<string, any[]> = {};
@@ -236,7 +257,7 @@ export default function Specifications() {
         },
         projectStandards: projectStandards || [],
         techStacks: projectTechStacks?.map((pts: any) => pts.tech_stacks) || [],
-        linkedStandards: reqStandards || []
+        linkedStandards: reqStandards.flat() || []
       };
 
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });

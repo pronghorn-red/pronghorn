@@ -48,15 +48,22 @@ export function LinkSelector({ type, projectId, selectedIds, onSelect, onUnselec
     setLoading(true);
     try {
       if (type === "requirement" && projectId) {
-        const { data } = await supabase
-          .from("requirements")
-          .select("id, code, title, type, parent_id")
-          .eq("project_id", projectId);
+        // CRITICAL: Use RPC with token for project requirements
+        const urlParams = new URLSearchParams(window.location.search);
+        const shareToken = urlParams.get("token");
         
-        // Build hierarchy and sort by code
-        const hierarchical = buildHierarchy(data || []);
-        setItems(hierarchical);
+        if (shareToken) {
+          const { data } = await supabase.rpc("get_requirements_with_token", {
+            p_project_id: projectId,
+            p_token: shareToken
+          });
+          
+          // Build hierarchy and sort by code
+          const hierarchical = buildHierarchy(data || []);
+          setItems(hierarchical);
+        }
       } else if (type === "standard") {
+        // Standards table is not project-scoped, direct query allowed
         const { data } = await supabase
           .from("standards")
           .select("id, code, title, category_id, parent_id")
@@ -65,6 +72,7 @@ export function LinkSelector({ type, projectId, selectedIds, onSelect, onUnselec
         const hierarchical = buildHierarchy(data || []);
         setItems(hierarchical);
       } else if (type === "tech_stack") {
+        // Tech stacks table is not project-scoped, direct query allowed
         const { data } = await supabase
           .from("tech_stacks")
           .select("id, name, description")

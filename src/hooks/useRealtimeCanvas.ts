@@ -214,12 +214,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
       }
 
       const performSave = async () => {
-        const { data: existing } = await supabase
-          .from("canvas_nodes")
-          .select("id")
-          .eq("id", node.id)
-          .maybeSingle();
-
+        // CRITICAL: No direct table queries - RPC function validates access through RLS
         const { error } = await supabase.rpc("upsert_canvas_node_with_token", {
           p_id: node.id,
           p_project_id: projectId,

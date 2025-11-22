@@ -42,17 +42,22 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete, project
   const loadDropdownData = async () => {
     if (!node) return;
 
-    // Load requirements for dropdown
+    // CRITICAL: Load requirements via RPC with token for project data
     if (node.data.type === "REQUIREMENT") {
-      const { data } = await supabase
-        .from("requirements")
-        .select("id, code, title")
-        .eq("project_id", projectId)
-        .order("code");
-      setRequirements(data || []);
+      // Get share token from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const shareToken = urlParams.get("token");
+      
+      if (shareToken) {
+        const { data } = await supabase.rpc("get_requirements_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken
+        });
+        setRequirements(data || []);
+      }
     }
 
-    // Load standards for dropdown
+    // Standards table is not project-scoped, direct query allowed
     if (node.data.type === "STANDARD") {
       const { data } = await supabase
         .from("standards")
@@ -61,7 +66,7 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete, project
       setStandards(data || []);
     }
 
-    // Load tech stacks for dropdown
+    // Tech stacks table is not project-scoped, direct query allowed
     if (node.data.type === "TECH_STACK") {
       const { data } = await supabase
         .from("tech_stacks")
@@ -94,14 +99,9 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete, project
   const handleRequirementChange = async (requirementId: string) => {
     if (!node) return;
     
-    // Load the requirement to get its label
-    const { data } = await supabase
-      .from("requirements")
-      .select("code, title")
-      .eq("id", requirementId)
-      .single();
-    
-    const newSubtitle = data ? `${data.code} - ${data.title}` : subtitle;
+    // Find requirement from already loaded list (no additional query needed)
+    const requirement = requirements.find(r => r.id === requirementId);
+    const newSubtitle = requirement ? `${requirement.code} - ${requirement.title}` : subtitle;
     
     onUpdate(node.id, {
       data: { 
