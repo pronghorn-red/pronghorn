@@ -153,25 +153,3 @@ All colors MUST be HSL.
 .react-flow__node.selected .react-flow__handle {
   background: hsl(var(--primary));
 }
-
-/* React Flow edge label styles for proper export rendering */
-.react-flow__edge-textbg {
-  fill: transparent !important;
-}
-
-.react-flow__edge-text {
-  fill: hsl(var(--foreground)) !important;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-/* Ensure edges are visible in exports */
-.react-flow__edge-path {
-  stroke: hsl(var(--muted-foreground)) !important;
-  stroke-width: 2 !important;
-}
-
-.react-flow__edge.selected .react-flow__edge-path {
-  stroke: hsl(var(--primary)) !important;
-  stroke-width: 3 !important;
-}
