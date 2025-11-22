@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { requirementId, useGemini = true, shareToken } = await req.json();
+    const { requirementId, useGemini = true, shareToken: clientToken } = await req.json();
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -30,15 +30,10 @@ serve(async (req) => {
       },
     });
 
-    // Validate share token is present
-    if (!shareToken) {
-      throw new Error('Share token is required for requirement expansion');
-    }
-
-    // Step 1: Fetch the requirement using token-based RPC
+    // Step 1: Fetch the requirement to get project_id and validate access
     const { data: requirements, error: reqError } = await supabase.rpc('get_requirements_with_token', {
-      p_project_id: null, // Will filter by requirementId
-      p_token: shareToken
+      p_project_id: null as any,
+      p_token: clientToken || null
     });
 
     if (reqError) {
@@ -53,7 +48,26 @@ serve(async (req) => {
 
     const projectId = requirement.project_id;
 
-    // Step 2: Fetch all project requirements for context using token-based RPC
+    // Step 2: Get the project's share token (for authenticated users who don't have it in URL)
+    let shareToken = clientToken;
+    if (!shareToken && authHeader) {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('share_token')
+        .eq('id', projectId)
+        .single();
+      
+      if (project?.share_token) {
+        shareToken = project.share_token;
+      }
+    }
+
+    // Validate share token is present
+    if (!shareToken) {
+      throw new Error('Share token is required for requirement expansion');
+    }
+
+    // Step 3: Fetch all project requirements for context using token-based RPC
     const { data: allRequirements, error: allReqError } = await supabase.rpc('get_requirements_with_token', {
       p_project_id: projectId,
       p_token: shareToken
@@ -64,7 +78,7 @@ serve(async (req) => {
       throw new Error('Failed to fetch all requirements');
     }
 
-    // Step 3: Fetch linked standards using token-based RPC
+    // Step 4: Fetch linked standards using token-based RPC
     const { data: linkedStandards, error: linkedError } = await supabase.rpc('get_requirement_standards_with_token', {
       p_requirement_id: requirementId,
       p_token: shareToken
@@ -193,10 +207,10 @@ IMPORTANT: Return ONLY the JSON array, no additional text or explanation.`;
       }
     }
 
-    // Step 4: Determine child type based on parent type
+    // Step 5: Determine child type based on parent type
     const childType = getChildType(requirement.type);
 
-    // Step 5: Insert new requirements via token-based RPC (loop, not bulk)
+    // Step 6: Insert new requirements via token-based RPC (loop, not bulk)
     const inserted = [];
     for (let i = 0; i < suggestions.length; i++) {
       const s = suggestions[i];
