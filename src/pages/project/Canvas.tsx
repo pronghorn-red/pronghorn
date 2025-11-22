@@ -100,9 +100,22 @@ function CanvasFlow() {
   const visibleEdges = useMemo(() => {
     if (!edges || !Array.isArray(edges)) return [];
     const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
-    return edges.filter(
-      (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
-    );
+    return edges
+      .filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))
+      .map((edge) => ({
+        ...edge,
+        labelStyle: edge.labelStyle || { 
+          fill: '#000000',
+          fontSize: 12,
+          fontWeight: 500,
+        },
+        labelBgStyle: edge.labelBgStyle || { 
+          fill: '#ffffff',
+          fillOpacity: 0.9,
+        },
+        labelBgPadding: edge.labelBgPadding || [8, 4] as [number, number],
+        labelBgBorderRadius: edge.labelBgBorderRadius || 4,
+      }));
   }, [edges, visibleNodes]);
 
   const handleToggleVisibility = useCallback((type: NodeType) => {
@@ -119,13 +132,24 @@ function CanvasFlow() {
 
   const onConnect = useCallback(
     (params: Connection) => {
-      // Create edge with proper UUID
+      // Create edge with proper UUID and styling for export
       const newEdge: Edge = {
         id: crypto.randomUUID(),
         source: params.source!,
         target: params.target!,
         sourceHandle: params.sourceHandle,
         targetHandle: params.targetHandle,
+        labelStyle: { 
+          fill: '#000000',
+          fontSize: 12,
+          fontWeight: 500,
+        },
+        labelBgStyle: { 
+          fill: '#ffffff',
+          fillOpacity: 0.9,
+        },
+        labelBgPadding: [8, 4] as [number, number],
+        labelBgBorderRadius: 4,
       };
       
       setEdges((eds) => [...eds, newEdge]);
@@ -506,6 +530,17 @@ function CanvasFlow() {
               source: sourceId,
               target: targetId,
               label: genEdge.relationship,
+              labelStyle: { 
+                fill: '#000000',
+                fontSize: 12,
+                fontWeight: 500,
+              },
+              labelBgStyle: { 
+                fill: '#ffffff',
+                fillOpacity: 0.9,
+              },
+              labelBgPadding: [8, 4] as [number, number],
+              labelBgBorderRadius: 4,
             };
             
             newEdges.push(edge);
