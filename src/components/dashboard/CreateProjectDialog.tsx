@@ -17,10 +17,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAnonymousProjects } from "@/hooks/useAnonymousProjects";
 
 export function CreateProjectDialog() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { addProject } = useAnonymousProjects();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -56,7 +60,7 @@ export function CreateProjectDialog() {
         orgId = orgs[0].id;
       }
 
-      // CRITICAL: Use token-based RPC for project creation
+      // CRITICAL: Use token-based RPC for project creation (Exception: no token required for creation)
       const { data: project, error } = await supabase.rpc('insert_project_with_token', {
         p_name: name.trim(),
         p_org_id: orgId,
@@ -81,8 +85,29 @@ export function CreateProjectDialog() {
       // Invalidate projects query to refresh the list
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       
-      // Navigate to the new project
-      navigate(`/project/${project.id}/canvas`);
+      // Handle navigation based on authentication state
+      if (user) {
+        // Authenticated user: navigate without token (uses auth.uid() for RLS)
+        navigate(`/project/${project.id}/canvas`);
+      } else {
+        // Anonymous user: store token and navigate with token in URL
+        const shareToken = project.share_token;
+        if (shareToken) {
+          addProject({
+            id: project.id,
+            shareToken: shareToken,
+            name: name.trim(),
+            createdAt: new Date().toISOString()
+          });
+          navigate(`/project/${project.id}/canvas?token=${shareToken}`);
+          
+          // Show warning modal about saving the URL
+          toast.warning(
+            "Save this URL to access your project later. Anonymous projects will be lost if you close the tab.",
+            { duration: 10000 }
+          );
+        }
+      }
     } catch (error) {
       console.error("Error creating project:", error);
       toast.error(error instanceof Error ? error.message : "Failed to create project");

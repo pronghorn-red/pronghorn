@@ -13,31 +13,26 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     
-    // Use service role to bypass RLS for project creation
-    // This is safe because we're handling the creation logic server-side
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    // CRITICAL: Use anon key, not service role - respects RLS policies
+    // Get auth header for authenticated users
+    const authHeader = req.headers.get('Authorization');
+    
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
       },
+      global: {
+        headers: authHeader ? { Authorization: authHeader } : {},
+      },
     });
     
-    // Get user from auth header if present for attribution
-    const authHeader = req.headers.get('Authorization');
+    // Get user ID if authenticated
     let userId = null;
     if (authHeader) {
-      const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      });
-      const { data: { user } } = await userClient.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       userId = user?.id || null;
     }
 
@@ -50,15 +45,16 @@ serve(async (req) => {
     
     console.log('[create-project] User:', userId || 'anonymous');
 
-    // Create the project (using service role to bypass RLS)
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .insert({
-        ...projectData,
-        created_by: userId,
-      })
-      .select('id, share_token')
-      .single();
+    // Step 1: Create project using RPC (Exception: no token required for initial creation)
+    const { data: project, error: projectError } = await supabase.rpc('insert_project_with_token', {
+      p_name: projectData.name,
+      p_org_id: projectData.org_id,
+      p_description: projectData.description || null,
+      p_organization: projectData.organization || null,
+      p_budget: projectData.budget || null,
+      p_scope: projectData.scope || null,
+      p_status: projectData.status || 'DESIGN'
+    });
 
     if (projectError) {
       console.error('[create-project] Project creation error:', projectError);
@@ -71,51 +67,56 @@ serve(async (req) => {
       createdBy: userId || 'anonymous'
     });
 
-    // Link tech stacks
+    // Step 2: Use returned share_token for all subsequent operations
+    const shareToken = project.share_token;
+
+    // Step 3: Link tech stacks using token-based RPC
     if (techStackIds && techStackIds.length > 0) {
-      const techStackLinks = techStackIds.map((techStackId: string) => ({
-        project_id: project.id,
-        tech_stack_id: techStackId
-      }));
+      console.log('[create-project] Linking tech stacks with token-based RPC');
+      
+      for (const techStackId of techStackIds) {
+        const { error: techStackError } = await supabase.rpc('insert_project_tech_stack_with_token', {
+          p_project_id: project.id,
+          p_token: shareToken,
+          p_tech_stack_id: techStackId
+        });
 
-      const { error: techStackError } = await supabase
-        .from('project_tech_stacks')
-        .insert(techStackLinks);
-
-      if (techStackError) {
-        console.error('[create-project] Tech stack linking error:', techStackError);
-      } else {
-        console.log('[create-project] Tech stacks linked:', techStackIds.length);
+        if (techStackError) {
+          console.error('[create-project] Tech stack linking error:', techStackError);
+        }
       }
+      
+      console.log('[create-project] Tech stacks linked:', techStackIds.length);
     }
 
-    // Link standards
+    // Step 4: Link standards using token-based RPC
     if (standardIds && standardIds.length > 0) {
-      const standardLinks = standardIds.map((standardId: string) => ({
-        project_id: project.id,
-        standard_id: standardId
-      }));
+      console.log('[create-project] Linking standards with token-based RPC');
+      
+      for (const standardId of standardIds) {
+        const { error: standardError } = await supabase.rpc('insert_project_standard_with_token', {
+          p_project_id: project.id,
+          p_token: shareToken,
+          p_standard_id: standardId
+        });
 
-      const { error: standardError } = await supabase
-        .from('project_standards')
-        .insert(standardLinks);
-
-      if (standardError) {
-        console.error('[create-project] Standards linking error:', standardError);
-      } else {
-        console.log('[create-project] Standards linked:', standardIds.length);
+        if (standardError) {
+          console.error('[create-project] Standards linking error:', standardError);
+        }
       }
+      
+      console.log('[create-project] Standards linked:', standardIds.length);
     }
 
-    // Process requirements if provided
+    // Step 5: Process requirements if provided (pass share_token to AI decomposition)
     if (requirementsText && requirementsText.trim()) {
-      console.log('[create-project] Invoking requirements decomposition');
+      console.log('[create-project] Invoking requirements decomposition with share token');
       
       const { error: aiError } = await supabase.functions.invoke("decompose-requirements", {
         body: { 
           text: requirementsText.trim(), 
           projectId: project.id,
-          shareToken: project.share_token 
+          shareToken: shareToken
         },
       });
 

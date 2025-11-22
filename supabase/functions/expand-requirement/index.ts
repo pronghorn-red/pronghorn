@@ -30,42 +30,68 @@ serve(async (req) => {
       },
     });
 
-    // Set share token if provided (for anonymous users)
-    if (shareToken) {
-      const { error: tokenError } = await supabase.rpc('set_share_token', { token: shareToken });
-      if (tokenError) {
-        console.error('Error setting share token:', tokenError);
-        throw new Error('Invalid share token');
-      }
+    // Validate share token is present
+    if (!shareToken) {
+      throw new Error('Share token is required for requirement expansion');
     }
 
-    // Fetch the requirement and its context
-    const { data: requirement, error: reqError } = await supabase
-      .from('requirements')
-      .select('*, project_id')
-      .eq('id', requirementId)
-      .single();
+    // Step 1: Fetch the requirement using token-based RPC
+    const { data: requirements, error: reqError } = await supabase.rpc('get_requirements_with_token', {
+      p_project_id: null, // Will filter by requirementId
+      p_token: shareToken
+    });
 
-    if (reqError || !requirement) {
+    if (reqError) {
+      console.error('Error fetching requirements:', reqError);
+      throw new Error('Failed to fetch requirements');
+    }
+
+    const requirement = requirements?.find((r: any) => r.id === requirementId);
+    if (!requirement) {
       throw new Error('Requirement not found');
     }
 
-    // Fetch all project requirements for context
-    const { data: allRequirements } = await supabase
-      .from('requirements')
-      .select('*')
-      .eq('project_id', requirement.project_id)
-      .order('created_at');
+    const projectId = requirement.project_id;
 
-    // Fetch linked standards for context
-    const { data: linkedStandards } = await supabase
-      .from('requirement_standards')
-      .select('standard_id, standards(code, title, description, content)')
-      .eq('requirement_id', requirementId);
+    // Step 2: Fetch all project requirements for context using token-based RPC
+    const { data: allRequirements, error: allReqError } = await supabase.rpc('get_requirements_with_token', {
+      p_project_id: projectId,
+      p_token: shareToken
+    });
+
+    if (allReqError) {
+      console.error('Error fetching all requirements:', allReqError);
+      throw new Error('Failed to fetch all requirements');
+    }
+
+    // Step 3: Fetch linked standards using token-based RPC
+    const { data: linkedStandards, error: linkedError } = await supabase.rpc('get_requirement_standards_with_token', {
+      p_requirement_id: requirementId,
+      p_token: shareToken
+    });
+
+    if (linkedError) {
+      console.error('Error fetching linked standards:', linkedError);
+    }
+
+    // Fetch full standard details for context
+    const standardDetails = [];
+    if (linkedStandards && linkedStandards.length > 0) {
+      for (const ls of linkedStandards) {
+        const { data: standard } = await supabase
+          .from('standards')
+          .select('code, title, description, content')
+          .eq('id', ls.standard_id)
+          .single();
+        
+        if (standard) {
+          standardDetails.push(standard);
+        }
+      }
+    }
 
     // Build context for AI
-    const standardsContext = linkedStandards?.map((ls: any) => {
-      const std = ls.standards;
+    const standardsContext = standardDetails.map((std: any) => {
       return `${std.code}: ${std.title}\n${std.description || ''}`;
     }).join('\n\n') || 'No standards linked yet.';
 
@@ -167,27 +193,43 @@ IMPORTANT: Return ONLY the JSON array, no additional text or explanation.`;
       }
     }
 
-    // Determine child type based on parent type
+    // Step 4: Determine child type based on parent type
     const childType = getChildType(requirement.type);
 
-    // Insert new requirements
-    const newRequirements = suggestions.map((s: any, index: number) => ({
-      project_id: requirement.project_id,
-      parent_id: requirementId,
-      type: childType,
-      title: s.title,
-      content: s.content,
-      order_index: index
-    }));
+    // Step 5: Insert new requirements via token-based RPC (loop, not bulk)
+    const inserted = [];
+    for (let i = 0; i < suggestions.length; i++) {
+      const s = suggestions[i];
+      const { data: newReq, error: insertError } = await supabase.rpc('insert_requirement_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken,
+        p_parent_id: requirementId,
+        p_type: childType,
+        p_title: s.title
+      });
 
-    const { data: inserted, error: insertError } = await supabase
-      .from('requirements')
-      .insert(newRequirements)
-      .select();
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw insertError;
+      }
 
-    if (insertError) {
-      console.error('Insert error:', insertError);
-      throw insertError;
+      // Update content separately since insert RPC may not support it
+      if (s.content && newReq) {
+        const { error: updateError } = await supabase.rpc('update_requirement_with_token', {
+          p_id: newReq.id,
+          p_token: shareToken,
+          p_title: s.title,
+          p_content: s.content
+        });
+
+        if (updateError) {
+          console.error('Update error:', updateError);
+        }
+      }
+
+      if (newReq) {
+        inserted.push(newReq);
+      }
     }
 
     return new Response(
