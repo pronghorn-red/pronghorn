@@ -58,19 +58,21 @@ export default function Dashboard() {
   });
 
   // Map anonymous projects to the same format
-  const anonymousProjectCards = anonymousProjects.map(p => ({
-    projectId: p.id,
-    projectName: p.name,
-    lastUpdated: new Date(p.createdAt),
-    status: 'DESIGN' as const,
-    coverage: undefined,
-    description: undefined,
-    organization: undefined,
-    budget: undefined,
-    scope: undefined,
-    isAnonymous: true,
-    shareToken: p.shareToken
-  }));
+  const anonymousProjectCards = anonymousProjects
+    .filter(p => p.shareToken) // Only show projects with valid tokens
+    .map(p => ({
+      projectId: p.id,
+      projectName: p.name,
+      lastUpdated: new Date(p.createdAt),
+      status: 'DESIGN' as const,
+      coverage: undefined,
+      description: undefined,
+      organization: undefined,
+      budget: undefined,
+      scope: undefined,
+      isAnonymous: true,
+      shareToken: p.shareToken
+    }));
 
   const handleSaveProject = async (projectId: string, shareToken: string) => {
     if (!user) {
@@ -178,7 +180,14 @@ export default function Dashboard() {
                       </Badge>
                       <ProjectCard 
                         {...p} 
-                        onClick={(id) => navigate(`/project/${id}/canvas?token=${p.shareToken}`)} 
+                        onClick={(id) => {
+                          console.log('[Dashboard] Navigating to anonymous project:', { id, token: p.shareToken });
+                          if (!p.shareToken) {
+                            toast.error('This project is missing a share token. Please create a new project.');
+                            return;
+                          }
+                          navigate(`/project/${id}/canvas?token=${p.shareToken}`);
+                        }} 
                         onUpdate={refetch}
                         isAnonymous={true}
                         shareToken={p.shareToken}
@@ -195,6 +204,7 @@ export default function Dashboard() {
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {projects.map((p) => <ProjectCard key={p.projectId} {...p} onClick={(id) => {
                     const token = (p as any).shareToken;
+                    console.log('[Dashboard] Navigating to authenticated project:', { id, token });
                     navigate(`/project/${id}/canvas${token ? `?token=${token}` : ''}`);
                   }} onUpdate={refetch} />)}
                 </div>
