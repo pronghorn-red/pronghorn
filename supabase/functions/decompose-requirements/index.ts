@@ -275,6 +275,21 @@ Return format:
 
     console.log("Requirements decomposition complete");
 
+    // Broadcast refresh to all connected clients
+    if (requirements.epics.length > 0) {
+      const channel = supabase.channel(`requirements-${projectId}`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'requirements_refresh',
+        payload: { 
+          projectId, 
+          action: 'bulk_decompose', 
+          epicCount: requirements.epics.length 
+        }
+      });
+      console.log(`Broadcast sent for ${requirements.epics.length} decomposed epics`);
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 
