@@ -65,6 +65,7 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
       const { data, error } = await supabase.functions.invoke("expand-requirement", { 
         body: { 
           requirementId: requirement.id,
+          projectId,
           shareToken 
         } 
       });
