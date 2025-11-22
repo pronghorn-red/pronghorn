@@ -137,7 +137,7 @@ export function useRealtimeRequirements(projectId: string) {
     });
 
     try {
-      const { error } = await supabase.rpc("insert_requirement_with_token", {
+      const { data, error } = await supabase.rpc("insert_requirement_with_token", {
         p_project_id: projectId,
         p_token: shareToken || null,
         p_parent_id: parentId,
@@ -147,7 +147,32 @@ export function useRealtimeRequirements(projectId: string) {
 
       if (error) throw error;
       
-      // Real-time subscription will update with actual data
+      // Replace temporary requirement with real one that has UUID
+      if (data) {
+        setRequirements((prev) => {
+          const replaceTemp = (items: Requirement[]): Requirement[] => {
+            return items.map((item) => {
+              if (item.id === tempId) {
+                // Replace temporary item with real one from database
+                return {
+                  id: data.id,
+                  code: data.code,
+                  type: data.type,
+                  title: data.title,
+                  content: data.content,
+                  parentId: data.parent_id,
+                  children: [],
+                };
+              }
+              if (item.children && item.children.length > 0) {
+                return { ...item, children: replaceTemp(item.children) };
+              }
+              return item;
+            });
+          };
+          return replaceTemp(prev);
+        });
+      }
     } catch (error) {
       console.error("Error adding requirement:", error);
       
