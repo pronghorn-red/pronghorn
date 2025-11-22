@@ -582,79 +582,21 @@ function CanvasFlow() {
 
   const handleDownloadSnapshot = useCallback(
     async (format: 'png' | 'svg') => {
-      if (visibleNodes.length === 0) {
+      const viewport = document.querySelector('.react-flow__viewport') as HTMLElement;
+      if (!viewport) {
         toast({
           title: "Error",
-          description: "No nodes to export",
+          description: "Canvas not found",
           variant: "destructive",
         });
         return;
       }
 
       try {
-        // Calculate bounds of visible nodes
-        const nodesBounds = getNodesBounds(visibleNodes);
-        const padding = 50; // Add padding around nodes
-        
-        // Add padding to bounds
-        const bounds = {
-          x: nodesBounds.x - padding,
-          y: nodesBounds.y - padding,
-          width: nodesBounds.width + padding * 2,
-          height: nodesBounds.height + padding * 2,
-        };
-
-        // Get viewport transformation for these bounds
-        const viewport = getViewportForBounds(
-          bounds,
-          bounds.width,
-          bounds.height,
-          0.5, // min zoom
-          2,   // max zoom
-          0    // padding already applied
-        );
-
-        // Create a temporary container with exact dimensions
-        const tempContainer = document.createElement('div');
-        tempContainer.style.position = 'absolute';
-        tempContainer.style.left = '-9999px';
-        tempContainer.style.width = `${bounds.width}px`;
-        tempContainer.style.height = `${bounds.height}px`;
-        document.body.appendChild(tempContainer);
-
-        // Clone the viewport
-        const viewportElement = document.querySelector('.react-flow__viewport') as HTMLElement;
-        if (!viewportElement) {
-          document.body.removeChild(tempContainer);
-          toast({
-            title: "Error",
-            description: "Canvas not found",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        const clonedViewport = viewportElement.cloneNode(true) as HTMLElement;
-        clonedViewport.style.transform = `translate(${-bounds.x}px, ${-bounds.y}px) scale(${viewport.zoom})`;
-        tempContainer.appendChild(clonedViewport);
-
-        // Generate image
         const dataUrl = format === 'png' 
-          ? await toPng(tempContainer, { 
-              backgroundColor: '#ffffff',
-              width: bounds.width,
-              height: bounds.height,
-            })
-          : await toSvg(tempContainer, { 
-              backgroundColor: '#ffffff',
-              width: bounds.width,
-              height: bounds.height,
-            });
+          ? await toPng(viewport, { backgroundColor: '#ffffff' })
+          : await toSvg(viewport, { backgroundColor: '#ffffff' });
         
-        // Cleanup
-        document.body.removeChild(tempContainer);
-
-        // Download
         const link = document.createElement('a');
         link.download = `canvas-snapshot.${format}`;
         link.href = dataUrl;
@@ -673,7 +615,7 @@ function CanvasFlow() {
         });
       }
     },
-    [visibleNodes, toast]
+    [toast]
   );
 
   const handleSelectLayer = useCallback(
