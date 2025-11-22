@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { RequirementStandardsBadges } from "./RequirementStandardsBadges";
@@ -118,9 +119,7 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
                className="flex-1 min-w-[80px]"
                onClick={async () => { 
                  try {
-                   if (onUpdate) {
-                     await onUpdate(requirement.id, { title: editTitle, content: editContent });
-                   }
+                   await onUpdate?.(requirement.id, { title: editTitle, content: editContent });
                    toast.success("Changes saved");
                    setIsEditing(false);
                  } catch (error) {
@@ -194,65 +193,92 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
                 )}
               </div>
             </div>
-          </div>
-          
-          {/* Action buttons - always visible on mobile, hover on desktop */}
-          <div className="flex flex-wrap gap-1 mt-2 pl-14 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-7 w-7 flex-shrink-0" 
-              onClick={() => setIsEditing(true)}
-              aria-label="Edit"
-            >
-              <Edit2 className="h-3.5 w-3.5" />
-            </Button>
-            <SourceRequirementsUpload 
-              requirementId={requirement.id} 
-              requirementTitle={requirement.title} 
-              onUploadComplete={refreshFiles}
-              open={openFileModal}
-              onOpenChange={setOpenFileModal}
-            />
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-7 w-7 flex-shrink-0" 
-              onClick={handleAIExpand} 
-              disabled={isExpanding}
-              aria-label="AI Expand"
-            >
-              {isExpanding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-7 w-7 flex-shrink-0" 
-              onClick={() => onLinkStandard?.(requirement.id, requirement.title)}
-              aria-label="Link Standards"
-            >
-              <LinkIcon className="h-3.5 w-3.5" />
-            </Button>
-            {getNextType(requirement.type) && (
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-7 w-7 flex-shrink-0" 
-                onClick={handleAddChild}
-                aria-label="Add Child"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-7 w-7 flex-shrink-0 text-destructive hover:bg-destructive/10" 
-              onClick={() => onDelete?.(requirement.id)}
-              aria-label="Delete"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            
+            {/* Action buttons - on mobile below, on desktop to the right with always visible */}
+            <TooltipProvider>
+              <div className="flex md:flex-row flex-wrap gap-1 mt-2 md:mt-0 md:ml-2 md:items-start md:flex-shrink-0 w-full md:w-auto pl-14 md:pl-0">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 flex-shrink-0" 
+                      onClick={() => setIsEditing(true)}
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Edit requirement</TooltipContent>
+                </Tooltip>
+                
+                <SourceRequirementsUpload 
+                  requirementId={requirement.id} 
+                  requirementTitle={requirement.title} 
+                  onUploadComplete={refreshFiles}
+                  open={openFileModal}
+                  onOpenChange={setOpenFileModal}
+                />
+                
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 flex-shrink-0" 
+                      onClick={handleAIExpand} 
+                      disabled={isExpanding}
+                    >
+                      {isExpanding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>AI expand</TooltipContent>
+                </Tooltip>
+                
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 flex-shrink-0" 
+                      onClick={() => onLinkStandard?.(requirement.id, requirement.title)}
+                    >
+                      <LinkIcon className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Link standards</TooltipContent>
+                </Tooltip>
+                
+                {getNextType(requirement.type) && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-7 w-7 flex-shrink-0" 
+                        onClick={handleAddChild}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Add child requirement</TooltipContent>
+                  </Tooltip>
+                )}
+                
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 flex-shrink-0 text-destructive hover:bg-destructive/10" 
+                      onClick={() => onDelete?.(requirement.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Delete requirement</TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
           </div>
         </div>
       )}

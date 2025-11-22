@@ -194,7 +194,27 @@ export function useRealtimeRequirements(projectId: string) {
   };
 
   const updateRequirement = async (id: string, updates: Partial<Requirement>) => {
+    // Store original data for rollback
+    const originalRequirements = requirements;
+    
     try {
+      // Optimistic update - update UI immediately
+      setRequirements((prev) => {
+        const updateItem = (items: Requirement[]): Requirement[] => {
+          return items.map((item) => {
+            if (item.id === id) {
+              return { ...item, ...updates };
+            }
+            if (item.children && item.children.length > 0) {
+              return { ...item, children: updateItem(item.children) };
+            }
+            return item;
+          });
+        };
+        return updateItem(prev);
+      });
+
+      // Then persist to database
       const { error } = await supabase.rpc("update_requirement_with_token", {
         p_id: id,
         p_token: shareToken || null,
@@ -205,6 +225,8 @@ export function useRealtimeRequirements(projectId: string) {
       if (error) throw error;
     } catch (error) {
       console.error("Error updating requirement:", error);
+      // Rollback on error
+      setRequirements(originalRequirements);
       throw error;
     }
   };
