@@ -114,25 +114,23 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
           />
           <div className="flex flex-wrap gap-2">
             <Button 
-              size="sm" 
-              className="flex-1 min-w-[80px]"
-              onClick={async () => { 
-                const { error } = await supabase
-                  .from("requirements")
-                  .update({ title: editTitle, content: editContent })
-                  .eq("id", requirement.id);
-                
-                if (error) {
-                  toast.error("Failed to save changes");
-                } else {
-                  toast.success("Changes saved");
-                  onUpdate?.(requirement.id, { title: editTitle, content: editContent }); 
-                  setIsEditing(false);
-                }
-              }}
-            >
-              Save
-            </Button>
+               size="sm" 
+               className="flex-1 min-w-[80px]"
+               onClick={async () => { 
+                 try {
+                   if (onUpdate) {
+                     await onUpdate(requirement.id, { title: editTitle, content: editContent });
+                   }
+                   toast.success("Changes saved");
+                   setIsEditing(false);
+                 } catch (error) {
+                   console.error("Failed to save requirement", error);
+                   toast.error("Failed to save changes");
+                 }
+               }}
+             >
+               Save
+             </Button>
             <Button 
               size="sm" 
               variant="outline" 
