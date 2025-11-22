@@ -23,12 +23,14 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image, ChevronRight } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image, ChevronRight, Wrench } from "lucide-react";
 import { AIArchitectDialog } from "@/components/canvas/AIArchitectDialog";
 import { useToast } from "@/hooks/use-toast";
 import { toPng, toSvg } from "html-to-image";
 import { Lasso } from "@/components/canvas/Lasso";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const nodeTypes = {
   custom: CanvasNode,
@@ -61,6 +63,7 @@ function CanvasFlow() {
   const [isLassoActive, setIsLassoActive] = useState(false);
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   // Layers management
   const { layers, saveLayer, deleteLayer } = useRealtimeLayers(projectId!, token);
@@ -625,57 +628,87 @@ function CanvasFlow() {
           <div className="flex-1 relative" ref={reactFlowWrapper}>
             <TooltipProvider>
               <div className="absolute top-4 left-4 z-10 flex gap-2">
-                <AIArchitectDialog
-                  projectId={projectId!}
-                  existingNodes={nodes}
-                  existingEdges={edges}
-                  onArchitectureGenerated={handleArchitectureGenerated}
-                />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      onClick={() => setIsLassoActive(!isLassoActive)}
-                      variant={isLassoActive ? "default" : "outline"}
-                      className={isLassoActive ? "" : "bg-card/80"}
-                      size="icon"
-                    >
-                      <LassoIcon className="w-4 h-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <p>Lasso Select</p>
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      onClick={() => handleDownloadSnapshot('png')}
-                      size="sm"
-                      variant="outline"
-                      className="bg-card/80"
-                    >
-                      <Image className="w-3 h-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <p>Export PNG</p>
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      onClick={() => handleDownloadSnapshot('svg')}
-                      size="sm"
-                      variant="outline"
-                      className="bg-card/80"
-                    >
-                      <Camera className="w-3 h-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <p>Export SVG</p>
-                  </TooltipContent>
-                </Tooltip>
+                {isMobile ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon" variant="outline" className="bg-card/80">
+                        <Wrench className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="bg-popover z-50">
+                      <DropdownMenuItem onClick={() => {
+                        // Trigger AI Architect modal - we'll need to expose this
+                        const aiButton = document.querySelector('[data-ai-architect-trigger]') as HTMLElement;
+                        aiButton?.click();
+                      }}>
+                        AI Architect
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setIsLassoActive(!isLassoActive)}>
+                        {isLassoActive ? "Disable" : "Enable"} Lasso Select
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleDownloadSnapshot('png')}>
+                        Export PNG
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleDownloadSnapshot('svg')}>
+                        Export SVG
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <>
+                    <AIArchitectDialog
+                      projectId={projectId!}
+                      existingNodes={nodes}
+                      existingEdges={edges}
+                      onArchitectureGenerated={handleArchitectureGenerated}
+                    />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={() => setIsLassoActive(!isLassoActive)}
+                          variant={isLassoActive ? "default" : "outline"}
+                          className={isLassoActive ? "" : "bg-card/80"}
+                          size="icon"
+                        >
+                          <LassoIcon className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p>Lasso Select</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={() => handleDownloadSnapshot('png')}
+                          size="sm"
+                          variant="outline"
+                          className="bg-card/80"
+                        >
+                          <Image className="w-3 h-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p>Export PNG</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={() => handleDownloadSnapshot('svg')}
+                          size="sm"
+                          variant="outline"
+                          className="bg-card/80"
+                        >
+                          <Camera className="w-3 h-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p>Export SVG</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
               </div>
             </TooltipProvider>
             <ReactFlow
@@ -747,7 +780,7 @@ function CanvasFlow() {
               onToggle={handleTogglePanel}
             />
           ) : (
-            <div className="w-12 border-l border-border bg-card flex flex-col items-center py-4 h-full">
+            <div className="w-12 border-l border-border bg-card flex flex-col items-center py-4 h-full z-50">
               <Button
                 variant="ghost"
                 size="icon"
