@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface Layer {
@@ -14,26 +14,27 @@ export interface Layer {
 export function useRealtimeLayers(projectId: string, token: string | null) {
   const [layers, setLayers] = useState<Layer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const channelRef = useRef<any>(null);
+
+  const loadLayers = async () => {
+    if (!projectId) return;
+
+    const { data, error } = await supabase.rpc("get_canvas_layers_with_token", {
+      p_project_id: projectId,
+      p_token: token || null,
+    });
+
+    if (error) {
+      console.error("Error fetching layers:", error);
+    } else {
+      setLayers(data || []);
+    }
+    setIsLoading(false);
+  };
 
   // Fetch initial layers
   useEffect(() => {
-    if (!projectId) return;
-
-    const fetchLayers = async () => {
-      const { data, error } = await supabase.rpc("get_canvas_layers_with_token", {
-        p_project_id: projectId,
-        p_token: token || null,
-      });
-
-      if (error) {
-        console.error("Error fetching layers:", error);
-      } else {
-        setLayers(data || []);
-      }
-      setIsLoading(false);
-    };
-
-    fetchLayers();
+    loadLayers();
   }, [projectId, token]);
 
   // Subscribe to real-time updates
@@ -41,7 +42,7 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
     if (!projectId) return;
 
     const channel = supabase
-      .channel(`canvas_layers:${projectId}`)
+      .channel(`canvas-layers-${projectId}`)
       .on(
         "postgres_changes",
         {
@@ -66,6 +67,14 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
           }
         }
       )
+      .on(
+        "broadcast",
+        { event: "layers_refresh" },
+        (payload) => {
+          console.log("Received layers refresh broadcast:", payload);
+          loadLayers();
+        }
+      )
       .subscribe((status) => {
         console.log("Layers channel status:", status);
         if (status === 'SUBSCRIBED') {
@@ -73,21 +82,17 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.error("❌ Layers realtime connection failed:", status);
           // Refetch data if connection fails
-          const refetch = async () => {
-            const { data } = await supabase.rpc("get_canvas_layers_with_token", {
-              p_project_id: projectId,
-              p_token: token || null,
-            });
-            if (data) setLayers(data);
-          };
-          refetch();
+          loadLayers();
         } else if (status === 'CLOSED') {
           console.warn("⚠️ Layers realtime connection closed");
         }
       });
 
+    channelRef.current = channel;
+
     return () => {
       supabase.removeChannel(channel);
+      channelRef.current = null;
     };
   }, [projectId, token]);
 
@@ -106,7 +111,6 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
       }
     });
 
-    // Save to server in background
     const { error } = await supabase.rpc("upsert_canvas_layer_with_token", {
       p_id: layer.id,
       p_project_id: projectId,
@@ -119,11 +123,13 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
     if (error) {
       console.error("Error saving layer:", error);
       // Revert on error by refetching
-      const { data } = await supabase.rpc("get_canvas_layers_with_token", {
-        p_project_id: projectId,
-        p_token: token || null,
+      loadLayers();
+    } else if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "layers_refresh",
+        payload: { projectId, layerId: layer.id },
       });
-      if (data) setLayers(data);
     }
   };
 
@@ -131,7 +137,6 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
     // Optimistic update: Remove from UI immediately
     setLayers((prev) => prev.filter((l) => l.id !== layerId));
 
-    // Delete from server in background
     const { error } = await supabase.rpc("delete_canvas_layer_with_token", {
       p_id: layerId,
       p_token: token || null,
@@ -140,11 +145,13 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
     if (error) {
       console.error("Error deleting layer:", error);
       // Revert on error by refetching
-      const { data } = await supabase.rpc("get_canvas_layers_with_token", {
-        p_project_id: projectId,
-        p_token: token || null,
+      loadLayers();
+    } else if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "layers_refresh",
+        payload: { projectId, layerId },
       });
-      if (data) setLayers(data);
     }
   };
 

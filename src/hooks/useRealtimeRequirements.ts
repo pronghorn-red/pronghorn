@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Requirement } from "@/components/requirements/RequirementsTree";
 
@@ -9,6 +9,7 @@ export function useRealtimeRequirements(
 ) {
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const channelRef = useRef<any>(null);
 
   const buildHierarchy = (flatList: any[]): Requirement[] => {
     const map = new Map<string, Requirement>();
@@ -170,6 +171,14 @@ export function useRealtimeRequirements(
           }
         }
       )
+      .on(
+        "broadcast",
+        { event: "requirements_refresh" },
+        (payload) => {
+          console.log("Received requirements refresh broadcast:", payload);
+          loadRequirements();
+        }
+      )
       .subscribe((status) => {
         console.log("Requirements channel status:", status);
         if (status === 'SUBSCRIBED') {
@@ -182,8 +191,11 @@ export function useRealtimeRequirements(
         }
       });
 
+    channelRef.current = channel;
+
     return () => {
       supabase.removeChannel(channel);
+      channelRef.current = null;
     };
   }, [projectId, enabled]);
 
@@ -265,6 +277,14 @@ export function useRealtimeRequirements(
           return replaceTemp(prev);
         });
       }
+
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: "broadcast",
+          event: "requirements_refresh",
+          payload: { projectId, action: "insert", id: data?.id },
+        });
+      }
     } catch (error) {
       console.error("Error adding requirement:", error);
       
@@ -315,6 +335,14 @@ export function useRealtimeRequirements(
       });
 
       if (error) throw error;
+
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: "broadcast",
+          event: "requirements_refresh",
+          payload: { projectId, action: "update", id },
+        });
+      }
     } catch (error) {
       console.error("Error updating requirement:", error);
       // Rollback on error
@@ -329,6 +357,14 @@ export function useRealtimeRequirements(
         p_id: id,
         p_token: shareToken || null
       });
+
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: "broadcast",
+          event: "requirements_refresh",
+          payload: { projectId, action: "delete", id },
+        });
+      }
     } catch (error) {
       console.error("Error deleting requirement:", error);
       throw error;
