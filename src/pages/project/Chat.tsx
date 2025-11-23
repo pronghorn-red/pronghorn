@@ -886,12 +886,12 @@ export default function Chat() {
 
       {/* Summary Dialog */}
       <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[80vw] h-[80vh] max-w-none flex flex-col">
           <DialogHeader>
             <DialogTitle>{sessions.find((s) => s.id === selectedSessionId)?.ai_title || "Chat Summary"}</DialogTitle>
             <DialogDescription>AI-generated summary of this conversation</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto pr-2">
             <div className="prose prose-sm dark:prose-invert max-w-none">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {streamingSummary || 
@@ -899,43 +899,34 @@ export default function Chat() {
                  "Click 'Generate Summary' to create an AI summary of this conversation"}
               </ReactMarkdown>
             </div>
-            <div className="flex gap-2 justify-end">
-              {!isProcessing && sessions.find((s) => s.id === selectedSessionId)?.ai_summary && (
-                <>
-                  <Button variant="outline" onClick={handleSaveSummaryAsArtifact} disabled={isProcessing}>
-                    <Archive className="h-4 w-4 mr-2" />
-                    Save Summary as Artifact
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={async () => {
-                      const session = sessions.find((s) => s.id === selectedSessionId);
-                      if (session) {
-                        // Clear existing summary and regenerate
-                        await updateSession(selectedSessionId!, undefined, "", "");
-                        await handleSummarizeChat();
-                      }
-                    }}
-                    disabled={isProcessing}
-                  >
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Regenerate Summary
-                  </Button>
-                </>
-              )}
-              {!isProcessing && !sessions.find((s) => s.id === selectedSessionId)?.ai_summary && (
+          </div>
+          <div className="flex flex-wrap gap-2 justify-end mt-4 pt-4 border-t flex-shrink-0">
+            {!isProcessing && sessions.find((s) => s.id === selectedSessionId)?.ai_summary && (
+              <>
+                <Button variant="outline" onClick={handleSaveSummaryAsArtifact} disabled={isProcessing} className="flex-shrink-0">
+                  <Archive className="h-4 w-4 mr-2" />
+                  Save Summary as Artifact
+                </Button>
                 <Button 
-                  onClick={handleSummarizeChat}
+                  variant="outline" 
+                  onClick={async () => {
+                    setStreamingSummary("");
+                    await handleSummarizeChat();
+                  }}
                   disabled={isProcessing}
+                  className="flex-shrink-0"
                 >
                   <Sparkles className="h-4 w-4 mr-2" />
-                  Generate Summary
+                  Regenerate Summary
                 </Button>
-              )}
-              <Button onClick={() => setShowSummaryDialog(false)} disabled={isProcessing}>
-                {isProcessing ? "Generating..." : "Close"}
+              </>
+            )}
+            {!sessions.find((s) => s.id === selectedSessionId)?.ai_summary && !isProcessing && (
+              <Button onClick={handleSummarizeChat} disabled={isProcessing} className="flex-shrink-0">
+                <Sparkles className="h-4 w-4 mr-2" />
+                Generate Summary
               </Button>
-            </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
