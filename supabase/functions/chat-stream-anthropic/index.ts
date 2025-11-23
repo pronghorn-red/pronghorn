@@ -11,13 +11,50 @@ serve(async (req) => {
   }
 
   try {
-    const { systemPrompt, userPrompt, messages = [], tools = [], model, maxOutputTokens } = await req.json();
+    const { 
+      systemPrompt, 
+      userPrompt, 
+      messages = [], 
+      tools = [], 
+      model, 
+      maxOutputTokens,
+      attachedContext = null,
+      projectId = null,
+      shareToken = null
+    } = await req.json();
     
     console.log("Received request:", { model, maxOutputTokens, toolsCount: tools.length });
 
     const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!anthropicApiKey) {
       throw new Error("ANTHROPIC_API_KEY is not configured");
+    }
+
+    // Build enriched system prompt with attached context
+    let enrichedSystemPrompt = systemPrompt;
+    
+    if (attachedContext && projectId) {
+      const contextParts: string[] = [];
+      
+      if (attachedContext.projectMetadata) {
+        contextParts.push("PROJECT METADATA: Will be included in context");
+      }
+      if (attachedContext.requirements?.length > 0) {
+        contextParts.push(`REQUIREMENTS: ${attachedContext.requirements.length} requirements attached`);
+      }
+      if (attachedContext.standards?.length > 0) {
+        contextParts.push(`STANDARDS: ${attachedContext.standards.length} standards attached`);
+      }
+      if (attachedContext.artifacts?.length > 0) {
+        contextParts.push(`ARTIFACTS: ${attachedContext.artifacts.length} artifacts attached`);
+      }
+      if (attachedContext.canvasNodes?.length > 0) {
+        contextParts.push(`CANVAS: ${attachedContext.canvasNodes.length} nodes attached`);
+      }
+      
+      if (contextParts.length > 0) {
+        enrichedSystemPrompt = `${systemPrompt}\n\nATTACHED PROJECT CONTEXT:\n${contextParts.join('\n')}`;
+      }
     }
 
     // Execute tools first
@@ -132,7 +169,7 @@ serve(async (req) => {
             body: JSON.stringify({
               model: model,
               max_tokens: maxOutputTokens,
-              system: systemPrompt,
+              system: enrichedSystemPrompt,
               messages: (Array.isArray(messages) && messages.length > 0)
                 ? messages.map((m: any) => ({
                     role: m.role === "assistant" ? "assistant" : "user",
