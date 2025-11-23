@@ -99,7 +99,25 @@ export const useRealtimeArtifacts = (
     aiTitle?: string,
     aiSummary?: string
   ) => {
+    // Store original for rollback
+    const originalArtifacts = artifacts;
+
     try {
+      // Optimistically update UI
+      setArtifacts((prev) =>
+        prev.map((artifact) =>
+          artifact.id === id
+            ? {
+                ...artifact,
+                ...(content !== undefined && { content }),
+                ...(aiTitle !== undefined && { ai_title: aiTitle }),
+                ...(aiSummary !== undefined && { ai_summary: aiSummary }),
+                updated_at: new Date().toISOString(),
+              }
+            : artifact
+        )
+      );
+
       const { data, error } = await supabase.rpc("update_artifact_with_token", {
         p_id: id,
         p_token: shareToken || null,
@@ -112,6 +130,8 @@ export const useRealtimeArtifacts = (
       toast.success("Artifact updated successfully");
       return data;
     } catch (error) {
+      // Rollback on error
+      setArtifacts(originalArtifacts);
       console.error("Error updating artifact:", error);
       toast.error("Failed to update artifact");
       throw error;

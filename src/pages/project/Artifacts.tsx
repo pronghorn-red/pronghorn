@@ -29,6 +29,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useQuery } from "@tanstack/react-query";
 
 export default function Artifacts() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -45,6 +52,21 @@ export default function Artifacts() {
   const [newContent, setNewContent] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [summarizingId, setSummarizingId] = useState<string | null>(null);
+
+  // Fetch project settings for model configuration
+  const { data: project } = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_project_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+      });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!projectId && isTokenSet,
+  });
 
   const filteredArtifacts = artifacts.filter((artifact) =>
     (artifact.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -67,16 +89,124 @@ export default function Artifacts() {
   };
 
   const handleSummarize = async (artifact: any) => {
+    if (summarizingId) return;
+
+    setSummarizingId(artifact.id);
+    toast.loading("Generating summary...", { id: "summarize-artifact" });
+
     try {
-      const { data, error } = await supabase.functions.invoke("summarize-artifact", {
-        body: { artifactId: artifact.id, shareToken }
+      const model = project?.selected_model || "gemini-2.5-flash";
+      let edgeFunctionName = "chat-stream-gemini";
+
+      if (model.startsWith("claude-")) {
+        edgeFunctionName = "chat-stream-anthropic";
+      } else if (model.startsWith("grok-")) {
+        edgeFunctionName = "chat-stream-xai";
+      }
+
+      const systemPrompt = `You are a helpful assistant that creates clear, concise summaries of content.`;
+      const userPrompt = `Please provide a summary of the following artifact content. Include a brief title (5-10 words) and a comprehensive summary (2-3 paragraphs) covering the key points. Format your response as:
+TITLE: [Your title here]
+SUMMARY: [Your summary here]
+
+Content:
+${artifact.content}`;
+
+      const response = await fetch(`https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/${edgeFunctionName}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ia3pka3NmYXl5Z25yemRxb2FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTA4MzcsImV4cCI6MjA3ODk4NjgzN30.xOKphCiEilzPTo9EGHNJqAJfruM_bijI9PN3BQBF-z8`,
+        },
+        body: JSON.stringify({
+          systemPrompt,
+          messages: [{ role: "user", content: userPrompt }],
+          model: model,
+          maxOutputTokens: 4096,
+        }),
       });
 
-      if (error) throw error;
-      toast.success("Artifact summarized successfully");
+      if (!response.ok) throw new Error("Failed to generate summary");
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullSummary = "";
+
+      if (reader) {
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+
+            const data = line.slice(6).trim();
+            if (!data) continue;
+
+            try {
+              const parsed = JSON.parse(data);
+
+              if (parsed.type === "delta" && typeof parsed.text === "string") {
+                fullSummary += parsed.text;
+                continue;
+              }
+
+              if (parsed.type === "done") {
+                continue;
+              }
+
+              const content = parsed.choices?.[0]?.delta?.content || "";
+              if (content) {
+                fullSummary += content;
+              }
+            } catch (e) {
+              console.error("Error parsing stream line", e);
+            }
+          }
+        }
+
+        if (buffer.trim().startsWith("data: ")) {
+          const data = buffer.trim().slice(6).trim();
+          if (data) {
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === "delta" && typeof parsed.text === "string") {
+                fullSummary += parsed.text;
+              } else if (!parsed.type && parsed.choices?.[0]?.delta?.content) {
+                const content = parsed.choices[0].delta.content;
+                fullSummary += content;
+              }
+            } catch (e) {
+              console.error("Error parsing final stream buffer", e);
+            }
+          }
+        }
+      }
+
+      // Parse the summary to extract title and summary
+      const titleMatch = fullSummary.match(/TITLE:\s*(.+?)(?:\n|$)/i);
+      const summaryMatch = fullSummary.match(/SUMMARY:\s*(.+)/is);
+      
+      const aiTitle = titleMatch ? titleMatch[1].trim() : artifact.ai_title || "Artifact Summary";
+      const aiSummary = summaryMatch ? summaryMatch[1].trim() : fullSummary;
+
+      // Update artifact with summary
+      await updateArtifact(artifact.id, undefined, aiTitle, aiSummary);
+      
+      toast.success("Summary generated successfully", { id: "summarize-artifact" });
     } catch (error) {
       console.error("Error summarizing artifact:", error);
-      toast.error("Failed to summarize artifact");
+      toast.error("Failed to generate summary", { id: "summarize-artifact" });
+    } finally {
+      setSummarizingId(null);
     }
   };
 
@@ -189,27 +319,45 @@ export default function Artifacts() {
                             </p>
                           </div>
                           <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleSummarize(artifact)}
-                            >
-                              <Sparkles className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditClick(artifact)}
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteArtifact(artifact.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleSummarize(artifact)}
+                                    disabled={summarizingId === artifact.id}
+                                  >
+                                    <Sparkles className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Generate AI Summary</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEditClick(artifact)}
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Edit Artifact</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => deleteArtifact(artifact.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Delete Artifact</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </div>
                         </div>
                       </CardHeader>
@@ -249,30 +397,48 @@ export default function Artifacts() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-1 justify-end">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => handleSummarize(artifact)}
-                              >
-                                <Sparkles className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => handleEditClick(artifact)}
-                              >
-                                <Edit2 className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => deleteArtifact(artifact.id)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => handleSummarize(artifact)}
+                                      disabled={summarizingId === artifact.id}
+                                    >
+                                      <Sparkles className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Generate AI Summary</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => handleEditClick(artifact)}
+                                    >
+                                      <Edit2 className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Edit Artifact</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => deleteArtifact(artifact.id)}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Delete Artifact</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
                           </TableCell>
                         </TableRow>
