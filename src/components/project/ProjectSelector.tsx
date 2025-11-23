@@ -1,0 +1,467 @@
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { 
+  FileText, 
+  MessageSquare, 
+  ListTree, 
+  BookOpen, 
+  Layers, 
+  Box, 
+  Network, 
+  Info,
+  CheckSquare,
+  Square
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { StandardsTreeSelector } from "@/components/standards/StandardsTreeSelector";
+import { TechStackTreeSelector } from "@/components/techstack/TechStackTreeSelector";
+import { RequirementsTreeSelector } from "./RequirementsTreeSelector";
+import { ArtifactsListSelector } from "./ArtifactsListSelector";
+import { ChatSessionsListSelector } from "./ChatSessionsListSelector";
+import { CanvasItemsSelector } from "./CanvasItemsSelector";
+
+export interface ProjectSelectionResult {
+  projectMetadata: boolean;
+  artifacts: string[];
+  chatSessions: string[];
+  requirements: string[];
+  standards: string[];
+  techStacks: string[];
+  canvasNodes: string[];
+  canvasEdges: string[];
+  canvasLayers: string[];
+}
+
+interface ProjectSelectorProps {
+  projectId: string;
+  shareToken: string | null;
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (selection: ProjectSelectionResult) => void;
+  initialSelection?: Partial<ProjectSelectionResult>;
+}
+
+type CategoryType = 
+  | "metadata" 
+  | "artifacts" 
+  | "chats" 
+  | "requirements" 
+  | "standards" 
+  | "techStacks" 
+  | "canvas";
+
+interface Category {
+  id: CategoryType;
+  label: string;
+  icon: React.ReactNode;
+  description: string;
+}
+
+const CATEGORIES: Category[] = [
+  {
+    id: "metadata",
+    label: "Project Info",
+    icon: <Info className="h-4 w-4" />,
+    description: "Project metadata and settings"
+  },
+  {
+    id: "artifacts",
+    label: "Artifacts",
+    icon: <FileText className="h-4 w-4" />,
+    description: "Reusable text blocks and documents"
+  },
+  {
+    id: "chats",
+    label: "Chat Sessions",
+    icon: <MessageSquare className="h-4 w-4" />,
+    description: "Previous chat conversations"
+  },
+  {
+    id: "requirements",
+    label: "Requirements",
+    icon: <ListTree className="h-4 w-4" />,
+    description: "Project requirements hierarchy"
+  },
+  {
+    id: "standards",
+    label: "Standards",
+    icon: <BookOpen className="h-4 w-4" />,
+    description: "Linked standards and compliance"
+  },
+  {
+    id: "techStacks",
+    label: "Tech Stacks",
+    icon: <Layers className="h-4 w-4" />,
+    description: "Technology stack components"
+  },
+  {
+    id: "canvas",
+    label: "Canvas",
+    icon: <Network className="h-4 w-4" />,
+    description: "Architecture nodes, edges, layers"
+  }
+];
+
+export function ProjectSelector({
+  projectId,
+  shareToken,
+  open,
+  onClose,
+  onConfirm,
+  initialSelection
+}: ProjectSelectorProps) {
+  const [activeCategory, setActiveCategory] = useState<CategoryType>("metadata");
+  const [includeMetadata, setIncludeMetadata] = useState(initialSelection?.projectMetadata ?? false);
+  const [selectedArtifacts, setSelectedArtifacts] = useState<Set<string>>(
+    new Set(initialSelection?.artifacts ?? [])
+  );
+  const [selectedChats, setSelectedChats] = useState<Set<string>>(
+    new Set(initialSelection?.chatSessions ?? [])
+  );
+  const [selectedRequirements, setSelectedRequirements] = useState<Set<string>>(
+    new Set(initialSelection?.requirements ?? [])
+  );
+  const [selectedStandards, setSelectedStandards] = useState<Set<string>>(
+    new Set(initialSelection?.standards ?? [])
+  );
+  const [selectedTechStacks, setSelectedTechStacks] = useState<Set<string>>(
+    new Set(initialSelection?.techStacks ?? [])
+  );
+  const [selectedNodes, setSelectedNodes] = useState<Set<string>>(
+    new Set(initialSelection?.canvasNodes ?? [])
+  );
+  const [selectedEdges, setSelectedEdges] = useState<Set<string>>(
+    new Set(initialSelection?.canvasEdges ?? [])
+  );
+  const [selectedLayers, setSelectedLayers] = useState<Set<string>>(
+    new Set(initialSelection?.canvasLayers ?? [])
+  );
+
+  // Load project-linked standards
+  const [standardCategories, setStandardCategories] = useState<any[]>([]);
+  const [techStacks, setTechStacks] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (open && projectId) {
+      loadProjectStandards();
+      loadProjectTechStacks();
+    }
+  }, [open, projectId]);
+
+  const loadProjectStandards = async () => {
+    try {
+      // Get project-linked standard IDs
+      const { data: projectStandards } = await supabase.rpc(
+        "get_project_standards_with_token",
+        {
+          p_project_id: projectId,
+          p_token: shareToken
+        }
+      );
+
+      if (!projectStandards) return;
+
+      const linkedStandardIds = projectStandards.map((ps: any) => ps.standard_id);
+
+      // Get all categories
+      const { data: categoriesData } = await supabase
+        .from("standard_categories")
+        .select("*")
+        .order("order_index");
+
+      // Get all standards
+      const { data: standardsData } = await supabase
+        .from("standards")
+        .select("*")
+        .in("id", linkedStandardIds)
+        .order("order_index");
+
+      const buildHierarchy = (flatStandards: any[]) => {
+        const map = new Map();
+        const roots: any[] = [];
+
+        flatStandards.forEach((std) => {
+          map.set(std.id, { ...std, children: [] });
+        });
+
+        flatStandards.forEach((std) => {
+          const node = map.get(std.id);
+          if (std.parent_id && map.has(std.parent_id)) {
+            map.get(std.parent_id).children.push(node);
+          } else {
+            roots.push(node);
+          }
+        });
+
+        return roots;
+      };
+
+      const categories = (categoriesData || [])
+        .map((cat) => ({
+          ...cat,
+          standards: buildHierarchy(
+            (standardsData || []).filter((s) => s.category_id === cat.id)
+          )
+        }))
+        .filter((cat) => cat.standards.length > 0);
+
+      setStandardCategories(categories);
+    } catch (error) {
+      console.error("Error loading standards:", error);
+    }
+  };
+
+  const loadProjectTechStacks = async () => {
+    try {
+      const { data: projectTechStacks } = await supabase.rpc(
+        "get_project_tech_stacks_with_token",
+        {
+          p_project_id: projectId,
+          p_token: shareToken
+        }
+      );
+
+      if (!projectTechStacks) return;
+
+      const linkedStackIds = projectTechStacks.map((pts: any) => pts.tech_stack_id);
+
+      const { data: stacks } = await supabase
+        .from("tech_stacks")
+        .select("*")
+        .in("id", linkedStackIds);
+
+      setTechStacks(stacks || []);
+    } catch (error) {
+      console.error("Error loading tech stacks:", error);
+    }
+  };
+
+  const handleConfirm = () => {
+    const result: ProjectSelectionResult = {
+      projectMetadata: includeMetadata,
+      artifacts: Array.from(selectedArtifacts),
+      chatSessions: Array.from(selectedChats),
+      requirements: Array.from(selectedRequirements),
+      standards: Array.from(selectedStandards),
+      techStacks: Array.from(selectedTechStacks),
+      canvasNodes: Array.from(selectedNodes),
+      canvasEdges: Array.from(selectedEdges),
+      canvasLayers: Array.from(selectedLayers)
+    };
+
+    onConfirm(result);
+    onClose();
+  };
+
+  const handleSelectAll = () => {
+    // Select all items in all categories
+    setIncludeMetadata(true);
+    // Artifacts, chats, requirements, nodes, edges, layers will be selected via their respective "Select All" in each view
+    toast.info("Use category-specific Select All buttons");
+  };
+
+  const handleSelectNone = () => {
+    setIncludeMetadata(false);
+    setSelectedArtifacts(new Set());
+    setSelectedChats(new Set());
+    setSelectedRequirements(new Set());
+    setSelectedStandards(new Set());
+    setSelectedTechStacks(new Set());
+    setSelectedNodes(new Set());
+    setSelectedEdges(new Set());
+    setSelectedLayers(new Set());
+  };
+
+  const getTotalSelected = () => {
+    return (
+      (includeMetadata ? 1 : 0) +
+      selectedArtifacts.size +
+      selectedChats.size +
+      selectedRequirements.size +
+      selectedStandards.size +
+      selectedTechStacks.size +
+      selectedNodes.size +
+      selectedEdges.size +
+      selectedLayers.size
+    );
+  };
+
+  const renderCategoryContent = () => {
+    switch (activeCategory) {
+      case "metadata":
+        return (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Include project name, description, organization, budget, scope, timeline, and other metadata.
+            </p>
+            <Button
+              variant={includeMetadata ? "default" : "outline"}
+              onClick={() => setIncludeMetadata(!includeMetadata)}
+              className="w-full"
+            >
+              {includeMetadata ? <CheckSquare className="h-4 w-4 mr-2" /> : <Square className="h-4 w-4 mr-2" />}
+              {includeMetadata ? "Project Metadata Included" : "Include Project Metadata"}
+            </Button>
+          </div>
+        );
+
+      case "artifacts":
+        return (
+          <ArtifactsListSelector
+            projectId={projectId}
+            shareToken={shareToken}
+            selectedArtifacts={selectedArtifacts}
+            onSelectionChange={setSelectedArtifacts}
+          />
+        );
+
+      case "chats":
+        return (
+          <ChatSessionsListSelector
+            projectId={projectId}
+            shareToken={shareToken}
+            selectedChats={selectedChats}
+            onSelectionChange={setSelectedChats}
+          />
+        );
+
+      case "requirements":
+        return (
+          <RequirementsTreeSelector
+            projectId={projectId}
+            shareToken={shareToken}
+            selectedRequirements={selectedRequirements}
+            onSelectionChange={setSelectedRequirements}
+          />
+        );
+
+      case "standards":
+        return standardCategories.length > 0 ? (
+          <StandardsTreeSelector
+            categories={standardCategories}
+            selectedStandards={selectedStandards}
+            onSelectionChange={setSelectedStandards}
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">No standards linked to this project.</p>
+        );
+
+      case "techStacks":
+        return techStacks.length > 0 ? (
+          <TechStackTreeSelector
+            techStacks={techStacks.map(ts => ({ ...ts, items: [] }))}
+            selectedItems={selectedTechStacks}
+            onSelectionChange={setSelectedTechStacks}
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">No tech stacks linked to this project.</p>
+        );
+
+      case "canvas":
+        return (
+          <CanvasItemsSelector
+            projectId={projectId}
+            shareToken={shareToken}
+            selectedNodes={selectedNodes}
+            selectedEdges={selectedEdges}
+            selectedLayers={selectedLayers}
+            onNodesChange={setSelectedNodes}
+            onEdgesChange={setSelectedEdges}
+            onLayersChange={setSelectedLayers}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-5xl max-h-[80vh] p-0">
+        <DialogHeader className="px-6 pt-6">
+          <DialogTitle>Select Project Elements</DialogTitle>
+          <DialogDescription>
+            Choose any elements from your project to include
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex h-[500px]">
+          {/* Left sidebar - Categories */}
+          <div className="w-56 border-r bg-muted/20 p-4">
+            <ScrollArea className="h-full">
+              <div className="space-y-1">
+                {CATEGORIES.map((category) => (
+                  <Button
+                    key={category.id}
+                    variant={activeCategory === category.id ? "secondary" : "ghost"}
+                    className="w-full justify-start text-sm"
+                    onClick={() => setActiveCategory(category.id)}
+                  >
+                    {category.icon}
+                    <span className="ml-2">{category.label}</span>
+                  </Button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* Right content area */}
+          <div className="flex-1 flex flex-col">
+            <div className="px-6 py-4 border-b">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="font-semibold">
+                    {CATEGORIES.find(c => c.id === activeCategory)?.label}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {CATEGORIES.find(c => c.id === activeCategory)?.description}
+                  </p>
+                </div>
+                <Badge variant="secondary">
+                  {getTotalSelected()} selected
+                </Badge>
+              </div>
+            </div>
+
+            <ScrollArea className="flex-1 px-6 py-4">
+              {renderCategoryContent()}
+            </ScrollArea>
+          </div>
+        </div>
+
+        <Separator />
+
+        <DialogFooter className="px-6 py-4">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleSelectNone}>
+                Clear All
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button onClick={handleConfirm}>
+                Add Selected ({getTotalSelected()})
+              </Button>
+            </div>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
