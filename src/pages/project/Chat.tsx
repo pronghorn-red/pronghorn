@@ -176,20 +176,19 @@ export default function Chat() {
         edgeFunctionName = "chat-stream-xai";
       }
 
-      // Build conversation history
+      // Build conversation history and add summary request
       const conversationHistory = messages.map((msg) => ({
         role: msg.role,
         content: msg.content,
       }));
 
-      const systemPrompt = `You are a helpful assistant that creates clear, concise summaries of conversations. 
-Analyze the entire conversation and provide:
-1. A brief title (5-10 words) that captures the main topic
-2. A comprehensive summary (2-3 paragraphs) covering the key points discussed
+      // Add a final user message requesting the summary
+      conversationHistory.push({
+        role: "user",
+        content: "Please provide a summary of our entire conversation above. Include a brief title (5-10 words) and a comprehensive summary (2-3 paragraphs) covering the key points discussed. Format your response as:\nTITLE: [Your title here]\nSUMMARY: [Your summary here]",
+      });
 
-Format your response as:
-TITLE: [Your title here]
-SUMMARY: [Your summary here]`;
+      const systemPrompt = `You are a helpful assistant that creates clear, concise summaries of conversations.`;
 
       const response = await fetch(`https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/${edgeFunctionName}`, {
         method: "POST",
