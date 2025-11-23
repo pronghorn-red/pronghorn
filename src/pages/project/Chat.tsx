@@ -698,8 +698,9 @@ export default function Chat() {
                                 </Button>
                               </div>
                             ) : (
-                              <p className="text-sm font-medium truncate">
-                                {session.ai_title || session.title || "New Chat"}
+                              <p className="text-sm font-medium break-words line-clamp-3">
+                                {(session.ai_title || session.title || "New Chat").slice(0, 150)}
+                                {(session.ai_title || session.title || "").length > 150 ? "..." : ""}
                               </p>
                             )}
                             <p className="text-xs text-muted-foreground">
