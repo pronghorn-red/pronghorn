@@ -89,6 +89,9 @@ export const useRealtimeChatSessions = (
       });
 
       if (error) throw error;
+      if (data) {
+        setSessions((prev) => [data, ...prev]);
+      }
       toast.success("Chat session created");
       return data;
     } catch (error) {

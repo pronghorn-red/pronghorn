@@ -196,10 +196,9 @@ export default function Chat() {
     setStreamingContent("");
 
     try {
-      // Add user message to DB (in background)
-      addMessage("user", userMessage).then(() => {
-        // Remove optimistic message once real one is in DB
-        setOptimisticMessages(prev => prev.filter(m => m.id !== optimisticUserMsg.id));
+      // Add user message to DB in background (no need to await)
+      addMessage("user", userMessage).catch((error) => {
+        console.error("Error adding user message:", error);
       });
 
       const model = project?.selected_model || "gemini-2.5-flash";
@@ -655,9 +654,21 @@ export default function Chat() {
 
                 <ScrollArea className="flex-1 p-4">
                   <div className="space-y-6">
-                    {[...messages, ...optimisticMessages].sort((a, b) => 
-                      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-                    ).map((message) => (
+                    {[...
+                      messages,
+                      ...optimisticMessages.filter((o) =>
+                        !messages.some((m) =>
+                          m.role === o.role &&
+                          m.content === o.content &&
+                          Math.abs(new Date(m.created_at).getTime() - new Date(o.created_at).getTime()) < 5000
+                        )
+                      ),
+                    ]
+                      .sort(
+                        (a, b) =>
+                          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                      )
+                      .map((message) => (
                       <div
                         key={message.id}
                         className={`flex ${
