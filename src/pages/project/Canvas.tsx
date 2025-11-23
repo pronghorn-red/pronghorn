@@ -601,7 +601,7 @@ function CanvasFlow() {
           link.href = dataUrl;
           link.click();
         } else {
-          // SVG export - crop to visible nodes
+          // SVG export - crop to visible nodes with proper viewBox
           const nodesBounds = getNodesBounds(visibleNodes);
           const padding = 50;
           
@@ -612,19 +612,30 @@ function CanvasFlow() {
             height: nodesBounds.height + padding * 2,
           };
 
-          const dataUrl = await toSvg(viewport, { 
+          // Generate SVG
+          let svgDataUrl = await toSvg(viewport, { 
             backgroundColor: '#ffffff',
-            width: bounds.width,
-            height: bounds.height,
-            style: {
-              transform: `translate(${-bounds.x}px, ${-bounds.y}px)`,
-              transformOrigin: 'top left',
-            }
           });
+          
+          // Parse and modify the SVG to set proper viewBox
+          const svgData = atob(svgDataUrl.split(',')[1]);
+          const parser = new DOMParser();
+          const svgDoc = parser.parseFromString(svgData, 'image/svg+xml');
+          const svgElement = svgDoc.documentElement;
+          
+          // Set viewBox to crop to bounds
+          svgElement.setAttribute('viewBox', `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`);
+          svgElement.setAttribute('width', bounds.width.toString());
+          svgElement.setAttribute('height', bounds.height.toString());
+          
+          // Convert back to data URL
+          const serializer = new XMLSerializer();
+          const modifiedSvg = serializer.serializeToString(svgElement);
+          const finalDataUrl = 'data:image/svg+xml;base64,' + btoa(modifiedSvg);
           
           const link = document.createElement('a');
           link.download = 'canvas-snapshot.svg';
-          link.href = dataUrl;
+          link.href = finalDataUrl;
           link.click();
         }
         
