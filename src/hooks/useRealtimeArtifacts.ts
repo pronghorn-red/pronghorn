@@ -74,6 +74,24 @@ export const useRealtimeArtifacts = (
   const addArtifact = async (content: string, sourceType?: string, sourceId?: string) => {
     if (!projectId) return;
 
+    // Generate temporary ID for optimistic update
+    const tempId = `temp-${Date.now()}`;
+    const optimisticArtifact: Artifact = {
+      id: tempId,
+      project_id: projectId,
+      content,
+      ai_title: null,
+      ai_summary: null,
+      source_type: sourceType || null,
+      source_id: sourceId || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: null,
+    };
+
+    // Optimistically add to UI
+    setArtifacts((prev) => [...prev, optimisticArtifact]);
+
     try {
       const { data, error } = await supabase.rpc("insert_artifact_with_token", {
         p_project_id: projectId,
@@ -84,9 +102,19 @@ export const useRealtimeArtifacts = (
       });
 
       if (error) throw error;
+
+      // Replace temporary artifact with real database artifact
+      if (data) {
+        setArtifacts((prev) =>
+          prev.map((artifact) => (artifact.id === tempId ? data : artifact))
+        );
+      }
+
       toast.success("Artifact created successfully");
       return data;
     } catch (error) {
+      // Rollback on error
+      setArtifacts((prev) => prev.filter((artifact) => artifact.id !== tempId));
       console.error("Error creating artifact:", error);
       toast.error("Failed to create artifact");
       throw error;
@@ -139,7 +167,13 @@ export const useRealtimeArtifacts = (
   };
 
   const deleteArtifact = async (id: string) => {
+    // Store original for rollback
+    const originalArtifacts = artifacts;
+
     try {
+      // Optimistically remove from UI
+      setArtifacts((prev) => prev.filter((artifact) => artifact.id !== id));
+
       const { error } = await supabase.rpc("delete_artifact_with_token", {
         p_id: id,
         p_token: shareToken || null,
@@ -148,6 +182,8 @@ export const useRealtimeArtifacts = (
       if (error) throw error;
       toast.success("Artifact deleted successfully");
     } catch (error) {
+      // Rollback on error
+      setArtifacts(originalArtifacts);
       console.error("Error deleting artifact:", error);
       toast.error("Failed to delete artifact");
       throw error;
