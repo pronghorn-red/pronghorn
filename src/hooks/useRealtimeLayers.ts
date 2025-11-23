@@ -55,7 +55,17 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
           console.log("Canvas layers change:", payload);
           
           if (payload.eventType === "INSERT") {
-            setLayers((prev) => [...prev, payload.new as Layer]);
+            setLayers((prev) => {
+              // Check if layer already exists (from optimistic update)
+              const exists = prev.some(layer => layer.id === payload.new.id);
+              if (exists) {
+                // Replace optimistic layer with real database layer
+                return prev.map(layer => 
+                  layer.id === payload.new.id ? (payload.new as Layer) : layer
+                );
+              }
+              return [...prev, payload.new as Layer];
+            });
           } else if (payload.eventType === "UPDATE") {
             setLayers((prev) =>
               prev.map((layer) =>
