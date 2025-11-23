@@ -55,7 +55,6 @@ export default function Chat() {
   const [editingTitle, setEditingTitle] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSummaryDialog, setShowSummaryDialog] = useState(false);
-  const [optimisticMessages, setOptimisticMessages] = useState<Array<{id: string, role: string, content: string, created_at: string}>>([]);
   const isMobile = useIsMobile();
 
   const { messages, addMessage, refresh: refreshMessages } = useRealtimeChatMessages(
@@ -182,21 +181,12 @@ export default function Chat() {
     const userMessage = inputMessage.trim();
     setInputMessage("");
     
-    // Add user message optimistically to UI immediately
-    const optimisticUserMsg = { 
-      id: `temp-user-${Date.now()}`, 
-      role: "user", 
-      content: userMessage, 
-      created_at: new Date().toISOString() 
-    };
-    setOptimisticMessages(prev => [...prev, optimisticUserMsg]);
-
     // Start streaming AI response
     setIsStreaming(true);
     setStreamingContent("");
 
     try {
-      // Add user message to DB in background (no need to await)
+      // Add user message to DB in background (hook will optimistically update UI per-session)
       addMessage("user", userMessage).catch((error) => {
         console.error("Error adding user message:", error);
       });
@@ -654,21 +644,7 @@ export default function Chat() {
 
                 <ScrollArea className="flex-1 p-4">
                   <div className="space-y-6">
-                    {[...
-                      messages,
-                      ...optimisticMessages.filter((o) =>
-                        !messages.some((m) =>
-                          m.role === o.role &&
-                          m.content === o.content &&
-                          Math.abs(new Date(m.created_at).getTime() - new Date(o.created_at).getTime()) < 5000
-                        )
-                      ),
-                    ]
-                      .sort(
-                        (a, b) =>
-                          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-                      )
-                      .map((message) => (
+                    {messages.map((message) => (
                       <div
                         key={message.id}
                         className={`flex ${

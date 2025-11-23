@@ -211,6 +211,19 @@ export const useRealtimeChatMessages = (
   const addMessage = async (role: string, content: string) => {
     if (!chatSessionId) return;
 
+    // Optimistically add message to current session
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimisticMessage: ChatMessage = {
+      id: tempId,
+      chat_session_id: chatSessionId,
+      role,
+      content,
+      created_at: new Date().toISOString(),
+      created_by: null,
+    };
+
+    setMessages((prev) => [...prev, optimisticMessage]);
+
     try {
       const { data, error } = await supabase.rpc("insert_chat_message_with_token", {
         p_chat_session_id: chatSessionId,
@@ -220,10 +233,14 @@ export const useRealtimeChatMessages = (
       });
 
       if (error) throw error;
+
+      // Let realtime reload the canonical list; no need to manually reconcile
       return data;
     } catch (error) {
       console.error("Error adding message:", error);
       toast.error("Failed to send message");
+      // Roll back optimistic message on error
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
       throw error;
     }
   };
