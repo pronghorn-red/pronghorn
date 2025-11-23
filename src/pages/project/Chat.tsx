@@ -157,14 +157,22 @@ export default function Chat() {
     const userMessage = inputMessage.trim();
     setInputMessage("");
     
-    // Add user message
-    await addMessage("user", userMessage);
+    // Add user message optimistically
+    const tempUserMessage = { 
+      id: `temp-${Date.now()}`, 
+      role: "user" as const, 
+      content: userMessage, 
+      created_at: new Date().toISOString() 
+    };
 
     // Start streaming AI response
     setIsStreaming(true);
     setStreamingContent("");
 
     try {
+      // Add user message to DB
+      await addMessage("user", userMessage);
+
       const model = project?.selected_model || "gemini-2.5-flash";
       let edgeFunctionName = "chat-stream-gemini";
       
@@ -173,6 +181,18 @@ export default function Chat() {
       } else if (model.startsWith("grok-")) {
         edgeFunctionName = "chat-stream-xai";
       }
+
+      // Build conversation history for context
+      const conversationHistory = messages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+
+      // Add the new user message to history
+      conversationHistory.push({
+        role: "user",
+        content: userMessage
+      });
 
       const response = await fetch(
         `https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/${edgeFunctionName}`,
@@ -184,7 +204,8 @@ export default function Chat() {
           },
           body: JSON.stringify({
             systemPrompt: "You are a helpful AI assistant for a project management system.",
-            userPrompt: userMessage,
+            messages: conversationHistory,
+            userPrompt: userMessage, // Keep for backward compatibility
             model: model,
             maxOutputTokens: project?.max_tokens || 32768,
             thinkingEnabled: project?.thinking_enabled || false,
@@ -271,6 +292,10 @@ export default function Chat() {
       // Save the complete AI response
       if (fullResponse) {
         await addMessage("assistant", fullResponse);
+        
+        // Small delay to allow realtime to update messages array
+        // before clearing streaming content
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     } catch (error) {
       console.error("Error streaming response:", error);
