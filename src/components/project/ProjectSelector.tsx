@@ -32,6 +32,7 @@ import { RequirementsTreeSelector } from "./RequirementsTreeSelector";
 import { ArtifactsListSelector } from "./ArtifactsListSelector";
 import { ChatSessionsListSelector } from "./ChatSessionsListSelector";
 import { CanvasItemsSelector } from "./CanvasItemsSelector";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export interface ProjectSelectionResult {
   projectMetadata: any | null;
@@ -123,6 +124,7 @@ export function ProjectSelector({
   onConfirm,
   initialSelection
 }: ProjectSelectorProps) {
+  const isMobile = useIsMobile();
   const [activeCategory, setActiveCategory] = useState<CategoryType>("metadata");
   const [includeMetadata, setIncludeMetadata] = useState(initialSelection?.projectMetadata ? true : false);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
@@ -501,82 +503,154 @@ export function ProjectSelector({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[80vh] p-0">
-        <DialogHeader className="px-6 pt-6">
+      <DialogContent className={isMobile ? "max-w-full w-full h-full max-h-full p-0 m-0" : "max-w-5xl max-h-[80vh] p-0"}>
+        <DialogHeader className="px-4 md:px-6 pt-4 md:pt-6">
           <DialogTitle>Select Project Elements</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs md:text-sm">
             Choose any elements from your project to include
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex h-[500px]">
-          {/* Left sidebar - Categories */}
-          <div className="w-56 border-r bg-muted/20 p-4">
-            <ScrollArea className="h-full">
-              <div className="space-y-1">
+        {isMobile ? (
+          /* Mobile Layout - Tabs at top */
+          <div className="flex flex-col h-[calc(100%-8rem)]">
+            {/* Horizontal scrollable category tabs */}
+            <ScrollArea className="border-b">
+              <div className="flex gap-1 px-4 py-2">
                 {CATEGORIES.map((category) => (
                   <Button
                     key={category.id}
-                    variant={activeCategory === category.id ? "secondary" : "ghost"}
-                    className="w-full justify-start text-sm"
+                    variant={activeCategory === category.id ? "default" : "outline"}
+                    size="sm"
+                    className="whitespace-nowrap"
                     onClick={() => setActiveCategory(category.id)}
                   >
                     {category.icon}
-                    <span className="ml-2">{category.label}</span>
+                    <span className="ml-1.5">{category.label}</span>
                   </Button>
                 ))}
               </div>
             </ScrollArea>
-          </div>
 
-          {/* Right content area */}
-          <div className="flex-1 flex flex-col">
-            <div className="px-6 py-4 border-b">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <h3 className="font-semibold">
-                    {CATEGORIES.find(c => c.id === activeCategory)?.label}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    {CATEGORIES.find(c => c.id === activeCategory)?.description}
-                  </p>
+            {/* Content area */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="px-4 py-3 border-b">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-sm">
+                      {CATEGORIES.find(c => c.id === activeCategory)?.label}
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      {CATEGORIES.find(c => c.id === activeCategory)?.description}
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">
+                    {getTotalSelected()}
+                  </Badge>
                 </div>
-                <Badge variant="secondary">
-                  {getTotalSelected()} selected
-                </Badge>
               </div>
+
+              <ScrollArea className="flex-1 px-4 py-3">
+                {renderCategoryContent()}
+              </ScrollArea>
+            </div>
+          </div>
+        ) : (
+          /* Desktop Layout - Sidebar */
+          <div className="flex h-[500px]">
+            {/* Left sidebar - Categories */}
+            <div className="w-56 border-r bg-muted/20 p-4">
+              <ScrollArea className="h-full">
+                <div className="space-y-1">
+                  {CATEGORIES.map((category) => (
+                    <Button
+                      key={category.id}
+                      variant={activeCategory === category.id ? "secondary" : "ghost"}
+                      className="w-full justify-start text-sm"
+                      onClick={() => setActiveCategory(category.id)}
+                    >
+                      {category.icon}
+                      <span className="ml-2">{category.label}</span>
+                    </Button>
+                  ))}
+                </div>
+              </ScrollArea>
             </div>
 
-            <ScrollArea className="flex-1 px-6 py-4">
-              {renderCategoryContent()}
-            </ScrollArea>
+            {/* Right content area */}
+            <div className="flex-1 flex flex-col">
+              <div className="px-6 py-4 border-b">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <h3 className="font-semibold">
+                      {CATEGORIES.find(c => c.id === activeCategory)?.label}
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      {CATEGORIES.find(c => c.id === activeCategory)?.description}
+                    </p>
+                  </div>
+                  <Badge variant="secondary">
+                    {getTotalSelected()} selected
+                  </Badge>
+                </div>
+              </div>
+
+              <ScrollArea className="flex-1 px-6 py-4">
+                {renderCategoryContent()}
+              </ScrollArea>
+            </div>
           </div>
-        </div>
+        )}
 
         <Separator />
 
-        <DialogFooter className="px-6 py-4">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleSelectNone}>
-                Clear All
-              </Button>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose} disabled={isLoadingContent}>
-                Cancel
-              </Button>
-              <Button onClick={handleConfirm} disabled={isLoadingContent}>
-                {isLoadingContent ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Retrieving Content...
-                  </>
-                ) : (
-                  `Add Selected (${getTotalSelected()})`
-                )}
-              </Button>
-            </div>
+        <DialogFooter className="px-4 md:px-6 py-3 md:py-4">
+          <div className={isMobile ? "flex flex-col gap-2 w-full" : "flex items-center justify-between w-full"}>
+            {isMobile ? (
+              <>
+                <Button onClick={handleConfirm} disabled={isLoadingContent} className="w-full">
+                  {isLoadingContent ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Retrieving Content...
+                    </>
+                  ) : (
+                    `Add Selected (${getTotalSelected()})`
+                  )}
+                </Button>
+                <div className="flex gap-2 w-full">
+                  <Button variant="outline" size="sm" onClick={handleSelectNone} className="flex-1">
+                    Clear All
+                  </Button>
+                  <Button variant="outline" onClick={onClose} disabled={isLoadingContent} className="flex-1">
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={handleSelectNone}>
+                    Clear All
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={onClose} disabled={isLoadingContent}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleConfirm} disabled={isLoadingContent}>
+                    {isLoadingContent ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Retrieving Content...
+                      </>
+                    ) : (
+                      `Add Selected (${getTotalSelected()})`
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>
