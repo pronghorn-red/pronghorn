@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useShareToken } from "@/hooks/useShareToken";
+import { ProjectSelector, ProjectSelectionResult } from "@/components/project/ProjectSelector";
 
 interface AIArchitectDialogProps {
   projectId: string;
@@ -36,80 +37,27 @@ export function AIArchitectDialog({
   const { toast } = useToast();
   const { token: shareToken } = useShareToken(projectId);
   
-  const [includeExistingNodes, setIncludeExistingNodes] = useState(true);
-  const [includeExistingEdges, setIncludeExistingEdges] = useState(true);
-  const [includeStandards, setIncludeStandards] = useState(false);
-  const [includeTechStack, setIncludeTechStack] = useState(false);
-  const [includeRequirements, setIncludeRequirements] = useState(false);
-  const [includeProjectDescription, setIncludeProjectDescription] = useState(false);
-  const [includeArtifacts, setIncludeArtifacts] = useState(false);
+  const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
+  const [selectedContext, setSelectedContext] = useState<ProjectSelectionResult | null>(null);
   const [drawEdges, setDrawEdges] = useState(true);
   
   const [projectData, setProjectData] = useState<any>(null);
-  const [standards, setStandards] = useState<any[]>([]);
-  const [techStacks, setTechStacks] = useState<any[]>([]);
-  const [requirements, setRequirements] = useState<any[]>([]);
-  const [artifacts, setArtifacts] = useState<any[]>([]);
-  const [selectedArtifacts, setSelectedArtifacts] = useState<string[]>([]);
 
   useEffect(() => {
     if (open && projectId) {
-      loadProjectContext();
+      loadProjectData();
     }
   }, [open, projectId]);
 
-  const loadProjectContext = async () => {
+  const loadProjectData = async () => {
     try {
-      // Load project details
       const { data: project } = await supabase.rpc('get_project_with_token', {
         p_project_id: projectId,
         p_token: shareToken || null
       });
       setProjectData(project);
-
-      // Load standards
-      const { data: projectStandards } = await supabase.rpc('get_project_standards_with_token', {
-        p_project_id: projectId,
-        p_token: shareToken || null
-      });
-      if (projectStandards) {
-        const standardIds = projectStandards.map((ps: any) => ps.standard_id);
-        const { data: standardsData } = await supabase
-          .from('standards')
-          .select('*')
-          .in('id', standardIds);
-        setStandards(standardsData || []);
-      }
-
-      // Load tech stacks
-      const { data: projectTechStacks } = await supabase.rpc('get_project_tech_stacks_with_token', {
-        p_project_id: projectId,
-        p_token: shareToken || null
-      });
-      if (projectTechStacks) {
-        const techStackIds = projectTechStacks.map((pts: any) => pts.tech_stack_id);
-        const { data: techStacksData } = await supabase
-          .from('tech_stacks')
-          .select('*')
-          .in('id', techStackIds);
-        setTechStacks(techStacksData || []);
-      }
-
-      // Load requirements
-      const { data: requirementsData } = await supabase.rpc('get_requirements_with_token', {
-        p_project_id: projectId,
-        p_token: shareToken || null
-      });
-      setRequirements(requirementsData || []);
-
-      // Load artifacts
-      const { data: artifactsData } = await supabase.rpc('get_artifacts_with_token', {
-        p_project_id: projectId,
-        p_token: shareToken || null
-      });
-      setArtifacts(artifactsData || []);
     } catch (error) {
-      console.error('Error loading project context:', error);
+      console.error('Error loading project data:', error);
     }
   };
 
@@ -132,46 +80,20 @@ export function AIArchitectDialog({
       const context: any = {
         description: finalDescription,
         drawEdges,
-      };
-
-      if (includeExistingNodes) {
-        context.existingNodes = existingNodes.map(n => ({ data: n.data, position: n.position }));
-      }
-
-      if (includeExistingEdges) {
-        context.existingEdges = existingEdges.map(e => ({ 
+        existingNodes: existingNodes.map(n => ({ data: n.data, position: n.position })),
+        existingEdges: existingEdges.map(e => ({ 
           source: e.source, 
           target: e.target, 
           data: e.data 
-        }));
-      }
+        })),
+      };
 
-      if (includeStandards && standards.length > 0) {
-        context.standards = standards.map(s => ({ 
-          title: s.title, 
-          code: s.code, 
-          description: s.description 
-        }));
-      }
-
-      if (includeTechStack && techStacks.length > 0) {
-        context.techStacks = techStacks.map(ts => ({ 
-          name: ts.name, 
-          description: ts.description 
-        }));
-      }
-
-      if (includeRequirements && requirements.length > 0) {
-        context.requirements = requirements.map(r => ({ 
-          code: r.code, 
-          title: r.title, 
-          type: r.type, 
-          content: r.content 
-        }));
-      }
-
-      if (includeProjectDescription && projectData?.description) {
-        context.projectDescription = projectData.description;
+      // Add selected context if available
+      if (selectedContext) {
+        if (selectedContext.projectMetadata && projectData) {
+          context.projectDescription = projectData.description;
+        }
+        // Add other selected context here as needed
       }
 
       const { data, error } = await supabase.functions.invoke('ai-architect', {
@@ -224,32 +146,12 @@ export function AIArchitectDialog({
         edges: existingEdges.map(e => ({ source: e.source, target: e.target, data: e.data })),
       };
 
-      if (includeStandards && standards.length > 0) {
-        context.standards = standards.map(s => ({ 
-          title: s.title, 
-          code: s.code, 
-          description: s.description 
-        }));
-      }
-
-      if (includeTechStack && techStacks.length > 0) {
-        context.techStacks = techStacks.map(ts => ({ 
-          name: ts.name, 
-          description: ts.description 
-        }));
-      }
-
-      if (includeRequirements && requirements.length > 0) {
-        context.requirements = requirements.map(r => ({ 
-          code: r.code, 
-          title: r.title, 
-          type: r.type, 
-          content: r.content 
-        }));
-      }
-
-      if (includeProjectDescription && projectData?.description) {
-        context.projectDescription = projectData.description;
+      // Add selected context if available
+      if (selectedContext) {
+        if (selectedContext.projectMetadata && projectData) {
+          context.projectDescription = projectData.description;
+        }
+        // Add other selected context here as needed
       }
 
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-architect-critic`, {
@@ -338,71 +240,28 @@ export function AIArchitectDialog({
                 <div className="space-y-1 md:space-y-2">
                   <h3 className="font-medium text-xs md:text-sm">Context Options</h3>
                   
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="existingNodes" 
-                      checked={includeExistingNodes}
-                      onCheckedChange={(checked) => setIncludeExistingNodes(checked as boolean)}
-                    />
-                    <label htmlFor="existingNodes" className="text-xs md:text-sm cursor-pointer">
-                      Include Existing Nodes
-                    </label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="existingEdges" 
-                      checked={includeExistingEdges}
-                      onCheckedChange={(checked) => setIncludeExistingEdges(checked as boolean)}
-                    />
-                    <label htmlFor="existingEdges" className="text-xs md:text-sm cursor-pointer">
-                      Include Existing Edges
-                    </label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="standards" 
-                      checked={includeStandards}
-                      onCheckedChange={(checked) => setIncludeStandards(checked as boolean)}
-                    />
-                    <label htmlFor="standards" className="text-xs md:text-sm cursor-pointer">
-                      Include Standards ({standards.length})
-                    </label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="techStack" 
-                      checked={includeTechStack}
-                      onCheckedChange={(checked) => setIncludeTechStack(checked as boolean)}
-                    />
-                    <label htmlFor="techStack" className="text-xs md:text-sm cursor-pointer">
-                      Include Tech Stack ({techStacks.length})
-                    </label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="requirements" 
-                      checked={includeRequirements}
-                      onCheckedChange={(checked) => setIncludeRequirements(checked as boolean)}
-                    />
-                    <label htmlFor="requirements" className="text-xs md:text-sm cursor-pointer">
-                      Include Requirements ({requirements.length})
-                    </label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="projectDesc" 
-                      checked={includeProjectDescription}
-                      onCheckedChange={(checked) => setIncludeProjectDescription(checked as boolean)}
-                    />
-                    <label htmlFor="projectDesc" className="text-xs md:text-sm cursor-pointer">
-                      Include Project Description
-                    </label>
-                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsProjectSelectorOpen(true)}
+                    className="w-full justify-start text-xs"
+                  >
+                    <FileSearch className="h-3 w-3 mr-2" />
+                    Select Project Elements
+                  </Button>
+                  
+                  {selectedContext && (
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      {selectedContext.projectMetadata && <p>✓ Project metadata</p>}
+                      {selectedContext.artifacts.length > 0 && <p>✓ {selectedContext.artifacts.length} artifacts</p>}
+                      {selectedContext.requirements.length > 0 && <p>✓ {selectedContext.requirements.length} requirements</p>}
+                      {selectedContext.standards.length > 0 && <p>✓ {selectedContext.standards.length} standards</p>}
+                      {selectedContext.techStacks.length > 0 && <p>✓ {selectedContext.techStacks.length} tech stacks</p>}
+                      {selectedContext.canvasNodes.length > 0 && <p>✓ {selectedContext.canvasNodes.length} canvas nodes</p>}
+                      {selectedContext.canvasEdges.length > 0 && <p>✓ {selectedContext.canvasEdges.length} canvas edges</p>}
+                      {selectedContext.canvasLayers.length > 0 && <p>✓ {selectedContext.canvasLayers.length} canvas layers</p>}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1 md:space-y-2 pt-2 md:pt-4 border-t">
@@ -471,49 +330,28 @@ export function AIArchitectDialog({
                 <div className="space-y-1 md:space-y-2">
                   <h3 className="font-medium text-xs md:text-sm">Context Options</h3>
                   
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="critic-standards" 
-                      checked={includeStandards}
-                      onCheckedChange={(checked) => setIncludeStandards(checked as boolean)}
-                    />
-                    <label htmlFor="critic-standards" className="text-xs md:text-sm cursor-pointer">
-                      Include Standards ({standards.length})
-                    </label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="critic-techStack" 
-                      checked={includeTechStack}
-                      onCheckedChange={(checked) => setIncludeTechStack(checked as boolean)}
-                    />
-                    <label htmlFor="critic-techStack" className="text-xs md:text-sm cursor-pointer">
-                      Include Tech Stack ({techStacks.length})
-                    </label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="critic-requirements" 
-                      checked={includeRequirements}
-                      onCheckedChange={(checked) => setIncludeRequirements(checked as boolean)}
-                    />
-                    <label htmlFor="critic-requirements" className="text-xs md:text-sm cursor-pointer">
-                      Include Requirements ({requirements.length})
-                    </label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="critic-projectDesc" 
-                      checked={includeProjectDescription}
-                      onCheckedChange={(checked) => setIncludeProjectDescription(checked as boolean)}
-                    />
-                    <label htmlFor="critic-projectDesc" className="text-xs md:text-sm cursor-pointer">
-                      Include Project Description
-                    </label>
-                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsProjectSelectorOpen(true)}
+                    className="w-full justify-start text-xs"
+                  >
+                    <FileSearch className="h-3 w-3 mr-2" />
+                    Select Project Elements
+                  </Button>
+                  
+                  {selectedContext && (
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      {selectedContext.projectMetadata && <p>✓ Project metadata</p>}
+                      {selectedContext.artifacts.length > 0 && <p>✓ {selectedContext.artifacts.length} artifacts</p>}
+                      {selectedContext.requirements.length > 0 && <p>✓ {selectedContext.requirements.length} requirements</p>}
+                      {selectedContext.standards.length > 0 && <p>✓ {selectedContext.standards.length} standards</p>}
+                      {selectedContext.techStacks.length > 0 && <p>✓ {selectedContext.techStacks.length} tech stacks</p>}
+                      {selectedContext.canvasNodes.length > 0 && <p>✓ {selectedContext.canvasNodes.length} canvas nodes</p>}
+                      {selectedContext.canvasEdges.length > 0 && <p>✓ {selectedContext.canvasEdges.length} canvas edges</p>}
+                      {selectedContext.canvasLayers.length > 0 && <p>✓ {selectedContext.canvasLayers.length} canvas layers</p>}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -574,6 +412,21 @@ export function AIArchitectDialog({
           </TabsContent>
         </Tabs>
       </DialogContent>
+      
+      <ProjectSelector
+        projectId={projectId}
+        shareToken={shareToken}
+        open={isProjectSelectorOpen}
+        onClose={() => setIsProjectSelectorOpen(false)}
+        onConfirm={(selection) => {
+          setSelectedContext(selection);
+          toast({
+            title: "Context attached",
+            description: "Project elements attached to AI Architect",
+          });
+        }}
+        initialSelection={selectedContext || undefined}
+      />
     </Dialog>
   );
 }

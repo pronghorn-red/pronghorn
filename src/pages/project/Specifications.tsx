@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
 import { useShareToken } from "@/hooks/useShareToken";
 import { DownloadOptions } from "@/components/specifications/DownloadOptions";
+import { ProjectSelector, ProjectSelectionResult } from "@/components/project/ProjectSelector";
 
 export default function Specifications() {
   const { projectId } = useParams();
@@ -22,6 +23,8 @@ export default function Specifications() {
   const [rawData, setRawData] = useState<any>(null);
   const [projectName, setProjectName] = useState<string>("project");
   const [hasGeneratedSpec, setHasGeneratedSpec] = useState(false);
+  const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
+  const [selectedDownloadContent, setSelectedDownloadContent] = useState<ProjectSelectionResult | null>(null);
 
   // Load saved specification and project name
   useEffect(() => {
@@ -399,13 +402,36 @@ export default function Specifications() {
               </Button>
             </div>
 
-            {/* Download Options with Checkboxes */}
-            <DownloadOptions 
-              projectId={projectId || ""}
-              projectName={projectName}
-              shareToken={shareToken}
-              hasGeneratedSpec={hasGeneratedSpec}
-            />
+            {/* Download Options with Project Selector */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Download Specifications</CardTitle>
+                <CardDescription>Select project elements to include in your export</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsProjectSelectorOpen(true)}
+                  className="w-full justify-start"
+                >
+                  <FileJson className="h-4 w-4 mr-2" />
+                  Select Elements to Download
+                </Button>
+                
+                {selectedDownloadContent && (
+                  <div className="text-sm text-muted-foreground space-y-1 p-3 bg-muted rounded-md">
+                    <p className="font-medium">Selected elements:</p>
+                    {selectedDownloadContent.projectMetadata && <p>✓ Project metadata</p>}
+                    {selectedDownloadContent.artifacts.length > 0 && <p>✓ {selectedDownloadContent.artifacts.length} artifacts</p>}
+                    {selectedDownloadContent.chatSessions.length > 0 && <p>✓ {selectedDownloadContent.chatSessions.length} chat sessions</p>}
+                    {selectedDownloadContent.requirements.length > 0 && <p>✓ {selectedDownloadContent.requirements.length} requirements</p>}
+                    {selectedDownloadContent.standards.length > 0 && <p>✓ {selectedDownloadContent.standards.length} standards</p>}
+                    {selectedDownloadContent.techStacks.length > 0 && <p>✓ {selectedDownloadContent.techStacks.length} tech stacks</p>}
+                    {selectedDownloadContent.canvasNodes.length > 0 && <p>✓ {selectedDownloadContent.canvasNodes.length} canvas nodes</p>}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {!generatedSpec && !isGenerating && (
               <Card>
@@ -506,6 +532,18 @@ export default function Specifications() {
           </div>
         </main>
       </div>
+      
+      <ProjectSelector
+        projectId={projectId!}
+        shareToken={shareToken}
+        open={isProjectSelectorOpen}
+        onClose={() => setIsProjectSelectorOpen(false)}
+        onConfirm={(selection) => {
+          setSelectedDownloadContent(selection);
+          toast.success("Elements selected for download");
+        }}
+        initialSelection={selectedDownloadContent || undefined}
+      />
     </div>
   );
 }

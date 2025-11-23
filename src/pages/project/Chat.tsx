@@ -50,6 +50,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ProjectSelector, ProjectSelectionResult } from "@/components/project/ProjectSelector";
 
 export default function Chat() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -76,6 +77,8 @@ export default function Chat() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSummaryDialog, setShowSummaryDialog] = useState(false);
   const isMobile = useIsMobile();
+  const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
+  const [attachedContext, setAttachedContext] = useState<ProjectSelectionResult | null>(null);
 
   const {
     messages,
@@ -875,9 +878,18 @@ export default function Chat() {
                       rows={3}
                       disabled={isStreaming}
                     />
-                    <Button onClick={handleSendMessage} disabled={!inputMessage.trim() || isStreaming} size="lg">
-                      <Send className="h-4 w-4" />
-                    </Button>
+                    <div className="flex flex-col gap-2">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setIsProjectSelectorOpen(true)} 
+                        size="icon"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                      </Button>
+                      <Button onClick={handleSendMessage} disabled={!inputMessage.trim() || isStreaming} size="icon">
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </>
@@ -895,6 +907,19 @@ export default function Chat() {
           </div>
         </main>
       </div>
+
+      {/* Project Selector */}
+      <ProjectSelector
+        projectId={projectId!}
+        shareToken={shareToken}
+        open={isProjectSelectorOpen}
+        onClose={() => setIsProjectSelectorOpen(false)}
+        onConfirm={(selection) => {
+          setAttachedContext(selection);
+          toast.success("Project elements attached to chat context");
+        }}
+        initialSelection={attachedContext || undefined}
+      />
 
       {/* Summary Dialog */}
       <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
