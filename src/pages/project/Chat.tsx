@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useRealtimeChatSessions, useRealtimeChatMessages } from "@/hooks/useRealtimeChatSessions";
-import { Plus, Send, Trash2, Copy, Download, Sparkles, Paperclip, Archive, Edit2, ChevronLeft, ChevronRight, Save } from "lucide-react";
+import { Plus, Send, Trash2, Copy, Download, Sparkles, Paperclip, Archive, Edit2, ChevronLeft, ChevronRight, Save, Wrench, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,9 +23,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Chat() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -46,6 +53,9 @@ export default function Chat() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showSummaryDialog, setShowSummaryDialog] = useState(false);
+  const isMobile = useIsMobile();
 
   const { messages, addMessage, refresh: refreshMessages } = useRealtimeChatMessages(
     selectedSessionId || undefined,
@@ -119,7 +129,10 @@ export default function Chat() {
   };
 
   const handleSummarizeChat = async () => {
-    if (!selectedSessionId) return;
+    if (!selectedSessionId || isProcessing) return;
+
+    setIsProcessing(true);
+    toast.loading("Summarizing chat...", { id: "summarize" });
 
     try {
       const { data, error } = await supabase.functions.invoke("summarize-chat", {
@@ -127,15 +140,21 @@ export default function Chat() {
       });
 
       if (error) throw error;
-      toast.success("Chat summarized successfully");
+      toast.success("Chat summarized successfully", { id: "summarize" });
+      setShowSummaryDialog(true);
     } catch (error) {
       console.error("Error summarizing chat:", error);
-      toast.error("Failed to summarize chat");
+      toast.error("Failed to summarize chat", { id: "summarize" });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const handleSaveMessageAsArtifact = async (messageContent: string) => {
-    if (!projectId) return;
+    if (!projectId || isProcessing) return;
+
+    setIsProcessing(true);
+    toast.loading("Saving as artifact...", { id: "save-message" });
 
     try {
       const { data, error } = await supabase.rpc("insert_artifact_with_token", {
@@ -147,10 +166,12 @@ export default function Chat() {
       });
 
       if (error) throw error;
-      toast.success("Message saved as artifact");
+      toast.success("Message saved as artifact", { id: "save-message" });
     } catch (error) {
       console.error("Error saving artifact:", error);
-      toast.error("Failed to save artifact");
+      toast.error("Failed to save artifact", { id: "save-message" });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -314,13 +335,28 @@ export default function Chat() {
   };
 
   const handleDownloadChat = () => {
-    if (!selectedSessionId || messages.length === 0) {
+    if (!selectedSessionId || messages.length === 0 || isProcessing) {
       toast.error("No messages to download");
       return;
     }
 
+    setIsProcessing(true);
+    toast.loading("Preparing download...", { id: "download" });
+
     const session = sessions.find(s => s.id === selectedSessionId);
-    const chatContent = messages
+    
+    let chatContent = "";
+    
+    // Add summary if available
+    if (session?.ai_summary) {
+      chatContent += `=== CHAT SUMMARY ===\n\n`;
+      chatContent += `Title: ${session.ai_title || session.title || "Untitled"}\n\n`;
+      chatContent += `Summary: ${session.ai_summary}\n\n`;
+      chatContent += `===================\n\n`;
+    }
+    
+    // Add messages
+    chatContent += messages
       .map(m => `${m.role === "user" ? "User" : "Assistant"} (${format(new Date(m.created_at), "PPp")}):\n${m.content}\n`)
       .join("\n---\n\n");
 
@@ -333,14 +369,19 @@ export default function Chat() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success("Chat downloaded");
+    
+    toast.success("Chat downloaded", { id: "download" });
+    setIsProcessing(false);
   };
 
   const handleSaveFullChatAsArtifact = async () => {
-    if (!selectedSessionId || !projectId || messages.length === 0) {
+    if (!selectedSessionId || !projectId || messages.length === 0 || isProcessing) {
       toast.error("No messages to save");
       return;
     }
+
+    setIsProcessing(true);
+    toast.loading("Saving full chat as artifact...", { id: "save-full" });
 
     try {
       const session = sessions.find(s => s.id === selectedSessionId);
@@ -357,10 +398,45 @@ export default function Chat() {
       });
 
       if (error) throw error;
-      toast.success("Full chat saved as artifact");
+      toast.success("Full chat saved as artifact", { id: "save-full" });
     } catch (error) {
       console.error("Error saving chat as artifact:", error);
-      toast.error("Failed to save chat as artifact");
+      toast.error("Failed to save chat as artifact", { id: "save-full" });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSaveSummaryAsArtifact = async () => {
+    if (!selectedSessionId || !projectId || isProcessing) return;
+
+    const session = sessions.find(s => s.id === selectedSessionId);
+    if (!session?.ai_summary) {
+      toast.error("No summary available");
+      return;
+    }
+
+    setIsProcessing(true);
+    toast.loading("Saving summary as artifact...", { id: "save-summary" });
+
+    try {
+      const summaryContent = `# ${session.ai_title || session.title || "Chat Summary"}\n\n${session.ai_summary}`;
+
+      const { data, error } = await supabase.rpc("insert_artifact_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_content: summaryContent,
+        p_source_type: "chat_summary",
+        p_source_id: selectedSessionId,
+      });
+
+      if (error) throw error;
+      toast.success("Summary saved as artifact", { id: "save-summary" });
+    } catch (error) {
+      console.error("Error saving summary as artifact:", error);
+      toast.error("Failed to save summary as artifact", { id: "save-summary" });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -512,22 +588,61 @@ export default function Chat() {
           </div>
 
           {/* Chat Area */}
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-w-0">
             {selectedSessionId ? (
               <>
+                {/* Action Buttons */}
                 <div className="border-b border-border p-3 flex gap-2 justify-end">
-                  <Button variant="outline" size="sm" onClick={handleSummarizeChat}>
-                    <Sparkles className="h-3 w-3 mr-2" />
-                    Summarize
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleSaveFullChatAsArtifact}>
-                    <Archive className="h-3 w-3 mr-2" />
-                    Save as Artifact
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleDownloadChat}>
-                    <Download className="h-3 w-3 mr-2" />
-                    Download
-                  </Button>
+                  {!isMobile ? (
+                    <>
+                      {sessions.find(s => s.id === selectedSessionId)?.ai_summary && (
+                        <Button variant="outline" size="sm" onClick={() => setShowSummaryDialog(true)}>
+                          <Eye className="h-3 w-3 mr-2" />
+                          View Summary
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" onClick={handleSummarizeChat} disabled={isProcessing}>
+                        <Sparkles className="h-3 w-3 mr-2" />
+                        Summarize
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleSaveFullChatAsArtifact} disabled={isProcessing}>
+                        <Archive className="h-3 w-3 mr-2" />
+                        Save as Artifact
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleDownloadChat} disabled={isProcessing}>
+                        <Download className="h-3 w-3 mr-2" />
+                        Download
+                      </Button>
+                    </>
+                  ) : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" disabled={isProcessing}>
+                          <Wrench className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {sessions.find(s => s.id === selectedSessionId)?.ai_summary && (
+                          <DropdownMenuItem onClick={() => setShowSummaryDialog(true)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Summary
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={handleSummarizeChat}>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Summarize
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleSaveFullChatAsArtifact}>
+                          <Archive className="h-4 w-4 mr-2" />
+                          Save as Artifact
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleDownloadChat}>
+                          <Download className="h-4 w-4 mr-2" />
+                          Download
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
 
                 <ScrollArea className="flex-1 p-6">
@@ -636,6 +751,34 @@ export default function Chat() {
           </div>
         </main>
       </div>
+
+      {/* Summary Dialog */}
+      <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {sessions.find(s => s.id === selectedSessionId)?.ai_title || "Chat Summary"}
+            </DialogTitle>
+            <DialogDescription>
+              AI-generated summary of this conversation
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {sessions.find(s => s.id === selectedSessionId)?.ai_summary || "No summary available"}
+              </ReactMarkdown>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={handleSaveSummaryAsArtifact} disabled={isProcessing}>
+                <Archive className="h-4 w-4 mr-2" />
+                Save Summary as Artifact
+              </Button>
+              <Button onClick={() => setShowSummaryDialog(false)}>Close</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
