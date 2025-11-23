@@ -52,6 +52,53 @@ export type Database = {
           },
         ]
       }
+      artifacts: {
+        Row: {
+          ai_summary: string | null
+          ai_title: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          project_id: string
+          source_id: string | null
+          source_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_summary?: string | null
+          ai_title?: string | null
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          project_id: string
+          source_id?: string | null
+          source_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_summary?: string | null
+          ai_title?: string | null
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          project_id?: string
+          source_id?: string | null
+          source_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "artifacts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_findings: {
         Row: {
           audit_run_id: string
@@ -310,6 +357,82 @@ export type Database = {
           },
         ]
       }
+      chat_messages: {
+        Row: {
+          chat_session_id: string
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          role: string
+        }
+        Insert: {
+          chat_session_id: string
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          role: string
+        }
+        Update: {
+          chat_session_id?: string
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_chat_session_id_fkey"
+            columns: ["chat_session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_sessions: {
+        Row: {
+          ai_summary: string | null
+          ai_title: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          project_id: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_summary?: string | null
+          ai_title?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          project_id: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_summary?: string | null
+          ai_title?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          project_id?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
@@ -485,14 +608,18 @@ export type Database = {
           github_branch: string | null
           github_repo: string | null
           id: string
+          max_tokens: number | null
           name: string
           org_id: string
           organization: string | null
           priority: string | null
           scope: string | null
+          selected_model: string | null
           share_token: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
+          thinking_budget: number | null
+          thinking_enabled: boolean | null
           timeline_end: string | null
           timeline_start: string | null
           updated_at: string
@@ -505,14 +632,18 @@ export type Database = {
           github_branch?: string | null
           github_repo?: string | null
           id?: string
+          max_tokens?: number | null
           name: string
           org_id: string
           organization?: string | null
           priority?: string | null
           scope?: string | null
+          selected_model?: string | null
           share_token?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           tags?: string[] | null
+          thinking_budget?: number | null
+          thinking_enabled?: boolean | null
           timeline_end?: string | null
           timeline_start?: string | null
           updated_at?: string
@@ -525,14 +656,18 @@ export type Database = {
           github_branch?: string | null
           github_repo?: string | null
           id?: string
+          max_tokens?: number | null
           name?: string
           org_id?: string
           organization?: string | null
           priority?: string | null
           scope?: string | null
+          selected_model?: string | null
           share_token?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           tags?: string[] | null
+          thinking_budget?: number | null
+          thinking_enabled?: boolean | null
           timeline_end?: string | null
           timeline_start?: string | null
           updated_at?: string
@@ -910,6 +1045,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_artifact_with_token: {
+        Args: { p_id: string; p_token: string }
+        Returns: undefined
+      }
       delete_canvas_edge_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
@@ -919,6 +1058,10 @@ export type Database = {
         Returns: undefined
       }
       delete_canvas_node_with_token: {
+        Args: { p_id: string; p_token: string }
+        Returns: undefined
+      }
+      delete_chat_session_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
       }
@@ -945,6 +1088,27 @@ export type Database = {
       generate_requirement_code: {
         Args: { p_parent_id: string; p_project_id: string; p_type: string }
         Returns: string
+      }
+      get_artifacts_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          project_id: string
+          source_id: string | null
+          source_type: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "artifacts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_canvas_edges_with_token: {
         Args: { p_project_id: string; p_token: string }
@@ -997,6 +1161,42 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "canvas_nodes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_chat_messages_with_token: {
+        Args: { p_chat_session_id: string; p_token: string }
+        Returns: {
+          chat_session_id: string
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          role: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "chat_messages"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_chat_sessions_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          project_id: string
+          title: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "chat_sessions"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -1058,14 +1258,18 @@ export type Database = {
           github_branch: string | null
           github_repo: string | null
           id: string
+          max_tokens: number | null
           name: string
           org_id: string
           organization: string | null
           priority: string | null
           scope: string | null
+          selected_model: string | null
           share_token: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
+          thinking_budget: number | null
+          thinking_enabled: boolean | null
           timeline_end: string | null
           timeline_start: string | null
           updated_at: string
@@ -1121,6 +1325,74 @@ export type Database = {
         }
         Returns: boolean
       }
+      insert_artifact_with_token: {
+        Args: {
+          p_content: string
+          p_project_id: string
+          p_source_id?: string
+          p_source_type?: string
+          p_token: string
+        }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          project_id: string
+          source_id: string | null
+          source_type: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_chat_message_with_token: {
+        Args: {
+          p_chat_session_id: string
+          p_content: string
+          p_role: string
+          p_token: string
+        }
+        Returns: {
+          chat_session_id: string
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          role: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chat_messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_chat_session_with_token: {
+        Args: { p_project_id: string; p_title?: string; p_token: string }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          project_id: string
+          title: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chat_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       insert_project_standard_with_token: {
         Args: { p_project_id: string; p_standard_id: string; p_token: string }
         Returns: {
@@ -1169,14 +1441,18 @@ export type Database = {
           github_branch: string | null
           github_repo: string | null
           id: string
+          max_tokens: number | null
           name: string
           org_id: string
           organization: string | null
           priority: string | null
           scope: string | null
+          selected_model: string | null
           share_token: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
+          thinking_budget: number | null
+          thinking_enabled: boolean | null
           timeline_end: string | null
           timeline_start: string | null
           updated_at: string
@@ -1250,14 +1526,18 @@ export type Database = {
           github_branch: string | null
           github_repo: string | null
           id: string
+          max_tokens: number | null
           name: string
           org_id: string
           organization: string | null
           priority: string | null
           scope: string | null
+          selected_model: string | null
           share_token: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
+          thinking_budget: number | null
+          thinking_enabled: boolean | null
           timeline_end: string | null
           timeline_start: string | null
           updated_at: string
@@ -1292,6 +1572,58 @@ export type Database = {
         }
       }
       set_share_token: { Args: { token: string }; Returns: undefined }
+      update_artifact_with_token: {
+        Args: {
+          p_ai_summary?: string
+          p_ai_title?: string
+          p_content?: string
+          p_id: string
+          p_token: string
+        }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          project_id: string
+          source_id: string | null
+          source_type: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_chat_session_with_token: {
+        Args: {
+          p_ai_summary?: string
+          p_ai_title?: string
+          p_id: string
+          p_title?: string
+          p_token: string
+        }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          project_id: string
+          title: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chat_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_project_with_token:
         | {
             Args: {
@@ -1316,14 +1648,18 @@ export type Database = {
               github_branch: string | null
               github_repo: string | null
               id: string
+              max_tokens: number | null
               name: string
               org_id: string
               organization: string | null
               priority: string | null
               scope: string | null
+              selected_model: string | null
               share_token: string | null
               status: Database["public"]["Enums"]["project_status"]
               tags: string[] | null
+              thinking_budget: number | null
+              thinking_enabled: boolean | null
               timeline_end: string | null
               timeline_start: string | null
               updated_at: string
@@ -1351,14 +1687,18 @@ export type Database = {
               github_branch: string | null
               github_repo: string | null
               id: string
+              max_tokens: number | null
               name: string
               org_id: string
               organization: string | null
               priority: string | null
               scope: string | null
+              selected_model: string | null
               share_token: string | null
               status: Database["public"]["Enums"]["project_status"]
               tags: string[] | null
+              thinking_budget: number | null
+              thinking_enabled: boolean | null
               timeline_end: string | null
               timeline_start: string | null
               updated_at: string

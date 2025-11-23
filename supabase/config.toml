@@ -24,3 +24,12 @@ verify_jwt = false
 
 [functions.ai-architect-critic]
 verify_jwt = false
+
+[functions.chat-stream-gemini]
+verify_jwt = false
+
+[functions.chat-stream-anthropic]
+verify_jwt = false
+
+[functions.chat-stream-xai]
+verify_jwt = false

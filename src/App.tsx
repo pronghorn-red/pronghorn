@@ -15,6 +15,9 @@ import ProjectSettings from "./pages/project/ProjectSettings";
 import Specifications from "./pages/project/Specifications";
 import NotFound from "./pages/NotFound";
 
+import Artifacts from "./pages/project/Artifacts";
+import Chat from "./pages/project/Chat";
+
 const App = () => (
   <Routes>
     <Route path="/" element={<Landing />} />
@@ -26,6 +29,9 @@ const App = () => (
     <Route path="/settings/profile" element={<Settings />} />
     
     {/* Project Routes */}
+    <Route path="/project/:projectId/settings" element={<ProjectSettings />} />
+    <Route path="/project/:projectId/artifacts" element={<Artifacts />} />
+    <Route path="/project/:projectId/chat" element={<Chat />} />
     <Route path="/project/:projectId/requirements" element={<Requirements />} />
     <Route path="/project/:projectId/standards" element={<ProjectStandards />} />
     <Route path="/project/:projectId/canvas" element={<Canvas />} />
@@ -33,7 +39,6 @@ const App = () => (
     <Route path="/project/:projectId/build" element={<Build />} />
     <Route path="/project/:projectId/repository" element={<Repository />} />
     <Route path="/project/:projectId/specifications" element={<Specifications />} />
-    <Route path="/project/:projectId/settings" element={<ProjectSettings />} />
     
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />

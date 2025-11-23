@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useAuth } from "@/contexts/AuthContext";
 
+import { Switch } from "@/components/ui/switch";
+
 export default function ProjectSettings() {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
@@ -30,6 +32,10 @@ export default function ProjectSettings() {
   const [timelineEnd, setTimelineEnd] = useState("");
   const [priority, setPriority] = useState("medium");
   const [tags, setTags] = useState("");
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
+  const [maxTokens, setMaxTokens] = useState(32768);
+  const [thinkingEnabled, setThinkingEnabled] = useState(false);
+  const [thinkingBudget, setThinkingBudget] = useState(-1);
 
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
@@ -57,6 +63,10 @@ export default function ProjectSettings() {
       setTimelineEnd(project.timeline_end || "");
       setPriority(project.priority || "medium");
       setTags(project.tags?.join(", ") || "");
+      setSelectedModel(project.selected_model || "gemini-2.5-flash");
+      setMaxTokens(project.max_tokens || 32768);
+      setThinkingEnabled(project.thinking_enabled || false);
+      setThinkingBudget(project.thinking_budget || -1);
     }
   }, [project]);
 
@@ -78,6 +88,20 @@ export default function ProjectSettings() {
       });
       
       if (error) throw error;
+      
+      // Also update LLM settings
+      const { error: updateError } = await supabase
+        .from('projects')
+        .update({
+          selected_model: selectedModel,
+          max_tokens: maxTokens,
+          thinking_enabled: thinkingEnabled,
+          thinking_budget: thinkingBudget,
+        })
+        .eq('id', projectId);
+        
+      if (updateError) throw updateError;
+      
       return data;
     },
     onSuccess: () => {
@@ -329,6 +353,125 @@ export default function ProjectSettings() {
                       disabled={updateProjectMutation.isPending}
                     >
                       {updateProjectMutation.isPending ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* LLM Configuration */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>LLM Configuration</CardTitle>
+                    <CardDescription>Configure AI model settings for chat</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="model-select">Model</Label>
+                      <Select value={selectedModel} onValueChange={setSelectedModel}>
+                        <SelectTrigger id="model-select">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash (Default)</SelectItem>
+                          <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro (Advanced)</SelectItem>
+                          <SelectItem value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Fast)</SelectItem>
+                          <SelectItem value="claude-sonnet-4-5">Claude Sonnet 4.5</SelectItem>
+                          <SelectItem value="claude-haiku-4-5">Claude Haiku 4.5</SelectItem>
+                          <SelectItem value="claude-opus-4-1">Claude Opus 4.1</SelectItem>
+                          <SelectItem value="grok-4-fast-reasoning">Grok 4 Fast Reasoning</SelectItem>
+                          <SelectItem value="grok-4-fast-non-reasoning">Grok 4 Fast Non-Reasoning</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Flash: Fast and efficient • Pro: Enhanced reasoning • Lite: Fastest and cheapest
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="max-tokens-select">Response Length</Label>
+                      <Select value={maxTokens.toString()} onValueChange={(val) => setMaxTokens(Number(val))}>
+                        <SelectTrigger id="max-tokens-select">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2048">Short (2,048 tokens)</SelectItem>
+                          <SelectItem value="8192">Medium (8,192 tokens)</SelectItem>
+                          <SelectItem value="16384">Large (16,384 tokens)</SelectItem>
+                          <SelectItem value="32768">XL (32,768 tokens)</SelectItem>
+                          {selectedModel === "claude-opus-4-1" ? (
+                            <SelectItem value="32000">2XL (32,000 tokens)</SelectItem>
+                          ) : selectedModel.startsWith("claude-") ? (
+                            <SelectItem value="64000">2XL (64,000 tokens)</SelectItem>
+                          ) : (
+                            <SelectItem value="65535">2XL (65,535 tokens)</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Longer responses may take more time to generate
+                      </p>
+                    </div>
+
+                    {selectedModel === "gemini-2.5-flash" || selectedModel === "gemini-2.5-flash-lite" ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="thinking-enabled">Thinking Enabled</Label>
+                          <Switch
+                            id="thinking-enabled"
+                            checked={thinkingEnabled}
+                            onCheckedChange={setThinkingEnabled}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Enable model thinking for complex reasoning
+                        </p>
+                        
+                        {thinkingEnabled && (
+                          <div className="space-y-2 mt-3">
+                            <Label htmlFor="thinking-budget-select">Thinking Budget</Label>
+                            <Select 
+                              value={thinkingBudget.toString()} 
+                              onValueChange={(val) => setThinkingBudget(Number(val))}
+                            >
+                              <SelectTrigger id="thinking-budget-select">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="-1">Fully Activated (Auto)</SelectItem>
+                                {selectedModel === "gemini-2.5-flash" && (
+                                  <>
+                                    <SelectItem value="1024">Small (1,024 tokens)</SelectItem>
+                                    <SelectItem value="4096">Medium (4,096 tokens)</SelectItem>
+                                    <SelectItem value="8192">Large (8,192 tokens)</SelectItem>
+                                    <SelectItem value="16384">XL (16,384 tokens)</SelectItem>
+                                    <SelectItem value="24576">Max (24,576 tokens)</SelectItem>
+                                  </>
+                                )}
+                                {selectedModel === "gemini-2.5-flash-lite" && (
+                                  <>
+                                    <SelectItem value="512">Minimum (512 tokens)</SelectItem>
+                                    <SelectItem value="2048">Small (2,048 tokens)</SelectItem>
+                                    <SelectItem value="4096">Medium (4,096 tokens)</SelectItem>
+                                    <SelectItem value="8192">Large (8,192 tokens)</SelectItem>
+                                    <SelectItem value="16384">XL (16,384 tokens)</SelectItem>
+                                    <SelectItem value="24576">Max (24,576 tokens)</SelectItem>
+                                  </>
+                                )}
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                              {selectedModel === "gemini-2.5-flash" && "Range: 0-24,576 tokens"}
+                              {selectedModel === "gemini-2.5-flash-lite" && "Range: 512-24,576 tokens"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+
+                    <Button 
+                      onClick={() => updateProjectMutation.mutate()}
+                      disabled={updateProjectMutation.isPending}
+                    >
+                      {updateProjectMutation.isPending ? 'Saving...' : 'Save LLM Settings'}
                     </Button>
                   </CardContent>
                 </Card>
