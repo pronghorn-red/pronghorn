@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useRealtimeChatSessions, useRealtimeChatMessages } from "@/hooks/useRealtimeChatSessions";
-import { Plus, Send, Trash2, Copy, Download, Sparkles, Paperclip, Archive } from "lucide-react";
+import { Plus, Send, Trash2, Copy, Download, Sparkles, Paperclip, Archive, Edit2, ChevronLeft, ChevronRight, Save } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,6 +43,9 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isAttachDialogOpen, setIsAttachDialogOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
 
   const { messages, addMessage, refresh: refreshMessages } = useRealtimeChatMessages(
     selectedSessionId || undefined,
@@ -333,6 +336,60 @@ export default function Chat() {
     toast.success("Chat downloaded");
   };
 
+  const handleSaveFullChatAsArtifact = async () => {
+    if (!selectedSessionId || !projectId || messages.length === 0) {
+      toast.error("No messages to save");
+      return;
+    }
+
+    try {
+      const session = sessions.find(s => s.id === selectedSessionId);
+      const chatContent = messages
+        .map(m => `**${m.role === "user" ? "User" : "Assistant"}** (${format(new Date(m.created_at), "PPp")}):\n\n${m.content}\n`)
+        .join("\n---\n\n");
+
+      const { data, error } = await supabase.rpc("insert_artifact_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_content: chatContent,
+        p_source_type: "chat_session",
+        p_source_id: selectedSessionId,
+      });
+
+      if (error) throw error;
+      toast.success("Full chat saved as artifact");
+    } catch (error) {
+      console.error("Error saving chat as artifact:", error);
+      toast.error("Failed to save chat as artifact");
+    }
+  };
+
+  const handleStartRename = (sessionId: string, currentTitle: string) => {
+    setEditingSessionId(sessionId);
+    setEditingTitle(currentTitle || "");
+  };
+
+  const handleSaveRename = async (sessionId: string) => {
+    if (!editingTitle.trim()) {
+      setEditingSessionId(null);
+      return;
+    }
+
+    try {
+      await updateSession(sessionId, editingTitle.trim());
+      setEditingSessionId(null);
+      toast.success("Chat renamed");
+    } catch (error) {
+      console.error("Error renaming chat:", error);
+      toast.error("Failed to rename chat");
+    }
+  };
+
+  const handleCancelRename = () => {
+    setEditingSessionId(null);
+    setEditingTitle("");
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
@@ -342,50 +399,116 @@ export default function Chat() {
 
         <main className="flex-1 w-full flex">
           {/* Sessions Sidebar */}
-          <div className="w-64 border-r border-border bg-card p-4 space-y-4">
-            <Button onClick={handleNewChat} className="w-full">
-              <Plus className="h-4 w-4 mr-2" />
-              New Chat
-            </Button>
+          <div 
+            className={`border-r border-border bg-card transition-all duration-300 ${
+              isSidebarCollapsed ? "w-12" : "w-64"
+            }`}
+          >
+            {/* Collapse Toggle */}
+            <div className="flex justify-end p-2 border-b border-border">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              >
+                {isSidebarCollapsed ? (
+                  <ChevronRight className="h-4 w-4" />
+                ) : (
+                  <ChevronLeft className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
 
-            <ScrollArea className="h-[calc(100vh-200px)]">
-              <div className="space-y-2">
-                {sessions.map((session) => (
-                  <Card
-                    key={session.id}
-                    className={`p-3 cursor-pointer hover:bg-muted transition-colors ${
-                      selectedSessionId === session.id ? "bg-muted" : ""
-                    }`}
-                    onClick={() => setSelectedSessionId(session.id)}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {session.ai_title || session.title || "New Chat"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(session.updated_at), "MMM d, h:mm a")}
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 flex-shrink-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteSession(session.id);
-                          if (selectedSessionId === session.id) {
-                            setSelectedSessionId(null);
-                          }
-                        }}
+            {!isSidebarCollapsed && (
+              <div className="p-4 space-y-4">
+                <Button onClick={handleNewChat} className="w-full">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Chat
+                </Button>
+
+                <ScrollArea className="h-[calc(100vh-200px)]">
+                  <div className="space-y-2">
+                    {sessions.map((session) => (
+                      <Card
+                        key={session.id}
+                        className={`p-3 cursor-pointer hover:bg-muted transition-colors ${
+                          selectedSessionId === session.id ? "bg-muted" : ""
+                        }`}
+                        onClick={() => setSelectedSessionId(session.id)}
                       >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            {editingSessionId === session.id ? (
+                              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                <Input
+                                  value={editingTitle}
+                                  onChange={(e) => setEditingTitle(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      handleSaveRename(session.id);
+                                    } else if (e.key === "Escape") {
+                                      handleCancelRename();
+                                    }
+                                  }}
+                                  className="h-6 text-sm"
+                                  autoFocus
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => handleSaveRename(session.id)}
+                                >
+                                  <Save className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <p className="text-sm font-medium truncate">
+                                {session.ai_title || session.title || "New Chat"}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              {format(new Date(session.updated_at), "MMM d, h:mm a")}
+                            </p>
+                          </div>
+                          <div className="flex gap-1 flex-shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartRename(
+                                  session.id,
+                                  session.ai_title || session.title || ""
+                                );
+                              }}
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteSession(session.id);
+                                if (selectedSessionId === session.id) {
+                                  setSelectedSessionId(null);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </ScrollArea>
               </div>
-            </ScrollArea>
+            )}
           </div>
 
           {/* Chat Area */}
@@ -396,6 +519,10 @@ export default function Chat() {
                   <Button variant="outline" size="sm" onClick={handleSummarizeChat}>
                     <Sparkles className="h-3 w-3 mr-2" />
                     Summarize
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleSaveFullChatAsArtifact}>
+                    <Archive className="h-3 w-3 mr-2" />
+                    Save as Artifact
                   </Button>
                   <Button variant="outline" size="sm" onClick={handleDownloadChat}>
                     <Download className="h-3 w-3 mr-2" />
