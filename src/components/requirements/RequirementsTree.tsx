@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronRight, ChevronDown, Plus, Trash2, Edit2, FileText, ListTodo, CheckSquare, FileCheck, Sparkles, Link as LinkIcon, Loader2, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,7 @@ interface RequirementsTreeProps {
   requirements: Requirement[];
   projectId: string;
   shareToken?: string | null;
+  expandAll?: boolean;
   onNodeUpdate?: (id: string, updates: Partial<Requirement>) => void;
   onNodeDelete?: (id: string) => void;
   onNodeAdd?: (parentId: string | null, type: RequirementType) => void;
@@ -47,8 +48,14 @@ function getNextType(type: RequirementType): RequirementType | null {
   return (map[type] as RequirementType) || null;
 }
 
-function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpdate, onDelete, onAdd, onExpand, onLinkStandard }: any) {
+function RequirementNode({ requirement, level = 0, projectId, shareToken, expandAll, onUpdate, onDelete, onAdd, onExpand, onLinkStandard }: any) {
   const [isExpanded, setIsExpanded] = useState(level < 2);
+
+  useEffect(() => {
+    if (expandAll !== undefined) {
+      setIsExpanded(expandAll);
+    }
+  }, [expandAll]);
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(requirement.title);
   const [editContent, setEditContent] = useState(requirement.content || "");
@@ -287,7 +294,7 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, onUpda
            </div>
          </div>
       )}
-      {isExpanded && hasChildren && <div>{requirement.children!.map((child: any) => <RequirementNode key={child.id} requirement={child} level={level + 1} projectId={projectId} shareToken={shareToken} onUpdate={onUpdate} onDelete={onDelete} onAdd={onAdd} onExpand={onExpand} onLinkStandard={onLinkStandard} />)}</div>}
+      {isExpanded && hasChildren && <div>{requirement.children!.map((child: any) => <RequirementNode key={child.id} requirement={child} level={level + 1} projectId={projectId} shareToken={shareToken} expandAll={expandAll} onUpdate={onUpdate} onDelete={onDelete} onAdd={onAdd} onExpand={onExpand} onLinkStandard={onLinkStandard} />)}</div>}
     </div>
   );
 }
@@ -302,6 +309,7 @@ export function RequirementsTree(props: RequirementsTreeProps) {
           level={0}
           projectId={props.projectId}
           shareToken={props.shareToken}
+          expandAll={props.expandAll}
           onUpdate={props.onNodeUpdate}
           onDelete={props.onNodeDelete}
           onAdd={props.onNodeAdd}

@@ -25,6 +25,7 @@ export default function Requirements() {
   );
   const [showAIDialog, setShowAIDialog] = useState(false);
   const [linkReq, setLinkReq] = useState<{ id: string; title: string } | null>(null);
+  const [expandAll, setExpandAll] = useState<boolean | undefined>(undefined);
 
   // Log projectId for debugging
   console.log("Requirements page - projectId:", projectId);
@@ -89,6 +90,13 @@ export default function Requirements() {
                 <Button variant="outline" onClick={() => setShowAIDialog(true)} className="flex-1 md:flex-none text-sm">
                   AI Decompose
                 </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setExpandAll(prev => prev === true ? false : true)} 
+                  className="flex-1 md:flex-none text-sm"
+                >
+                  {expandAll ? "Collapse All" : "Expand All"}
+                </Button>
                 <Button onClick={() => addRequirement(null, "EPIC", "New Epic")} className="flex-1 md:flex-none text-sm">
                   <Plus className="h-3 w-3 md:h-4 md:w-4 mr-2" />
                   Add Epic
@@ -101,6 +109,7 @@ export default function Requirements() {
                   requirements={requirements} 
                   projectId={projectId!} 
                   shareToken={shareToken}
+                  expandAll={expandAll}
                   onNodeUpdate={(id, u) => {
                     updateRequirement(id, u).then(() => toast.success("Updated"));
                   }} 
