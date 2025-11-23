@@ -613,14 +613,14 @@ function CanvasFlow() {
           };
 
           // Generate SVG
-          let svgDataUrl = await toSvg(viewport, { 
+          const svgDataUrl = await toSvg(viewport, { 
             backgroundColor: '#ffffff',
           });
           
-          // Parse and modify the SVG to set proper viewBox
-          const svgData = atob(svgDataUrl.split(',')[1]);
+          // Extract SVG content from data URL (it's URL-encoded, not base64)
+          const svgContent = decodeURIComponent(svgDataUrl.split(',')[1]);
           const parser = new DOMParser();
-          const svgDoc = parser.parseFromString(svgData, 'image/svg+xml');
+          const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
           const svgElement = svgDoc.documentElement;
           
           // Set viewBox to crop to bounds
@@ -631,7 +631,7 @@ function CanvasFlow() {
           // Convert back to data URL
           const serializer = new XMLSerializer();
           const modifiedSvg = serializer.serializeToString(svgElement);
-          const finalDataUrl = 'data:image/svg+xml;base64,' + btoa(modifiedSvg);
+          const finalDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(modifiedSvg);
           
           const link = document.createElement('a');
           link.download = 'canvas-snapshot.svg';
