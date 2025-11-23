@@ -11,7 +11,49 @@ serve(async (req) => {
   }
 
   try {
-    const { systemPrompt, userPrompt, messages = [], tools = [], model = "gemini-2.5-flash", maxOutputTokens = 32768, thinkingEnabled = false, thinkingBudget = 0 } = await req.json();
+    const { 
+      systemPrompt, 
+      userPrompt, 
+      messages = [], 
+      tools = [], 
+      model = "gemini-2.5-flash", 
+      maxOutputTokens = 32768, 
+      thinkingEnabled = false, 
+      thinkingBudget = 0,
+      attachedContext = null,
+      projectId = null,
+      shareToken = null
+    } = await req.json();
+    
+    // Build enriched system prompt with attached context
+    let enrichedSystemPrompt = systemPrompt;
+    
+    if (attachedContext && projectId) {
+      const contextParts: string[] = [];
+      
+      // Add project metadata if included
+      if (attachedContext.projectMetadata) {
+        contextParts.push("PROJECT METADATA: Will be included in context");
+      }
+      
+      // Add counts for other attached elements
+      if (attachedContext.requirements?.length > 0) {
+        contextParts.push(`REQUIREMENTS: ${attachedContext.requirements.length} requirements attached`);
+      }
+      if (attachedContext.standards?.length > 0) {
+        contextParts.push(`STANDARDS: ${attachedContext.standards.length} standards attached`);
+      }
+      if (attachedContext.artifacts?.length > 0) {
+        contextParts.push(`ARTIFACTS: ${attachedContext.artifacts.length} artifacts attached`);
+      }
+      if (attachedContext.canvasNodes?.length > 0) {
+        contextParts.push(`CANVAS: ${attachedContext.canvasNodes.length} nodes attached`);
+      }
+      
+      if (contextParts.length > 0) {
+        enrichedSystemPrompt = `${systemPrompt}\n\nATTACHED PROJECT CONTEXT:\n${contextParts.join('\n')}`;
+      }
+    }
     
     // Ensure maxOutputTokens is a valid number
     let validMaxTokens = 32768;
@@ -33,7 +75,7 @@ serve(async (req) => {
       throw new Error("GEMINI_API_KEY is not configured");
     }
 
-    console.log("Running agent with system prompt:", systemPrompt.substring(0, 50));
+    console.log("Running agent with system prompt:", enrichedSystemPrompt.substring(0, 50));
     console.log("Tool instances:", tools);
 
     // Execute tools if any
@@ -154,10 +196,10 @@ serve(async (req) => {
       }));
 
       // Optionally prepend system prompt as its own turn
-      if (systemPrompt) {
+      if (enrichedSystemPrompt) {
         contentsPayload.push({
           role: "user",
-          parts: [{ text: systemPrompt }],
+          parts: [{ text: enrichedSystemPrompt }],
         });
       }
 
@@ -168,7 +210,7 @@ serve(async (req) => {
         {
           role: "user",
           parts: [
-            { text: `${systemPrompt}\n\n${finalPrompt}`.trim() }
+            { text: `${enrichedSystemPrompt}\n\n${finalPrompt}`.trim() }
           ]
         }
       ];

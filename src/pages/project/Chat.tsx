@@ -4,7 +4,7 @@ import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useRealtimeChatSessions, useRealtimeChatMessages, ChatMessage } from "@/hooks/useRealtimeChatSessions";
 import {
@@ -389,6 +389,9 @@ export default function Chat() {
           maxOutputTokens: project?.max_tokens || 32768,
           thinkingEnabled: project?.thinking_enabled || false,
           thinkingBudget: project?.thinking_budget || -1,
+          attachedContext: attachedContext || undefined,
+          projectId: projectId,
+          shareToken: shareToken,
         }),
       });
 
@@ -862,7 +865,38 @@ export default function Chat() {
                   </div>
                 </ScrollArea>
 
-                <div className="border-t border-border p-4 flex-shrink-0">
+                <div className="border-t border-border p-4 flex-shrink-0 space-y-3">
+                  {/* Attached Context Display */}
+                  {attachedContext && (
+                    <Card className="bg-muted/50">
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <p className="text-xs font-medium mb-2">Attached Context:</p>
+                            <div className="text-xs text-muted-foreground space-y-1">
+                              {attachedContext.projectMetadata && <p>✓ Project metadata</p>}
+                              {attachedContext.artifacts.length > 0 && <p>✓ {attachedContext.artifacts.length} artifacts</p>}
+                              {attachedContext.chatSessions.length > 0 && <p>✓ {attachedContext.chatSessions.length} chat sessions</p>}
+                              {attachedContext.requirements.length > 0 && <p>✓ {attachedContext.requirements.length} requirements</p>}
+                              {attachedContext.standards.length > 0 && <p>✓ {attachedContext.standards.length} standards</p>}
+                              {attachedContext.techStacks.length > 0 && <p>✓ {attachedContext.techStacks.length} tech stacks</p>}
+                              {attachedContext.canvasNodes.length > 0 && <p>✓ {attachedContext.canvasNodes.length} canvas nodes</p>}
+                              {attachedContext.canvasEdges.length > 0 && <p>✓ {attachedContext.canvasEdges.length} canvas edges</p>}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => setAttachedContext(null)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  
                   <div className="flex gap-2">
                     <Textarea
                       value={inputMessage}

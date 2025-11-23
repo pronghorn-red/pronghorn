@@ -18,7 +18,10 @@ serve(async (req) => {
       messages = [],
       tools = [], 
       model = "grok-4-fast-non-reasoning",
-      maxOutputTokens = 16384 
+      maxOutputTokens = 16384,
+      attachedContext = null,
+      projectId = null,
+      shareToken = null
     } = await req.json();
 
     const XAI_API_KEY = Deno.env.get('XAI_API_KEY');
@@ -26,8 +29,35 @@ serve(async (req) => {
       throw new Error('XAI_API_KEY is not configured');
     }
 
+    // Build enriched system prompt with attached context
+    let enrichedSystemPrompt = systemPrompt;
+    
+    if (attachedContext && projectId) {
+      const contextParts: string[] = [];
+      
+      if (attachedContext.projectMetadata) {
+        contextParts.push("PROJECT METADATA: Will be included in context");
+      }
+      if (attachedContext.requirements?.length > 0) {
+        contextParts.push(`REQUIREMENTS: ${attachedContext.requirements.length} requirements attached`);
+      }
+      if (attachedContext.standards?.length > 0) {
+        contextParts.push(`STANDARDS: ${attachedContext.standards.length} standards attached`);
+      }
+      if (attachedContext.artifacts?.length > 0) {
+        contextParts.push(`ARTIFACTS: ${attachedContext.artifacts.length} artifacts attached`);
+      }
+      if (attachedContext.canvasNodes?.length > 0) {
+        contextParts.push(`CANVAS: ${attachedContext.canvasNodes.length} nodes attached`);
+      }
+      
+      if (contextParts.length > 0) {
+        enrichedSystemPrompt = `${systemPrompt}\n\nATTACHED PROJECT CONTEXT:\n${contextParts.join('\n')}`;
+      }
+    }
+
     console.log(`Using xAI model: ${model}`);
-    console.log(`System prompt length: ${systemPrompt.length}`);
+    console.log(`System prompt length: ${enrichedSystemPrompt.length}`);
     console.log(`User prompt length: ${userPrompt.length}`);
     console.log(`Tools requested: ${tools.length}`);
 
@@ -110,14 +140,14 @@ serve(async (req) => {
         model,
         messages: (Array.isArray(messages) && messages.length > 0)
           ? [
-              ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+              ...(enrichedSystemPrompt ? [{ role: 'system', content: enrichedSystemPrompt }] : []),
               ...messages.map((m: any) => ({
                 role: m.role === 'assistant' ? 'assistant' : 'user',
                 content: m.content,
               })),
             ]
           : [
-              { role: 'system', content: systemPrompt },
+              { role: 'system', content: enrichedSystemPrompt },
               { role: 'user', content: finalPrompt },
             ],
         max_tokens: maxOutputTokens,
