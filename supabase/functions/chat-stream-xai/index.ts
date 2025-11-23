@@ -20,6 +20,7 @@ serve(async (req) => {
       model = "grok-4-fast-non-reasoning",
       maxOutputTokens = 16384,
       attachedContext = null,
+      attachedContextPayload = null,
       projectId = null,
       shareToken = null
     } = await req.json();
@@ -32,27 +33,46 @@ serve(async (req) => {
     // Build enriched system prompt with attached context
     let enrichedSystemPrompt = systemPrompt;
     
-    if (attachedContext && projectId) {
+    if ((attachedContext || attachedContextPayload) && projectId) {
       const contextParts: string[] = [];
-      
-      if (attachedContext.projectMetadata) {
-        contextParts.push("PROJECT METADATA: Will be included in context");
+      const selection = attachedContextPayload?.selection || attachedContext;
+
+      if (selection?.projectMetadata || attachedContextPayload?.project) {
+        contextParts.push("PROJECT METADATA: included");
       }
-      if (attachedContext.requirements?.length > 0) {
-        contextParts.push(`REQUIREMENTS: ${attachedContext.requirements.length} requirements attached`);
+      if (selection?.requirements?.length) {
+        contextParts.push(`REQUIREMENTS: ${selection.requirements.length} requirements attached`);
       }
-      if (attachedContext.standards?.length > 0) {
-        contextParts.push(`STANDARDS: ${attachedContext.standards.length} standards attached`);
+      if (selection?.standards?.length) {
+        contextParts.push(`STANDARDS: ${selection.standards.length} standards attached`);
       }
-      if (attachedContext.artifacts?.length > 0) {
-        contextParts.push(`ARTIFACTS: ${attachedContext.artifacts.length} artifacts attached`);
+      if (selection?.artifacts?.length || attachedContextPayload?.artifacts?.length) {
+        const count = attachedContextPayload?.artifacts?.length || selection.artifacts.length;
+        contextParts.push(`ARTIFACTS: ${count} artifacts attached`);
       }
-      if (attachedContext.canvasNodes?.length > 0) {
-        contextParts.push(`CANVAS: ${attachedContext.canvasNodes.length} nodes attached`);
+      if (selection?.techStacks?.length) {
+        contextParts.push(`TECH STACKS: ${selection.techStacks.length} tech stacks attached`);
       }
-      
-      if (contextParts.length > 0) {
-        enrichedSystemPrompt = `${systemPrompt}\n\nATTACHED PROJECT CONTEXT:\n${contextParts.join('\n')}`;
+      if (selection?.canvasNodes?.length || attachedContextPayload?.canvasNodes?.length) {
+        const count = attachedContextPayload?.canvasNodes?.length || selection.canvasNodes.length;
+        contextParts.push(`CANVAS NODES: ${count} nodes attached`);
+      }
+      if (selection?.canvasEdges?.length) {
+        contextParts.push(`CANVAS EDGES: ${selection.canvasEdges.length} edges attached`);
+      }
+      if (selection?.canvasLayers?.length) {
+        contextParts.push(`CANVAS LAYERS: ${selection.canvasLayers.length} layers attached`);
+      }
+
+      const contextJson = attachedContextPayload || selection;
+
+      if (contextParts.length > 0 && contextJson) {
+        const jsonString = JSON.stringify(contextJson);
+        const truncatedJson = jsonString.length > 12000
+          ? jsonString.slice(0, 12000) + "...[truncated]"
+          : jsonString;
+
+        enrichedSystemPrompt = `${systemPrompt}\n\nATTACHED PROJECT CONTEXT SUMMARY:\n${contextParts.join("\n")}\n\nATTACHED_PROJECT_CONTEXT_JSON:\n${truncatedJson}`;
       }
     }
 
