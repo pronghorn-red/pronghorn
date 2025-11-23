@@ -24,7 +24,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image, ChevronRight, Wrench, Sparkles, FileSearch } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image, ChevronRight, Wrench, Sparkles, FileSearch, AlignLeft, AlignVerticalJustifyStart, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter } from "lucide-react";
 import { AIArchitectDialog } from "@/components/canvas/AIArchitectDialog";
 import { useToast } from "@/hooks/use-toast";
 import { toPng, toSvg } from "html-to-image";
@@ -690,6 +690,119 @@ function CanvasFlow() {
     return visibleNodes.filter((n) => n.selected);
   }, [visibleNodes]);
 
+  // Alignment functions for multiple selected nodes
+  const handleAlignLeft = useCallback(() => {
+    if (selectedNodesList.length <= 1) return;
+    
+    const minX = Math.min(...selectedNodesList.map(n => n.position.x));
+    const updates = selectedNodesList.map(node => ({
+      ...node,
+      position: { ...node.position, x: minX }
+    }));
+    
+    setNodes((nds) =>
+      nds.map((node) => {
+        const update = updates.find((u) => u.id === node.id);
+        return update || node;
+      })
+    );
+    
+    updates.forEach(node => {
+      saveNode(node, true, false);
+    });
+    
+    toast({
+      title: "Nodes aligned",
+      description: "Aligned to leftmost position",
+    });
+  }, [selectedNodesList, setNodes, saveNode, toast]);
+
+  const handleAlignTop = useCallback(() => {
+    if (selectedNodesList.length <= 1) return;
+    
+    const minY = Math.min(...selectedNodesList.map(n => n.position.y));
+    const updates = selectedNodesList.map(node => ({
+      ...node,
+      position: { ...node.position, y: minY }
+    }));
+    
+    setNodes((nds) =>
+      nds.map((node) => {
+        const update = updates.find((u) => u.id === node.id);
+        return update || node;
+      })
+    );
+    
+    updates.forEach(node => {
+      saveNode(node, true, false);
+    });
+    
+    toast({
+      title: "Nodes aligned",
+      description: "Aligned to topmost position",
+    });
+  }, [selectedNodesList, setNodes, saveNode, toast]);
+
+  const handleDistributeHorizontally = useCallback(() => {
+    if (selectedNodesList.length <= 2) return;
+    
+    const sorted = [...selectedNodesList].sort((a, b) => a.position.x - b.position.x);
+    const minX = sorted[0].position.x;
+    const maxX = sorted[sorted.length - 1].position.x;
+    const spacing = (maxX - minX) / (sorted.length - 1);
+    
+    const updates = sorted.map((node, index) => ({
+      ...node,
+      position: { ...node.position, x: minX + (spacing * index) }
+    }));
+    
+    setNodes((nds) =>
+      nds.map((node) => {
+        const update = updates.find((u) => u.id === node.id);
+        return update || node;
+      })
+    );
+    
+    updates.forEach(node => {
+      saveNode(node, true, false);
+    });
+    
+    toast({
+      title: "Nodes distributed",
+      description: "Distributed evenly horizontally",
+    });
+  }, [selectedNodesList, setNodes, saveNode, toast]);
+
+  const handleDistributeVertically = useCallback(() => {
+    if (selectedNodesList.length <= 2) return;
+    
+    const sorted = [...selectedNodesList].sort((a, b) => a.position.y - b.position.y);
+    const minY = sorted[0].position.y;
+    const maxY = sorted[sorted.length - 1].position.y;
+    const spacing = (maxY - minY) / (sorted.length - 1);
+    
+    const updates = sorted.map((node, index) => ({
+      ...node,
+      position: { ...node.position, y: minY + (spacing * index) }
+    }));
+    
+    setNodes((nds) =>
+      nds.map((node) => {
+        const update = updates.find((u) => u.id === node.id);
+        return update || node;
+      })
+    );
+    
+    updates.forEach(node => {
+      saveNode(node, true, false);
+    });
+    
+    toast({
+      title: "Nodes distributed",
+      description: "Distributed evenly vertically",
+    });
+  }, [selectedNodesList, setNodes, saveNode, toast]);
+
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
       <PrimaryNav />
@@ -747,6 +860,32 @@ function CanvasFlow() {
                         <FileSearch className="h-4 w-4 mr-2" />
                         Export SVG
                       </DropdownMenuItem>
+                      {selectedNodesList.length > 1 && (
+                        <>
+                          <DropdownMenuItem onClick={handleAlignLeft}>
+                            <AlignLeft className="h-4 w-4 mr-2" />
+                            Align Left
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={handleAlignTop}>
+                            <AlignVerticalJustifyStart className="h-4 w-4 mr-2" />
+                            Align Top
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={handleDistributeHorizontally}
+                            disabled={selectedNodesList.length <= 2}
+                          >
+                            <AlignHorizontalDistributeCenter className="h-4 w-4 mr-2" />
+                            Distribute Horizontally
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={handleDistributeVertically}
+                            disabled={selectedNodesList.length <= 2}
+                          >
+                            <AlignVerticalDistributeCenter className="h-4 w-4 mr-2" />
+                            Distribute Vertically
+                          </DropdownMenuItem>
+                        </>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
@@ -811,6 +950,74 @@ function CanvasFlow() {
                         <p>Export SVG</p>
                       </TooltipContent>
                     </Tooltip>
+                    
+                    {/* Alignment buttons - show when multiple nodes selected */}
+                    {selectedNodesList.length > 1 && (
+                      <>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={handleAlignLeft}
+                              size="sm"
+                              variant="outline"
+                              className="bg-card/80"
+                            >
+                              <AlignLeft className="w-3 h-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            <p>Align Left</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={handleAlignTop}
+                              size="sm"
+                              variant="outline"
+                              className="bg-card/80"
+                            >
+                              <AlignVerticalJustifyStart className="w-3 h-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            <p>Align Top</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={handleDistributeHorizontally}
+                              size="sm"
+                              variant="outline"
+                              className="bg-card/80"
+                              disabled={selectedNodesList.length <= 2}
+                            >
+                              <AlignHorizontalDistributeCenter className="w-3 h-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            <p>Distribute Horizontally</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={handleDistributeVertically}
+                              size="sm"
+                              variant="outline"
+                              className="bg-card/80"
+                              disabled={selectedNodesList.length <= 2}
+                            >
+                              <AlignVerticalDistributeCenter className="w-3 h-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            <p>Distribute Vertically</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </>
+                    )}
                   </>
                 )}
               </div>
