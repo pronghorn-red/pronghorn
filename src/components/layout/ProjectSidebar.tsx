@@ -1,4 +1,4 @@
-import { ListTree, Layout, ShieldCheck, Hammer, Code, FileText, Settings as SettingsIcon, Menu, X } from "lucide-react";
+import { ListTree, Layout, ShieldCheck, Hammer, Code, FileText, Settings as SettingsIcon, Menu, X, Archive, MessageSquare } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,8 @@ interface ProjectSidebarProps {
 
 const activeNavItems = [
   { icon: SettingsIcon, label: "Settings", path: "settings" },
+  { icon: Archive, label: "Artifacts", path: "artifacts" },
+  { icon: MessageSquare, label: "Chat", path: "chat" },
   { icon: ListTree, label: "Requirements", path: "requirements" },
   { icon: ShieldCheck, label: "Standards", path: "standards" },
   { icon: Layout, label: "Canvas", path: "canvas" },
