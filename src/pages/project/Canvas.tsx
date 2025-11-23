@@ -583,24 +583,50 @@ function CanvasFlow() {
   const handleDownloadSnapshot = useCallback(
     async (format: 'png' | 'svg') => {
       const viewport = document.querySelector('.react-flow__viewport') as HTMLElement;
-      if (!viewport) {
+      if (!viewport || visibleNodes.length === 0) {
         toast({
           title: "Error",
-          description: "Canvas not found",
+          description: "Canvas not found or no nodes to export",
           variant: "destructive",
         });
         return;
       }
 
       try {
-        const dataUrl = format === 'png' 
-          ? await toPng(viewport, { backgroundColor: '#ffffff' })
-          : await toSvg(viewport, { backgroundColor: '#ffffff' });
-        
-        const link = document.createElement('a');
-        link.download = `canvas-snapshot.${format}`;
-        link.href = dataUrl;
-        link.click();
+        if (format === 'png') {
+          // PNG export - use viewport as-is
+          const dataUrl = await toPng(viewport, { backgroundColor: '#ffffff' });
+          const link = document.createElement('a');
+          link.download = 'canvas-snapshot.png';
+          link.href = dataUrl;
+          link.click();
+        } else {
+          // SVG export - crop to visible nodes
+          const nodesBounds = getNodesBounds(visibleNodes);
+          const padding = 50;
+          
+          const bounds = {
+            x: nodesBounds.x - padding,
+            y: nodesBounds.y - padding,
+            width: nodesBounds.width + padding * 2,
+            height: nodesBounds.height + padding * 2,
+          };
+
+          const dataUrl = await toSvg(viewport, { 
+            backgroundColor: '#ffffff',
+            width: bounds.width,
+            height: bounds.height,
+            style: {
+              transform: `translate(${-bounds.x}px, ${-bounds.y}px)`,
+              transformOrigin: 'top left',
+            }
+          });
+          
+          const link = document.createElement('a');
+          link.download = 'canvas-snapshot.svg';
+          link.href = dataUrl;
+          link.click();
+        }
         
         toast({
           title: "Snapshot downloaded",
@@ -615,7 +641,7 @@ function CanvasFlow() {
         });
       }
     },
-    [toast]
+    [visibleNodes, toast]
   );
 
   const handleSelectLayer = useCallback(
