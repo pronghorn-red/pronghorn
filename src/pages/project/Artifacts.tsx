@@ -12,6 +12,8 @@ import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List } from "lucide-
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Dialog,
   DialogContent,
@@ -388,8 +390,10 @@ ${artifact.content}`;
                                 AI Summary
                               </AccordionTrigger>
                               <AccordionContent>
-                                <div className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                  {streamingSummary[artifact.id] || artifact.ai_summary}
+                                <div className="text-sm text-muted-foreground prose prose-sm dark:prose-invert max-w-none">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {streamingSummary[artifact.id] || artifact.ai_summary}
+                                  </ReactMarkdown>
                                 </div>
                               </AccordionContent>
                             </AccordionItem>
