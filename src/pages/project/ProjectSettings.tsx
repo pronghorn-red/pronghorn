@@ -38,13 +38,13 @@ export default function ProjectSettings() {
   const [thinkingBudget, setThinkingBudget] = useState(-1);
 
   const { data: project } = useQuery({
-    queryKey: ['project', projectId],
+    queryKey: ["project", projectId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_project_with_token', {
+      const { data, error } = await supabase.rpc("get_project_with_token", {
         p_project_id: projectId,
-        p_token: shareToken || null
+        p_token: shareToken || null,
       });
-      
+
       if (error) throw error;
       return data;
     },
@@ -72,7 +72,7 @@ export default function ProjectSettings() {
 
   const updateProjectMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.rpc('update_project_with_token', {
+      const { data, error } = await supabase.rpc("update_project_with_token", {
         p_project_id: projectId,
         p_token: shareToken || null,
         p_name: projectName,
@@ -84,13 +84,18 @@ export default function ProjectSettings() {
         p_timeline_start: timelineStart || null,
         p_timeline_end: timelineEnd || null,
         p_priority: priority,
-        p_tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : null
+        p_tags: tags
+          ? tags
+              .split(",")
+              .map((t) => t.trim())
+              .filter(Boolean)
+          : null,
       });
-      
+
       if (error) throw error;
-      
+
       // Update LLM settings via RPC
-      const { error: llmError } = await supabase.rpc('update_project_llm_settings_with_token', {
+      const { error: llmError } = await supabase.rpc("update_project_llm_settings_with_token", {
         p_project_id: projectId,
         p_token: shareToken || null,
         p_selected_model: selectedModel,
@@ -98,62 +103,62 @@ export default function ProjectSettings() {
         p_thinking_enabled: thinkingEnabled,
         p_thinking_budget: thinkingBudget,
       });
-        
+
       if (llmError) throw llmError;
-      
+
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-      toast.success('Project details updated successfully');
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast.success("Project details updated successfully");
     },
     onError: () => {
-      toast.error('Failed to update project details');
+      toast.error("Failed to update project details");
     },
   });
 
   const generateTokenMutation = useMutation({
     mutationFn: async () => {
       // CRITICAL: Use token-based RPC for token regeneration
-      const { data: newToken, error } = await supabase.rpc('regenerate_share_token', {
+      const { data: newToken, error } = await supabase.rpc("regenerate_share_token", {
         p_project_id: projectId,
-        p_token: shareToken || null
+        p_token: shareToken || null,
       });
-      
+
       if (error) throw error;
       return { share_token: newToken };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-      toast.success('New share token generated - previous links are now invalid');
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast.success("New share token generated - previous links are now invalid");
     },
     onError: () => {
-      toast.error('Failed to generate new token');
+      toast.error("Failed to generate new token");
     },
   });
 
   const copyShareLink = () => {
     const token = project?.share_token;
     if (!token) {
-      toast.error('No share token available');
+      toast.error("No share token available");
       return;
     }
-    
+
     const url = `https://pronghorn.red/project/${projectId}/requirements?token=${token}`;
     navigator.clipboard.writeText(url);
-    toast.success('Share link copied to clipboard');
+    toast.success("Share link copied to clipboard");
   };
 
   const copyFullUrl = () => {
     const token = project?.share_token;
     if (!token) {
-      toast.error('No share token available');
+      toast.error("No share token available");
       return;
     }
-    
+
     const url = `https://pronghorn.red/project/${projectId}/settings?token=${token}`;
     navigator.clipboard.writeText(url);
-    toast.success('Full URL copied to clipboard');
+    toast.success("Full URL copied to clipboard");
   };
 
   return (
@@ -164,7 +169,7 @@ export default function ProjectSettings() {
         <ProjectSidebar projectId={projectId!} />
 
         <main className="flex-1 w-full">
-          <div className="container px-6 py-8 max-w-4xl">
+          <div className="container px-6 py-8 max-w-6xl">
             <div className="space-y-6">
               <div>
                 <h2 className="text-2xl font-bold mb-2">Project Settings</h2>
@@ -187,28 +192,21 @@ export default function ProjectSettings() {
                     <div className="space-y-2">
                       <Label>Current Token</Label>
                       <div className="flex gap-2">
-                        <Input 
-                          value={project?.share_token || 'Loading...'} 
-                          readOnly 
-                          className="font-mono text-sm"
-                        />
-                        <Button
-                          onClick={copyFullUrl}
-                          disabled={!project?.share_token}
-                          className="shrink-0"
-                        >
+                        <Input value={project?.share_token || "Loading..."} readOnly className="font-mono text-sm" />
+                        <Button onClick={copyFullUrl} disabled={!project?.share_token} className="shrink-0">
                           <Copy className="h-4 w-4" />
                           Copy Full URL
                         </Button>
                       </div>
                     </div>
-                    
+
                     {user && project?.created_by === user.id && (
                       <div className="flex items-start gap-3 p-3 rounded-md bg-muted">
                         <RefreshCw className="h-5 w-5 text-muted-foreground mt-0.5" />
                         <div className="flex-1 space-y-2">
                           <p className="text-sm text-muted-foreground">
-                            Regenerating the token will invalidate all previous share links. Anyone using old links will lose access.
+                            Regenerating the token will invalidate all previous share links. Anyone using old links will
+                            lose access.
                           </p>
                           <Button
                             variant="destructive"
@@ -216,7 +214,7 @@ export default function ProjectSettings() {
                             onClick={() => generateTokenMutation.mutate()}
                             disabled={generateTokenMutation.isPending}
                           >
-                            {generateTokenMutation.isPending ? 'Generating...' : 'Regenerate Token'}
+                            {generateTokenMutation.isPending ? "Generating..." : "Regenerate Token"}
                           </Button>
                         </div>
                       </div>
@@ -233,17 +231,13 @@ export default function ProjectSettings() {
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="name">Project Name</Label>
-                      <Input 
-                        id="name" 
-                        value={projectName} 
-                        onChange={(e) => setProjectName(e.target.value)}
-                      />
+                      <Input id="name" value={projectName} onChange={(e) => setProjectName(e.target.value)} />
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="description">Project Description</Label>
-                      <Textarea 
-                        id="description" 
+                      <Textarea
+                        id="description"
                         value={projectDescription}
                         onChange={(e) => setProjectDescription(e.target.value)}
                         placeholder="Enter detailed project description that can be used for AI context..."
@@ -254,9 +248,9 @@ export default function ProjectSettings() {
 
                     <div className="space-y-2">
                       <Label htmlFor="repo">GitHub Repository</Label>
-                      <Input 
-                        id="repo" 
-                        placeholder="owner/repo" 
+                      <Input
+                        id="repo"
+                        placeholder="owner/repo"
                         value={githubRepo}
                         onChange={(e) => setGithubRepo(e.target.value)}
                       />
@@ -264,8 +258,8 @@ export default function ProjectSettings() {
 
                     <div className="space-y-2">
                       <Label htmlFor="organization">Organization</Label>
-                      <Input 
-                        id="organization" 
+                      <Input
+                        id="organization"
                         placeholder="Organization name"
                         value={organization}
                         onChange={(e) => setOrganization(e.target.value)}
@@ -275,8 +269,8 @@ export default function ProjectSettings() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="budget">Budget</Label>
-                        <Input 
-                          id="budget" 
+                        <Input
+                          id="budget"
                           type="number"
                           placeholder="0.00"
                           value={budget}
@@ -302,8 +296,8 @@ export default function ProjectSettings() {
 
                     <div className="space-y-2">
                       <Label htmlFor="scope">Scope</Label>
-                      <Textarea 
-                        id="scope" 
+                      <Textarea
+                        id="scope"
                         placeholder="Define project scope and boundaries..."
                         value={scope}
                         onChange={(e) => setScope(e.target.value)}
@@ -315,8 +309,8 @@ export default function ProjectSettings() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="timeline-start">Timeline Start</Label>
-                        <Input 
-                          id="timeline-start" 
+                        <Input
+                          id="timeline-start"
                           type="date"
                           value={timelineStart}
                           onChange={(e) => setTimelineStart(e.target.value)}
@@ -325,8 +319,8 @@ export default function ProjectSettings() {
 
                       <div className="space-y-2">
                         <Label htmlFor="timeline-end">Timeline End</Label>
-                        <Input 
-                          id="timeline-end" 
+                        <Input
+                          id="timeline-end"
                           type="date"
                           value={timelineEnd}
                           onChange={(e) => setTimelineEnd(e.target.value)}
@@ -336,22 +330,17 @@ export default function ProjectSettings() {
 
                     <div className="space-y-2">
                       <Label htmlFor="tags">Tags</Label>
-                      <Input 
-                        id="tags" 
+                      <Input
+                        id="tags"
                         placeholder="tag1, tag2, tag3"
                         value={tags}
                         onChange={(e) => setTags(e.target.value)}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Comma-separated tags for project categorization
-                      </p>
+                      <p className="text-xs text-muted-foreground">Comma-separated tags for project categorization</p>
                     </div>
 
-                    <Button 
-                      onClick={() => updateProjectMutation.mutate()}
-                      disabled={updateProjectMutation.isPending}
-                    >
-                      {updateProjectMutation.isPending ? 'Saving...' : 'Save Changes'}
+                    <Button onClick={() => updateProjectMutation.mutate()} disabled={updateProjectMutation.isPending}>
+                      {updateProjectMutation.isPending ? "Saving..." : "Save Changes"}
                     </Button>
                   </CardContent>
                 </Card>
@@ -405,9 +394,7 @@ export default function ProjectSettings() {
                           )}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Longer responses may take more time to generate
-                      </p>
+                      <p className="text-xs text-muted-foreground">Longer responses may take more time to generate</p>
                     </div>
 
                     {selectedModel === "gemini-2.5-flash" || selectedModel === "gemini-2.5-flash-lite" ? (
@@ -420,15 +407,13 @@ export default function ProjectSettings() {
                             onCheckedChange={setThinkingEnabled}
                           />
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          Enable model thinking for complex reasoning
-                        </p>
-                        
+                        <p className="text-xs text-muted-foreground">Enable model thinking for complex reasoning</p>
+
                         {thinkingEnabled && (
                           <div className="space-y-2 mt-3">
                             <Label htmlFor="thinking-budget-select">Thinking Budget</Label>
-                            <Select 
-                              value={thinkingBudget.toString()} 
+                            <Select
+                              value={thinkingBudget.toString()}
                               onValueChange={(val) => setThinkingBudget(Number(val))}
                             >
                               <SelectTrigger id="thinking-budget-select">
@@ -466,11 +451,8 @@ export default function ProjectSettings() {
                       </div>
                     ) : null}
 
-                    <Button 
-                      onClick={() => updateProjectMutation.mutate()}
-                      disabled={updateProjectMutation.isPending}
-                    >
-                      {updateProjectMutation.isPending ? 'Saving...' : 'Save LLM Settings'}
+                    <Button onClick={() => updateProjectMutation.mutate()} disabled={updateProjectMutation.isPending}>
+                      {updateProjectMutation.isPending ? "Saving..." : "Save LLM Settings"}
                     </Button>
                   </CardContent>
                 </Card>
