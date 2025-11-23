@@ -33,3 +33,9 @@ verify_jwt = false
 
 [functions.chat-stream-xai]
 verify_jwt = false
+
+[functions.summarize-artifact]
+verify_jwt = false
+
+[functions.summarize-chat]
+verify_jwt = false

@@ -7,17 +7,28 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useRealtimeChatSessions, useRealtimeChatMessages } from "@/hooks/useRealtimeChatSessions";
-import { Plus, Send, Trash2, Copy, Download } from "lucide-react";
+import { Plus, Send, Trash2, Copy, Download, Sparkles, Paperclip, Archive } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery } from "@tanstack/react-query";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 export default function Chat() {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
-  const { sessions, isLoading: sessionsLoading, createSession, deleteSession } = useRealtimeChatSessions(
+  const { sessions, isLoading: sessionsLoading, createSession, deleteSession, updateSession } = useRealtimeChatSessions(
     projectId,
     shareToken,
     isTokenSet
@@ -28,6 +39,8 @@ export default function Chat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isAttachDialogOpen, setIsAttachDialogOpen] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
   const { messages, addMessage } = useRealtimeChatMessages(
     selectedSessionId || undefined,
@@ -49,6 +62,46 @@ export default function Chat() {
     enabled: !!projectId && isTokenSet,
   });
 
+  // Fetch available context
+  const { data: requirements } = useQuery({
+    queryKey: ['requirements', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_requirements_with_token', {
+        p_project_id: projectId!,
+        p_token: shareToken || null
+      });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId && isTokenSet,
+  });
+
+  const { data: canvasNodes } = useQuery({
+    queryKey: ['canvas-nodes', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_canvas_nodes_with_token', {
+        p_project_id: projectId!,
+        p_token: shareToken || null
+      });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId && isTokenSet,
+  });
+
+  const { data: artifacts } = useQuery({
+    queryKey: ['artifacts', projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_artifacts_with_token', {
+        p_project_id: projectId!,
+        p_token: shareToken || null
+      });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId && isTokenSet,
+  });
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent]);
@@ -57,6 +110,42 @@ export default function Chat() {
     const newSession = await createSession();
     if (newSession) {
       setSelectedSessionId(newSession.id);
+    }
+  };
+
+  const handleSummarizeChat = async () => {
+    if (!selectedSessionId) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("summarize-chat", {
+        body: { chatSessionId: selectedSessionId, shareToken }
+      });
+
+      if (error) throw error;
+      toast.success("Chat summarized successfully");
+    } catch (error) {
+      console.error("Error summarizing chat:", error);
+      toast.error("Failed to summarize chat");
+    }
+  };
+
+  const handleSaveMessageAsArtifact = async (messageContent: string) => {
+    if (!projectId) return;
+
+    try {
+      const { data, error } = await supabase.rpc("insert_artifact_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_content: messageContent,
+        p_source_type: "chat_message",
+        p_source_id: selectedSessionId,
+      });
+
+      if (error) throw error;
+      toast.success("Message saved as artifact");
+    } catch (error) {
+      console.error("Error saving artifact:", error);
+      toast.error("Failed to save artifact");
     }
   };
 
@@ -89,7 +178,7 @@ export default function Chat() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || ''}`,
+            "Authorization": `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ia3pka3NmYXl5Z25yemRxb2FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTA4MzcsImV4cCI6MjA3ODk4NjgzN30.xOKphCiEilzPTo9EGHNJqAJfruM_bijI9PN3BQBF-z8`,
           },
           body: JSON.stringify({
             systemPrompt: "You are a helpful AI assistant for a project management system.",
@@ -154,6 +243,29 @@ export default function Chat() {
     toast.success("Copied to clipboard");
   };
 
+  const handleDownloadChat = () => {
+    if (!selectedSessionId || messages.length === 0) {
+      toast.error("No messages to download");
+      return;
+    }
+
+    const session = sessions.find(s => s.id === selectedSessionId);
+    const chatContent = messages
+      .map(m => `${m.role === "user" ? "User" : "Assistant"} (${format(new Date(m.created_at), "PPp")}):\n${m.content}\n`)
+      .join("\n---\n\n");
+
+    const blob = new Blob([chatContent], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `chat-${session?.ai_title || session?.title || "conversation"}-${format(new Date(), "yyyy-MM-dd")}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Chat downloaded");
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
@@ -213,6 +325,17 @@ export default function Chat() {
           <div className="flex-1 flex flex-col">
             {selectedSessionId ? (
               <>
+                <div className="border-b border-border p-3 flex gap-2 justify-end">
+                  <Button variant="outline" size="sm" onClick={handleSummarizeChat}>
+                    <Sparkles className="h-3 w-3 mr-2" />
+                    Summarize
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleDownloadChat}>
+                    <Download className="h-3 w-3 mr-2" />
+                    Download
+                  </Button>
+                </div>
+
                 <ScrollArea className="flex-1 p-6">
                   <div className="max-w-4xl mx-auto space-y-6">
                     {messages.map((message) => (
@@ -229,14 +352,24 @@ export default function Chat() {
                         >
                           <div className="flex items-start justify-between gap-4">
                             <div className="whitespace-pre-wrap flex-1">{message.content}</div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 flex-shrink-0"
-                              onClick={() => handleCopyMessage(message.content)}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
+                            <div className="flex gap-1 flex-shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleCopyMessage(message.content)}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleSaveMessageAsArtifact(message.content)}
+                              >
+                                <Archive className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
                           <p className="text-xs opacity-70 mt-2">
                             {format(new Date(message.created_at), "h:mm a")}

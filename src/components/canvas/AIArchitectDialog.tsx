@@ -42,12 +42,15 @@ export function AIArchitectDialog({
   const [includeTechStack, setIncludeTechStack] = useState(false);
   const [includeRequirements, setIncludeRequirements] = useState(false);
   const [includeProjectDescription, setIncludeProjectDescription] = useState(false);
+  const [includeArtifacts, setIncludeArtifacts] = useState(false);
   const [drawEdges, setDrawEdges] = useState(true);
   
   const [projectData, setProjectData] = useState<any>(null);
   const [standards, setStandards] = useState<any[]>([]);
   const [techStacks, setTechStacks] = useState<any[]>([]);
   const [requirements, setRequirements] = useState<any[]>([]);
+  const [artifacts, setArtifacts] = useState<any[]>([]);
+  const [selectedArtifacts, setSelectedArtifacts] = useState<string[]>([]);
 
   useEffect(() => {
     if (open && projectId) {
@@ -98,6 +101,13 @@ export function AIArchitectDialog({
         p_token: shareToken || null
       });
       setRequirements(requirementsData || []);
+
+      // Load artifacts
+      const { data: artifactsData } = await supabase.rpc('get_artifacts_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
+      setArtifacts(artifactsData || []);
     } catch (error) {
       console.error('Error loading project context:', error);
     }

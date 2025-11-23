@@ -31,6 +31,8 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
     includeRequirements: true,
     includeStandards: true,
     includeCanvas: true,
+    includeArtifacts: true,
+    includeChats: true,
     includeGeneratedSpec: hasGeneratedSpec
   });
 
@@ -159,6 +161,28 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
             />
             <Label htmlFor="canvas" className="cursor-pointer">
               Canvas Architecture (JSON + PNG)
+            </Label>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="artifacts"
+              checked={options.includeArtifacts}
+              onCheckedChange={() => handleCheckboxChange('includeArtifacts')}
+            />
+            <Label htmlFor="artifacts" className="cursor-pointer">
+              Project Artifacts
+            </Label>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="chats"
+              checked={options.includeChats}
+              onCheckedChange={() => handleCheckboxChange('includeChats')}
+            />
+            <Label htmlFor="chats" className="cursor-pointer">
+              Chat Sessions & Messages
             </Label>
           </div>
           

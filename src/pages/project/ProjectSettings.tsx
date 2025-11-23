@@ -89,18 +89,17 @@ export default function ProjectSettings() {
       
       if (error) throw error;
       
-      // Also update LLM settings
-      const { error: updateError } = await supabase
-        .from('projects')
-        .update({
-          selected_model: selectedModel,
-          max_tokens: maxTokens,
-          thinking_enabled: thinkingEnabled,
-          thinking_budget: thinkingBudget,
-        })
-        .eq('id', projectId);
+      // Update LLM settings via RPC
+      const { error: llmError } = await supabase.rpc('update_project_llm_settings_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_selected_model: selectedModel,
+        p_max_tokens: maxTokens,
+        p_thinking_enabled: thinkingEnabled,
+        p_thinking_budget: thinkingBudget,
+      });
         
-      if (updateError) throw updateError;
+      if (llmError) throw llmError;
       
       return data;
     },

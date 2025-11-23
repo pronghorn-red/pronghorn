@@ -1624,6 +1624,46 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_project_llm_settings_with_token: {
+        Args: {
+          p_max_tokens: number
+          p_project_id: string
+          p_selected_model: string
+          p_thinking_budget: number
+          p_thinking_enabled: boolean
+          p_token: string
+        }
+        Returns: {
+          budget: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          github_branch: string | null
+          github_repo: string | null
+          id: string
+          max_tokens: number | null
+          name: string
+          org_id: string
+          organization: string | null
+          priority: string | null
+          scope: string | null
+          selected_model: string | null
+          share_token: string | null
+          status: Database["public"]["Enums"]["project_status"]
+          tags: string[] | null
+          thinking_budget: number | null
+          thinking_enabled: boolean | null
+          timeline_end: string | null
+          timeline_start: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_project_with_token:
         | {
             Args: {

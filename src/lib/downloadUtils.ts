@@ -6,6 +6,8 @@ export interface DownloadOptions {
   includeRequirements: boolean;
   includeStandards: boolean;
   includeCanvas: boolean;
+  includeArtifacts: boolean;
+  includeChats: boolean;
   includeGeneratedSpec: boolean;
 }
 
@@ -132,6 +134,32 @@ export async function fetchProjectData(projectId: string, shareToken: string | n
     }
   }
 
+  // Fetch artifacts via RPC
+  const { data: artifacts } = await supabase.rpc('get_artifacts_with_token', {
+    p_project_id: projectId,
+    p_token: shareToken
+  });
+
+  // Fetch chat sessions via RPC
+  const { data: chatSessions } = await supabase.rpc('get_chat_sessions_with_token', {
+    p_project_id: projectId,
+    p_token: shareToken
+  });
+
+  // Fetch chat messages for each session
+  const chatMessages: any[] = [];
+  if (chatSessions) {
+    for (const session of chatSessions) {
+      const { data: messages } = await supabase.rpc('get_chat_messages_with_token', {
+        p_chat_session_id: session.id,
+        p_token: shareToken
+      });
+      if (messages) {
+        chatMessages.push(...messages);
+      }
+    }
+  }
+
   return {
     project,
     requirements,
@@ -141,7 +169,10 @@ export async function fetchProjectData(projectId: string, shareToken: string | n
     projectTechStacks,
     specification,
     requirementFiles,
-    standardAttachments
+    standardAttachments,
+    artifacts: artifacts || [],
+    chatSessions: chatSessions || [],
+    chatMessages
   };
 }
 
@@ -218,6 +249,37 @@ export function buildMarkdownDocument(data: any, options: DownloadOptions): stri
     markdown += `## AI Generated Specification\n\n`;
     markdown += data.specification.generated_spec;
     markdown += `\n\n`;
+  }
+
+  if (options.includeArtifacts && data.artifacts && data.artifacts.length > 0) {
+    markdown += `## Project Artifacts (${data.artifacts.length})\n\n`;
+    for (const artifact of data.artifacts) {
+      markdown += `### ${artifact.ai_title || 'Untitled Artifact'}\n`;
+      if (artifact.ai_summary) {
+        markdown += `${artifact.ai_summary}\n\n`;
+      }
+      markdown += `\`\`\`\n${artifact.content}\n\`\`\`\n\n`;
+      markdown += `Created: ${new Date(artifact.created_at).toLocaleString()}\n\n`;
+    }
+  }
+
+  if (options.includeChats && data.chatSessions && data.chatSessions.length > 0) {
+    markdown += `## Chat Sessions (${data.chatSessions.length})\n\n`;
+    for (const session of data.chatSessions) {
+      markdown += `### ${session.ai_title || session.title || 'Untitled Chat'}\n`;
+      if (session.ai_summary) {
+        markdown += `${session.ai_summary}\n\n`;
+      }
+      
+      const sessionMessages = data.chatMessages?.filter((m: any) => m.chat_session_id === session.id) || [];
+      if (sessionMessages.length > 0) {
+        markdown += `**Messages:**\n\n`;
+        for (const msg of sessionMessages) {
+          markdown += `**${msg.role === 'user' ? 'User' : 'Assistant'}**: ${msg.content}\n\n`;
+        }
+      }
+      markdown += `Last updated: ${new Date(session.updated_at).toLocaleString()}\n\n`;
+    }
   }
 
   // Attachment sections
@@ -303,6 +365,35 @@ export function buildIndividualJSONs(data: any, options: DownloadOptions) {
     };
   }
 
+  if (options.includeArtifacts && data.artifacts) {
+    jsons['artifacts.json'] = data.artifacts.map((artifact: any) => ({
+      id: artifact.id,
+      title: artifact.ai_title,
+      summary: artifact.ai_summary,
+      content: artifact.content,
+      source_type: artifact.source_type,
+      source_id: artifact.source_id,
+      created_at: artifact.created_at
+    }));
+  }
+
+  if (options.includeChats && data.chatSessions) {
+    jsons['chat-sessions.json'] = data.chatSessions.map((session: any) => ({
+      id: session.id,
+      title: session.ai_title || session.title,
+      summary: session.ai_summary,
+      created_at: session.created_at,
+      updated_at: session.updated_at,
+      messages: data.chatMessages
+        ?.filter((m: any) => m.chat_session_id === session.id)
+        .map((m: any) => ({
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at
+        })) || []
+    }));
+  }
+
   return jsons;
 }
 
@@ -375,6 +466,35 @@ export function buildComprehensiveJSON(data: any, options: DownloadOptions) {
       generated_at: data.specification.created_at,
       specification: data.specification.generated_spec
     };
+  }
+
+  if (options.includeArtifacts && data.artifacts) {
+    comprehensive.artifacts = data.artifacts.map((artifact: any) => ({
+      id: artifact.id,
+      title: artifact.ai_title,
+      summary: artifact.ai_summary,
+      content: artifact.content,
+      source_type: artifact.source_type,
+      source_id: artifact.source_id,
+      created_at: artifact.created_at
+    }));
+  }
+
+  if (options.includeChats && data.chatSessions) {
+    comprehensive.chat_sessions = data.chatSessions.map((session: any) => ({
+      id: session.id,
+      title: session.ai_title || session.title,
+      summary: session.ai_summary,
+      created_at: session.created_at,
+      updated_at: session.updated_at,
+      messages: data.chatMessages
+        ?.filter((m: any) => m.chat_session_id === session.id)
+        .map((m: any) => ({
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at
+        })) || []
+    }));
   }
 
   return comprehensive;
@@ -450,6 +570,34 @@ export async function downloadAsZip(data: any, options: DownloadOptions, project
 
   if (options.includeGeneratedSpec && data.specification) {
     zip.file('generated-specification.md', data.specification.generated_spec);
+  }
+
+  if (options.includeArtifacts && data.artifacts && data.artifacts.length > 0) {
+    const artifactsFolder = zip.folder('artifacts');
+    if (artifactsFolder) {
+      artifactsFolder.file('artifacts.json', JSON.stringify(data.artifacts, null, 2));
+      for (const artifact of data.artifacts) {
+        const filename = (artifact.ai_title || 'artifact').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        artifactsFolder.file(`${filename}_${artifact.id.slice(0, 8)}.txt`, artifact.content);
+      }
+    }
+  }
+
+  if (options.includeChats && data.chatSessions && data.chatSessions.length > 0) {
+    const chatsFolder = zip.folder('chats');
+    if (chatsFolder) {
+      chatsFolder.file('chat-sessions.json', JSON.stringify(data.chatSessions, null, 2));
+      
+      for (const session of data.chatSessions) {
+        const sessionMessages = data.chatMessages?.filter((m: any) => m.chat_session_id === session.id) || [];
+        const filename = (session.ai_title || session.title || 'chat').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const chatTranscript = sessionMessages
+          .map((m: any) => `[${m.role.toUpperCase()}] ${new Date(m.created_at).toLocaleString()}\n${m.content}\n`)
+          .join('\n---\n\n');
+        
+        chatsFolder.file(`${filename}_${session.id.slice(0, 8)}.txt`, chatTranscript);
+      }
+    }
   }
 
   const blob = await zip.generateAsync({ type: 'blob' });

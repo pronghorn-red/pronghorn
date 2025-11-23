@@ -10,6 +10,8 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { useRealtimeArtifacts } from "@/hooks/useRealtimeArtifacts";
 import { Plus, Search, Trash2, Edit2, Sparkles } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
@@ -53,13 +55,17 @@ export default function Artifacts() {
   };
 
   const handleSummarize = async (artifact: any) => {
-    // TODO: Call edge function to generate AI summary
-    await updateArtifact(
-      artifact.id,
-      undefined,
-      "AI Generated Title",
-      "AI generated summary will appear here"
-    );
+    try {
+      const { data, error } = await supabase.functions.invoke("summarize-artifact", {
+        body: { artifactId: artifact.id, shareToken }
+      });
+
+      if (error) throw error;
+      toast.success("Artifact summarized successfully");
+    } catch (error) {
+      console.error("Error summarizing artifact:", error);
+      toast.error("Failed to summarize artifact");
+    }
   };
 
   return (

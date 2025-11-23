@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +25,22 @@ interface AIDecomposeDialogProps {
 export function AIDecomposeDialog({ projectId, shareToken, open, onClose }: AIDecomposeDialogProps) {
   const [text, setText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [artifacts, setArtifacts] = useState<any[]>([]);
+  const [selectedArtifacts, setSelectedArtifacts] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (open && projectId) {
+      loadArtifacts();
+    }
+  }, [open, projectId]);
+
+  const loadArtifacts = async () => {
+    const { data } = await supabase.rpc('get_artifacts_with_token', {
+      p_project_id: projectId,
+      p_token: shareToken || null
+    });
+    setArtifacts(data || []);
+  };
 
   const handleDecompose = async () => {
     if (!text.trim()) {
