@@ -7,7 +7,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useRealtimeChatSessions, useRealtimeChatMessages } from "@/hooks/useRealtimeChatSessions";
-import { Plus, Send, Trash2, Copy, Download, Sparkles, Paperclip, Archive, Edit2, ChevronLeft, ChevronRight, Save, Wrench, Eye } from "lucide-react";
+import {
+  Plus,
+  Send,
+  Trash2,
+  Copy,
+  Download,
+  Sparkles,
+  Paperclip,
+  Archive,
+  Edit2,
+  ChevronLeft,
+  ChevronRight,
+  Save,
+  Wrench,
+  Eye,
+} from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,11 +52,13 @@ import { useIsMobile } from "@/hooks/use-mobile";
 export default function Chat() {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
-  const { sessions, isLoading: sessionsLoading, createSession, deleteSession, updateSession } = useRealtimeChatSessions(
-    projectId,
-    shareToken,
-    isTokenSet
-  );
+  const {
+    sessions,
+    isLoading: sessionsLoading,
+    createSession,
+    deleteSession,
+    updateSession,
+  } = useRealtimeChatSessions(projectId, shareToken, isTokenSet);
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [inputMessage, setInputMessage] = useState("");
@@ -57,19 +74,19 @@ export default function Chat() {
   const [showSummaryDialog, setShowSummaryDialog] = useState(false);
   const isMobile = useIsMobile();
 
-  const { messages, addMessage, refresh: refreshMessages } = useRealtimeChatMessages(
-    selectedSessionId || undefined,
-    shareToken,
-    isTokenSet && !!selectedSessionId
-  );
+  const {
+    messages,
+    addMessage,
+    refresh: refreshMessages,
+  } = useRealtimeChatMessages(selectedSessionId || undefined, shareToken, isTokenSet && !!selectedSessionId);
 
   // Fetch project settings for model configuration
   const { data: project } = useQuery({
-    queryKey: ['project', projectId],
+    queryKey: ["project", projectId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_project_with_token', {
+      const { data, error } = await supabase.rpc("get_project_with_token", {
         p_project_id: projectId,
-        p_token: shareToken || null
+        p_token: shareToken || null,
       });
       if (error) throw error;
       return data;
@@ -79,11 +96,11 @@ export default function Chat() {
 
   // Fetch available context
   const { data: requirements } = useQuery({
-    queryKey: ['requirements', projectId],
+    queryKey: ["requirements", projectId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_requirements_with_token', {
+      const { data, error } = await supabase.rpc("get_requirements_with_token", {
         p_project_id: projectId!,
-        p_token: shareToken || null
+        p_token: shareToken || null,
       });
       if (error) throw error;
       return data || [];
@@ -92,11 +109,11 @@ export default function Chat() {
   });
 
   const { data: canvasNodes } = useQuery({
-    queryKey: ['canvas-nodes', projectId],
+    queryKey: ["canvas-nodes", projectId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_canvas_nodes_with_token', {
+      const { data, error } = await supabase.rpc("get_canvas_nodes_with_token", {
         p_project_id: projectId!,
-        p_token: shareToken || null
+        p_token: shareToken || null,
       });
       if (error) throw error;
       return data || [];
@@ -105,11 +122,11 @@ export default function Chat() {
   });
 
   const { data: artifacts } = useQuery({
-    queryKey: ['artifacts', projectId],
+    queryKey: ["artifacts", projectId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_artifacts_with_token', {
+      const { data, error } = await supabase.rpc("get_artifacts_with_token", {
         p_project_id: projectId!,
-        p_token: shareToken || null
+        p_token: shareToken || null,
       });
       if (error) throw error;
       return data || [];
@@ -136,7 +153,7 @@ export default function Chat() {
 
     try {
       const { data, error } = await supabase.functions.invoke("summarize-chat", {
-        body: { chatSessionId: selectedSessionId, shareToken }
+        body: { chatSessionId: selectedSessionId, shareToken },
       });
 
       if (error) throw error;
@@ -180,7 +197,7 @@ export default function Chat() {
 
     const userMessage = inputMessage.trim();
     setInputMessage("");
-    
+
     // Start streaming AI response
     setIsStreaming(true);
     setStreamingContent("");
@@ -193,7 +210,7 @@ export default function Chat() {
 
       const model = project?.selected_model || "gemini-2.5-flash";
       let edgeFunctionName = "chat-stream-gemini";
-      
+
       if (model.startsWith("claude-")) {
         edgeFunctionName = "chat-stream-anthropic";
       } else if (model.startsWith("grok-")) {
@@ -201,36 +218,33 @@ export default function Chat() {
       }
 
       // Build conversation history for context
-      const conversationHistory = messages.map(msg => ({
+      const conversationHistory = messages.map((msg) => ({
         role: msg.role,
-        content: msg.content
+        content: msg.content,
       }));
 
       // Add the new user message to history
       conversationHistory.push({
         role: "user",
-        content: userMessage
+        content: userMessage,
       });
 
-      const response = await fetch(
-        `https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/${edgeFunctionName}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ia3pka3NmYXl5Z25yemRxb2FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTA4MzcsImV4cCI6MjA3ODk4NjgzN30.xOKphCiEilzPTo9EGHNJqAJfruM_bijI9PN3BQBF-z8`,
-          },
-          body: JSON.stringify({
-            systemPrompt: "You are a helpful AI assistant for a project management system.",
-            messages: conversationHistory,
-            userPrompt: userMessage, // Keep for backward compatibility
-            model: model,
-            maxOutputTokens: project?.max_tokens || 32768,
-            thinkingEnabled: project?.thinking_enabled || false,
-            thinkingBudget: project?.thinking_budget || -1,
-          }),
-        }
-      );
+      const response = await fetch(`https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/${edgeFunctionName}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ia3pka3NmYXl5Z25yemRxb2FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTA4MzcsImV4cCI6MjA3ODk4NjgzN30.xOKphCiEilzPTo9EGHNJqAJfruM_bijI9PN3BQBF-z8`,
+        },
+        body: JSON.stringify({
+          systemPrompt: "",
+          messages: conversationHistory,
+          userPrompt: userMessage, // Keep for backward compatibility
+          model: model,
+          maxOutputTokens: project?.max_tokens || 32768,
+          thinkingEnabled: project?.thinking_enabled || false,
+          thinkingBudget: project?.thinking_budget || -1,
+        }),
+      });
 
       if (!response.ok) throw new Error("Failed to get AI response");
 
@@ -337,10 +351,10 @@ export default function Chat() {
     setIsProcessing(true);
     toast.loading("Preparing download...", { id: "download" });
 
-    const session = sessions.find(s => s.id === selectedSessionId);
-    
+    const session = sessions.find((s) => s.id === selectedSessionId);
+
     let chatContent = "";
-    
+
     // Add summary if available
     if (session?.ai_summary) {
       chatContent += `=== CHAT SUMMARY ===\n\n`;
@@ -348,10 +362,13 @@ export default function Chat() {
       chatContent += `Summary: ${session.ai_summary}\n\n`;
       chatContent += `===================\n\n`;
     }
-    
+
     // Add messages
     chatContent += messages
-      .map(m => `${m.role === "user" ? "User" : "Assistant"} (${format(new Date(m.created_at), "PPp")}):\n${m.content}\n`)
+      .map(
+        (m) =>
+          `${m.role === "user" ? "User" : "Assistant"} (${format(new Date(m.created_at), "PPp")}):\n${m.content}\n`,
+      )
       .join("\n---\n\n");
 
     const blob = new Blob([chatContent], { type: "text/plain" });
@@ -363,7 +380,7 @@ export default function Chat() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     toast.success("Chat downloaded", { id: "download" });
     setIsProcessing(false);
   };
@@ -378,9 +395,12 @@ export default function Chat() {
     toast.loading("Saving full chat as artifact...", { id: "save-full" });
 
     try {
-      const session = sessions.find(s => s.id === selectedSessionId);
+      const session = sessions.find((s) => s.id === selectedSessionId);
       const chatContent = messages
-        .map(m => `**${m.role === "user" ? "User" : "Assistant"}** (${format(new Date(m.created_at), "PPp")}):\n\n${m.content}\n`)
+        .map(
+          (m) =>
+            `**${m.role === "user" ? "User" : "Assistant"}** (${format(new Date(m.created_at), "PPp")}):\n\n${m.content}\n`,
+        )
         .join("\n---\n\n");
 
       const { data, error } = await supabase.rpc("insert_artifact_with_token", {
@@ -404,7 +424,7 @@ export default function Chat() {
   const handleSaveSummaryAsArtifact = async () => {
     if (!selectedSessionId || !projectId || isProcessing) return;
 
-    const session = sessions.find(s => s.id === selectedSessionId);
+    const session = sessions.find((s) => s.id === selectedSessionId);
     if (!session?.ai_summary) {
       toast.error("No summary available");
       return;
@@ -469,7 +489,7 @@ export default function Chat() {
 
         <main className="flex-1 w-full flex overflow-hidden">
           {/* Sessions Sidebar */}
-          <div 
+          <div
             className={`border-r border-border bg-card transition-all duration-300 flex flex-col ${
               isSidebarCollapsed ? "w-12" : "w-64"
             }`}
@@ -482,11 +502,7 @@ export default function Chat() {
                 className="h-8 w-8"
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
               >
-                {isSidebarCollapsed ? (
-                  <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <ChevronLeft className="h-4 w-4" />
-                )}
+                {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
               </Button>
             </div>
 
@@ -552,10 +568,7 @@ export default function Chat() {
                               className="h-6 w-6"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleStartRename(
-                                  session.id,
-                                  session.ai_title || session.title || ""
-                                );
+                                handleStartRename(session.id, session.ai_title || session.title || "");
                               }}
                             >
                               <Edit2 className="h-3 w-3" />
@@ -592,7 +605,7 @@ export default function Chat() {
                 <div className="border-b border-border p-3 flex gap-2 justify-end flex-shrink-0">
                   {!isMobile ? (
                     <>
-                      {sessions.find(s => s.id === selectedSessionId)?.ai_summary && (
+                      {sessions.find((s) => s.id === selectedSessionId)?.ai_summary && (
                         <Button variant="outline" size="sm" onClick={() => setShowSummaryDialog(true)}>
                           <Eye className="h-3 w-3 mr-2" />
                           View Summary
@@ -602,7 +615,12 @@ export default function Chat() {
                         <Sparkles className="h-3 w-3 mr-2" />
                         Summarize
                       </Button>
-                      <Button variant="outline" size="sm" onClick={handleSaveFullChatAsArtifact} disabled={isProcessing}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSaveFullChatAsArtifact}
+                        disabled={isProcessing}
+                      >
                         <Archive className="h-3 w-3 mr-2" />
                         Save as Artifact
                       </Button>
@@ -619,7 +637,7 @@ export default function Chat() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {sessions.find(s => s.id === selectedSessionId)?.ai_summary && (
+                        {sessions.find((s) => s.id === selectedSessionId)?.ai_summary && (
                           <DropdownMenuItem onClick={() => setShowSummaryDialog(true)}>
                             <Eye className="h-4 w-4 mr-2" />
                             View Summary
@@ -647,9 +665,7 @@ export default function Chat() {
                     {messages.map((message) => (
                       <div
                         key={message.id}
-                        className={`flex ${
-                          message.role === "user" ? "justify-end" : "justify-start"
-                        }`}
+                        className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                       >
                         <Card
                           className={`w-full md:max-w-[85%] p-4 ${
@@ -657,9 +673,7 @@ export default function Chat() {
                           }`}
                         >
                           <div className="flex items-center justify-between gap-2 mb-2">
-                            <p className="text-xs opacity-70">
-                              {format(new Date(message.created_at), "h:mm a")}
-                            </p>
+                            <p className="text-xs opacity-70">{format(new Date(message.created_at), "h:mm a")}</p>
                             <div className="flex gap-1">
                               <Button
                                 variant="ghost"
@@ -683,9 +697,7 @@ export default function Chat() {
                             {message.role === "user" ? (
                               <div className="whitespace-pre-wrap">{message.content}</div>
                             ) : (
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {message.content}
-                              </ReactMarkdown>
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                             )}
                           </div>
                         </Card>
@@ -696,9 +708,7 @@ export default function Chat() {
                       <div className="flex justify-start">
                         <Card className="w-full md:max-w-[85%] p-4">
                           <div className="prose prose-sm dark:prose-invert max-w-none">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {streamingContent}
-                            </ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
                           </div>
                         </Card>
                       </div>
@@ -724,11 +734,7 @@ export default function Chat() {
                       rows={3}
                       disabled={isStreaming}
                     />
-                    <Button
-                      onClick={handleSendMessage}
-                      disabled={!inputMessage.trim() || isStreaming}
-                      size="lg"
-                    >
+                    <Button onClick={handleSendMessage} disabled={!inputMessage.trim() || isStreaming} size="lg">
                       <Send className="h-4 w-4" />
                     </Button>
                   </div>
@@ -753,17 +759,13 @@ export default function Chat() {
       <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
-              {sessions.find(s => s.id === selectedSessionId)?.ai_title || "Chat Summary"}
-            </DialogTitle>
-            <DialogDescription>
-              AI-generated summary of this conversation
-            </DialogDescription>
+            <DialogTitle>{sessions.find((s) => s.id === selectedSessionId)?.ai_title || "Chat Summary"}</DialogTitle>
+            <DialogDescription>AI-generated summary of this conversation</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="prose prose-sm dark:prose-invert max-w-none">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {sessions.find(s => s.id === selectedSessionId)?.ai_summary || "No summary available"}
+                {sessions.find((s) => s.id === selectedSessionId)?.ai_summary || "No summary available"}
               </ReactMarkdown>
             </div>
             <div className="flex gap-2 justify-end">
