@@ -22,6 +22,8 @@ import {
   Save,
   Wrench,
   Eye,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -156,12 +158,26 @@ export default function Chat() {
     // Show modal immediately
     setShowSummaryDialog(true);
     
-    // If summary already exists, just show it
+    // If summary already exists, just show it (don't regenerate)
     if (session?.ai_summary) {
       return;
     }
 
-    // Otherwise generate new summary via streaming
+    // Generate new summary
+    await generateSummary();
+  };
+
+  const handleRegenerateSummary = async () => {
+    if (!selectedSessionId || isProcessing) return;
+    
+    // Clear existing summary and regenerate
+    setStreamingSummary("");
+    await generateSummary();
+  };
+
+  const generateSummary = async () => {
+    if (!selectedSessionId || isProcessing) return;
+
     setIsProcessing(true);
     setStreamingSummary("");
     toast.loading("Generating summary...", { id: "summarize" });
@@ -734,15 +750,9 @@ export default function Chat() {
                 <div className="border-b border-border p-3 flex gap-2 justify-end flex-shrink-0">
                   {!isMobile ? (
                     <>
-                      {sessions.find((s) => s.id === selectedSessionId)?.ai_summary && (
-                        <Button variant="outline" size="sm" onClick={() => setShowSummaryDialog(true)}>
-                          <Eye className="h-3 w-3 mr-2" />
-                          View Summary
-                        </Button>
-                      )}
                       <Button variant="outline" size="sm" onClick={handleSummarizeChat} disabled={isProcessing}>
                         <Sparkles className="h-3 w-3 mr-2" />
-                        {sessions.find((s) => s.id === selectedSessionId)?.ai_summary ? "Regenerate" : "Summarize"}
+                        {sessions.find((s) => s.id === selectedSessionId)?.ai_summary ? "View Summary" : "Summarize"}
                       </Button>
                       <Button
                         variant="outline"
@@ -766,15 +776,9 @@ export default function Chat() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {sessions.find((s) => s.id === selectedSessionId)?.ai_summary && (
-                          <DropdownMenuItem onClick={() => setShowSummaryDialog(true)}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Summary
-                          </DropdownMenuItem>
-                        )}
                         <DropdownMenuItem onClick={handleSummarizeChat}>
                           <Sparkles className="h-4 w-4 mr-2" />
-                          {sessions.find((s) => s.id === selectedSessionId)?.ai_summary ? "Regenerate Summary" : "Summarize"}
+                          {sessions.find((s) => s.id === selectedSessionId)?.ai_summary ? "View Summary" : "Summarize"}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={handleSaveFullChatAsArtifact}>
                           <Archive className="h-4 w-4 mr-2" />
@@ -901,28 +905,25 @@ export default function Chat() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2 justify-end mt-4 pt-4 border-t flex-shrink-0">
-            {!isProcessing && sessions.find((s) => s.id === selectedSessionId)?.ai_summary && (
+            {sessions.find((s) => s.id === selectedSessionId)?.ai_summary && (
               <>
                 <Button variant="outline" onClick={handleSaveSummaryAsArtifact} disabled={isProcessing} className="flex-shrink-0">
                   <Archive className="h-4 w-4 mr-2" />
-                  Save Summary as Artifact
+                  Save as Artifact
                 </Button>
                 <Button 
                   variant="outline" 
-                  onClick={async () => {
-                    setStreamingSummary("");
-                    await handleSummarizeChat();
-                  }}
+                  onClick={handleRegenerateSummary}
                   disabled={isProcessing}
                   className="flex-shrink-0"
                 >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Regenerate Summary
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Regenerate
                 </Button>
               </>
             )}
-            {!sessions.find((s) => s.id === selectedSessionId)?.ai_summary && !isProcessing && (
-              <Button onClick={handleSummarizeChat} disabled={isProcessing} className="flex-shrink-0">
+            {!sessions.find((s) => s.id === selectedSessionId)?.ai_summary && (
+              <Button onClick={generateSummary} disabled={isProcessing} className="flex-shrink-0">
                 <Sparkles className="h-4 w-4 mr-2" />
                 Generate Summary
               </Button>
