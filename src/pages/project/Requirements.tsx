@@ -6,7 +6,8 @@ import { AIDecomposeDialog } from "@/components/requirements/AIDecomposeDialog";
 import { LinkStandardsDialog } from "@/components/requirements/LinkStandardsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, ChevronsDown, ChevronsUp } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useParams } from "react-router-dom";
 import { useRealtimeRequirements } from "@/hooks/useRealtimeRequirements";
 import { useShareToken } from "@/hooks/useShareToken";
@@ -90,17 +91,26 @@ export default function Requirements() {
                 <Button variant="outline" onClick={() => setShowAIDialog(true)} className="flex-1 md:flex-none text-sm">
                   AI Decompose
                 </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setExpandAll(prev => prev === true ? false : true)} 
-                  className="flex-1 md:flex-none text-sm"
-                >
-                  {expandAll ? "Collapse All" : "Expand All"}
-                </Button>
                 <Button onClick={() => addRequirement(null, "EPIC", "New Epic")} className="flex-1 md:flex-none text-sm">
                   <Plus className="h-3 w-3 md:h-4 md:w-4 mr-2" />
                   Add Epic
                 </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="icon"
+                        onClick={() => setExpandAll(prev => prev === true ? false : true)}
+                      >
+                        {expandAll ? <ChevronsUp className="h-4 w-4" /> : <ChevronsDown className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {expandAll ? "Collapse All" : "Expand All"}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
             {isLoading ? <p className="text-center py-12 text-muted-foreground">Loading...</p> : requirements.length > 0 ? (
