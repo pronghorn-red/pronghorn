@@ -72,6 +72,7 @@ export default function Chat() {
   const [streamingContent, setStreamingContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
+  const lastUserMessageRef = useRef<HTMLDivElement>(null);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
   const [isAttachDialogOpen, setIsAttachDialogOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -147,14 +148,14 @@ export default function Chat() {
     enabled: !!projectId && isTokenSet,
   });
 
-  // Auto-scroll only when enabled (user is at bottom)
+  // Auto-scroll: scroll to show user's message at top when sending
   useEffect(() => {
-    if (isAutoScrollEnabled) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isAutoScrollEnabled && lastUserMessageRef.current) {
+      lastUserMessageRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [messages, streamingContent, isAutoScrollEnabled]);
 
-  // Detect user scroll and unlock auto-scroll when user scrolls up
+  // Detect user scroll and update auto-scroll state
   useEffect(() => {
     const scrollArea = scrollViewportRef.current;
     if (!scrollArea) return;
@@ -166,17 +167,10 @@ export default function Chat() {
       const { scrollTop, scrollHeight, clientHeight } = viewport;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       const threshold = 100;
+      const isAtBottom = distanceFromBottom < threshold;
 
-      // Only ever turn auto-scroll off here (when user scrolls up).
-      // Re-enabling is done explicitly via the scroll-to-bottom button or when sending a message.
-      setIsAutoScrollEnabled((prev) => {
-        if (!prev) {
-          return prev;
-        }
-
-        const isAtBottom = distanceFromBottom < threshold;
-        return isAtBottom ? prev : false;
-      });
+      // Update auto-scroll state based on scroll position
+      setIsAutoScrollEnabled(isAtBottom);
     };
 
     viewport.addEventListener("scroll", handleScroll, { passive: true });
@@ -863,16 +857,21 @@ export default function Chat() {
 
                 <ScrollArea className="flex-1 p-4" ref={scrollViewportRef}>
                   <div className="space-y-6">
-                    {messages.map((message) => (
-                      <div
-                        key={message.id}
-                        className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                      >
-                        <Card
-                          className={`w-full md:max-w-[85%] p-4 ${
-                            message.role === "user" ? "bg-primary text-primary-foreground" : ""
-                          }`}
+                    {messages.map((message, index) => {
+                      const isLastUserMessage = message.role === "user" && 
+                        index === messages.map((m, i) => m.role === "user" ? i : -1).filter(i => i !== -1).pop();
+                      
+                      return (
+                        <div
+                          key={message.id}
+                          ref={isLastUserMessage ? lastUserMessageRef : undefined}
+                          className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                         >
+                          <Card
+                            className={`w-full md:max-w-[85%] p-4 ${
+                              message.role === "user" ? "bg-primary text-primary-foreground" : ""
+                            }`}
+                          >
                           <div className="flex items-center justify-between gap-2 mb-2">
                             <p className="text-xs opacity-70">{format(new Date(message.created_at), "h:mm a")}</p>
                             <div className="flex gap-1">
@@ -903,7 +902,8 @@ export default function Chat() {
                           </div>
                         </Card>
                       </div>
-                    ))}
+                    );
+                    })}
 
                     {streamingContent && (
                       <div className="flex justify-start">
@@ -923,15 +923,13 @@ export default function Chat() {
                 {!isAutoScrollEnabled && (
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="absolute bottom-24 right-6 shadow-lg z-10"
+                    size="icon"
+                    className="absolute bottom-24 right-6 rounded-full h-10 w-10 shadow-lg z-10 bg-background hover:bg-accent"
                     onClick={() => {
-                      setIsAutoScrollEnabled(true);
                       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
                     }}
                   >
-                    <ChevronDown className="h-4 w-4 mr-2" />
-                    Scroll to bottom
+                    <ChevronDown className="h-5 w-5" />
                   </Button>
                 )}
 
