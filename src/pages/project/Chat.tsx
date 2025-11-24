@@ -153,11 +153,17 @@ export default function Chat() {
   useEffect(() => {
     if (!shouldScrollToLastUserMessage) return;
 
-    if (lastUserMessageRef.current) {
-      lastUserMessageRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-      // Once we've scrolled to the user message, don't auto-scroll again
-      setShouldScrollToLastUserMessage(false);
+    const scrollArea = scrollViewportRef.current;
+    if (scrollArea && lastUserMessageRef.current) {
+      const viewport = scrollArea.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+      if (viewport) {
+        const elementTop = lastUserMessageRef.current.offsetTop;
+        viewport.scrollTop = elementTop - 16; // 16px padding from top
+      }
     }
+
+    // Once we've scrolled to the user message, don't auto-scroll again
+    setShouldScrollToLastUserMessage(false);
   }, [shouldScrollToLastUserMessage]);
 
   // Detect user scroll and update auto-scroll state
@@ -386,16 +392,15 @@ export default function Chat() {
     // Prepare one-time scroll to the latest user message
     setIsAutoScrollEnabled(true);
     setShouldScrollToLastUserMessage(true);
+    // Add extra space immediately so there's room for the AI response
+    setIsStreaming(true);
 
     try {
-      // Add user message immediately
+      // Add user message immediately (optimistic update)
       await addMessage("user", userMessage);
 
       // Create temporary assistant message for streaming
       const assistantTempId = addTemporaryMessage("assistant", "");
-
-      // Start streaming
-      setIsStreaming(true);
 
       const model = project?.selected_model || "gemini-2.5-flash";
       let edgeFunctionName = "chat-stream-gemini";
