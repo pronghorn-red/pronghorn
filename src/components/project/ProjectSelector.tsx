@@ -503,9 +503,9 @@ export function ProjectSelector({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className={isMobile ? "max-w-full w-full h-full max-h-full p-0 m-0" : "max-w-5xl max-h-[80vh] p-0"}>
-        <DialogHeader className="px-4 md:px-6 pt-4 md:pt-6">
-          <DialogTitle>Select Project Elements</DialogTitle>
+      <DialogContent className={isMobile ? "max-w-[95vw] w-full h-[90vh] p-0 m-0 flex flex-col" : "max-w-5xl max-h-[80vh] p-0 flex flex-col"}>
+        <DialogHeader className="px-3 md:px-6 pt-3 md:pt-6 pb-2 md:pb-4 shrink-0">
+          <DialogTitle className="text-base md:text-lg">Select Project Elements</DialogTitle>
           <DialogDescription className="text-xs md:text-sm">
             Choose any elements from your project to include
           </DialogDescription>
@@ -513,16 +513,16 @@ export function ProjectSelector({
 
         {isMobile ? (
           /* Mobile Layout - Tabs at top */
-          <div className="flex flex-col h-[calc(100%-8rem)]">
+          <div className="flex-1 flex flex-col min-h-0">
             {/* Horizontal scrollable category tabs */}
-            <ScrollArea className="border-b">
-              <div className="flex gap-1 px-4 py-2">
+            <div className="border-b shrink-0 overflow-x-auto">
+              <div className="flex gap-1 px-3 py-2 min-w-max">
                 {CATEGORIES.map((category) => (
                   <Button
                     key={category.id}
                     variant={activeCategory === category.id ? "default" : "outline"}
                     size="sm"
-                    className="whitespace-nowrap"
+                    className="whitespace-nowrap text-xs"
                     onClick={() => setActiveCategory(category.id)}
                   >
                     {category.icon}
@@ -530,37 +530,37 @@ export function ProjectSelector({
                   </Button>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
 
             {/* Content area */}
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="px-4 py-3 border-b">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-sm">
+              <div className="px-3 py-2 border-b shrink-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-sm truncate">
                       {CATEGORIES.find(c => c.id === activeCategory)?.label}
                     </h3>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground truncate">
                       {CATEGORIES.find(c => c.id === activeCategory)?.description}
                     </p>
                   </div>
-                  <Badge variant="secondary" className="text-xs">
+                  <Badge variant="secondary" className="text-xs shrink-0">
                     {getTotalSelected()}
                   </Badge>
                 </div>
               </div>
 
-              <ScrollArea className="flex-1 px-4 py-3">
+              <div className="flex-1 overflow-y-auto px-3 py-2 min-h-0">
                 {renderCategoryContent()}
-              </ScrollArea>
+              </div>
             </div>
           </div>
         ) : (
           /* Desktop Layout - Sidebar */
-          <div className="flex h-[500px]">
+          <div className="flex-1 flex min-h-0">
             {/* Left sidebar - Categories */}
-            <div className="w-56 border-r bg-muted/20 p-4">
-              <ScrollArea className="h-full">
+            <div className="w-56 border-r bg-muted/20 p-4 shrink-0">
+              <div className="h-full overflow-y-auto">
                 <div className="space-y-1">
                   {CATEGORIES.map((category) => (
                     <Button
@@ -574,12 +574,12 @@ export function ProjectSelector({
                     </Button>
                   ))}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
 
             {/* Right content area */}
-            <div className="flex-1 flex flex-col">
-              <div className="px-6 py-4 border-b">
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="px-6 py-4 border-b shrink-0">
                 <div className="flex items-center justify-between mb-2">
                   <div>
                     <h3 className="font-semibold">
@@ -595,34 +595,34 @@ export function ProjectSelector({
                 </div>
               </div>
 
-              <ScrollArea className="flex-1 px-6 py-4">
+              <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
                 {renderCategoryContent()}
-              </ScrollArea>
+              </div>
             </div>
           </div>
         )}
 
-        <Separator />
+        <Separator className="shrink-0" />
 
-        <DialogFooter className="px-4 md:px-6 py-3 md:py-4">
+        <DialogFooter className="px-3 md:px-6 py-2 md:py-4 shrink-0">
           <div className={isMobile ? "flex flex-col gap-2 w-full" : "flex items-center justify-between w-full"}>
             {isMobile ? (
               <>
-                <Button onClick={handleConfirm} disabled={isLoadingContent} className="w-full">
+                <Button onClick={handleConfirm} disabled={isLoadingContent} className="w-full text-sm" size="sm">
                   {isLoadingContent ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Retrieving Content...
+                      Retrieving...
                     </>
                   ) : (
                     `Add Selected (${getTotalSelected()})`
                   )}
                 </Button>
                 <div className="flex gap-2 w-full">
-                  <Button variant="outline" size="sm" onClick={handleSelectNone} className="flex-1">
+                  <Button variant="outline" size="sm" onClick={handleSelectNone} className="flex-1 text-xs">
                     Clear All
                   </Button>
-                  <Button variant="outline" onClick={onClose} disabled={isLoadingContent} className="flex-1">
+                  <Button variant="outline" size="sm" onClick={onClose} disabled={isLoadingContent} className="flex-1 text-xs">
                     Cancel
                   </Button>
                 </div>
