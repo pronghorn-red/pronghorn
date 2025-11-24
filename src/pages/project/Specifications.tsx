@@ -150,7 +150,11 @@ export default function Specifications() {
   };
 
   const getAgentPrompt = (agent: Agent) => {
-    return customizedAgents[agent.id] || agent.systemPrompt;
+    // Use custom prompt if it exists (even if empty string), otherwise use default
+    const customPrompt = customizedAgents[agent.id];
+    const finalPrompt = customPrompt !== undefined ? customPrompt : agent.systemPrompt;
+    console.log(`[Agent ${agent.id}] Using ${customPrompt !== undefined ? 'CUSTOM' : 'DEFAULT'} prompt`);
+    return finalPrompt;
   };
 
   const buildContextFromSelection = () => {
