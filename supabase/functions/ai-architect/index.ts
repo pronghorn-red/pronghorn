@@ -18,10 +18,7 @@ serve(async (req) => {
       existingNodes, 
       existingEdges, 
       drawEdges = true,
-      standards,
-      techStacks,
-      requirements,
-      projectDescription
+      attachedContext
     } = body;
     
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -93,49 +90,68 @@ Return ONLY valid JSON with this structure:
 Be comprehensive. Include all major components, pages, APIs, databases, and external services.
 Use clear, descriptive names. Be specific about what each component does.`;
 
-    // Build context string
-    let contextInfo = '';
+    // Build enriched system prompt with attached context
+    let enrichedSystemPrompt = systemPrompt;
+    
+    if (attachedContext) {
+      const contextParts: string[] = [];
+
+      if (attachedContext.projectMetadata) {
+        contextParts.push("PROJECT METADATA: included");
+      }
+      if (attachedContext.artifacts?.length) {
+        contextParts.push(`ARTIFACTS: ${attachedContext.artifacts.length} artifacts attached`);
+      }
+      if (attachedContext.chatSessions?.length) {
+        contextParts.push(`CHAT SESSIONS: ${attachedContext.chatSessions.length} sessions attached`);
+      }
+      if (attachedContext.requirements?.length) {
+        contextParts.push(`REQUIREMENTS: ${attachedContext.requirements.length} requirements attached`);
+      }
+      if (attachedContext.standards?.length) {
+        contextParts.push(`STANDARDS: ${attachedContext.standards.length} standards attached`);
+      }
+      if (attachedContext.techStacks?.length) {
+        contextParts.push(`TECH STACKS: ${attachedContext.techStacks.length} tech stacks attached`);
+      }
+      if (attachedContext.canvasNodes?.length) {
+        contextParts.push(`CANVAS NODES: ${attachedContext.canvasNodes.length} nodes attached`);
+      }
+      if (attachedContext.canvasEdges?.length) {
+        contextParts.push(`CANVAS EDGES: ${attachedContext.canvasEdges.length} edges attached`);
+      }
+      if (attachedContext.canvasLayers?.length) {
+        contextParts.push(`CANVAS LAYERS: ${attachedContext.canvasLayers.length} layers attached`);
+      }
+
+      if (contextParts.length > 0) {
+        const jsonString = JSON.stringify(attachedContext, null, 2);
+        const truncatedJson = jsonString.length > 50000
+          ? jsonString.slice(0, 50000) + "\n...[truncated for length]"
+          : jsonString;
+
+        enrichedSystemPrompt = `${systemPrompt}\n\n===== ATTACHED PROJECT CONTEXT =====\n${contextParts.join("\n")}\n\n===== FULL CONTEXT DATA =====\n${truncatedJson}\n\nPlease use the above context to inform your architecture design. The context includes full object data with all properties and content.`;
+      }
+    }
+    
+    // Build context string for existing architecture
+    let existingContextInfo = '';
     
     if (existingNodes && existingNodes.length > 0) {
       const nodesList = existingNodes.map((n: any) => 
         `${n.data.label} (${n.data.type}): ${n.data.description || 'No description'}`
       ).join('\n');
-      contextInfo += `\n\nEXISTING NODES (${existingNodes.length}):\n${nodesList}\n\n⚠️ CRITICAL: DO NOT recreate any of the existing nodes listed above. ONLY generate NEW nodes that complement and augment the existing architecture. If a node with similar functionality already exists, DO NOT create a duplicate. Focus on filling gaps and adding missing components.`;
+      existingContextInfo += `\n\nEXISTING NODES (${existingNodes.length}):\n${nodesList}\n\n⚠️ CRITICAL: DO NOT recreate any of the existing nodes listed above. ONLY generate NEW nodes that complement and augment the existing architecture. If a node with similar functionality already exists, DO NOT create a duplicate. Focus on filling gaps and adding missing components.`;
     }
 
     if (existingEdges && existingEdges.length > 0) {
       const edgesList = existingEdges.map((e: any) => 
         `${e.source} → ${e.target}${e.data?.label ? ` (${e.data.label})` : ''}`
       ).join('\n');
-      contextInfo += `\n\nEXISTING CONNECTIONS (${existingEdges.length}):\n${edgesList}`;
+      existingContextInfo += `\n\nEXISTING CONNECTIONS (${existingEdges.length}):\n${edgesList}`;
     }
 
-    if (standards && standards.length > 0) {
-      const standardsList = standards.map((s: any) => 
-        `${s.code}: ${s.title} - ${s.description || ''}`
-      ).join('\n');
-      contextInfo += `\n\nPROJECT STANDARDS:\n${standardsList}`;
-    }
-
-    if (techStacks && techStacks.length > 0) {
-      const techStacksList = techStacks.map((ts: any) => 
-        `${ts.name}: ${ts.description || ''}`
-      ).join('\n');
-      contextInfo += `\n\nTECH STACKS:\n${techStacksList}`;
-    }
-
-    if (requirements && requirements.length > 0) {
-      const requirementsList = requirements.map((r: any) => 
-        `${r.code || ''}: ${r.title} (${r.type})${r.content ? ` - ${r.content}` : ''}`
-      ).join('\n');
-      contextInfo += `\n\nREQUIREMENTS:\n${requirementsList}`;
-    }
-
-    if (projectDescription) {
-      contextInfo += `\n\nPROJECT DESCRIPTION:\n${projectDescription}`;
-    }
-
-    const userPrompt = `Generate a complete application architecture for: ${description}${contextInfo}`;
+    const userPrompt = `Generate a complete application architecture for: ${description}${existingContextInfo}`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -146,7 +162,7 @@ Use clear, descriptive names. Be specific about what each component does.`;
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: enrichedSystemPrompt },
           { role: 'user', content: userPrompt }
         ],
         temperature: 0.7,

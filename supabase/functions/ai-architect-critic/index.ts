@@ -15,10 +15,7 @@ serve(async (req) => {
     const { 
       nodes, 
       edges,
-      standards,
-      techStacks,
-      requirements,
-      projectDescription
+      attachedContext
     } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
@@ -51,32 +48,48 @@ Provide specific, actionable recommendations for improvement. Be constructive an
       `${e.source} → ${e.target}${e.data?.label ? ` (${e.data.label})` : ''}`
     ).join('\n');
 
-    // Build context string
-    let contextInfo = '';
+    // Build enriched system prompt with attached context
+    let enrichedSystemPrompt = systemPrompt;
     
-    if (standards && standards.length > 0) {
-      const standardsList = standards.map((s: any) => 
-        `${s.code}: ${s.title} - ${s.description || ''}`
-      ).join('\n');
-      contextInfo += `\n\nPROJECT STANDARDS:\n${standardsList}`;
-    }
+    if (attachedContext) {
+      const contextParts: string[] = [];
 
-    if (techStacks && techStacks.length > 0) {
-      const techStacksList = techStacks.map((ts: any) => 
-        `${ts.name}: ${ts.description || ''}`
-      ).join('\n');
-      contextInfo += `\n\nTECH STACKS:\n${techStacksList}`;
-    }
+      if (attachedContext.projectMetadata) {
+        contextParts.push("PROJECT METADATA: included");
+      }
+      if (attachedContext.artifacts?.length) {
+        contextParts.push(`ARTIFACTS: ${attachedContext.artifacts.length} artifacts attached`);
+      }
+      if (attachedContext.chatSessions?.length) {
+        contextParts.push(`CHAT SESSIONS: ${attachedContext.chatSessions.length} sessions attached`);
+      }
+      if (attachedContext.requirements?.length) {
+        contextParts.push(`REQUIREMENTS: ${attachedContext.requirements.length} requirements attached`);
+      }
+      if (attachedContext.standards?.length) {
+        contextParts.push(`STANDARDS: ${attachedContext.standards.length} standards attached`);
+      }
+      if (attachedContext.techStacks?.length) {
+        contextParts.push(`TECH STACKS: ${attachedContext.techStacks.length} tech stacks attached`);
+      }
+      if (attachedContext.canvasNodes?.length) {
+        contextParts.push(`CANVAS NODES: ${attachedContext.canvasNodes.length} nodes attached`);
+      }
+      if (attachedContext.canvasEdges?.length) {
+        contextParts.push(`CANVAS EDGES: ${attachedContext.canvasEdges.length} edges attached`);
+      }
+      if (attachedContext.canvasLayers?.length) {
+        contextParts.push(`CANVAS LAYERS: ${attachedContext.canvasLayers.length} layers attached`);
+      }
 
-    if (requirements && requirements.length > 0) {
-      const reqsList = requirements.map((r: any) => 
-        `${r.code}: ${r.title} (${r.type}) - ${r.content || ''}`
-      ).join('\n');
-      contextInfo += `\n\nREQUIREMENTS:\n${reqsList}`;
-    }
+      if (contextParts.length > 0) {
+        const jsonString = JSON.stringify(attachedContext, null, 2);
+        const truncatedJson = jsonString.length > 50000
+          ? jsonString.slice(0, 50000) + "\n...[truncated for length]"
+          : jsonString;
 
-    if (projectDescription) {
-      contextInfo += `\n\nPROJECT DESCRIPTION:\n${projectDescription}`;
+        enrichedSystemPrompt = `${systemPrompt}\n\n===== ATTACHED PROJECT CONTEXT =====\n${contextParts.join("\n")}\n\n===== FULL CONTEXT DATA =====\n${truncatedJson}\n\nPlease use the above context to inform your critique. The context includes full object data with all properties and content.`;
+      }
     }
 
     const userPrompt = `Analyze this application architecture:
@@ -86,7 +99,6 @@ ${nodesSummary}
 
 CONNECTIONS (${edges.length}):
 ${edgesSummary}
-${contextInfo}
 
 Provide a comprehensive critique with specific recommendations for improvement.`;
 
@@ -99,7 +111,7 @@ Provide a comprehensive critique with specific recommendations for improvement.`
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: enrichedSystemPrompt },
           { role: 'user', content: userPrompt }
         ],
         temperature: 0.7,

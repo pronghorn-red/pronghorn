@@ -86,15 +86,8 @@ export function AIArchitectDialog({
           target: e.target, 
           data: e.data 
         })),
+        attachedContext: selectedContext || undefined,
       };
-
-      // Add selected context if available
-      if (selectedContext) {
-        if (selectedContext.projectMetadata && projectData) {
-          context.projectDescription = projectData.description;
-        }
-        // Add other selected context here as needed
-      }
 
       const { data, error } = await supabase.functions.invoke('ai-architect', {
         body: context
@@ -144,15 +137,8 @@ export function AIArchitectDialog({
       const context: any = {
         nodes: existingNodes.map(n => ({ data: n.data, position: n.position })),
         edges: existingEdges.map(e => ({ source: e.source, target: e.target, data: e.data })),
+        attachedContext: selectedContext || undefined,
       };
-
-      // Add selected context if available
-      if (selectedContext) {
-        if (selectedContext.projectMetadata && projectData) {
-          context.projectDescription = projectData.description;
-        }
-        // Add other selected context here as needed
-      }
 
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-architect-critic`, {
         method: 'POST',
