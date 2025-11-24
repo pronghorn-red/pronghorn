@@ -11,6 +11,7 @@ import { Loader2, Sparkles, FileText, FileJson } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useShareToken } from "@/hooks/useShareToken";
 import { DownloadOptions } from "@/components/specifications/DownloadOptions";
 import { ProjectSelector, ProjectSelectionResult } from "@/components/project/ProjectSelector";
@@ -130,6 +131,7 @@ export default function Specifications() {
     }
 
     setIsGenerating(true);
+    setGeneratedSpec(""); // Clear previous results
     try {
       // Build context from selectedContent
       const contextParts = [];
@@ -186,14 +188,14 @@ export default function Specifications() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''}`
+            'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ia3pka3NmYXl5Z25yemRxb2FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTA4MzcsImV4cCI6MjA3ODk4NjgzN30.xOKphCiEilzPTo9EGHNJqAJfruM_bijI9PN3BQBF-z8`
           },
           body: JSON.stringify({
             systemPrompt,
-            userPrompt,
             messages: [],
+            userPrompt,
             model: projectSettings.selected_model,
-            maxTokens: projectSettings.max_tokens,
+            maxOutputTokens: projectSettings.max_tokens,
             thinkingEnabled: projectSettings.thinking_enabled,
             thinkingBudget: projectSettings.thinking_budget
           })
@@ -210,55 +212,94 @@ export default function Specifications() {
       let accumulated = '';
 
       if (reader) {
-        let done = false;
-        while (!done) {
-          const { value, done: streamDone } = await reader.read();
-          done = streamDone;
-          
-          if (value) {
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
-            
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                if (data === '[DONE]') continue;
-                
-                try {
-                  const parsed = JSON.parse(data);
-                  const content = parsed.choices?.[0]?.delta?.content;
-                  if (content) {
-                    accumulated += content;
-                    setGeneratedSpec(accumulated);
-                  }
-                } catch (e) {
-                  // Ignore parse errors for incomplete JSON
-                }
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+
+            const data = line.slice(6).trim();
+            if (!data) continue;
+
+            try {
+              const parsed = JSON.parse(data);
+
+              // Handle custom delta format
+              if (parsed.type === 'delta' && typeof parsed.text === 'string') {
+                accumulated += parsed.text;
+                setGeneratedSpec(accumulated);
+                continue;
               }
+
+              // Handle done event
+              if (parsed.type === 'done') {
+                continue;
+              }
+
+              // Handle standard OpenAI-style format
+              const content = parsed.choices?.[0]?.delta?.content || '';
+              if (content) {
+                accumulated += content;
+                setGeneratedSpec(accumulated);
+              }
+            } catch (e) {
+              console.error('Error parsing stream line:', e);
+            }
+          }
+        }
+
+        // Process any remaining data in buffer
+        if (buffer.trim().startsWith('data: ')) {
+          const data = buffer.trim().slice(6).trim();
+          if (data) {
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === 'delta' && typeof parsed.text === 'string') {
+                accumulated += parsed.text;
+                setGeneratedSpec(accumulated);
+              } else if (!parsed.type && parsed.choices?.[0]?.delta?.content) {
+                const content = parsed.choices[0].delta.content;
+                accumulated += content;
+                setGeneratedSpec(accumulated);
+              }
+            } catch (e) {
+              console.error('Error parsing final stream buffer:', e);
             }
           }
         }
       }
 
       // Save to database
-      const { error: saveError } = await supabase.rpc('save_project_specification_with_token', {
-        p_project_id: projectId,
-        p_token: shareToken || null,
-        p_generated_spec: accumulated,
-        p_raw_data: selectedContent as any
-      });
+      if (accumulated) {
+        const { error: saveError } = await supabase.rpc('save_project_specification_with_token', {
+          p_project_id: projectId,
+          p_token: shareToken || null,
+          p_generated_spec: accumulated,
+          p_raw_data: selectedContent as any
+        });
 
-      if (saveError) {
-        console.error('Error saving specification:', saveError);
-        toast.error('Specification generated but failed to save');
-      } else {
-        setRawData(selectedContent);
-        setHasGeneratedSpec(true);
-        toast.success("Specification generated and saved successfully!");
+        if (saveError) {
+          console.error('Error saving specification:', saveError);
+          toast.error('Specification generated but failed to save');
+        } else {
+          setRawData(selectedContent);
+          setHasGeneratedSpec(true);
+          toast.success("Specification generated and saved successfully!");
+        }
       }
     } catch (error) {
       console.error("Error generating specification:", error);
       toast.error(error instanceof Error ? error.message : "Failed to generate specification");
+      setGeneratedSpec(""); // Clear on error
     } finally {
       setIsGenerating(false);
     }
@@ -730,13 +771,15 @@ export default function Specifications() {
                   <Card>
                     <CardContent className="p-6">
                       <ScrollArea className="h-[calc(100vh-20rem)]">
-                        {isGenerating ? (
+                        {isGenerating && !generatedSpec ? (
                           <div className="flex items-center justify-center py-12">
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
                           </div>
                         ) : (
-                          <div className="prose prose-slate max-w-none">
-                            <ReactMarkdown>{generatedSpec}</ReactMarkdown>
+                          <div className="prose prose-slate dark:prose-invert max-w-none">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {generatedSpec}
+                            </ReactMarkdown>
                           </div>
                         )}
                       </ScrollArea>
@@ -748,7 +791,7 @@ export default function Specifications() {
                   <Card>
                     <CardContent className="p-6">
                       <ScrollArea className="h-[calc(100vh-20rem)]">
-                        {isGenerating ? (
+                        {isGenerating && !generatedSpec ? (
                           <div className="flex items-center justify-center py-12">
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
                           </div>
