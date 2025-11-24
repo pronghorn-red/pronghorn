@@ -64,10 +64,23 @@ export function AIArchitectDialog({
   const handleGenerate = async (useCriticFeedback = false) => {
     const finalDescription = useCriticFeedback ? criticFeedback : description;
     
-    if (!finalDescription.trim()) {
+    const hasDescription = finalDescription.trim().length > 0;
+    const hasContext = selectedContext && (
+      selectedContext.projectMetadata ||
+      selectedContext.artifacts.length > 0 ||
+      selectedContext.chatSessions.length > 0 ||
+      selectedContext.requirements.length > 0 ||
+      selectedContext.standards.length > 0 ||
+      selectedContext.techStacks.length > 0 ||
+      selectedContext.canvasNodes.length > 0 ||
+      selectedContext.canvasEdges.length > 0 ||
+      selectedContext.canvasLayers.length > 0
+    );
+    
+    if (!hasDescription && !hasContext) {
       toast({
-        title: "Description required",
-        description: "Please describe the application you want to architect.",
+        title: "Input required",
+        description: "Please provide an application description or select project context.",
         variant: "destructive",
       });
       return;
@@ -294,7 +307,12 @@ export function AIArchitectDialog({
                 <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={isGenerating} className="text-xs md:text-sm">
                   Cancel
                 </Button>
-                <Button size="sm" onClick={() => handleGenerate(false)} disabled={isGenerating} className="text-xs md:text-sm">
+                <Button 
+                  size="sm" 
+                  onClick={() => handleGenerate(false)} 
+                  disabled={isGenerating || (!description.trim() && !selectedContext)} 
+                  className="text-xs md:text-sm"
+                >
                   {isGenerating ? (
                     <>
                       <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin mr-1 md:mr-2" />
