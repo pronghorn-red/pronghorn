@@ -118,8 +118,13 @@ export default function Specifications() {
     );
   };
 
+  const hasSelectedContent = () => {
+    if (!selectedContent) return false;
+    return getTotalSelectedCount(selectedContent) > 0;
+  };
+
   const generateSpecification = async () => {
-    if (!projectId || !projectSettings || !selectedContent) {
+    if (!projectId || !projectSettings || !hasSelectedContent()) {
       toast.error("Please select project content first");
       return;
     }
@@ -591,12 +596,12 @@ export default function Specifications() {
               </CardContent>
             </Card>
 
-            {/* Step 3: AI Summary */}
+            {/* Step 3: AI Analysis */}
             <Card>
               <CardHeader>
-                <CardTitle>AI Summary</CardTitle>
+                <CardTitle>AI Analysis</CardTitle>
                 <CardDescription>
-                  Generate an AI-powered specification document from selected content
+                  Generate an AI-powered analysis document from selected content
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -606,7 +611,7 @@ export default function Specifications() {
                     <AccordionContent>
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">
-                          Customize how the AI generates your specification document:
+                          Customize how the AI generates your analysis document:
                         </p>
                         <Textarea
                           value={systemPrompt}
@@ -628,7 +633,7 @@ export default function Specifications() {
 
                 <Button
                   onClick={generateSpecification}
-                  disabled={isGenerating || !projectSettings || !selectedContent}
+                  disabled={isGenerating || !projectSettings || !hasSelectedContent()}
                   size="lg"
                   className="w-full"
                 >
@@ -640,7 +645,7 @@ export default function Specifications() {
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4 mr-2" />
-                      Generate Specification
+                      Generate Summary
                     </>
                   )}
                 </Button>
