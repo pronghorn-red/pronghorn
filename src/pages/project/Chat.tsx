@@ -157,23 +157,45 @@ export default function Chat() {
   // Detect user scroll and update auto-scroll state
   useEffect(() => {
     const scrollArea = scrollViewportRef.current;
-    if (!scrollArea) return;
+    console.log('Setting up scroll listener, scrollArea:', scrollArea);
+    
+    if (!scrollArea) {
+      console.log('No scroll area found');
+      return;
+    }
 
     const viewport = scrollArea.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
-    if (!viewport) return;
+    console.log('Found viewport:', viewport);
+    
+    if (!viewport) {
+      console.log('No viewport found');
+      return;
+    }
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = viewport;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       const threshold = 100;
       const isAtBottom = distanceFromBottom < threshold;
+      
+      console.log('Scroll event:', { 
+        scrollTop, 
+        scrollHeight, 
+        clientHeight, 
+        distanceFromBottom, 
+        isAtBottom,
+        currentAutoScrollState: isAutoScrollEnabled 
+      });
+      
       setIsAutoScrollEnabled(isAtBottom);
     };
 
     viewport.addEventListener('scroll', handleScroll, { passive: true });
+    console.log('Scroll listener attached');
     
     return () => {
       viewport.removeEventListener('scroll', handleScroll);
+      console.log('Scroll listener removed');
     };
   }, [selectedSessionId]);
 
