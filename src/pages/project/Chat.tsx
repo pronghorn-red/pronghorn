@@ -19,6 +19,7 @@ import {
   Edit2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Save,
   Wrench,
   Eye,
@@ -70,6 +71,8 @@ export default function Chat() {
   const [streamingSummary, setStreamingSummary] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
+  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
   const [isAttachDialogOpen, setIsAttachDialogOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -144,9 +147,35 @@ export default function Chat() {
     enabled: !!projectId && isTokenSet,
   });
 
+  // Auto-scroll only when enabled (user is at bottom)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingContent]);
+    if (isAutoScrollEnabled) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, streamingContent, isAutoScrollEnabled]);
+
+  // Detect user scroll and update auto-scroll state
+  useEffect(() => {
+    const scrollArea = scrollViewportRef.current;
+    if (!scrollArea) return;
+
+    const viewport = scrollArea.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+    if (!viewport) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = viewport;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const threshold = 100;
+      const isAtBottom = distanceFromBottom < threshold;
+      setIsAutoScrollEnabled(isAtBottom);
+    };
+
+    viewport.addEventListener('scroll', handleScroll, { passive: true });
+    
+    return () => {
+      viewport.removeEventListener('scroll', handleScroll);
+    };
+  }, [selectedSessionId]);
 
   const handleNewChat = async () => {
     const newSession = await createSession();
@@ -345,6 +374,9 @@ export default function Chat() {
 
     const userMessage = inputMessage.trim();
     setInputMessage("");
+    
+    // Force auto-scroll when user sends message
+    setIsAutoScrollEnabled(true);
 
     try {
       // Add user message immediately
@@ -820,7 +852,7 @@ export default function Chat() {
                   )}
                 </div>
 
-                <ScrollArea className="flex-1 p-4">
+                <ScrollArea className="flex-1 p-4" ref={scrollViewportRef}>
                   <div className="space-y-6">
                     {messages.map((message) => (
                       <div
@@ -877,6 +909,22 @@ export default function Chat() {
                     <div ref={messagesEndRef} />
                   </div>
                 </ScrollArea>
+
+                {/* Scroll to bottom button */}
+                {!isAutoScrollEnabled && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="absolute bottom-24 right-6 shadow-lg z-10"
+                    onClick={() => {
+                      setIsAutoScrollEnabled(true);
+                      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                    }}
+                  >
+                    <ChevronDown className="h-4 w-4 mr-2" />
+                    Scroll to bottom
+                  </Button>
+                )}
 
                 <div className="border-t border-border p-4 flex-shrink-0 space-y-3">
                   {/* Attached Context Display */}
