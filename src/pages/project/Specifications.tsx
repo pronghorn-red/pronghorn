@@ -883,7 +883,7 @@ export default function Specifications() {
                            <CardContent>
                             <ScrollArea className="h-[600px] w-full rounded-md border p-4">
                               {agentResults.find(r => r.agentId === activeAgentView)?.content ? (
-                                <div className="prose prose-sm dark:prose-invert max-w-none break-words overflow-wrap-anywhere [&_p]:mb-4 [&_ul]:my-4 [&_ol]:my-4 [&_li]:mb-2 [&_h1]:mb-4 [&_h2]:mb-4 [&_h3]:mb-3 [&_h4]:mb-3 [&_table]:border [&_table]:border-border [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_td]:border [&_td]:border-border [&_td]:p-2 [&_*]:max-w-full [&_pre]:overflow-x-auto">
+                                <div className="prose prose-sm dark:prose-invert max-w-none break-words whitespace-normal [&_p]:mb-4 [&_p]:break-words [&_ul]:my-4 [&_ol]:my-4 [&_li]:mb-2 [&_li]:break-words [&_h1]:mb-4 [&_h1]:break-words [&_h2]:mb-4 [&_h2]:break-words [&_h3]:mb-3 [&_h3]:break-words [&_h4]:mb-3 [&_h4]:break-words [&_table]:border [&_table]:border-border [&_table]:w-full [&_table]:table-auto [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_th]:break-words [&_td]:border [&_td]:border-border [&_td]:p-2 [&_td]:break-words [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_code]:break-words [&_a]:break-words">
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {agentResults.find(r => r.agentId === activeAgentView)?.content || ''}
                                   </ReactMarkdown>
