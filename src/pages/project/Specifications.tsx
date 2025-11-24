@@ -373,10 +373,10 @@ export default function Specifications() {
         <ProjectSidebar projectId={projectId || ""} />
         <main className="flex-1 w-full p-8">
           <div className="max-w-6xl mx-auto space-y-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-3xl font-bold mb-2">Project Specifications</h1>
-                <p className="text-muted-foreground">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+              <div className="space-y-1">
+                <h1 className="text-2xl md:text-3xl font-bold">Project Specifications</h1>
+                <p className="text-sm md:text-base text-muted-foreground">
                   Generate comprehensive documentation with AI and export in multiple formats
                 </p>
               </div>
@@ -384,6 +384,7 @@ export default function Specifications() {
                 onClick={generateSpecification}
                 disabled={isGenerating}
                 size="lg"
+                className="w-full md:w-auto shrink-0"
               >
                 {isGenerating ? (
                   <>
