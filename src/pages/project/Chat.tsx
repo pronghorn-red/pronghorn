@@ -74,6 +74,7 @@ export default function Chat() {
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const lastUserMessageRef = useRef<HTMLDivElement>(null);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
+  const [shouldScrollToLastUserMessage, setShouldScrollToLastUserMessage] = useState(false);
   const [isAttachDialogOpen, setIsAttachDialogOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -148,12 +149,15 @@ export default function Chat() {
     enabled: !!projectId && isTokenSet,
   });
 
-  // Auto-scroll: scroll to show user's message at top when sending
+  // One-time scroll to the latest user message when sending
   useEffect(() => {
-    if (isAutoScrollEnabled && lastUserMessageRef.current) {
+    if (!shouldScrollToLastUserMessage) return;
+
+    if (lastUserMessageRef.current) {
       lastUserMessageRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      setShouldScrollToLastUserMessage(false);
     }
-  }, [messages, streamingContent, isAutoScrollEnabled]);
+  }, [shouldScrollToLastUserMessage, messages.length]);
 
   // Detect user scroll and update auto-scroll state
   useEffect(() => {
@@ -378,8 +382,9 @@ export default function Chat() {
     const userMessage = inputMessage.trim();
     setInputMessage("");
     
-    // Force auto-scroll when user sends message
+    // Prepare one-time scroll to the latest user message
     setIsAutoScrollEnabled(true);
+    setShouldScrollToLastUserMessage(true);
 
     try {
       // Add user message immediately
