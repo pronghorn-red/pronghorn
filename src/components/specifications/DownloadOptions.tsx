@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, FileArchive, FileText, FileJson, Loader2, ListChecks } from "lucide-react";
+import { Download, FileArchive, FileText, FileJson, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   fetchProjectData,
@@ -14,19 +13,18 @@ import {
   type DownloadOptions as DownloadOpts
 } from "@/lib/downloadUtils";
 import { toPng } from "html-to-image";
-import { ProjectSelector, type ProjectSelectionResult } from "@/components/project/ProjectSelector";
+import { type ProjectSelectionResult } from "@/components/project/ProjectSelector";
 
 interface DownloadOptionsProps {
   projectId: string;
   projectName: string;
   shareToken: string | null;
   hasGeneratedSpec: boolean;
+  selectedContent: ProjectSelectionResult | null;
 }
 
-export function DownloadOptions({ projectId, projectName, shareToken, hasGeneratedSpec }: DownloadOptionsProps) {
+export function DownloadOptions({ projectId, projectName, shareToken, hasGeneratedSpec, selectedContent }: DownloadOptionsProps) {
   const [downloading, setDownloading] = useState(false);
-  const [selectorOpen, setSelectorOpen] = useState(false);
-  const [selectedContent, setSelectedContent] = useState<ProjectSelectionResult | null>(null);
   const [options, setOptions] = useState<DownloadOpts>({
     includeSettings: true,
     includeRequirements: true,
@@ -36,22 +34,6 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
     includeChats: true,
     includeGeneratedSpec: hasGeneratedSpec
   });
-
-  const handleProjectSelection = (selection: ProjectSelectionResult) => {
-    setSelectedContent(selection);
-    // Update options based on selection
-    setOptions({
-      includeSettings: !!selection.projectMetadata,
-      includeRequirements: selection.requirements.length > 0,
-      includeStandards: selection.standards.length > 0,
-      includeCanvas: selection.canvasNodes.length > 0 || selection.canvasEdges.length > 0 || selection.canvasLayers.length > 0,
-      includeArtifacts: selection.artifacts.length > 0,
-      includeChats: selection.chatSessions.length > 0,
-      includeGeneratedSpec: hasGeneratedSpec
-    });
-    setSelectorOpen(false);
-    toast.success("Content selection updated!");
-  };
 
   const captureCanvasPNG = async (): Promise<Blob | undefined> => {
     // Find the React Flow viewport element
@@ -144,62 +126,9 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Download Specifications</CardTitle>
-          <CardDescription>
-            Select what to include and choose your download format
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Select Content Button */}
-          <div className="space-y-3">
-            <Button 
-              onClick={() => setSelectorOpen(true)}
-              variant="outline"
-              className="w-full justify-start"
-            >
-              <ListChecks className="mr-2 h-4 w-4" />
-              {selectedContent ? "Update Content Selection" : "Select Content to Include"}
-            </Button>
-            
-            {/* Show selected content summary */}
-            {selectedContent && (
-              <div className="p-3 bg-muted/50 rounded-md space-y-1 text-sm">
-                <p className="font-medium">Selected Content:</p>
-                <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
-                  {selectedContent.projectMetadata && <li>Project Settings & Metadata</li>}
-                  {selectedContent.requirements.length > 0 && (
-                    <li>Requirements ({selectedContent.requirements.length} items)</li>
-                  )}
-                  {selectedContent.standards.length > 0 && (
-                    <li>Standards ({selectedContent.standards.length} items)</li>
-                  )}
-                  {selectedContent.canvasNodes.length > 0 && (
-                    <li>Canvas Nodes ({selectedContent.canvasNodes.length} items)</li>
-                  )}
-                  {selectedContent.canvasEdges.length > 0 && (
-                    <li>Canvas Edges ({selectedContent.canvasEdges.length} items)</li>
-                  )}
-                  {selectedContent.canvasLayers.length > 0 && (
-                    <li>Canvas Layers ({selectedContent.canvasLayers.length} items)</li>
-                  )}
-                  {selectedContent.artifacts.length > 0 && (
-                    <li>Artifacts ({selectedContent.artifacts.length} items)</li>
-                  )}
-                  {selectedContent.chatSessions.length > 0 && (
-                    <li>Chat Sessions ({selectedContent.chatSessions.length} items)</li>
-                  )}
-                  {hasGeneratedSpec && options.includeGeneratedSpec && (
-                    <li>AI Generated Specification</li>
-                  )}
-                </ul>
-              </div>
-            )}
-          </div>
-
+      <div className="space-y-6">
         {/* Download buttons */}
-        <div className="space-y-2 pt-4 border-t">
+        <div className="space-y-2">
           <p className="text-sm font-medium mb-3">Download Formats:</p>
           
           <Button
@@ -255,20 +184,10 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
             ) : (
               <Download className="mr-2 h-4 w-4" />
             )}
-            Comprehensive JSON
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-
-    {/* Project Selector Modal */}
-    <ProjectSelector
-      projectId={projectId}
-      shareToken={shareToken}
-      open={selectorOpen}
-      onClose={() => setSelectorOpen(false)}
-      onConfirm={handleProjectSelection}
-    />
+          Comprehensive JSON
+        </Button>
+      </div>
+    </div>
   </>
   );
 }

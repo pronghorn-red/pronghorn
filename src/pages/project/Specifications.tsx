@@ -555,25 +555,49 @@ export default function Specifications() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Select from project metadata, requirements, artifacts, chat sessions, canvas items, standards, and tech stacks.
-                  </p>
-                  {selectedContent && (
-                    <div className="p-3 bg-muted rounded-md mb-4">
-                      <p className="text-sm font-medium">
-                        {getTotalSelectedCount(selectedContent)} items selected
-                      </p>
-                    </div>
-                  )}
+                <div className="space-y-3">
                   <Button
                     onClick={() => setIsSelectorOpen(true)}
                     size="lg"
                     className="w-full"
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
-                    Select Content to Include
+                    {selectedContent ? "Update Content Selection" : "Select Content to Include"}
                   </Button>
+                  
+                  {/* Show selected content summary */}
+                  {selectedContent && (
+                    <div className="p-3 bg-muted/50 rounded-md space-y-1 text-sm">
+                      <p className="font-medium">Selected Content:</p>
+                      <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                        {selectedContent.projectMetadata && <li>Project Settings & Metadata</li>}
+                        {selectedContent.requirements.length > 0 && (
+                          <li>Requirements ({selectedContent.requirements.length} items)</li>
+                        )}
+                        {selectedContent.standards.length > 0 && (
+                          <li>Standards ({selectedContent.standards.length} items)</li>
+                        )}
+                        {selectedContent.techStacks.length > 0 && (
+                          <li>Tech Stacks ({selectedContent.techStacks.length} items)</li>
+                        )}
+                        {selectedContent.canvasNodes.length > 0 && (
+                          <li>Canvas Nodes ({selectedContent.canvasNodes.length} items)</li>
+                        )}
+                        {selectedContent.canvasEdges.length > 0 && (
+                          <li>Canvas Edges ({selectedContent.canvasEdges.length} items)</li>
+                        )}
+                        {selectedContent.canvasLayers.length > 0 && (
+                          <li>Canvas Layers ({selectedContent.canvasLayers.length} items)</li>
+                        )}
+                        {selectedContent.artifacts.length > 0 && (
+                          <li>Artifacts ({selectedContent.artifacts.length} items)</li>
+                        )}
+                        {selectedContent.chatSessions.length > 0 && (
+                          <li>Chat Sessions ({selectedContent.chatSessions.length} items)</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -583,7 +607,7 @@ export default function Specifications() {
               <CardHeader>
                 <CardTitle>Download Project Content</CardTitle>
                 <CardDescription>
-                  Export raw project data in JSON format
+                  Export selected project data in various formats
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -592,6 +616,7 @@ export default function Specifications() {
                   projectName={projectName}
                   shareToken={shareToken}
                   hasGeneratedSpec={hasGeneratedSpec}
+                  selectedContent={selectedContent}
                 />
               </CardContent>
             </Card>
@@ -645,7 +670,7 @@ export default function Specifications() {
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4 mr-2" />
-                      Generate Summary
+                      Generate Analysis
                     </>
                   )}
                 </Button>
