@@ -853,7 +853,7 @@ export default function Chat() {
                               </Button>
                             </div>
                           </div>
-                          <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:mb-4">
+                          <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:mb-4 [&_ul]:my-4 [&_ol]:my-4 [&_li]:mb-2 [&_h1]:mb-4 [&_h2]:mb-4 [&_h3]:mb-3 [&_h4]:mb-3">
                             {message.role === "user" ? (
                               <div className="whitespace-pre-wrap">{message.content}</div>
                             ) : (
@@ -867,7 +867,7 @@ export default function Chat() {
                     {streamingContent && (
                       <div className="flex justify-start">
                         <Card className="w-full md:max-w-[85%] p-4">
-                          <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:mb-4">
+                          <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:mb-4 [&_ul]:my-4 [&_ol]:my-4 [&_li]:mb-2 [&_h1]:mb-4 [&_h2]:mb-4 [&_h3]:mb-3 [&_h4]:mb-3">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
                           </div>
                         </Card>
