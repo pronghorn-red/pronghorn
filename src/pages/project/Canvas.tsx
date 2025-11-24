@@ -66,6 +66,7 @@ function CanvasFlow() {
   const [isAIArchitectOpen, setIsAIArchitectOpen] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Layers management
   const { layers, saveLayer, deleteLayer } = useRealtimeLayers(projectId!, token);
@@ -808,7 +809,7 @@ function CanvasFlow() {
       <PrimaryNav />
       
       <div className="flex flex-1 overflow-hidden">
-        <ProjectSidebar projectId={projectId!} />
+        <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
         
         <div className="flex flex-1 overflow-hidden">
           <CanvasPalette
@@ -822,6 +823,7 @@ function CanvasFlow() {
             onSelectLayer={handleSelectLayer}
             activeLayerId={activeLayerId}
             onSetActiveLayer={setActiveLayerId}
+            onMenuClick={() => setIsSidebarOpen(true)}
           />
           
           <div className="flex-1 relative" ref={reactFlowWrapper}>
