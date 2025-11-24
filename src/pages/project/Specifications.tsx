@@ -13,24 +13,43 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
 import { useShareToken } from "@/hooks/useShareToken";
 import { DownloadOptions } from "@/components/specifications/DownloadOptions";
+import { ProjectSelector, ProjectSelectionResult } from "@/components/project/ProjectSelector";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Textarea } from "@/components/ui/textarea";
+
+const DEFAULT_SYSTEM_PROMPT = `You are a technical specification writer. Generate a comprehensive project specification document based on the provided project data.
+
+The document should include:
+1. Executive Summary - Brief overview of the project
+2. Project Overview - Detailed description, scope, and objectives
+3. Requirements - Complete hierarchy with epics, features, stories, and acceptance criteria
+4. Architecture - Description of the canvas nodes, edges, and layers
+5. Technology Stack - List and description of all technologies
+6. Standards & Compliance - All linked standards and their application
+7. Integration Points - Key integrations and data flows
+8. Recommendations - Best practices and suggestions
+
+Format the output as a well-structured markdown document with clear headings, bullet points, and tables where appropriate.`;
 
 export default function Specifications() {
   const { projectId } = useParams();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [generatedSpec, setGeneratedSpec] = useState<string>("");
   const [rawData, setRawData] = useState<any>(null);
   const [projectName, setProjectName] = useState<string>("project");
   const [hasGeneratedSpec, setHasGeneratedSpec] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [projectSettings, setProjectSettings] = useState<any>(null);
 
-  // Load saved specification and project name
+  // Load saved specification, project name, and settings
   useEffect(() => {
     const loadData = async () => {
       if (!projectId || !isTokenSet) return;
 
-      // Load project name via RPC (token-based)
+      // Load project details and settings via RPC (token-based)
       const { data: project } = await supabase.rpc('get_project_with_token', {
         p_project_id: projectId,
         p_token: shareToken || null
@@ -38,6 +57,12 @@ export default function Specifications() {
       
       if (project) {
         setProjectName(project.name);
+        setProjectSettings({
+          selected_model: project.selected_model || 'google/gemini-2.5-flash',
+          max_tokens: project.max_tokens || 32768,
+          thinking_enabled: project.thinking_enabled || false,
+          thinking_budget: project.thinking_budget || -1
+        });
       }
 
       // Load saved specification
@@ -73,24 +98,136 @@ export default function Specifications() {
     );
   }
 
-  const generateSpecification = async () => {
-    if (!projectId) return;
+  const handleProjectSelection = async (selection: ProjectSelectionResult) => {
+    if (!projectId || !projectSettings) return;
 
     setIsGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-specification", {
-        body: { 
-          projectId,
-          shareToken 
+      // Build context from selection
+      const contextParts = [];
+      
+      if (selection.projectMetadata) {
+        contextParts.push(`# Project Metadata\n${JSON.stringify(selection.projectMetadata, null, 2)}`);
+      }
+      
+      if (selection.requirements.length > 0) {
+        contextParts.push(`# Requirements\n${JSON.stringify(selection.requirements, null, 2)}`);
+      }
+      
+      if (selection.artifacts.length > 0) {
+        contextParts.push(`# Artifacts\n${JSON.stringify(selection.artifacts, null, 2)}`);
+      }
+      
+      if (selection.chatSessions.length > 0) {
+        contextParts.push(`# Chat Sessions\n${JSON.stringify(selection.chatSessions, null, 2)}`);
+      }
+      
+      if (selection.standards.length > 0) {
+        contextParts.push(`# Standards\n${JSON.stringify(selection.standards, null, 2)}`);
+      }
+      
+      if (selection.techStacks.length > 0) {
+        contextParts.push(`# Tech Stacks\n${JSON.stringify(selection.techStacks, null, 2)}`);
+      }
+      
+      if (selection.canvasNodes.length > 0) {
+        contextParts.push(`# Canvas Nodes\n${JSON.stringify(selection.canvasNodes, null, 2)}`);
+      }
+      
+      if (selection.canvasEdges.length > 0) {
+        contextParts.push(`# Canvas Edges\n${JSON.stringify(selection.canvasEdges, null, 2)}`);
+      }
+      
+      if (selection.canvasLayers.length > 0) {
+        contextParts.push(`# Canvas Layers\n${JSON.stringify(selection.canvasLayers, null, 2)}`);
+      }
+
+      const userPrompt = `Please generate a comprehensive technical specification document based on the following project data:\n\n${contextParts.join('\n\n')}`;
+
+      // Determine which edge function to call based on model
+      let edgeFunctionName = 'chat-stream-gemini';
+      if (projectSettings.selected_model.includes('anthropic') || projectSettings.selected_model.includes('claude')) {
+        edgeFunctionName = 'chat-stream-anthropic';
+      } else if (projectSettings.selected_model.includes('xai') || projectSettings.selected_model.includes('grok')) {
+        edgeFunctionName = 'chat-stream-xai';
+      }
+
+      const response = await fetch(
+        `https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/${edgeFunctionName}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''}`
+          },
+          body: JSON.stringify({
+            systemPrompt,
+            userPrompt,
+            messages: [],
+            model: projectSettings.selected_model,
+            maxTokens: projectSettings.max_tokens,
+            thinkingEnabled: projectSettings.thinking_enabled,
+            thinkingBudget: projectSettings.thinking_budget
+          })
         }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to generate specification: ${errorText}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = '';
+
+      if (reader) {
+        let done = false;
+        while (!done) {
+          const { value, done: streamDone } = await reader.read();
+          done = streamDone;
+          
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                if (data === '[DONE]') continue;
+                
+                try {
+                  const parsed = JSON.parse(data);
+                  const content = parsed.choices?.[0]?.delta?.content;
+                  if (content) {
+                    accumulated += content;
+                    setGeneratedSpec(accumulated);
+                  }
+                } catch (e) {
+                  // Ignore parse errors for incomplete JSON
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Save to database
+      const { error: saveError } = await supabase.rpc('save_project_specification_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_generated_spec: accumulated,
+        p_raw_data: selection as any
       });
 
-      if (error) throw error;
-
-      setGeneratedSpec(data.generatedSpecification);
-      setRawData(data.rawData);
-      setHasGeneratedSpec(true);
-      toast.success("Specification generated and saved successfully!");
+      if (saveError) {
+        console.error('Error saving specification:', saveError);
+        toast.error('Specification generated but failed to save');
+      } else {
+        setRawData(selection);
+        setHasGeneratedSpec(true);
+        toast.success("Specification generated and saved successfully!");
+      }
     } catch (error) {
       console.error("Error generating specification:", error);
       toast.error(error instanceof Error ? error.message : "Failed to generate specification");
@@ -379,26 +516,6 @@ export default function Specifications() {
               title="Project Specifications"
               subtitle="Generate comprehensive documentation with AI and export in multiple formats"
               onMenuClick={() => setIsSidebarOpen(true)}
-              actions={
-                <Button
-                  onClick={generateSpecification}
-                  disabled={isGenerating}
-                  size="lg"
-                  className="w-full md:w-auto"
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Generate Specification
-                    </>
-                  )}
-                </Button>
-              }
             />
 
             {/* Download Options */}
@@ -414,22 +531,68 @@ export default function Specifications() {
                 <CardHeader>
                   <CardTitle>AI-Generated Documentation</CardTitle>
                   <CardDescription>
-                    Click "Generate Specification" to create a comprehensive project documentation with AI
+                    Select project content and customize the prompt to generate comprehensive documentation
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
+                  <Accordion type="single" collapsible defaultValue="prompt">
+                    <AccordionItem value="prompt">
+                      <AccordionTrigger>System Prompt</AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-2">
+                          <p className="text-sm text-muted-foreground">
+                            Customize how the AI generates your specification document:
+                          </p>
+                          <Textarea
+                            value={systemPrompt}
+                            onChange={(e) => setSystemPrompt(e.target.value)}
+                            rows={12}
+                            className="font-mono text-sm"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSystemPrompt(DEFAULT_SYSTEM_PROMPT)}
+                          >
+                            Reset to Default
+                          </Button>
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+
                   <div>
-                    <h3 className="font-semibold mb-2">What will be included:</h3>
+                    <h3 className="font-semibold mb-2">What can be included:</h3>
                     <ul className="list-disc list-inside space-y-2 text-muted-foreground">
-                      <li>AI-generated executive summary and overview</li>
-                      <li>Complete requirements hierarchy (Epics, Features, Stories)</li>
-                      <li>Architecture canvas with all nodes and connections</li>
-                      <li>Technology stack details</li>
-                      <li>Linked standards and compliance information</li>
-                      <li>Component inventory by type</li>
-                      <li>Integration points and recommendations</li>
+                      <li>Project metadata and settings</li>
+                      <li>Requirements hierarchy (Epics, Features, Stories)</li>
+                      <li>Artifacts and documentation</li>
+                      <li>Chat sessions and conversations</li>
+                      <li>Architecture canvas (nodes, edges, layers)</li>
+                      <li>Technology stack components</li>
+                      <li>Standards and compliance information</li>
                     </ul>
                   </div>
+
+                  <Button
+                    onClick={() => setIsSelectorOpen(true)}
+                    disabled={isGenerating || !projectSettings}
+                    size="lg"
+                    className="w-full"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Generate Specification
+                      </>
+                    )}
+                  </Button>
+
                   <div>
                     <h3 className="font-semibold mb-2">Export Formats:</h3>
                     <ul className="list-disc list-inside space-y-2 text-muted-foreground">
@@ -508,6 +671,14 @@ export default function Specifications() {
           </div>
         </main>
       </div>
+
+      <ProjectSelector
+        projectId={projectId || ""}
+        shareToken={shareToken}
+        open={isSelectorOpen}
+        onClose={() => setIsSelectorOpen(false)}
+        onConfirm={handleProjectSelection}
+      />
     </div>
   );
 }
