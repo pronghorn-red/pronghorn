@@ -1,5 +1,5 @@
 import { NodeType } from "./NodePalette";
-import { Eye, EyeOff, ChevronLeft, ChevronRight } from "lucide-react";
+import { Eye, EyeOff, ChevronLeft, ChevronRight, Menu } from "lucide-react";
 import { useState } from "react";
 import {
   Accordion,
@@ -54,6 +54,7 @@ interface CanvasPaletteProps {
   onSelectLayer: (nodeIds: string[]) => void;
   activeLayerId: string | null;
   onSetActiveLayer: (layerId: string | null) => void;
+  onMenuClick: () => void;
 }
 
 export function CanvasPalette({
@@ -67,6 +68,7 @@ export function CanvasPalette({
   onSelectLayer,
   activeLayerId,
   onSetActiveLayer,
+  onMenuClick,
 }: CanvasPaletteProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -123,7 +125,18 @@ export function CanvasPalette({
   return (
     <div className="w-80 border-r border-border bg-card flex flex-col h-full overflow-hidden">
       <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
-        <h3 className="text-sm font-semibold">Canvas Palette</h3>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onMenuClick}
+            className="h-8 w-8"
+            aria-label="Open menu"
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+          <h3 className="text-sm font-semibold">Canvas Palette</h3>
+        </div>
         <Button
           variant="ghost"
           size="icon"

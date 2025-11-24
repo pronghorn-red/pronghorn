@@ -51,6 +51,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ProjectSelector, ProjectSelectionResult } from "@/components/project/ProjectSelector";
+import { Menu } from "lucide-react";
 
 export default function Chat() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -79,6 +80,7 @@ export default function Chat() {
   const isMobile = useIsMobile();
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
   const [attachedContext, setAttachedContext] = useState<ProjectSelectionResult | null>(null);
+  const [isProjectSidebarOpen, setIsProjectSidebarOpen] = useState(false);
 
   const {
     messages,
@@ -643,7 +645,7 @@ export default function Chat() {
       <PrimaryNav />
 
       <div className="flex relative flex-1 overflow-hidden">
-        <ProjectSidebar projectId={projectId!} />
+        <ProjectSidebar projectId={projectId!} isOpen={isProjectSidebarOpen} onOpenChange={setIsProjectSidebarOpen} />
 
         <main className="flex-1 w-full flex overflow-hidden">
           {/* Sessions Sidebar */}
@@ -652,12 +654,23 @@ export default function Chat() {
               isSidebarCollapsed ? "w-12" : "w-64"
             }`}
           >
-            {/* Collapse Toggle */}
-            <div className="flex justify-end p-2 border-b border-border">
+            {/* Header with Menu and Collapse Toggle */}
+            <div className="flex items-center justify-between p-2 border-b border-border">
+              {!isSidebarCollapsed && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setIsProjectSidebarOpen(true)}
+                  aria-label="Open menu"
+                >
+                  <Menu className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-8 w-8 ml-auto"
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
               >
                 {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
