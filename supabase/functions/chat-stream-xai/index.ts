@@ -19,6 +19,8 @@ serve(async (req) => {
       tools = [], 
       model = "grok-4-fast-non-reasoning",
       maxOutputTokens = 16384,
+      thinkingEnabled = false,
+      thinkingBudget = 0,
       attachedContext = null
     } = await req.json();
 

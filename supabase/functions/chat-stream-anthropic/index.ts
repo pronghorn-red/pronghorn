@@ -18,6 +18,8 @@ serve(async (req) => {
       tools = [], 
       model, 
       maxOutputTokens,
+      thinkingEnabled = false,
+      thinkingBudget = 0,
       attachedContext = null
     } = await req.json();
     
