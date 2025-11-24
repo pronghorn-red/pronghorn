@@ -190,7 +190,7 @@ export default function Specifications() {
       contextParts.push(`# Canvas Layers\n${JSON.stringify(selectedContent.canvasLayers, null, 2)}`);
     }
 
-    return `Please generate a comprehensive specification document based on the following project data:\n\n${contextParts.join('\n\n')}`;
+    return contextParts.join('\n\n');
   };
 
   const generateForAgent = async (agent: Agent, userPrompt: string) => {
