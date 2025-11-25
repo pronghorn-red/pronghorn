@@ -13,11 +13,11 @@ serve(async (req) => {
   }
 
   try {
-    const { projectId, shareToken } = await req.json();
+    const { selectedContent } = await req.json();
 
-    if (!projectId || !shareToken) {
+    if (!selectedContent) {
       return new Response(
-        JSON.stringify({ error: 'projectId and shareToken are required' }),
+        JSON.stringify({ error: 'selectedContent is required' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -25,69 +25,39 @@ serve(async (req) => {
       );
     }
 
-    console.log('🎨 Generating infographic for project:', projectId);
+    console.log('🎨 Generating infographic from selected content');
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 
     if (!GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      throw new Error('SUPABASE_URL or SUPABASE_ANON_KEY is not configured');
-    }
-
-    // Create Supabase client with anon key (respects RLS)
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // Fetch project details
-    const { data: project, error: projectError } = await supabase.rpc('get_project_with_token', {
-      p_project_id: projectId,
-      p_token: shareToken
-    });
-
-    if (projectError) {
-      console.error('Error fetching project:', projectError);
-      throw new Error('Failed to fetch project details');
-    }
-
-    // Fetch requirements
-    const { data: requirements, error: reqError } = await supabase.rpc('get_requirements_with_token', {
-      p_project_id: projectId,
-      p_token: shareToken
-    });
-
-    if (reqError) {
-      console.error('Error fetching requirements:', reqError);
-      throw new Error('Failed to fetch requirements');
-    }
-
-    // Fetch canvas nodes
-    const { data: canvasNodes, error: nodesError } = await supabase.rpc('get_canvas_nodes_with_token', {
-      p_project_id: projectId,
-      p_token: shareToken
-    });
-
-    if (nodesError) {
-      console.error('Error fetching canvas nodes:', nodesError);
-      throw new Error('Failed to fetch canvas nodes');
-    }
-
-    // Build the prompt
-    const projectTitle = project.name || 'Untitled Project';
-    const projectDescription = project.description || 'No description provided';
+    // Build the prompt from selected content
+    const projectTitle = selectedContent.projectMetadata?.name || 'Untitled Project';
+    const projectDescription = selectedContent.projectMetadata?.description || 'No description provided';
     
-    const requirementsList = requirements && requirements.length > 0 
-      ? requirements.map((r: any) => `- ${r.title}: ${r.content || 'No details'}`).join('\n')
-      : 'No requirements defined';
+    const requirementsList = selectedContent.requirements && selectedContent.requirements.length > 0 
+      ? selectedContent.requirements.map((r: any) => `- ${r.title}: ${r.content || 'No details'}`).join('\n')
+      : 'No requirements selected';
 
-    const nodesList = canvasNodes && canvasNodes.length > 0
-      ? canvasNodes.map((n: any) => `- ${n.data?.label || 'Unlabeled'} (${n.type})`).join('\n')
-      : 'No canvas nodes defined';
+    const nodesList = selectedContent.canvasNodes && selectedContent.canvasNodes.length > 0
+      ? selectedContent.canvasNodes.map((n: any) => `- ${n.data?.label || 'Unlabeled'} (${n.type})`).join('\n')
+      : 'No canvas nodes selected';
 
-    const prompt = `Create a professional, visually appealing infographic for this software project.
+    const artifactsList = selectedContent.artifacts && selectedContent.artifacts.length > 0
+      ? selectedContent.artifacts.map((a: any) => `- ${a.ai_title || 'Untitled'}: ${a.ai_summary || a.content?.substring(0, 100)}`).join('\n')
+      : '';
+
+    const standardsList = selectedContent.standards && selectedContent.standards.length > 0
+      ? selectedContent.standards.map((s: any) => `- ${s.title}: ${s.description || ''}`).join('\n')
+      : '';
+
+    const techStacksList = selectedContent.techStacks && selectedContent.techStacks.length > 0
+      ? selectedContent.techStacks.map((t: any) => `- ${t.name}: ${t.description || ''}`).join('\n')
+      : '';
+
+    let prompt = `Create a professional, visually appealing infographic for this software project.
 
 **Project Title:** ${projectTitle}
 
@@ -98,15 +68,30 @@ ${projectDescription}
 ${requirementsList}
 
 **Architecture Components:**
-${nodesList}
+${nodesList}`;
+
+    if (artifactsList) {
+      prompt += `\n\n**Artifacts:**\n${artifactsList}`;
+    }
+
+    if (standardsList) {
+      prompt += `\n\n**Standards:**\n${standardsList}`;
+    }
+
+    if (techStacksList) {
+      prompt += `\n\n**Tech Stacks:**\n${techStacksList}`;
+    }
+
+    prompt += `
 
 Design an infographic that:
 1. Uses the project title as the main heading
 2. Visually represents the architecture components and their relationships
-3. Highlights key requirements
+3. Highlights key requirements and selected content
 4. Uses a modern, professional color scheme
 5. Is clear, informative, and suitable for stakeholder presentations
-6. Includes icons or visual elements that represent different component types (databases, APIs, services, etc.)`;
+6. Includes icons or visual elements that represent different component types (databases, APIs, services, etc.)
+7. Incorporates any standards and tech stack information if provided`;
 
     console.log('🎨 Generating infographic with Gemini 3 Pro Image Preview...');
 

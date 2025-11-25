@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Download } from "lucide-react";
+import { Loader2, Download, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { ProjectSelector, type ProjectSelectionResult } from "@/components/project/ProjectSelector";
+import { Badge } from "@/components/ui/badge";
 
 interface InfographicDialogProps {
   projectId: string;
@@ -15,10 +17,17 @@ interface InfographicDialogProps {
 export function InfographicDialog({ projectId, shareToken, open, onOpenChange }: InfographicDialogProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [showProjectSelector, setShowProjectSelector] = useState(false);
+  const [selectedContent, setSelectedContent] = useState<ProjectSelectionResult | null>(null);
+
+  const handleContentSelected = (selection: ProjectSelectionResult) => {
+    setSelectedContent(selection);
+    setShowProjectSelector(false);
+  };
 
   const generateInfographic = async () => {
-    if (!shareToken) {
-      toast.error("Share token is required to generate infographic");
+    if (!selectedContent) {
+      toast.error("Please select content first");
       return;
     }
 
@@ -26,12 +35,11 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
     setImageUrl(null);
 
     try {
-      console.log('Generating infographic for project:', projectId);
+      console.log('Generating infographic with selected content');
       
       const { data, error } = await supabase.functions.invoke('generate-image', {
         body: { 
-          projectId,
-          shareToken
+          selectedContent
         }
       });
 
@@ -58,6 +66,21 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
     }
   };
 
+  const getTotalSelectedCount = () => {
+    if (!selectedContent) return 0;
+    return (
+      (selectedContent.projectMetadata ? 1 : 0) +
+      selectedContent.artifacts.length +
+      selectedContent.chatSessions.length +
+      selectedContent.requirements.length +
+      selectedContent.standards.length +
+      selectedContent.techStacks.length +
+      selectedContent.canvasNodes.length +
+      selectedContent.canvasEdges.length +
+      selectedContent.canvasLayers.length
+    );
+  };
+
   const downloadInfographic = () => {
     if (!imageUrl) return;
 
@@ -82,14 +105,46 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
 
         <div className="space-y-4">
           {!imageUrl && !isGenerating && (
-            <div className="flex flex-col items-center justify-center py-12 space-y-4">
-              <p className="text-sm text-muted-foreground text-center max-w-md">
-                Click the button below to generate a professional infographic based on your project's 
-                architecture, requirements, and components.
-              </p>
-              <Button onClick={generateInfographic} size="lg">
-                Generate Infographic
-              </Button>
+            <div className="space-y-4">
+              {!selectedContent ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                  <p className="text-sm text-muted-foreground text-center max-w-md">
+                    Select the project content you want to include in your infographic.
+                  </p>
+                  <Button onClick={() => setShowProjectSelector(true)} size="lg">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Select Content
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="border rounded-lg p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium">Selected Content</h4>
+                      <Badge variant="secondary">{getTotalSelectedCount()} items</Badge>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                      {selectedContent.projectMetadata && <div>• Project Info</div>}
+                      {selectedContent.artifacts.length > 0 && <div>• {selectedContent.artifacts.length} Artifacts</div>}
+                      {selectedContent.chatSessions.length > 0 && <div>• {selectedContent.chatSessions.length} Chats</div>}
+                      {selectedContent.requirements.length > 0 && <div>• {selectedContent.requirements.length} Requirements</div>}
+                      {selectedContent.standards.length > 0 && <div>• {selectedContent.standards.length} Standards</div>}
+                      {selectedContent.techStacks.length > 0 && <div>• {selectedContent.techStacks.length} Tech Stacks</div>}
+                      {selectedContent.canvasNodes.length > 0 && <div>• {selectedContent.canvasNodes.length} Canvas Nodes</div>}
+                      {selectedContent.canvasEdges.length > 0 && <div>• {selectedContent.canvasEdges.length} Canvas Edges</div>}
+                      {selectedContent.canvasLayers.length > 0 && <div>• {selectedContent.canvasLayers.length} Canvas Layers</div>}
+                    </div>
+                  </div>
+                  <div className="flex justify-center gap-2">
+                    <Button onClick={() => setShowProjectSelector(true)} variant="outline">
+                      Change Selection
+                    </Button>
+                    <Button onClick={generateInfographic} size="lg">
+                      Generate Infographic
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -124,6 +179,14 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
           )}
         </div>
       </DialogContent>
+
+      <ProjectSelector
+        projectId={projectId}
+        shareToken={shareToken}
+        open={showProjectSelector}
+        onClose={() => setShowProjectSelector(false)}
+        onConfirm={handleContentSelected}
+      />
     </Dialog>
   );
 }
