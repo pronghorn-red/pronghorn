@@ -134,6 +134,10 @@ export default function Specifications() {
     return getTotalSelectedCount(selectedContent) > 0;
   };
 
+  const isAnyAgentProcessing = () => {
+    return agentResults.some(r => r.status === 'pending' || r.status === 'streaming');
+  };
+
   const toggleAgent = (agentId: string) => {
     setSelectedAgents(prev => 
       prev.includes(agentId) 
@@ -781,12 +785,21 @@ export default function Specifications() {
                 <div className="space-y-4">
                   <Button
                     onClick={generateSpecifications}
-                    disabled={!hasSelectedContent() || selectedAgents.length === 0}
+                    disabled={!hasSelectedContent() || selectedAgents.length === 0 || isAnyAgentProcessing()}
                     size="lg"
                     className="w-full"
                   >
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Generate Analysis
+                    {isAnyAgentProcessing() ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Generate Analysis
+                      </>
+                    )}
                   </Button>
 
                   {agentResults.length > 0 && (
