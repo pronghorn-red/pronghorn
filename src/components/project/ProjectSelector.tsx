@@ -352,7 +352,38 @@ export function ProjectSelector({
           p_token: shareToken || null
         });
         if (error) throw error;
-        canvasLayers.push(...(data || []).filter((l: any) => selectedLayers.has(l.id)));
+        const filteredLayers = (data || []).filter((l: any) => selectedLayers.has(l.id));
+        canvasLayers.push(...filteredLayers);
+        
+        // Also include nodes from selected layers (if not already included)
+        const layerNodeIds = new Set<string>();
+        filteredLayers.forEach((layer: any) => {
+          layer.node_ids?.forEach((nodeId: string) => layerNodeIds.add(nodeId));
+        });
+        
+        // Add any layer nodes that weren't already selected
+        if (layerNodeIds.size > 0 && canvasNodes.length > 0) {
+          const allNodesData = await supabase.rpc("get_canvas_nodes_with_token", {
+            p_project_id: projectId,
+            p_token: shareToken || null
+          });
+          if (allNodesData.data) {
+            const additionalNodes = (allNodesData.data || []).filter(
+              (n: any) => layerNodeIds.has(n.id) && !canvasNodes.some(cn => cn.id === n.id)
+            );
+            canvasNodes.push(...additionalNodes);
+          }
+        } else if (layerNodeIds.size > 0 && canvasNodes.length === 0) {
+          // If no nodes were selected initially, fetch all layer nodes
+          const allNodesData = await supabase.rpc("get_canvas_nodes_with_token", {
+            p_project_id: projectId,
+            p_token: shareToken || null
+          });
+          if (allNodesData.data) {
+            const layerNodes = (allNodesData.data || []).filter((n: any) => layerNodeIds.has(n.id));
+            canvasNodes.push(...layerNodes);
+          }
+        }
       }
 
       const result: ProjectSelectionResult = {

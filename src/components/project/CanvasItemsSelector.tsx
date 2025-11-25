@@ -102,13 +102,27 @@ export function CanvasItemsSelector({
   };
 
   const toggleLayer = (id: string) => {
-    const newSelected = new Set(selectedLayers);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
+    const newSelectedLayers = new Set(selectedLayers);
+    const layer = layers.find(l => l.id === id);
+    
+    if (newSelectedLayers.has(id)) {
+      // Deselecting layer - also deselect its nodes
+      newSelectedLayers.delete(id);
+      if (layer) {
+        const newSelectedNodes = new Set(selectedNodes);
+        layer.node_ids.forEach(nodeId => newSelectedNodes.delete(nodeId));
+        onNodesChange(newSelectedNodes);
+      }
     } else {
-      newSelected.add(id);
+      // Selecting layer - also select its nodes
+      newSelectedLayers.add(id);
+      if (layer) {
+        const newSelectedNodes = new Set(selectedNodes);
+        layer.node_ids.forEach(nodeId => newSelectedNodes.add(nodeId));
+        onNodesChange(newSelectedNodes);
+      }
     }
-    onLayersChange(newSelected);
+    onLayersChange(newSelectedLayers);
   };
 
   if (loading) {
