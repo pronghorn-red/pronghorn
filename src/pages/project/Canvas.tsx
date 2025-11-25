@@ -24,8 +24,9 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image, ChevronRight, Wrench, Sparkles, FileSearch, AlignLeft, AlignVerticalJustifyStart, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Grid3x3 } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image, ChevronRight, Wrench, Sparkles, FileSearch, AlignLeft, AlignVerticalJustifyStart, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Grid3x3, ImagePlus } from "lucide-react";
 import { AIArchitectDialog } from "@/components/canvas/AIArchitectDialog";
+import { InfographicDialog } from "@/components/canvas/InfographicDialog";
 import { useToast } from "@/hooks/use-toast";
 import { toPng, toSvg } from "html-to-image";
 import { Lasso } from "@/components/canvas/Lasso";
@@ -64,6 +65,7 @@ function CanvasFlow() {
   const [isLassoActive, setIsLassoActive] = useState(false);
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
   const [isAIArchitectOpen, setIsAIArchitectOpen] = useState(false);
+  const [isInfographicOpen, setIsInfographicOpen] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -910,6 +912,13 @@ function CanvasFlow() {
                 onOpenChange={setIsAIArchitectOpen}
               />
               
+              <InfographicDialog
+                projectId={projectId!}
+                shareToken={token}
+                open={isInfographicOpen}
+                onOpenChange={setIsInfographicOpen}
+              />
+              
               <div className="absolute top-4 left-4 z-10 flex gap-2">
                 {isMobile ? (
                   <DropdownMenu>
@@ -934,6 +943,10 @@ function CanvasFlow() {
                       <DropdownMenuItem onClick={() => handleDownloadSnapshot('svg')}>
                         <FileSearch className="h-4 w-4 mr-2" />
                         Export SVG
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setIsInfographicOpen(true)}>
+                        <ImagePlus className="h-4 w-4 mr-2" />
+                        Generate Infographic
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={handleAlignLeft} disabled={selectedNodesList.length <= 1}>
                         <AlignLeft className="h-4 w-4 mr-2" />
@@ -1023,6 +1036,21 @@ function CanvasFlow() {
                       </TooltipTrigger>
                       <TooltipContent side="bottom">
                         <p>Export SVG</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={() => setIsInfographicOpen(true)}
+                          size="sm"
+                          variant="outline"
+                          className="bg-card/80"
+                        >
+                          <ImagePlus className="w-3 h-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p>Generate Infographic</p>
                       </TooltipContent>
                     </Tooltip>
                     

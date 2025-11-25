@@ -360,6 +360,7 @@ export default function ProjectSettings() {
                         <SelectContent>
                           <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash (Default)</SelectItem>
                           <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro (Advanced)</SelectItem>
+                          <SelectItem value="gemini-3-pro-preview">Gemini 3 Pro Preview (Next-Gen)</SelectItem>
                           <SelectItem value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Fast)</SelectItem>
                           <SelectItem value="claude-sonnet-4-5">Claude Sonnet 4.5</SelectItem>
                           <SelectItem value="claude-haiku-4-5">Claude Haiku 4.5</SelectItem>
