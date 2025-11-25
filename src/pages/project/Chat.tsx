@@ -421,6 +421,19 @@ export default function Chat() {
         content: userMessage,
       });
 
+      // Filter out empty arrays from attachedContext
+      const filteredContext = attachedContext ? {
+        projectMetadata: attachedContext.projectMetadata || null,
+        artifacts: attachedContext.artifacts.length > 0 ? attachedContext.artifacts : undefined,
+        chatSessions: attachedContext.chatSessions.length > 0 ? attachedContext.chatSessions : undefined,
+        requirements: attachedContext.requirements.length > 0 ? attachedContext.requirements : undefined,
+        standards: attachedContext.standards.length > 0 ? attachedContext.standards : undefined,
+        techStacks: attachedContext.techStacks.length > 0 ? attachedContext.techStacks : undefined,
+        canvasNodes: attachedContext.canvasNodes.length > 0 ? attachedContext.canvasNodes : undefined,
+        canvasEdges: attachedContext.canvasEdges.length > 0 ? attachedContext.canvasEdges : undefined,
+        canvasLayers: attachedContext.canvasLayers.length > 0 ? attachedContext.canvasLayers : undefined,
+      } : undefined;
+
       const response = await fetch(`https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/${edgeFunctionName}`, {
         method: "POST",
         headers: {
@@ -435,7 +448,7 @@ export default function Chat() {
           maxOutputTokens: project?.max_tokens || 32768,
           thinkingEnabled: project?.thinking_enabled || false,
           thinkingBudget: project?.thinking_budget || -1,
-          attachedContext: attachedContext || undefined,
+          attachedContext: filteredContext,
           projectId: projectId,
           shareToken: shareToken,
         }),
@@ -793,12 +806,14 @@ export default function Chat() {
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6"
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
-                                deleteSession(session.id);
-                                if (selectedSessionId === session.id) {
+                                const isCurrentSession = selectedSessionId === session.id;
+                                if (isCurrentSession) {
+                                  // Clear selection first to prevent flash of old messages
                                   setSelectedSessionId(null);
                                 }
+                                await deleteSession(session.id);
                               }}
                             >
                               <Trash2 className="h-3 w-3" />
@@ -962,6 +977,7 @@ export default function Chat() {
                               {attachedContext.techStacks.length > 0 && <p>✓ {attachedContext.techStacks.length} tech stacks</p>}
                               {attachedContext.canvasNodes.length > 0 && <p>✓ {attachedContext.canvasNodes.length} canvas nodes</p>}
                               {attachedContext.canvasEdges.length > 0 && <p>✓ {attachedContext.canvasEdges.length} canvas edges</p>}
+                              {attachedContext.canvasLayers.length > 0 && <p>✓ {attachedContext.canvasLayers.length} canvas layers</p>}
                             </div>
                           </div>
                           <Button
