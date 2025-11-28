@@ -6,6 +6,12 @@ import { Loader2, Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { ProjectSelector, type ProjectSelectionResult } from "@/components/project/ProjectSelector";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type GenerationType = "infographic" | "web-mockup" | "mobile-mockup";
+type InfographicStyle = "whiteboard" | "flowchart" | "cartoon" | "photographic" | "modern" | "minimalist";
+type MockupStyle = "material" | "ios" | "flat" | "neumorphic" | "glassmorphic" | "corporate";
 
 interface InfographicDialogProps {
   projectId: string;
@@ -19,6 +25,9 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [selectedContent, setSelectedContent] = useState<ProjectSelectionResult | null>(null);
+  const [generationType, setGenerationType] = useState<GenerationType>("infographic");
+  const [infographicStyle, setInfographicStyle] = useState<InfographicStyle>("modern");
+  const [mockupStyle, setMockupStyle] = useState<MockupStyle>("material");
 
   const handleContentSelected = (selection: ProjectSelectionResult) => {
     setSelectedContent(selection);
@@ -35,11 +44,13 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
     setImageUrl(null);
 
     try {
-      console.log('Generating infographic with selected content');
+      console.log('Generating with selected content and style');
       
       const { data, error } = await supabase.functions.invoke('generate-image', {
         body: { 
-          selectedContent
+          selectedContent,
+          generationType,
+          style: generationType === "infographic" ? infographicStyle : mockupStyle
         }
       });
 
@@ -97,9 +108,9 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Generate Infographic</DialogTitle>
+          <DialogTitle>Generate Visual</DialogTitle>
           <DialogDescription>
-            Generate a visual infographic of your project architecture, requirements, and components.
+            Generate infographics or mockups from your project content with various visual styles.
           </DialogDescription>
         </DialogHeader>
 
@@ -109,7 +120,7 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
               {!selectedContent ? (
                 <div className="flex flex-col items-center justify-center py-12 space-y-4">
                   <p className="text-sm text-muted-foreground text-center max-w-md">
-                    Select the project content you want to include in your infographic.
+                    Select the project content you want to visualize.
                   </p>
                   <Button onClick={() => setShowProjectSelector(true)} size="lg">
                     <FileText className="w-4 h-4 mr-2" />
@@ -135,12 +146,62 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                       {selectedContent.canvasLayers.length > 0 && <div>• {selectedContent.canvasLayers.length} Canvas Layers</div>}
                     </div>
                   </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Generation Type</Label>
+                      <Select value={generationType} onValueChange={(value) => setGenerationType(value as GenerationType)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="infographic">Infographic</SelectItem>
+                          <SelectItem value="web-mockup">Web Mockup</SelectItem>
+                          <SelectItem value="mobile-mockup">Mobile Mockup</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Visual Style</Label>
+                      {generationType === "infographic" ? (
+                        <Select value={infographicStyle} onValueChange={(value) => setInfographicStyle(value as InfographicStyle)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="modern">Modern</SelectItem>
+                            <SelectItem value="minimalist">Minimalist</SelectItem>
+                            <SelectItem value="whiteboard">Whiteboard</SelectItem>
+                            <SelectItem value="flowchart">Flowchart</SelectItem>
+                            <SelectItem value="cartoon">Cartoon</SelectItem>
+                            <SelectItem value="photographic">Photographic</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Select value={mockupStyle} onValueChange={(value) => setMockupStyle(value as MockupStyle)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="material">Material Design</SelectItem>
+                            <SelectItem value="ios">iOS Style</SelectItem>
+                            <SelectItem value="flat">Flat Design</SelectItem>
+                            <SelectItem value="neumorphic">Neumorphic</SelectItem>
+                            <SelectItem value="glassmorphic">Glassmorphic</SelectItem>
+                            <SelectItem value="corporate">Corporate</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="flex justify-center gap-2">
                     <Button onClick={() => setShowProjectSelector(true)} variant="outline">
                       Change Selection
                     </Button>
                     <Button onClick={generateInfographic} size="lg">
-                      Generate Infographic
+                      Generate Visual
                     </Button>
                   </div>
                 </div>
@@ -152,7 +213,7 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">
-                Generating your infographic... This may take a moment.
+                Generating your visual... This may take a moment.
               </p>
             </div>
           )}

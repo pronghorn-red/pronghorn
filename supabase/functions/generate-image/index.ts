@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { selectedContent } = await req.json();
+    const { selectedContent, generationType = 'infographic', style = 'modern' } = await req.json();
 
     if (!selectedContent) {
       return new Response(
@@ -25,7 +25,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('🎨 Generating infographic from selected content');
+    console.log(`🎨 Generating ${generationType} with ${style} style from selected content`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 
@@ -57,7 +57,22 @@ serve(async (req) => {
       ? selectedContent.techStacks.map((t: any) => `- ${t.name}: ${t.description || ''}`).join('\n')
       : '';
 
-    let prompt = `Create a professional, visually appealing infographic for this software project.
+    // Build style-specific prompt instructions
+    let styleInstructions = '';
+    let prompt = '';
+    
+    if (generationType === 'infographic') {
+      const styleMap: Record<string, string> = {
+        modern: 'Use a modern, professional design with clean lines, vibrant gradients, and contemporary iconography. Emphasize hierarchy and visual balance.',
+        minimalist: 'Use a minimalist design with ample white space, simple geometric shapes, limited color palette (2-3 colors), and clean typography. Focus on essential elements only.',
+        whiteboard: 'Create a whiteboard-style illustration with hand-drawn elements, sketchy lines, simple stick figures or icons, and a casual, brainstorming aesthetic.',
+        flowchart: 'Design a structured flowchart-style diagram with clear boxes, arrows, decision diamonds, and process flow indicators. Use standard flowchart symbols and connectors.',
+        cartoon: 'Use a playful cartoon style with rounded shapes, bright cheerful colors, friendly character illustrations, and a fun, approachable aesthetic.',
+        photographic: 'Create a photorealistic composite with realistic textures, lighting, shadows, and 3D-rendered elements that look like physical objects or real environments.'
+      };
+      styleInstructions = styleMap[style] || styleMap.modern;
+
+      prompt = `Create a professional ${style} infographic for this software project.
 
 **Project Title:** ${projectTitle}
 
@@ -70,30 +85,127 @@ ${requirementsList}
 **Architecture Components:**
 ${nodesList}`;
 
-    if (artifactsList) {
-      prompt += `\n\n**Artifacts:**\n${artifactsList}`;
-    }
+      if (artifactsList) {
+        prompt += `\n\n**Artifacts:**\n${artifactsList}`;
+      }
 
-    if (standardsList) {
-      prompt += `\n\n**Standards:**\n${standardsList}`;
-    }
+      if (standardsList) {
+        prompt += `\n\n**Standards:**\n${standardsList}`;
+      }
 
-    if (techStacksList) {
-      prompt += `\n\n**Tech Stacks:**\n${techStacksList}`;
-    }
+      if (techStacksList) {
+        prompt += `\n\n**Tech Stacks:**\n${techStacksList}`;
+      }
 
-    prompt += `
+      prompt += `
 
 Design an infographic that:
 1. Uses the project title as the main heading
-2. Visually represents the architecture components and their relationships
-3. Highlights key requirements and selected content
-4. Uses a modern, professional color scheme
+2. ${styleInstructions}
+3. Visually represents the architecture components and their relationships
+4. Highlights key requirements and selected content
 5. Is clear, informative, and suitable for stakeholder presentations
 6. Includes icons or visual elements that represent different component types (databases, APIs, services, etc.)
 7. Incorporates any standards and tech stack information if provided`;
 
-    console.log('🎨 Generating infographic with Gemini 3 Pro Image Preview...');
+    } else if (generationType === 'web-mockup') {
+      const styleMap: Record<string, string> = {
+        material: 'Use Google Material Design principles with elevation shadows, floating action buttons, bold colors, and card-based layouts.',
+        ios: 'Follow Apple iOS design guidelines with subtle shadows, rounded corners, system fonts, and clean navigation patterns.',
+        flat: 'Use flat design with no shadows or gradients, bold solid colors, simple geometric shapes, and clear typography.',
+        neumorphic: 'Apply neumorphic (soft UI) design with subtle shadows creating extruded or pressed effects, monochromatic palette, and soft 3D appearances.',
+        glassmorphic: 'Create glassmorphism effects with frosted glass aesthetics, blur effects, translucent layers, and vibrant backgrounds.',
+        corporate: 'Use professional corporate styling with conservative colors (blues, grays), formal typography, structured layouts, and business-appropriate imagery.'
+      };
+      styleInstructions = styleMap[style] || styleMap.material;
+
+      prompt = `Create a professional desktop web application mockup in ${style} style for this software project.
+
+**Project Title:** ${projectTitle}
+
+**Project Description:**
+${projectDescription}
+
+**Key Requirements:**
+${requirementsList}
+
+**Architecture Components:**
+${nodesList}`;
+
+      if (artifactsList) {
+        prompt += `\n\n**Artifacts:**\n${artifactsList}`;
+      }
+
+      if (standardsList) {
+        prompt += `\n\n**Standards:**\n${standardsList}`;
+      }
+
+      if (techStacksList) {
+        prompt += `\n\n**Tech Stacks:**\n${techStacksList}`;
+      }
+
+      prompt += `
+
+Design a desktop web mockup that:
+1. Shows a realistic browser window with the application interface
+2. ${styleInstructions}
+3. Displays key features and components based on requirements
+4. Includes realistic UI elements: navigation bar, sidebar, main content area, buttons, forms
+5. Represents the architecture components visually in the interface
+6. Uses appropriate iconography and visual hierarchy
+7. Looks like a production-ready web application
+8. Maintains consistency with modern web design standards`;
+
+    } else if (generationType === 'mobile-mockup') {
+      const styleMap: Record<string, string> = {
+        material: 'Use Google Material Design for mobile with bottom navigation, FABs, and card-based content.',
+        ios: 'Follow iOS mobile design with tab bar, navigation bar, and iOS-specific UI patterns and gestures.',
+        flat: 'Use flat mobile design with simple tap targets, clear icons, and minimal visual effects.',
+        neumorphic: 'Apply neumorphic mobile design with soft shadows and subtle 3D button effects.',
+        glassmorphic: 'Create mobile glassmorphism with frosted panels, translucent navigation, and blur effects.',
+        corporate: 'Use professional mobile styling appropriate for enterprise or business applications.'
+      };
+      styleInstructions = styleMap[style] || styleMap.material;
+
+      prompt = `Create a professional mobile application mockup in ${style} style for this software project.
+
+**Project Title:** ${projectTitle}
+
+**Project Description:**
+${projectDescription}
+
+**Key Requirements:**
+${requirementsList}
+
+**Architecture Components:**
+${nodesList}`;
+
+      if (artifactsList) {
+        prompt += `\n\n**Artifacts:**\n${artifactsList}`;
+      }
+
+      if (standardsList) {
+        prompt += `\n\n**Standards:**\n${standardsList}`;
+      }
+
+      if (techStacksList) {
+        prompt += `\n\n**Tech Stacks:**\n${techStacksList}`;
+      }
+
+      prompt += `
+
+Design a mobile app mockup that:
+1. Shows a realistic smartphone frame with the application interface
+2. ${styleInstructions}
+3. Displays key features based on requirements in a mobile-optimized layout
+4. Includes mobile UI elements: status bar, navigation, buttons, cards, lists
+5. Represents the architecture components in a mobile context
+6. Uses touch-friendly tap targets and mobile interaction patterns
+7. Looks like a production-ready mobile application
+8. Follows mobile design best practices (thumb-friendly zones, clear hierarchy)`;
+    }
+
+    console.log('🎨 Generating with Gemini 3 Pro Image Preview...');
 
     // Prepare request body for Gemini image generation
     const requestBody = {
