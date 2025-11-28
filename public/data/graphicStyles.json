@@ -171,6 +171,97 @@
           "prompt": "Create abstract, artistic representations of people interacting with technology. Use shapes, colors, and symbolic representations rather than realistic depictions."
         }
       ]
+    },
+    {
+      "id": "marketing-presentation",
+      "label": "Marketing Presentation",
+      "description": "Professional presentation slides",
+      "styles": [
+        {
+          "id": "photographic",
+          "label": "Photographic",
+          "description": "Real photography and images",
+          "prompt": "Use high-quality photographic style with realistic images, professional photography, authentic textures, and real-world visual elements. Incorporate professional product photography and lifestyle imagery."
+        },
+        {
+          "id": "vector",
+          "label": "Vector",
+          "description": "Clean vector graphics",
+          "prompt": "Use vector graphics style with clean lines, scalable illustrations, geometric precision, smooth gradients, and professional iconography. Create sharp, resolution-independent designs."
+        },
+        {
+          "id": "flat",
+          "label": "Flat Design",
+          "description": "Modern flat aesthetic",
+          "prompt": "Use flat design style with bold colors, minimal shadows, simple shapes, clean typography, and modern 2D aesthetics. Emphasize simplicity and clarity."
+        },
+        {
+          "id": "illustration",
+          "label": "Illustration",
+          "description": "Hand-drawn illustrations",
+          "prompt": "Use illustration style with artistic hand-drawn elements, creative visual metaphors, stylized characters, and expressive line work. Add personality and warmth through illustration."
+        },
+        {
+          "id": "cartoon",
+          "label": "Cartoon",
+          "description": "Fun cartoon style",
+          "prompt": "Use cartoon style with playful characters, bright cheerful colors, exaggerated features, fun expressions, and whimsical visual elements. Make it engaging and approachable."
+        },
+        {
+          "id": "sci-fi",
+          "label": "Science Fiction",
+          "description": "Futuristic tech aesthetic",
+          "prompt": "Use science fiction style with futuristic interfaces, holographic effects, neon accents, cyberpunk aesthetics, advanced technology visuals, and high-tech design elements."
+        },
+        {
+          "id": "retro",
+          "label": "Retro",
+          "description": "Vintage aesthetic",
+          "prompt": "Use retro style with vintage color palettes, classic typography, nostalgic design elements, aged textures, and throwback aesthetics from 60s-90s design eras."
+        }
+      ],
+      "slideTypes": [
+        {
+          "id": "cover-sheet",
+          "label": "Cover Sheet",
+          "description": "Title slide with branding"
+        },
+        {
+          "id": "fact-sheet",
+          "label": "Fact Sheet",
+          "description": "Key statistics and data points"
+        },
+        {
+          "id": "timeline",
+          "label": "Timeline",
+          "description": "Chronological roadmap"
+        },
+        {
+          "id": "features-list",
+          "label": "Features List",
+          "description": "Product capabilities overview"
+        },
+        {
+          "id": "venn-diagram",
+          "label": "Venn Diagram",
+          "description": "Relationship visualization"
+        },
+        {
+          "id": "burndown-chart",
+          "label": "Burndown Chart",
+          "description": "Progress tracking visualization"
+        },
+        {
+          "id": "feature-table",
+          "label": "Feature Table",
+          "description": "Comparison matrix"
+        },
+        {
+          "id": "next-steps",
+          "label": "Next Steps",
+          "description": "Action items and roadmap"
+        }
+      ]
     }
   ]
 }

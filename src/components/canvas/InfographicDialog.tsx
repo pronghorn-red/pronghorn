@@ -252,7 +252,7 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
       <DialogContent className="max-w-[90vw] max-h-[90vh] w-[90vw] h-[90vh] p-0">
         <div className="flex flex-col md:flex-row h-full">
           {/* Side Menu */}
-          <div className="w-full md:w-64 border-b md:border-b-0 md:border-r bg-muted/30">
+          <div className="w-full md:w-64 border-b md:border-b-0 md:border-r bg-muted/30 flex flex-col">
             <DialogHeader className="p-6 border-b">
               <DialogTitle>Visual Generator</DialogTitle>
               <DialogDescription className="text-xs">
@@ -260,7 +260,7 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
               </DialogDescription>
             </DialogHeader>
             
-            <ScrollArea className="h-[calc(100%-5rem)]">
+            <ScrollArea className="flex-1">
               <div className="p-4 space-y-6">
                 {/* Content Selection */}
                 <div className="space-y-2">
@@ -341,49 +341,6 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                   </div>
                 )}
 
-                {/* Custom Prompt */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold">Custom Instructions</Label>
-                  <Textarea
-                    value={customPrompt}
-                    onChange={(e) => setCustomPrompt(e.target.value)}
-                    placeholder="Add specific details about what to visualize..."
-                    className="text-xs min-h-20 resize-none"
-                  />
-                </div>
-
-                {/* Generate Button */}
-                <Button
-                  onClick={generateInfographic}
-                  disabled={!selectedContent || isGenerating}
-                  className="w-full"
-                  size="sm"
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="w-3 h-3 mr-2 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <ImagePlus className="w-3 h-3 mr-2" />
-                      Generate
-                    </>
-                  )}
-                </Button>
-
-                {/* Download All */}
-                {generatedImages.length > 0 && (
-                  <Button
-                    onClick={downloadAllAsZip}
-                    variant="outline"
-                    className="w-full"
-                    size="sm"
-                  >
-                    <Download className="w-3 h-3 mr-2" />
-                    Download All ({generatedImages.length})
-                  </Button>
-                )}
               </div>
             </ScrollArea>
           </div>
@@ -391,12 +348,23 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
           {/* Main Content Area */}
           <div className="flex-1 flex flex-col">
             <div className="p-6 border-b">
-              <h3 className="text-lg font-semibold">Generated Visuals</h3>
-              <p className="text-sm text-muted-foreground">
+              <h3 className="text-lg font-semibold leading-none">Generated Visuals</h3>
+              <p className="text-sm text-muted-foreground mt-1">
                 {generatedImages.length === 0 
                   ? "Your generated images will appear here" 
                   : `${generatedImages.length} visual${generatedImages.length !== 1 ? 's' : ''} generated`}
               </p>
+            </div>
+
+            {/* Custom Instructions - Full Width */}
+            <div className="p-6 border-b space-y-2">
+              <Label className="text-sm font-semibold">Custom Instructions</Label>
+              <Textarea
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="Add specific details about what to visualize..."
+                className="text-sm min-h-20 resize-none"
+              />
             </div>
 
             <ScrollArea className="flex-1">
@@ -471,6 +439,37 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                 )}
               </div>
             </ScrollArea>
+
+            {/* Bottom Action Buttons */}
+            <div className="p-6 border-t bg-muted/30 flex justify-end gap-2">
+              {generatedImages.length > 0 && (
+                <Button
+                  onClick={downloadAllAsZip}
+                  variant="outline"
+                  size="sm"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download All ({generatedImages.length})
+                </Button>
+              )}
+              <Button
+                onClick={generateInfographic}
+                disabled={!selectedContent || isGenerating}
+                size="sm"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <ImagePlus className="w-4 h-4 mr-2" />
+                    Generate
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
