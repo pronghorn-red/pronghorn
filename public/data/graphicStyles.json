@@ -1,0 +1,176 @@
+{
+  "generationTypes": [
+    {
+      "id": "infographic",
+      "label": "Infographic",
+      "description": "Visual diagrams and flowcharts",
+      "styles": [
+        {
+          "id": "modern",
+          "label": "Modern",
+          "description": "Clean lines, vibrant gradients, contemporary iconography",
+          "prompt": "Use a modern, professional design with clean lines, vibrant gradients, and contemporary iconography. Emphasize hierarchy and visual balance."
+        },
+        {
+          "id": "minimalist",
+          "label": "Minimalist",
+          "description": "Simple shapes, limited colors, ample white space",
+          "prompt": "Use a minimalist design with ample white space, simple geometric shapes, limited color palette (2-3 colors), and clean typography. Focus on essential elements only."
+        },
+        {
+          "id": "whiteboard",
+          "label": "Whiteboard",
+          "description": "Hand-drawn sketchy style",
+          "prompt": "Create a whiteboard-style illustration with hand-drawn elements, sketchy lines, simple stick figures or icons, and a casual, brainstorming aesthetic."
+        },
+        {
+          "id": "flowchart",
+          "label": "Flowchart",
+          "description": "Structured diagrams with standard symbols",
+          "prompt": "Design a structured flowchart-style diagram with clear boxes, arrows, decision diamonds, and process flow indicators. Use standard flowchart symbols and connectors."
+        },
+        {
+          "id": "cartoon",
+          "label": "Cartoon",
+          "description": "Playful and colorful illustrations",
+          "prompt": "Use a playful cartoon style with rounded shapes, bright cheerful colors, friendly character illustrations, and a fun, approachable aesthetic."
+        },
+        {
+          "id": "photographic",
+          "label": "Photographic",
+          "description": "Realistic 3D renders",
+          "prompt": "Create a photorealistic composite with realistic textures, lighting, shadows, and 3D-rendered elements that look like physical objects or real environments."
+        }
+      ]
+    },
+    {
+      "id": "web-mockup",
+      "label": "Web Mockup",
+      "description": "Desktop application interfaces",
+      "styles": [
+        {
+          "id": "material",
+          "label": "Material Design",
+          "description": "Google Material Design principles",
+          "prompt": "Use Google Material Design principles with elevation shadows, floating action buttons, bold colors, and card-based layouts."
+        },
+        {
+          "id": "ios",
+          "label": "iOS Style",
+          "description": "Apple design guidelines",
+          "prompt": "Follow Apple iOS design guidelines with subtle shadows, rounded corners, system fonts, and clean navigation patterns."
+        },
+        {
+          "id": "flat",
+          "label": "Flat Design",
+          "description": "No shadows, bold colors",
+          "prompt": "Use flat design with no shadows or gradients, bold solid colors, simple geometric shapes, and clear typography."
+        },
+        {
+          "id": "neumorphic",
+          "label": "Neumorphic",
+          "description": "Soft UI with extruded effects",
+          "prompt": "Apply neumorphic (soft UI) design with subtle shadows creating extruded or pressed effects, monochromatic palette, and soft 3D appearances."
+        },
+        {
+          "id": "glassmorphic",
+          "label": "Glassmorphic",
+          "description": "Frosted glass aesthetics",
+          "prompt": "Create glassmorphism effects with frosted glass aesthetics, blur effects, translucent layers, and vibrant backgrounds."
+        },
+        {
+          "id": "corporate",
+          "label": "Corporate",
+          "description": "Professional business styling",
+          "prompt": "Use professional corporate styling with conservative colors (blues, grays), formal typography, structured layouts, and business-appropriate imagery."
+        }
+      ]
+    },
+    {
+      "id": "mobile-mockup",
+      "label": "Mobile Mockup",
+      "description": "Mobile application interfaces",
+      "styles": [
+        {
+          "id": "material",
+          "label": "Material Design",
+          "description": "Google Material for mobile",
+          "prompt": "Use Google Material Design for mobile with bottom navigation, FABs, and card-based content."
+        },
+        {
+          "id": "ios",
+          "label": "iOS Style",
+          "description": "Apple iOS mobile patterns",
+          "prompt": "Follow iOS mobile design with tab bar, navigation bar, and iOS-specific UI patterns and gestures."
+        },
+        {
+          "id": "flat",
+          "label": "Flat Design",
+          "description": "Simple mobile interface",
+          "prompt": "Use flat mobile design with simple tap targets, clear icons, and minimal visual effects."
+        },
+        {
+          "id": "neumorphic",
+          "label": "Neumorphic",
+          "description": "Soft UI for mobile",
+          "prompt": "Apply neumorphic mobile design with soft shadows and subtle 3D button effects."
+        },
+        {
+          "id": "glassmorphic",
+          "label": "Glassmorphic",
+          "description": "Frosted glass mobile UI",
+          "prompt": "Create mobile glassmorphism with frosted panels, translucent navigation, and blur effects."
+        },
+        {
+          "id": "corporate",
+          "label": "Corporate",
+          "description": "Enterprise mobile styling",
+          "prompt": "Use professional mobile styling appropriate for enterprise or business applications."
+        }
+      ]
+    },
+    {
+      "id": "mockup",
+      "label": "Usage Mockup",
+      "description": "People interacting with applications",
+      "styles": [
+        {
+          "id": "photographic",
+          "label": "Photographic",
+          "description": "Realistic photos of people using apps",
+          "prompt": "Create photorealistic scenes showing real people interacting with the application on devices. Use professional photography lighting, realistic environments, and authentic human interactions with screens and interfaces."
+        },
+        {
+          "id": "illustration",
+          "label": "Illustration",
+          "description": "Illustrated people using apps",
+          "prompt": "Create illustrated scenes showing stylized people interacting with the application. Use consistent illustration style, simplified human figures, and artistic representations of devices and interfaces."
+        },
+        {
+          "id": "lifestyle",
+          "label": "Lifestyle",
+          "description": "People in natural settings",
+          "prompt": "Create lifestyle photography showing people naturally using the application in real-world contexts - offices, homes, cafes, etc. Emphasize authentic scenarios and natural interactions."
+        },
+        {
+          "id": "professional",
+          "label": "Professional",
+          "description": "Business environment usage",
+          "prompt": "Create professional scenes showing people using the application in business environments. Use corporate settings, professional attire, and business-appropriate contexts."
+        },
+        {
+          "id": "isometric",
+          "label": "Isometric",
+          "description": "3D isometric illustrations",
+          "prompt": "Create isometric 3D illustrations showing people and devices from an elevated angle. Use consistent isometric perspective, stylized characters, and geometric representations of technology."
+        },
+        {
+          "id": "abstract",
+          "label": "Abstract",
+          "description": "Abstract representations",
+          "prompt": "Create abstract, artistic representations of people interacting with technology. Use shapes, colors, and symbolic representations rather than realistic depictions."
+        }
+      ]
+    }
+  ]
+}

@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { selectedContent, generationType = 'infographic', style = 'modern' } = await req.json();
+    const { selectedContent, generationType = 'infographic', style = 'modern', stylePrompt = '', customPrompt = '' } = await req.json();
 
     if (!selectedContent) {
       return new Response(
@@ -57,20 +57,12 @@ serve(async (req) => {
       ? selectedContent.techStacks.map((t: any) => `- ${t.name}: ${t.description || ''}`).join('\n')
       : '';
 
-    // Build style-specific prompt instructions
-    let styleInstructions = '';
+    // Use style prompt from JSON or fallback to basic instruction
+    const styleInstructions = stylePrompt || `Apply ${style} style to the visual.`;
+    
     let prompt = '';
     
     if (generationType === 'infographic') {
-      const styleMap: Record<string, string> = {
-        modern: 'Use a modern, professional design with clean lines, vibrant gradients, and contemporary iconography. Emphasize hierarchy and visual balance.',
-        minimalist: 'Use a minimalist design with ample white space, simple geometric shapes, limited color palette (2-3 colors), and clean typography. Focus on essential elements only.',
-        whiteboard: 'Create a whiteboard-style illustration with hand-drawn elements, sketchy lines, simple stick figures or icons, and a casual, brainstorming aesthetic.',
-        flowchart: 'Design a structured flowchart-style diagram with clear boxes, arrows, decision diamonds, and process flow indicators. Use standard flowchart symbols and connectors.',
-        cartoon: 'Use a playful cartoon style with rounded shapes, bright cheerful colors, friendly character illustrations, and a fun, approachable aesthetic.',
-        photographic: 'Create a photorealistic composite with realistic textures, lighting, shadows, and 3D-rendered elements that look like physical objects or real environments.'
-      };
-      styleInstructions = styleMap[style] || styleMap.modern;
 
       prompt = `Create a professional ${style} infographic for this software project.
 
@@ -108,16 +100,11 @@ Design an infographic that:
 6. Includes icons or visual elements that represent different component types (databases, APIs, services, etc.)
 7. Incorporates any standards and tech stack information if provided`;
 
+      if (customPrompt) {
+        prompt += `\n\n**Additional Instructions:**\n${customPrompt}`;
+      }
+
     } else if (generationType === 'web-mockup') {
-      const styleMap: Record<string, string> = {
-        material: 'Use Google Material Design principles with elevation shadows, floating action buttons, bold colors, and card-based layouts.',
-        ios: 'Follow Apple iOS design guidelines with subtle shadows, rounded corners, system fonts, and clean navigation patterns.',
-        flat: 'Use flat design with no shadows or gradients, bold solid colors, simple geometric shapes, and clear typography.',
-        neumorphic: 'Apply neumorphic (soft UI) design with subtle shadows creating extruded or pressed effects, monochromatic palette, and soft 3D appearances.',
-        glassmorphic: 'Create glassmorphism effects with frosted glass aesthetics, blur effects, translucent layers, and vibrant backgrounds.',
-        corporate: 'Use professional corporate styling with conservative colors (blues, grays), formal typography, structured layouts, and business-appropriate imagery.'
-      };
-      styleInstructions = styleMap[style] || styleMap.material;
 
       prompt = `Create a professional desktop web application mockup in ${style} style for this software project.
 
@@ -156,16 +143,11 @@ Design a desktop web mockup that:
 7. Looks like a production-ready web application
 8. Maintains consistency with modern web design standards`;
 
+      if (customPrompt) {
+        prompt += `\n\n**Additional Instructions:**\n${customPrompt}`;
+      }
+
     } else if (generationType === 'mobile-mockup') {
-      const styleMap: Record<string, string> = {
-        material: 'Use Google Material Design for mobile with bottom navigation, FABs, and card-based content.',
-        ios: 'Follow iOS mobile design with tab bar, navigation bar, and iOS-specific UI patterns and gestures.',
-        flat: 'Use flat mobile design with simple tap targets, clear icons, and minimal visual effects.',
-        neumorphic: 'Apply neumorphic mobile design with soft shadows and subtle 3D button effects.',
-        glassmorphic: 'Create mobile glassmorphism with frosted panels, translucent navigation, and blur effects.',
-        corporate: 'Use professional mobile styling appropriate for enterprise or business applications.'
-      };
-      styleInstructions = styleMap[style] || styleMap.material;
 
       prompt = `Create a professional mobile application mockup in ${style} style for this software project.
 
@@ -203,6 +185,52 @@ Design a mobile app mockup that:
 6. Uses touch-friendly tap targets and mobile interaction patterns
 7. Looks like a production-ready mobile application
 8. Follows mobile design best practices (thumb-friendly zones, clear hierarchy)`;
+
+      if (customPrompt) {
+        prompt += `\n\n**Additional Instructions:**\n${customPrompt}`;
+      }
+
+    } else if (generationType === 'mockup') {
+      // Usage mockups - people interacting with the application
+      prompt = `Create a ${style} mockup showing people interacting with this application.
+
+**Project Title:** ${projectTitle}
+
+**Project Description:**
+${projectDescription}
+
+**Key Requirements:**
+${requirementsList}
+
+**Architecture Components:**
+${nodesList}`;
+
+      if (artifactsList) {
+        prompt += `\n\n**Artifacts:**\n${artifactsList}`;
+      }
+
+      if (standardsList) {
+        prompt += `\n\n**Standards:**\n${standardsList}`;
+      }
+
+      if (techStacksList) {
+        prompt += `\n\n**Tech Stacks:**\n${techStacksList}`;
+      }
+
+      prompt += `
+
+${styleInstructions}
+
+Create a compelling scene that:
+1. Shows realistic people (diverse demographics) using the application
+2. Displays the application interface on appropriate devices (desktop, tablet, or mobile)
+3. Conveys the value and usability of the application through authentic interactions
+4. Uses professional composition and lighting
+5. Creates an aspirational yet realistic representation of the product in use`;
+
+      if (customPrompt) {
+        prompt += `\n\n**Additional Instructions:**\n${customPrompt}`;
+      }
     }
 
     console.log('🎨 Generating with Gemini 3 Pro Image Preview...');
