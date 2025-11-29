@@ -584,6 +584,15 @@ function CanvasFlow() {
     [setNodes, setEdges, saveNode, saveEdge, toast]
   );
 
+  const refreshCanvas = useCallback(() => {
+    // Clear local state and reload from database to ensure a consistent view
+    setSelectedNode(null);
+    setSelectedEdge(null);
+    setNodes([]);
+    setEdges([]);
+    loadCanvasData();
+  }, [setNodes, setEdges, loadCanvasData]);
+
   const handleDownloadSnapshot = useCallback(
     async (format: 'png' | 'svg') => {
       const viewport = document.querySelector('.react-flow__viewport') as HTMLElement;
@@ -916,11 +925,11 @@ function CanvasFlow() {
                 onOpenChange={(open) => {
                   setIsAIArchitectOpen(open);
                   if (!open) {
-                    // Refresh canvas when dialog closes
-                    loadCanvasData();
+                    // Fully refresh canvas from database when dialog closes
+                    refreshCanvas();
                   }
                 }}
-                onCanvasRefresh={loadCanvasData}
+                onCanvasRefresh={refreshCanvas}
               />
               
               <InfographicDialog
