@@ -76,7 +76,7 @@ export function IterativeEnhancement({
       simple: ['architect', 'developer'],
       standard: ['architect', 'developer', 'dba', 'qa', 'cyber'],
       full: ['architect', 'standards', 'developer', 'dba', 'cloudops', 'qa', 'uat', 'cyber'],
-      simplify: ['architect', 'simplifier', 'integrator', 'architect'],
+      simplify: ['simplifier', 'integrator', 'simplifier'],
     } as const;
 
     const agentIds = flowDefinitions[flowType];
@@ -380,6 +380,11 @@ export function IterativeEnhancement({
     startIteration(nodeId);
   };
 
+  const handleDeleteAgent = (nodeId: string) => {
+    setAgentFlowNodes((nds) => nds.filter(n => n.id !== nodeId));
+    setAgentFlowEdges((eds) => eds.filter(e => e.source !== nodeId && e.target !== nodeId));
+  };
+
   const handleSaveAgentPrompt = (nodeId: string, systemPrompt: string, userPrompt: string) => {
     setAgentPrompts((prev) => ({
       ...prev,
@@ -556,7 +561,7 @@ export function IterativeEnhancement({
               >
                 <div className="text-left w-full">
                   <div className="font-medium">Simplify</div>
-                  <div className="text-xs text-muted-foreground whitespace-normal break-words">Architect → Simplifier → Integrator → Architect</div>
+                  <div className="text-xs text-muted-foreground whitespace-normal break-words">Simplifier → Integrator → Simplifier</div>
                 </div>
               </Button>
               <Button 
@@ -601,6 +606,7 @@ export function IterativeEnhancement({
                 executingAgentId={executingAgentId}
                 onEditAgent={handleEditAgent}
                 onPlayAgent={handlePlayAgent}
+                onDeleteAgent={handleDeleteAgent}
                 initialNodes={agentFlowNodes}
                 initialEdges={agentFlowEdges}
               />
