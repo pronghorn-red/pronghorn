@@ -69,6 +69,71 @@ export function IterativeEnhancement({
     setAgentFlowEdges(edges);
   };
 
+  const createStandardFlow = (flowType: 'simple' | 'standard' | 'full') => {
+    const flowDefinitions = {
+      simple: ['architect', 'developer'],
+      standard: ['architect', 'developer', 'dba', 'qa', 'cyber-security'],
+      full: ['architect', 'standards', 'developer', 'dba', 'cloud-ops', 'qa', 'uat', 'cyber-security'],
+    };
+
+    const agentIds = flowDefinitions[flowType];
+    const agents = agentIds.map(id => agentDefinitions.find(a => a.id === id)).filter(Boolean);
+
+    if (agents.length === 0) {
+      toast.error('Agent definitions not loaded yet');
+      return;
+    }
+
+    // Create nodes in staggered layout (3 per row)
+    const nodesPerRow = 3;
+    const horizontalSpacing = 300;
+    const verticalSpacing = 150;
+    
+    const newNodes: Node[] = agents.map((agent, index) => {
+      const row = Math.floor(index / nodesPerRow);
+      const col = index % nodesPerRow;
+      
+      return {
+        id: `${agent.id}-${Date.now()}-${index}`,
+        type: 'agent',
+        position: { 
+          x: col * horizontalSpacing + 50, 
+          y: row * verticalSpacing + 50 
+        },
+        data: {
+          type: agent.id,
+          label: agent.label,
+          color: agent.color,
+          systemPrompt: agent.systemPrompt,
+          capabilities: agent.capabilities,
+        },
+      };
+    });
+
+    // Create edges connecting each agent in sequence
+    const newEdges: Edge[] = [];
+    for (let i = 0; i < newNodes.length - 1; i++) {
+      newEdges.push({
+        id: `edge-${i}`,
+        source: newNodes[i].id,
+        target: newNodes[i + 1].id,
+        type: 'smoothstep',
+      });
+    }
+
+    // Add final edge back to first node (Architect)
+    newEdges.push({
+      id: `edge-loop`,
+      source: newNodes[newNodes.length - 1].id,
+      target: newNodes[0].id,
+      type: 'smoothstep',
+    });
+
+    setAgentFlowNodes(newNodes);
+    setAgentFlowEdges(newEdges);
+    toast.success(`${flowType.charAt(0).toUpperCase() + flowType.slice(1)} flow created`);
+  };
+
   const handleContextConfirm = (context: any) => {
     // Directly use the selection returned by ProjectSelector so counts stay stable
     setSelectedContext(context);
@@ -431,6 +496,47 @@ export function IterativeEnhancement({
                   <p className="text-xs text-muted-foreground mt-1">{agent.description}</p>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Standard Flows */}
+          <div className="space-y-2 pt-4 border-t">
+            <h3 className="font-semibold text-sm mb-3">Standard Flows</h3>
+            <p className="text-xs text-muted-foreground mb-2">Pre-configured agent sequences</p>
+            <div className="space-y-2">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start text-sm h-auto py-2"
+                onClick={() => createStandardFlow('simple')}
+                disabled={isRunning}
+              >
+                <div className="text-left">
+                  <div className="font-medium">Simple</div>
+                  <div className="text-xs text-muted-foreground">Architect → Developer → Architect</div>
+                </div>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start text-sm h-auto py-2"
+                onClick={() => createStandardFlow('standard')}
+                disabled={isRunning}
+              >
+                <div className="text-left">
+                  <div className="font-medium">Standard</div>
+                  <div className="text-xs text-muted-foreground">Architect → Developer → DBA → QA → Cyber Security → Architect</div>
+                </div>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start text-sm h-auto py-2"
+                onClick={() => createStandardFlow('full')}
+                disabled={isRunning}
+              >
+                <div className="text-left">
+                  <div className="font-medium">Full</div>
+                  <div className="text-xs text-muted-foreground">Architect → Standards → Developer → DBA → Cloud Ops → QA → UAT → Cyber Security → Architect</div>
+                </div>
+              </Button>
             </div>
           </div>
         </div>
