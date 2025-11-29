@@ -189,6 +189,12 @@ export function IterativeEnhancement({
     setAbortController(controller);
 
     try {
+      // Fetch project settings for LLM configuration
+      const { data: projectData } = await supabase.rpc("get_project_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+      });
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orchestrate-agents`,
         {
@@ -209,6 +215,11 @@ export function IterativeEnhancement({
             orchestratorEnabled,
             startFromNodeId,
             agentPrompts,
+            // Pass LLM settings from project
+            selectedModel: projectData?.selected_model || 'gemini-2.5-flash',
+            maxTokens: projectData?.max_tokens || 32768,
+            thinkingEnabled: projectData?.thinking_enabled || false,
+            thinkingBudget: projectData?.thinking_budget || -1,
           }),
           signal: controller.signal,
         }
@@ -343,7 +354,7 @@ export function IterativeEnhancement({
     <div className="flex-1 flex flex-col md:flex-row gap-2 md:gap-4 min-h-0 overflow-hidden">
       {/* Left Sidebar */}
       <div className="w-full md:w-64 flex flex-col md:border-r md:pr-4 overflow-y-auto">
-        <div className="space-y-4">
+          <div className="space-y-4">
           {/* Context Options */}
           <div className="space-y-2">
             <h3 className="font-medium text-sm">Context Options</h3>
@@ -362,14 +373,14 @@ export function IterativeEnhancement({
             {selectedContext && (
               <div className="text-xs text-muted-foreground space-y-1">
                 {selectedContext.projectMetadata && <p>✓ Project metadata</p>}
-                {selectedContext.artifacts?.length > 0 && <p>✓ {selectedContext.artifacts.length} artifacts</p>}
-                {selectedContext.chatSessions?.length > 0 && <p>✓ {selectedContext.chatSessions.length} chat sessions</p>}
-                {selectedContext.requirements?.length > 0 && <p>✓ {selectedContext.requirements.length} requirements</p>}
-                {selectedContext.standards?.length > 0 && <p>✓ {selectedContext.standards.length} standards</p>}
-                {selectedContext.techStacks?.length > 0 && <p>✓ {selectedContext.techStacks.length} tech stacks</p>}
-                {selectedContext.canvasNodes?.length > 0 && <p>✓ {selectedContext.canvasNodes.length} canvas nodes</p>}
-                {selectedContext.canvasEdges?.length > 0 && <p>✓ {selectedContext.canvasEdges.length} canvas edges</p>}
-                {selectedContext.canvasLayers?.length > 0 && <p>✓ {selectedContext.canvasLayers.length} canvas layers</p>}
+                {selectedContext.artifacts?.length > 0 && <p>✓ {selectedContext.artifacts.length} artifact{selectedContext.artifacts.length !== 1 ? 's' : ''}</p>}
+                {selectedContext.chatSessions?.length > 0 && <p>✓ {selectedContext.chatSessions.length} chat session{selectedContext.chatSessions.length !== 1 ? 's' : ''}</p>}
+                {selectedContext.requirements?.length > 0 && <p>✓ {selectedContext.requirements.length} requirement{selectedContext.requirements.length !== 1 ? 's' : ''}</p>}
+                {selectedContext.standards?.length > 0 && <p>✓ {selectedContext.standards.length} standard{selectedContext.standards.length !== 1 ? 's' : ''}</p>}
+                {selectedContext.techStacks?.length > 0 && <p>✓ {selectedContext.techStacks.length} tech stack{selectedContext.techStacks.length !== 1 ? 's' : ''}</p>}
+                {selectedContext.canvasNodes?.length > 0 && <p>✓ {selectedContext.canvasNodes.length} node{selectedContext.canvasNodes.length !== 1 ? 's' : ''}</p>}
+                {selectedContext.canvasEdges?.length > 0 && <p>✓ {selectedContext.canvasEdges.length} edge{selectedContext.canvasEdges.length !== 1 ? 's' : ''}</p>}
+                {selectedContext.canvasLayers?.length > 0 && <p>✓ {selectedContext.canvasLayers.length} layer{selectedContext.canvasLayers.length !== 1 ? 's' : ''}</p>}
               </div>
             )}
           </div>

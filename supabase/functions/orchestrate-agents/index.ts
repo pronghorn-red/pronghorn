@@ -54,6 +54,10 @@ serve(async (req) => {
       orchestratorEnabled = true,
       startFromNodeId,
       agentPrompts = {},
+      selectedModel = 'gemini-2.5-flash',
+      maxTokens = 32768,
+      thinkingEnabled = false,
+      thinkingBudget = -1,
     } = await req.json();
 
     if (!projectId || !shareToken) {
@@ -64,9 +68,24 @@ serve(async (req) => {
       throw new Error('Agent flow must have at least one agent');
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
+    // Determine which API key to use based on model
+    let apiKey: string;
+    let apiProvider: 'gemini' | 'anthropic' | 'xai';
+    
+    if (selectedModel.startsWith('gemini-')) {
+      apiKey = Deno.env.get('GEMINI_API_KEY') || '';
+      apiProvider = 'gemini';
+      if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
+    } else if (selectedModel.startsWith('claude-')) {
+      apiKey = Deno.env.get('ANTHROPIC_API_KEY') || '';
+      apiProvider = 'anthropic';
+      if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
+    } else if (selectedModel.startsWith('grok-')) {
+      apiKey = Deno.env.get('XAI_API_KEY') || '';
+      apiProvider = 'xai';
+      if (!apiKey) throw new Error('XAI_API_KEY not configured');
+    } else {
+      throw new Error(`Unsupported model: ${selectedModel}`);
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -153,9 +172,14 @@ serve(async (req) => {
                     capabilities: agentNode.data.capabilities,
                     blackboard,
                     customPrompt: agentPrompts[agentNode.id], // Pass custom prompts
+                    selectedModel,
+                    maxTokens,
+                    thinkingEnabled,
+                    thinkingBudget,
                   },
                   supabase,
-                  LOVABLE_API_KEY
+                  apiKey,
+                  apiProvider
                 );
 
                 // Record changes
@@ -204,8 +228,13 @@ serve(async (req) => {
                         attachedContext,
                         blackboard,
                         iteration,
+                        selectedModel,
+                        maxTokens,
+                        thinkingEnabled,
+                        thinkingBudget,
                       },
-                      LOVABLE_API_KEY
+                      apiKey,
+                      apiProvider
                     );
 
                     // Add to blackboard
@@ -250,9 +279,14 @@ serve(async (req) => {
                         iteration,
                         capabilities: agentNode.data.capabilities,
                         blackboard,
+                        selectedModel,
+                        maxTokens,
+                        thinkingEnabled,
+                        thinkingBudget,
                       },
                       supabase,
-                      LOVABLE_API_KEY
+                      apiKey,
+                      apiProvider
                     );
                     
                     // Record successful retry
@@ -399,11 +433,16 @@ async function executeAgent(
   agentNode: AgentNode,
   context: any,
   supabase: any,
-  apiKey: string
+  apiKey: string,
+  apiProvider: 'gemini' | 'anthropic' | 'xai'
 ) {
   const systemPrompt = context.customPrompt?.system || agentNode.data.systemPrompt;
   const userAddition = context.customPrompt?.user || '';
   const capabilities = context.capabilities || [];
+  const selectedModel = context.selectedModel || 'gemini-2.5-flash';
+  const maxTokens = context.maxTokens || 32768;
+  const thinkingEnabled = context.thinkingEnabled || false;
+  const thinkingBudget = context.thinkingBudget || -1;
   
   // Allowed node types in main canvas enum
   const allowedNodeTypes = [
@@ -529,16 +568,21 @@ async function executeAgent(
   contextPrompt += `- For edgesToAdd, source and target MUST be node IDs from the list below (not labels).\n`;
   contextPrompt += `- If you create new nodes, you may optionally include an "id" field using a UUID string; otherwise only connect edges between existing node IDs.\n\n`;
 
-  contextPrompt += `Current Nodes:\n`;
+  contextPrompt += `Current Nodes in Database:\n`;
   context.currentNodes.forEach((node: any) => {
     contextPrompt += `- ${node.id}: ${node.data?.label || 'Unnamed'} (Type: ${node.type})\n`;
   });
   contextPrompt += `\n`;
 
-  contextPrompt += `Current Edges:\n`;
-  context.currentEdges.forEach((edge: any) => {
-    contextPrompt += `- ${edge.source} -> ${edge.target}\n`;
-  });
+  contextPrompt += `Current Edges in Database:\n`;
+  if (context.currentEdges && context.currentEdges.length > 0) {
+    context.currentEdges.forEach((edge: any) => {
+      contextPrompt += `- ${edge.id}: ${edge.source} -> ${edge.target}${edge.label ? ` (Label: ${edge.label})` : ''}\n`;
+    });
+  } else {
+    contextPrompt += `(No edges currently exist)\n`;
+  }
+  contextPrompt += `\nIMPORTANT: The edges listed above already exist in the database. Do NOT recreate them unless they need modification. Only add NEW edges that don't already exist.\n`;
 
   contextPrompt += `\nYour Task: Analyze the above and determine what changes are needed. Return a JSON object with:\n`;
   contextPrompt += `{\n`;
@@ -554,33 +598,85 @@ async function executeAgent(
     contextPrompt += `\n=== ADDITIONAL INSTRUCTIONS ===\n${userAddition}\n=== END ADDITIONAL INSTRUCTIONS ===\n`;
   }
 
-  // Call AI
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: contextPrompt },
-      ],
-      response_format: { type: 'json_object' },
-    }),
-  });
+  // Call AI based on provider
+  let response: Response;
+  
+  if (apiProvider === 'gemini') {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [{ text: `${systemPrompt}\n\n${contextPrompt}` }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: maxTokens,
+            ...(selectedModel !== 'gemini-2.5-pro' && {
+              thinkingConfig: { thinkingBudget: thinkingEnabled ? thinkingBudget : 0 }
+            })
+          }
+        })
+      }
+    );
+  } else if (apiProvider === 'anthropic') {
+    response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: selectedModel,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: contextPrompt }]
+      })
+    });
+  } else if (apiProvider === 'xai') {
+    // xAI/Grok doesn't respect system prompts, must prepend to user message
+    const combinedPrompt = `${systemPrompt}\n\n${contextPrompt}`;
+    response = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: selectedModel,
+        messages: [{ role: 'user', content: combinedPrompt }],
+        response_format: { type: 'json_object' },
+      })
+    });
+  } else {
+    throw new Error(`Unsupported API provider: ${apiProvider}`);
+  }
 
   if (!response.ok) {
-    throw new Error(`AI API error: ${response.status}`);
+    const errorText = await response.text();
+    throw new Error(`AI API Error: ${response.status} ${errorText}`);
   }
 
   const aiData = await response.json();
   
-  // Robust JSON extraction - handles markdown code blocks and extra text
+  // Robust JSON extraction - handles different API response formats
   let aiResponse;
   try {
-    const content = aiData.choices[0].message.content;
+    let content: string;
+    
+    if (apiProvider === 'gemini') {
+      content = aiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } else if (apiProvider === 'anthropic') {
+      content = aiData.content?.[0]?.text || '';
+    } else {
+      content = aiData.choices?.[0]?.message?.content || '';
+    }
     console.log('Raw AI response:', content);
     
     // Try to extract JSON from markdown code blocks
@@ -821,9 +917,19 @@ async function executeOrchestrator(
     attachedContext: any;
     blackboard: string[];
     iteration: number;
+    selectedModel?: string;
+    maxTokens?: number;
+    thinkingEnabled?: boolean;
+    thinkingBudget?: number;
   },
-  apiKey: string
+  apiKey: string,
+  apiProvider: 'gemini' | 'anthropic' | 'xai'
 ): Promise<string> {
+  const selectedModel = context.selectedModel || 'gemini-2.5-flash';
+  const maxTokens = context.maxTokens || 8192;
+  const thinkingEnabled = context.thinkingEnabled || false;
+  const thinkingBudget = context.thinkingBudget || -1;
+  
   const orchestratorPrompt = `You are the Orchestrator supervising all agents working on this architecture.
 
 **Agent That Just Completed**: ${context.agentLabel}
@@ -853,28 +959,74 @@ ${context.attachedContext?.standards?.length > 0 ? `\n**Standards to Meet**: ${c
 
 Keep it concise and actionable. This will be added to the Blackboard that all subsequent agents can reference.`;
 
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        { 
-          role: 'system', 
-          content: 'You are the Orchestrator supervising all agents. Review changes and provide brief guidance that all agents can reference. Focus on architectural coherence, missing elements, potential issues, and next priorities. Keep guidance to 2-3 sentences.' 
+  let response: Response;
+  
+  if (apiProvider === 'gemini') {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        { role: 'user', content: orchestratorPrompt },
-      ],
-    }),
-  });
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [{ text: orchestratorPrompt }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: maxTokens,
+            ...(selectedModel !== 'gemini-2.5-pro' && {
+              thinkingConfig: { thinkingBudget: thinkingEnabled ? thinkingBudget : 0 }
+            })
+          }
+        })
+      }
+    );
+  } else if (apiProvider === 'anthropic') {
+    response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: selectedModel,
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: orchestratorPrompt }]
+      })
+    });
+  } else {
+    response = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: selectedModel,
+        messages: [{ role: 'user', content: orchestratorPrompt }]
+      })
+    });
+  }
 
   if (!response.ok) {
-    throw new Error(`Orchestrator AI API error: ${response.status}`);
+    const errorText = await response.text();
+    throw new Error(`Orchestrator AI API Error: ${response.status} ${errorText}`);
   }
 
   const aiData = await response.json();
-  return aiData.choices[0].message.content.trim();
+  
+  let guidance: string;
+  if (apiProvider === 'gemini') {
+    guidance = aiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  } else if (apiProvider === 'anthropic') {
+    guidance = aiData.content?.[0]?.text || '';
+  } else {
+    guidance = aiData.choices?.[0]?.message?.content || '';
+  }
+  
+  return guidance.trim();
 }
