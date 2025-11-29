@@ -265,7 +265,14 @@ export function IterativeEnhancement({
             } else if (event.type === 'blackboard_update') {
               setBlackboard(event.blackboard || []);
             } else if (event.type === 'agent_error') {
-              toast.error(`Agent error: ${event.error}`);
+              const errorMsg = event.error || 'Unknown error';
+              if (errorMsg.includes('credits') || errorMsg.includes('Payment') || errorMsg.includes('402')) {
+                toast.error(`Agent error: ${errorMsg}`, { duration: 10000 });
+                setIsRunning(false);
+                setAbortController(null);
+              } else {
+                toast.error(`Agent error: ${errorMsg}`);
+              }
             } else if (event.type === 'complete') {
               toast.success(`Completed ${iterations} iterations!`);
               setIsRunning(false);

@@ -255,6 +255,18 @@ serve(async (req) => {
               } catch (agentError) {
                 console.error(`Agent ${agentNode.data.label} error:`, agentError);
                 
+                // Check for API payment/rate limit errors
+                const errorMsg = agentError instanceof Error ? agentError.message : 'Unknown error';
+                if (errorMsg.includes('402') || errorMsg.includes('Payment Required')) {
+                  send({
+                    type: 'agent_error',
+                    iteration,
+                    agentId: agentNode.data.type,
+                    error: `API credits exhausted. Please add funds to your ${apiProvider.toUpperCase()} account.`,
+                  });
+                  throw agentError; // Stop iteration on payment errors
+                }
+                
                 // FIX #6: Error recovery with retry logic
                 let retrySuccess = false;
                 for (let retryAttempt = 1; retryAttempt <= 2; retryAttempt++) {
