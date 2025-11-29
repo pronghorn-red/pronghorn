@@ -212,6 +212,17 @@ serve(async (req) => {
                 };
                 metrics.push(metric);
 
+                // Fetch updated canvas state after this agent's changes to compute accurate counts
+                const { data: updatedNodes } = await supabase.rpc('get_canvas_nodes_with_token', {
+                  p_project_id: projectId,
+                  p_token: shareToken,
+                });
+
+                const { data: updatedEdges } = await supabase.rpc('get_canvas_edges_with_token', {
+                  p_project_id: projectId,
+                  p_token: shareToken,
+                });
+
                 send({
                   type: 'agent_complete',
                   iteration,
@@ -219,8 +230,8 @@ serve(async (req) => {
                   changeLog,
                   metric,
                   currentCounts: {
-                    nodes: (currentNodes || []).length,
-                    edges: (currentEdges || []).length,
+                    nodes: (updatedNodes || []).length,
+                    edges: (updatedEdges || []).length,
                   },
                 });
 
