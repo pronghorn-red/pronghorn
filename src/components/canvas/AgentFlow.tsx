@@ -27,14 +27,34 @@ interface AgentDefinition {
 
 // Custom agent node component with connection handles
 function AgentNode({ data }: { data: any }) {
+  // Color mapping from Tailwind classes to actual colors
+  const colorMap: Record<string, string> = {
+    'bg-blue-500': '#3b82f6',
+    'bg-green-500': '#22c55e',
+    'bg-red-500': '#ef4444',
+    'bg-purple-500': '#a855f7',
+    'bg-orange-500': '#f97316',
+    'bg-cyan-500': '#06b6d4',
+    'bg-pink-500': '#ec4899',
+    'bg-yellow-500': '#eab308',
+    'bg-indigo-500': '#6366f1',
+    'bg-teal-500': '#14b8a6',
+    'bg-gray-600': '#4b5563',
+  };
+
+  const bgColor = colorMap[data.color] || '#3b82f6';
+
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} className="w-3 h-3" />
-      <Card className="p-4 rounded-lg shadow-lg min-w-[180px] border-2" style={{ 
-        backgroundColor: data.color || 'hsl(var(--primary))',
-        borderColor: data.color || 'hsl(var(--primary))',
-        color: '#ffffff'
-      }}>
+      <Card 
+        className="p-4 rounded-lg shadow-lg min-w-[180px] border-2" 
+        style={{ 
+          backgroundColor: bgColor,
+          borderColor: bgColor,
+          color: '#ffffff'
+        }}
+      >
         <div className="font-semibold text-sm">{data.label || data.type}</div>
         <div className="text-xs opacity-90 mt-1">{data.description}</div>
       </Card>
