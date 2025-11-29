@@ -66,47 +66,11 @@ export function IterativeEnhancement({
     setAgentFlowEdges(edges);
   };
 
-  const refreshCanvasContext = async () => {
-    if (!projectId || !shareToken) return;
-
-    try {
-      const [nodesResult, edgesResult] = await Promise.all([
-        fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/get_canvas_nodes_with_token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ p_project_id: projectId, p_token: shareToken }),
-        }),
-        fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/get_canvas_edges_with_token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ p_project_id: projectId, p_token: shareToken }),
-        }),
-      ]);
-
-      const nodesData = nodesResult.ok ? await nodesResult.json() : [];
-      const edgesData = edgesResult.ok ? await edgesResult.json() : [];
-
-      setSelectedContext((prev: any) => ({
-        ...(prev || {}),
-        canvasNodes: nodesData || [],
-        canvasEdges: edgesData || [],
-      }));
-    } catch (error) {
-      console.error('Error refreshing canvas context:', error);
-    }
-  };
-
   const handleContextConfirm = (context: any) => {
+    // Directly use the selection returned by ProjectSelector so counts stay stable
     setSelectedContext(context);
     setShowProjectSelector(false);
     toast.success('Project context selected');
-    refreshCanvasContext();
   };
 
   const validateAgentFlow = () => {
