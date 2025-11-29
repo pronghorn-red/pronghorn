@@ -47,6 +47,10 @@ export function IterativeEnhancement({
   const [executingAgentId, setExecutingAgentId] = useState<string | null>(null);
   const [editingAgentNodeId, setEditingAgentNodeId] = useState<string | null>(null);
   const [agentPrompts, setAgentPrompts] = useState<Record<string, { system: string; user: string }>>({});
+  const [initialNodeCount, setInitialNodeCount] = useState(0);
+  const [initialEdgeCount, setInitialEdgeCount] = useState(0);
+  const [currentNodeCount, setCurrentNodeCount] = useState(0);
+  const [currentEdgeCount, setCurrentEdgeCount] = useState(0);
 
   useEffect(() => {
     fetch('/data/buildAgents.json')
@@ -146,6 +150,12 @@ export function IterativeEnhancement({
     setMetrics([]);
     setBlackboard([]);
     setExecutingAgentId(null);
+    
+    // Track initial counts to show delta during iteration
+    setInitialNodeCount(existingNodes.length);
+    setInitialEdgeCount(existingEdges.length);
+    setCurrentNodeCount(existingNodes.length);
+    setCurrentEdgeCount(existingEdges.length);
 
     // FIX #2: Create AbortController for stopping
     const controller = new AbortController();
@@ -224,6 +234,11 @@ export function IterativeEnhancement({
               setExecutingAgentId(null);
               setChangeLogs((prev) => [...prev, event.changeLog]);
               setMetrics((prev) => [...prev, event.metric]);
+              // Update current counts to show delta
+              if (event.currentCounts) {
+                setCurrentNodeCount(event.currentCounts.nodes);
+                setCurrentEdgeCount(event.currentCounts.edges);
+              }
               // Don't call onArchitectureGenerated - let real-time subscriptions handle canvas updates
             } else if (event.type === 'blackboard_update') {
               setBlackboard(event.blackboard || []);
@@ -351,6 +366,15 @@ export function IterativeEnhancement({
                 {selectedContext.canvasNodes?.length > 0 && <p>✓ {selectedContext.canvasNodes.length} node{selectedContext.canvasNodes.length !== 1 ? 's' : ''}</p>}
                 {selectedContext.canvasEdges?.length > 0 && <p>✓ {selectedContext.canvasEdges.length} edge{selectedContext.canvasEdges.length !== 1 ? 's' : ''}</p>}
                 {selectedContext.canvasLayers?.length > 0 && <p>✓ {selectedContext.canvasLayers.length} layer{selectedContext.canvasLayers.length !== 1 ? 's' : ''}</p>}
+              </div>
+            )}
+            
+            {/* Show iteration delta */}
+            {isRunning && (
+              <div className="text-xs text-primary space-y-1 pt-2 border-t mt-2">
+                <p className="font-semibold">Added This Iteration:</p>
+                <p>+{currentNodeCount - initialNodeCount} nodes</p>
+                <p>+{currentEdgeCount - initialEdgeCount} edges</p>
               </div>
             )}
           </div>

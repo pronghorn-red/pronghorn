@@ -160,6 +160,11 @@ serve(async (req) => {
                   throw new Error(`Agent ${agentNode.data.label} is not connected to the flow`);
                 }
 
+                // CONTEXT PASSED TO EACH AGENT:
+                // 1. ProjectSelector content (artifacts, chat, requirements, standards, tech stacks, selected canvas nodes/edges/layers)
+                // 2. Blackboard shared memory (orchestrator guidance from all previous agents)
+                // 3. CURRENT COMPLETE CANVAS STATE (currentNodes, currentEdges) - fetched fresh before each agent
+                //    - This includes ALL nodes and edges: original + all changes made by previous agents in this iteration
                 const result = await executeAgent(
                   agentNode,
                   {
@@ -213,6 +218,10 @@ serve(async (req) => {
                   agentId: agentNode.data.type,
                   changeLog,
                   metric,
+                  currentCounts: {
+                    nodes: (currentNodes || []).length,
+                    edges: (currentEdges || []).length,
+                  },
                 });
 
                 // Call orchestrator after each agent execution
@@ -594,7 +603,11 @@ async function executeAgent(
   } else {
     contextPrompt += `(No edges currently exist)\n`;
   }
-  contextPrompt += `\nIMPORTANT: The edges listed above already exist in the database. Do NOT recreate them unless they need modification. Only add NEW edges that don't already exist.\n`;
+  contextPrompt += `\nIMPORTANT: The nodes and edges listed above are the COMPLETE CURRENT STATE of the canvas, including all changes made by previous agents in this iteration. This includes:\n`;
+  contextPrompt += `- All original nodes from the project\n`;
+  contextPrompt += `- All nodes added by previous agents in this iteration\n`;
+  contextPrompt += `- All edges created or modified during this iteration\n`;
+  contextPrompt += `Do NOT recreate existing edges unless they need modification. Only add NEW elements that don't already exist.\n`;
 
   contextPrompt += `\nYour Task: Analyze the above and determine what changes are needed. Return a JSON object with:\n`;
   contextPrompt += `{\n`;
