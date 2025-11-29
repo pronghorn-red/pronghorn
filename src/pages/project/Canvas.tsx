@@ -902,7 +902,10 @@ function CanvasFlow() {
             onMenuClick={() => setIsSidebarOpen(true)}
           />
           
-          <div className="flex-1 relative" ref={reactFlowWrapper}>
+          <div
+            className={`flex-1 relative ${isAIArchitectOpen ? "opacity-0 pointer-events-none" : ""}`}
+            ref={reactFlowWrapper}
+          >
             <TooltipProvider>
               <AIArchitectDialog
                 projectId={projectId!}
