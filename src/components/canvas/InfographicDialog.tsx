@@ -48,8 +48,8 @@ interface InfographicDialogProps {
 }
 
 export function InfographicDialog({ projectId, shareToken, open, onOpenChange }: InfographicDialogProps) {
-  const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
+  const [loadingImageIds, setLoadingImageIds] = useState<Set<string>>(new Set());
   const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [selectedContent, setSelectedContent] = useState<ProjectSelectionResult | null>(null);
   const [customPrompt, setCustomPrompt] = useState("");
@@ -97,7 +97,20 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
       return;
     }
 
-    setIsGenerating(true);
+    // Create placeholder image immediately
+    const placeholderId = crypto.randomUUID();
+    const placeholderImage: GeneratedImage = {
+      id: placeholderId,
+      imageUrl: '', // Empty URL indicates loading
+      generationType: selectedGenerationType,
+      style: selectedStyle,
+      customPrompt,
+      timestamp: Date.now()
+    };
+
+    // Add placeholder to images and track as loading
+    setGeneratedImages(prev => [...prev, placeholderImage]);
+    setLoadingImageIds(prev => new Set(prev).add(placeholderId));
 
     try {
       console.log('Generating with selected content and style');
@@ -125,15 +138,12 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
       }
 
       if (data.imageUrl) {
-        const newImage: GeneratedImage = {
-          id: crypto.randomUUID(),
-          imageUrl: data.imageUrl,
-          generationType: selectedGenerationType,
-          style: selectedStyle,
-          customPrompt,
-          timestamp: Date.now()
-        };
-        setGeneratedImages(prev => [...prev, newImage]);
+        // Update placeholder with real image
+        setGeneratedImages(prev => prev.map(img => 
+          img.id === placeholderId 
+            ? { ...img, imageUrl: data.imageUrl }
+            : img
+        ));
         toast.success("Visual generated successfully!");
       } else {
         throw new Error('No image URL returned');
@@ -141,13 +151,22 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
     } catch (error) {
       console.error('Error generating visual:', error);
       toast.error(error instanceof Error ? error.message : "Failed to generate visual");
+      
+      // Remove placeholder on error
+      setGeneratedImages(prev => prev.filter(img => img.id !== placeholderId));
     } finally {
-      setIsGenerating(false);
+      // Remove from loading set
+      setLoadingImageIds(prev => {
+        const next = new Set(prev);
+        next.delete(placeholderId);
+        return next;
+      });
     }
   };
 
   const regenerateImage = async (image: GeneratedImage) => {
-    setIsGenerating(true);
+    // Mark this image as loading
+    setLoadingImageIds(prev => new Set(prev).add(image.id));
 
     try {
       const selectedType = graphicStyles?.generationTypes.find(t => t.id === image.generationType);
@@ -178,7 +197,11 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
       console.error('Error regenerating visual:', error);
       toast.error(error instanceof Error ? error.message : "Failed to regenerate visual");
     } finally {
-      setIsGenerating(false);
+      setLoadingImageIds(prev => {
+        const next = new Set(prev);
+        next.delete(image.id);
+        return next;
+      });
     }
   };
 
@@ -508,17 +531,28 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                   </div>
                   ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      {generatedImages.map((image) => (
+                      {generatedImages.map((image) => {
+                        const isLoading = loadingImageIds.has(image.id);
+                        return (
                         <div key={image.id} className="border rounded-lg overflow-hidden bg-card">
                           <div 
                             className="aspect-video relative bg-muted cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => setFullScreenImage(image)}
+                            onClick={() => !isLoading && setFullScreenImage(image)}
                           >
-                            <img 
-                              src={image.imageUrl} 
-                              alt="Generated visual" 
-                              className="w-full h-full object-contain"
-                            />
+                            {isLoading ? (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <div className="text-center space-y-2">
+                                  <Loader2 className="w-8 h-8 animate-spin mx-auto text-muted-foreground" />
+                                  <p className="text-xs text-muted-foreground">Generating...</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <img 
+                                src={image.imageUrl} 
+                                alt="Generated visual" 
+                                className="w-full h-full object-contain"
+                              />
+                            )}
                           </div>
                         <div className="p-4 space-y-3">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -537,7 +571,7 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                           <div className="flex gap-2">
                             <Button
                               onClick={() => saveImageAsArtifact(image)}
-                              disabled={isSavingArtifact === image.id}
+                              disabled={isSavingArtifact === image.id || isLoading}
                               variant="default"
                               size="sm"
                               className="flex-1"
@@ -547,7 +581,7 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                             </Button>
                             <Button
                               onClick={() => regenerateImage(image)}
-                              disabled={isGenerating}
+                              disabled={isLoading}
                               variant="outline"
                               size="sm"
                             >
@@ -555,6 +589,7 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                             </Button>
                             <Button
                               onClick={() => downloadSingleImage(image)}
+                              disabled={isLoading}
                               variant="outline"
                               size="sm"
                             >
@@ -562,6 +597,7 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                             </Button>
                             <Button
                               onClick={() => deleteImage(image.id)}
+                              disabled={isLoading}
                               variant="outline"
                               size="sm"
                             >
@@ -570,7 +606,8 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                           </div>
                         </div>
                       </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   )}
                 </div>
@@ -601,20 +638,11 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
               )}
               <Button
                 onClick={generateInfographic}
-                disabled={!selectedContent || isGenerating}
+                disabled={!selectedContent}
                 size="sm"
               >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <ImagePlus className="w-4 h-4 mr-2" />
-                    Generate
-                  </>
-                )}
+                <ImagePlus className="w-4 h-4 mr-2" />
+                Generate
               </Button>
               </div>
             </div>
