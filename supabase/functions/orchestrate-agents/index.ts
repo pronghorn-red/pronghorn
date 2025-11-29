@@ -405,6 +405,22 @@ async function executeAgent(
   const userAddition = context.customPrompt?.user || '';
   const capabilities = context.capabilities || [];
   
+  // Allowed node types in main canvas enum
+  const allowedNodeTypes = [
+    'PROJECT',
+    'PAGE',
+    'COMPONENT',
+    'API',
+    'DATABASE',
+    'SERVICE',
+    'WEBHOOK',
+    'FIREWALL',
+    'SECURITY',
+    'REQUIREMENT',
+    'STANDARD',
+    'TECH_STACK',
+  ];
+  
   // Build context prompt
   let contextPrompt = `Current Canvas State:\n`;
   contextPrompt += `- Nodes: ${context.currentNodes.length}\n`;
@@ -507,6 +523,12 @@ async function executeAgent(
     }
   }
 
+  // Explain allowed node types and ID usage
+  contextPrompt += `=== NODE TYPE & ID RULES ===\n`;
+  contextPrompt += `- Node types must be one of: ${allowedNodeTypes.join(', ')}\n`;
+  contextPrompt += `- For edgesToAdd, source and target MUST be node IDs from the list below (not labels).\n`;
+  contextPrompt += `- If you create new nodes, you may optionally include an "id" field using a UUID string; otherwise only connect edges between existing node IDs.\n\n`;
+
   contextPrompt += `Current Nodes:\n`;
   context.currentNodes.forEach((node: any) => {
     contextPrompt += `- ${node.id}: ${node.data?.label || 'Unnamed'} (Type: ${node.type})\n`;
@@ -581,6 +603,9 @@ async function executeAgent(
   let nodesAdded = 0, nodesEdited = 0, nodesDeleted = 0;
   let edgesAdded = 0, edgesEdited = 0, edgesDeleted = 0;
 
+  // Track any newly created node IDs so edges can safely target them if needed
+  const newNodeIds: string[] = [];
+
   // FIX #3: Validate capabilities before applying changes
   const canAddNodes = capabilities.length === 0 || capabilities.includes('add_nodes');
   const canEditNodes = capabilities.length === 0 || capabilities.includes('edit_nodes');
@@ -595,12 +620,23 @@ async function executeAgent(
       try {
         const newNodeId = crypto.randomUUID();
         console.log(`Creating node ${newNodeId}:`, nodeData);
-        
+
+        // Map arbitrary LLM node types into allowed enum values
+        const rawType = typeof nodeData.type === 'string' ? nodeData.type.toUpperCase() : '';
+        let nodeType: string = 'COMPONENT';
+        if (allowedNodeTypes.includes(rawType)) {
+          nodeType = rawType;
+        } else if (rawType.includes('DATA')) {
+          nodeType = 'DATABASE';
+        } else if (rawType.includes('PROTOCOL') || rawType.includes('API')) {
+          nodeType = 'API';
+        }
+
         const { data, error } = await supabase.rpc('upsert_canvas_node_with_token', {
           p_id: newNodeId,
           p_project_id: context.projectId,
           p_token: context.shareToken,
-          p_type: nodeData.type || 'COMPONENT',
+          p_type: nodeType,
           p_position: { x: Math.random() * 500, y: Math.random() * 500 },
           p_data: { label: nodeData.label, description: nodeData.description },
         });
@@ -610,6 +646,7 @@ async function executeAgent(
           throw error;
         }
         console.log('Node added successfully:', data);
+        newNodeIds.push(newNodeId);
         nodesAdded++;
       } catch (err) {
         console.error('Error adding node:', err);
@@ -683,8 +720,20 @@ async function executeAgent(
   // Add edges
   if (aiResponse.edgesToAdd && canAddEdges) {
     console.log(`Adding ${aiResponse.edgesToAdd.length} edges...`);
+
+    // Only allow edges between known node IDs to avoid invalid UUID errors
+    const validNodeIds = new Set<string>([
+      ...context.currentNodes.map((n: any) => n.id),
+      ...newNodeIds,
+    ]);
+
     for (const edgeData of aiResponse.edgesToAdd) {
       try {
+        if (!validNodeIds.has(edgeData.source) || !validNodeIds.has(edgeData.target)) {
+          console.warn('Skipping edge with unknown source/target IDs:', edgeData);
+          continue;
+        }
+
         const newEdgeId = crypto.randomUUID();
         console.log(`Creating edge ${newEdgeId}:`, edgeData);
         
