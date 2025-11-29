@@ -95,7 +95,7 @@ export function IterativeEnhancement({
       
       return {
         id: `${agent.id}-${Date.now()}-${index}`,
-        type: 'agent',
+        type: 'agentNode',
         position: { 
           x: col * horizontalSpacing + 50, 
           y: row * verticalSpacing + 50 
@@ -104,6 +104,7 @@ export function IterativeEnhancement({
           type: agent.id,
           label: agent.label,
           color: agent.color,
+          description: agent.description,
           systemPrompt: agent.systemPrompt,
           capabilities: agent.capabilities,
         },
@@ -114,19 +115,33 @@ export function IterativeEnhancement({
     const newEdges: Edge[] = [];
     for (let i = 0; i < newNodes.length - 1; i++) {
       newEdges.push({
-        id: `edge-${i}`,
+        id: `edge-${Date.now()}-${i}`,
         source: newNodes[i].id,
         target: newNodes[i + 1].id,
-        type: 'smoothstep',
+        type: 'bezier',
+        animated: true,
+        markerEnd: {
+          type: 'arrowclosed' as any,
+          width: 20,
+          height: 20,
+        },
+        style: { strokeWidth: 2 }
       });
     }
 
     // Add final edge back to first node (Architect)
     newEdges.push({
-      id: `edge-loop`,
+      id: `edge-loop-${Date.now()}`,
       source: newNodes[newNodes.length - 1].id,
       target: newNodes[0].id,
-      type: 'smoothstep',
+      type: 'bezier',
+      animated: true,
+      markerEnd: {
+        type: 'arrowclosed' as any,
+        width: 20,
+        height: 20,
+      },
+      style: { strokeWidth: 2 }
     });
 
     setAgentFlowNodes(newNodes);
@@ -510,9 +525,9 @@ export function IterativeEnhancement({
                 onClick={() => createStandardFlow('simple')}
                 disabled={isRunning}
               >
-                <div className="text-left">
+                <div className="text-left w-full">
                   <div className="font-medium">Simple</div>
-                  <div className="text-xs text-muted-foreground">Architect → Developer → Architect</div>
+                  <div className="text-xs text-muted-foreground whitespace-normal break-words">Architect → Developer → Architect</div>
                 </div>
               </Button>
               <Button 
@@ -521,9 +536,9 @@ export function IterativeEnhancement({
                 onClick={() => createStandardFlow('standard')}
                 disabled={isRunning}
               >
-                <div className="text-left">
+                <div className="text-left w-full">
                   <div className="font-medium">Standard</div>
-                  <div className="text-xs text-muted-foreground">Architect → Developer → DBA → QA → Cyber Security → Architect</div>
+                  <div className="text-xs text-muted-foreground whitespace-normal break-words">Architect → Developer → DBA → QA → Cyber Security → Architect</div>
                 </div>
               </Button>
               <Button 
@@ -532,9 +547,9 @@ export function IterativeEnhancement({
                 onClick={() => createStandardFlow('full')}
                 disabled={isRunning}
               >
-                <div className="text-left">
+                <div className="text-left w-full">
                   <div className="font-medium">Full</div>
-                  <div className="text-xs text-muted-foreground">Architect → Standards → Developer → DBA → Cloud Ops → QA → UAT → Cyber Security → Architect</div>
+                  <div className="text-xs text-muted-foreground whitespace-normal break-words">Architect → Standards → Developer → DBA → Cloud Ops → QA → UAT → Cyber Security → Architect</div>
                 </div>
               </Button>
             </div>
@@ -568,6 +583,8 @@ export function IterativeEnhancement({
                 executingAgentId={executingAgentId}
                 onEditAgent={handleEditAgent}
                 onPlayAgent={handlePlayAgent}
+                initialNodes={agentFlowNodes}
+                initialEdges={agentFlowEdges}
               />
             </div>
           </div>
