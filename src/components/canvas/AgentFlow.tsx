@@ -104,12 +104,14 @@ interface AgentFlowProps {
   executingAgentId?: string | null;
   onEditAgent?: (nodeId: string) => void;
   onPlayAgent?: (nodeId: string) => void;
+  initialNodes?: Node[];
+  initialEdges?: Edge[];
 }
 
 // Memoize to prevent re-renders when parent updates
-export const AgentFlow = memo(function AgentFlow({ onFlowChange, agentDefinitions, executingAgentId, onEditAgent, onPlayAgent }: AgentFlowProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+export const AgentFlow = memo(function AgentFlow({ onFlowChange, agentDefinitions, executingAgentId, onEditAgent, onPlayAgent, initialNodes = [], initialEdges = [] }: AgentFlowProps) {
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
 
@@ -205,6 +207,21 @@ export const AgentFlow = memo(function AgentFlow({ onFlowChange, agentDefinition
       }))
     );
   }, [executingAgentId, onEditAgent, onPlayAgent]);
+
+  // Update nodes and edges when initialNodes/initialEdges change
+  useEffect(() => {
+    if (initialNodes.length > 0 || initialEdges.length > 0) {
+      setNodes(initialNodes.map(node => ({
+        ...node,
+        data: {
+          ...node.data,
+          onEdit: onEditAgent,
+          onPlay: onPlayAgent,
+        }
+      })));
+      setEdges(initialEdges);
+    }
+  }, [initialNodes, initialEdges, setNodes, setEdges, onEditAgent, onPlayAgent]);
 
   return (
     <div ref={reactFlowWrapper} className="h-full w-full bg-background">
