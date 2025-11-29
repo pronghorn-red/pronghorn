@@ -3,13 +3,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
-import { Play, Square, Settings2, BarChart3, Grid3x3, AlignLeft } from 'lucide-react';
+import { Play, Square, Settings2, BarChart3, Grid3x3, MessageSquare } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AgentFlow } from './AgentFlow';
 import { AgentPromptEditDialog } from './AgentPromptEditDialog';
 import { ChangeLogViewer } from './ChangeLogViewer';
 import { IterationVisualizer } from './IterationVisualizer';
 import { ChangeHeatmap } from './ChangeHeatmap';
+import { BlackboardViewer } from './BlackboardViewer';
 import { ProjectSelector } from '@/components/project/ProjectSelector';
 import { Node, Edge } from 'reactflow';
 import { toast } from 'sonner';
@@ -412,7 +413,13 @@ export function IterativeEnhancement({
               )}
             </div>
             <div className="h-[500px] border rounded-lg overflow-hidden">
-              <AgentFlow onFlowChange={handleFlowChange} agentDefinitions={agentDefinitions} />
+              <AgentFlow 
+                onFlowChange={handleFlowChange} 
+                agentDefinitions={agentDefinitions}
+                executingAgentId={executingAgentId}
+                onEditAgent={handleEditAgent}
+                onPlayAgent={handlePlayAgent}
+              />
             </div>
           </div>
         </Card>
@@ -438,6 +445,14 @@ export function IterativeEnhancement({
                 <Grid3x3 className="w-4 h-4 mr-2" />
                 Heatmap
               </Button>
+              <Button
+                size="sm"
+                variant={visualizationMode === 'blackboard' ? 'default' : 'outline'}
+                onClick={() => setVisualizationMode('blackboard')}
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Blackboard
+              </Button>
             </div>
             
             {visualizationMode === 'chart' ? (
@@ -446,9 +461,15 @@ export function IterativeEnhancement({
                 currentIteration={currentIteration}
                 totalIterations={iterations}
               />
-            ) : (
+            ) : visualizationMode === 'heatmap' ? (
               <ChangeHeatmap
                 metrics={metrics}
+                currentIteration={currentIteration}
+                totalIterations={iterations}
+              />
+            ) : (
+              <BlackboardViewer
+                blackboard={blackboard}
                 currentIteration={currentIteration}
                 totalIterations={iterations}
               />
