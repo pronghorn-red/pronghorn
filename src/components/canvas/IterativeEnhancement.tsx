@@ -551,6 +551,17 @@ export function IterativeEnhancement({
               <Button 
                 variant="outline" 
                 className="w-full justify-start text-sm h-auto py-2"
+                onClick={() => createStandardFlow('simplify')}
+                disabled={isRunning}
+              >
+                <div className="text-left w-full">
+                  <div className="font-medium">Simplify</div>
+                  <div className="text-xs text-muted-foreground whitespace-normal break-words">Architect → Simplifier → Integrator → Architect</div>
+                </div>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start text-sm h-auto py-2"
                 onClick={() => createStandardFlow('full')}
                 disabled={isRunning}
               >
