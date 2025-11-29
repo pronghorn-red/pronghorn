@@ -95,7 +95,7 @@ function AgentNode({ data, id, selected }: { data: any; id: string; selected: bo
 }
 
 const nodeTypes: NodeTypes = {
-  agent: AgentNode,
+  agentNode: AgentNode,
 };
 
 interface AgentFlowProps {
@@ -137,7 +137,7 @@ export function AgentFlow({ onFlowChange, agentDefinitions, executingAgentId, on
 
       const newNode: Node = {
         id: `${agent.id}-${Date.now()}`,
-        type: 'agent',
+        type: 'agentNode',
         position,
         data: {
           type: agent.id,
@@ -161,25 +161,27 @@ export function AgentFlow({ onFlowChange, agentDefinitions, executingAgentId, on
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      const newEdges = addEdge({ 
-        ...connection, 
-        animated: true, 
-        type: 'bezier',
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 20,
-          height: 20,
-        },
-        style: { strokeWidth: 2 }
-      }, edges);
-      
-      setEdges(newEdges);
-      
-      if (onFlowChange) {
-        onFlowChange(nodes, newEdges);
-      }
+      setEdges((eds) => {
+        const newEdges = addEdge({ 
+          ...connection, 
+          animated: true, 
+          type: 'bezier',
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 20,
+            height: 20,
+          },
+          style: { strokeWidth: 2 }
+        }, eds);
+
+        if (onFlowChange) {
+          onFlowChange(nodes, newEdges);
+        }
+
+        return newEdges;
+      });
     },
-    [nodes, edges, onFlowChange, setEdges]
+    [nodes, onFlowChange, setEdges]
   );
 
   const onNodeDragStop = useCallback(() => {
