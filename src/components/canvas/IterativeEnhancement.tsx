@@ -462,11 +462,15 @@ export function IterativeEnhancement({
             )}
             
             {/* Show iteration delta */}
-            {isRunning && (
+            {isRunning && metrics.length > 0 && (
               <div className="text-xs text-primary space-y-1 pt-2 border-t mt-2">
                 <p className="font-semibold">Added This Iteration:</p>
-                <p>+{currentNodeCount - initialNodeCount} nodes</p>
-                <p>+{currentEdgeCount - initialEdgeCount} edges</p>
+                <p>+{metrics.reduce((sum, m) => sum + m.nodesAdded, 0)} nodes</p>
+                <p>~{metrics.reduce((sum, m) => sum + m.nodesEdited, 0)}</p>
+                <p>-{metrics.reduce((sum, m) => sum + m.nodesDeleted, 0)}</p>
+                <p>+{metrics.reduce((sum, m) => sum + m.edgesAdded, 0)} edges</p>
+                <p>~{metrics.reduce((sum, m) => sum + m.edgesEdited, 0)}</p>
+                <p>-{metrics.reduce((sum, m) => sum + m.edgesDeleted, 0)}</p>
               </div>
             )}
           </div>
