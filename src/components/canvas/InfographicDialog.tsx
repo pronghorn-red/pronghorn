@@ -277,32 +277,27 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
   const saveImageAsArtifact = async (image: GeneratedImage) => {
     setIsSavingArtifact(image.id);
     try {
-      // Convert base64 to blob
-      const response = await fetch(image.imageUrl);
-      const blob = await response.blob();
-      
-      // Upload to storage
-      const fileName = `${projectId}/${image.id}-${Date.now()}.png`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('artifact-images')
-        .upload(fileName, blob, {
-          contentType: 'image/png',
-          upsert: false
-        });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('artifact-images')
-        .getPublicUrl(fileName);
-
-      // Create artifact with image URL
       const styleLabel = availableStyles.find(s => s.id === image.style)?.label || image.style;
       const typeLabel = graphicStyles?.generationTypes.find(t => t.id === image.generationType)?.label || image.generationType;
       const content = image.customPrompt || `Generated ${typeLabel} - ${styleLabel}`;
       
-      await addArtifact(content, 'infographic', image.id, publicUrl);
+      const fileName = `${image.id}-${Date.now()}.png`;
+      
+      // Use edge function to upload with proper token validation
+      const { data, error } = await supabase.functions.invoke('upload-artifact-image', {
+        body: {
+          projectId,
+          shareToken,
+          imageData: image.imageUrl,
+          fileName,
+          content,
+          sourceType: 'infographic',
+          sourceId: image.id
+        }
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
       
       toast.success("Image saved as artifact");
     } catch (error: any) {
@@ -325,28 +320,26 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
     try {
       for (const image of generatedImages) {
         try {
-          const response = await fetch(image.imageUrl);
-          const blob = await response.blob();
+          const imgStyleLabel = availableStyles.find(s => s.id === image.style)?.label || image.style;
+          const imgTypeLabel = graphicStyles?.generationTypes.find(t => t.id === image.generationType)?.label || image.generationType;
+          const imgContent = image.customPrompt || `Generated ${imgTypeLabel} - ${imgStyleLabel}`;
+          const imgFileName = `${image.id}-${Date.now()}.png`;
           
-          const fileName = `${projectId}/${image.id}-${Date.now()}.png`;
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('artifact-images')
-            .upload(fileName, blob, {
-              contentType: 'image/png',
-              upsert: false
-            });
+          // Use edge function to upload with proper token validation
+          const { data, error } = await supabase.functions.invoke('upload-artifact-image', {
+            body: {
+              projectId,
+              shareToken,
+              imageData: image.imageUrl,
+              fileName: imgFileName,
+              content: imgContent,
+              sourceType: 'infographic',
+              sourceId: image.id
+            }
+          });
 
-          if (uploadError) throw uploadError;
-
-          const { data: { publicUrl } } = supabase.storage
-            .from('artifact-images')
-            .getPublicUrl(fileName);
-
-          const styleLabel = availableStyles.find(s => s.id === image.style)?.label || image.style;
-          const typeLabel = graphicStyles?.generationTypes.find(t => t.id === image.generationType)?.label || image.generationType;
-          const content = image.customPrompt || `Generated ${typeLabel} - ${styleLabel}`;
-          
-          await addArtifact(content, 'infographic', image.id, publicUrl);
+          if (error) throw error;
+          if (data.error) throw new Error(data.error);
           successCount++;
         } catch (err) {
           console.error(`Error saving image ${image.id}:`, err);
