@@ -161,22 +161,27 @@ export function AgentFlow({ onFlowChange, agentDefinitions, executingAgentId, on
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      setEdges((eds) => addEdge({ 
-        ...connection, 
-        animated: true, 
-        type: 'bezier',
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 20,
-          height: 20,
-        },
-        style: { strokeWidth: 2 }
-      }, eds));
-      if (onFlowChange) {
-        onFlowChange(nodes, edges);
-      }
+      setEdges((eds) => {
+        const newEdges = addEdge({ 
+          ...connection, 
+          animated: true, 
+          type: 'bezier',
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 20,
+            height: 20,
+          },
+          style: { strokeWidth: 2 }
+        }, eds);
+
+        if (onFlowChange) {
+          onFlowChange(nodes, newEdges);
+        }
+
+        return newEdges;
+      });
     },
-    [nodes, edges, onFlowChange]
+    [nodes, onFlowChange]
   );
 
   const onNodeDragStop = useCallback(() => {
