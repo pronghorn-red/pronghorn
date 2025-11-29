@@ -3,10 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
-import { Play, Square, Settings2 } from 'lucide-react';
+import { Play, Square, Settings2, BarChart3, Grid3x3 } from 'lucide-react';
 import { AgentFlow } from './AgentFlow';
 import { ChangeLogViewer } from './ChangeLogViewer';
 import { IterationVisualizer } from './IterationVisualizer';
+import { ChangeHeatmap } from './ChangeHeatmap';
 import { ProjectSelector } from '@/components/project/ProjectSelector';
 import { Node, Edge } from 'reactflow';
 import { toast } from 'sonner';
@@ -35,6 +36,8 @@ export function IterativeEnhancement({
   const [selectedContext, setSelectedContext] = useState<any>(null);
   const [changeLogs, setChangeLogs] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any[]>([]);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [visualizationMode, setVisualizationMode] = useState<'chart' | 'heatmap'>('chart'); // FIX #7
 
   const handleFlowChange = (nodes: Node[], edges: Edge[]) => {
     setAgentFlowNodes(nodes);
@@ -292,11 +295,41 @@ export function IterativeEnhancement({
 
       {/* Visualization and Change Log */}
       <div className="grid grid-cols-2 gap-4">
-        <IterationVisualizer
-          metrics={metrics}
-          currentIteration={currentIteration}
-          totalIterations={iterations}
-        />
+        <div className="space-y-2">
+          {/* FIX #7: Visualization mode toggle */}
+          <div className="flex justify-end gap-2 mb-2">
+            <Button
+              size="sm"
+              variant={visualizationMode === 'chart' ? 'default' : 'outline'}
+              onClick={() => setVisualizationMode('chart')}
+            >
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Chart
+            </Button>
+            <Button
+              size="sm"
+              variant={visualizationMode === 'heatmap' ? 'default' : 'outline'}
+              onClick={() => setVisualizationMode('heatmap')}
+            >
+              <Grid3x3 className="w-4 h-4 mr-2" />
+              Heatmap
+            </Button>
+          </div>
+          
+          {visualizationMode === 'chart' ? (
+            <IterationVisualizer
+              metrics={metrics}
+              currentIteration={currentIteration}
+              totalIterations={iterations}
+            />
+          ) : (
+            <ChangeHeatmap
+              metrics={metrics}
+              currentIteration={currentIteration}
+              totalIterations={iterations}
+            />
+          )}
+        </div>
         <ChangeLogViewer
           logs={changeLogs}
           onSaveAsArtifact={handleSaveAsArtifact}

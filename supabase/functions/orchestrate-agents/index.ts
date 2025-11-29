@@ -100,19 +100,19 @@ serve(async (req) => {
               totalIterations: iterations 
             });
 
-            // Get current canvas state
-            const { data: currentNodes } = await supabase.rpc('get_canvas_nodes_with_token', {
-              p_project_id: projectId,
-              p_token: shareToken,
-            });
-
-            const { data: currentEdges } = await supabase.rpc('get_canvas_edges_with_token', {
-              p_project_id: projectId,
-              p_token: shareToken,
-            });
-
-            // Execute each agent in order
+            // Execute each agent in order - fetch fresh state before each agent
             for (const agentNode of executionOrder) {
+              // CRITICAL FIX #1: Fetch fresh canvas state before each agent execution
+              const { data: currentNodes } = await supabase.rpc('get_canvas_nodes_with_token', {
+                p_project_id: projectId,
+                p_token: shareToken,
+              });
+
+              const { data: currentEdges } = await supabase.rpc('get_canvas_edges_with_token', {
+                p_project_id: projectId,
+                p_token: shareToken,
+              });
+
               send({
                 type: 'agent_start',
                 iteration,
@@ -121,6 +121,14 @@ serve(async (req) => {
               });
 
               try {
+                // Validate agent is connected (FIX #4)
+                const isConnected = agentFlow.edges.some(
+                  (e: any) => e.source === agentNode.id || e.target === agentNode.id
+                );
+                if (!isConnected && agentFlow.nodes.length > 1) {
+                  throw new Error(`Agent ${agentNode.data.label} is not connected to the flow`);
+                }
+
                 const result = await executeAgent(
                   agentNode,
                   {
@@ -130,6 +138,7 @@ serve(async (req) => {
                     currentEdges: currentEdges || [],
                     attachedContext,
                     iteration,
+                    capabilities: agentNode.data.capabilities, // FIX #3: Pass capabilities
                   },
                   supabase,
                   LOVABLE_API_KEY
@@ -169,22 +178,87 @@ serve(async (req) => {
                 });
               } catch (agentError) {
                 console.error(`Agent ${agentNode.data.label} error:`, agentError);
-                send({
-                  type: 'agent_error',
-                  iteration,
-                  agentId: agentNode.data.type,
-                  error: agentError instanceof Error ? agentError.message : 'Unknown error',
-                });
+                
+                // FIX #6: Error recovery with retry logic
+                let retrySuccess = false;
+                for (let retryAttempt = 1; retryAttempt <= 2; retryAttempt++) {
+                  try {
+                    send({
+                      type: 'agent_retry',
+                      iteration,
+                      agentId: agentNode.data.type,
+                      attempt: retryAttempt,
+                    });
+                    
+                    await new Promise(resolve => setTimeout(resolve, 1000 * retryAttempt));
+                    
+                    const result = await executeAgent(
+                      agentNode,
+                      {
+                        projectId,
+                        shareToken,
+                        currentNodes: currentNodes || [],
+                        currentEdges: currentEdges || [],
+                        attachedContext,
+                        iteration,
+                        capabilities: agentNode.data.capabilities,
+                      },
+                      supabase,
+                      LOVABLE_API_KEY
+                    );
+                    
+                    // Record successful retry
+                    const changeLog: ChangeLogEntry = {
+                      iteration,
+                      agentId: agentNode.data.type,
+                      agentLabel: agentNode.data.label,
+                      timestamp: new Date().toISOString(),
+                      changes: result.changes,
+                      reasoning: `[RETRY ${retryAttempt}] ${result.reasoning}`,
+                    };
+                    changeLogs.push(changeLog);
+
+                    const metric: ChangeMetric = {
+                      iteration,
+                      agentId: agentNode.data.type,
+                      agentLabel: agentNode.data.label,
+                      nodesAdded: result.metrics.nodesAdded,
+                      nodesEdited: result.metrics.nodesEdited,
+                      nodesDeleted: result.metrics.nodesDeleted,
+                      edgesAdded: result.metrics.edgesAdded,
+                      edgesEdited: result.metrics.edgesEdited,
+                      edgesDeleted: result.metrics.edgesDeleted,
+                      timestamp: new Date().toISOString(),
+                    };
+                    metrics.push(metric);
+
+                    send({
+                      type: 'agent_complete',
+                      iteration,
+                      agentId: agentNode.data.type,
+                      changeLog,
+                      metric,
+                    });
+                    
+                    retrySuccess = true;
+                    break;
+                  } catch (retryError) {
+                    if (retryAttempt === 2) {
+                      send({
+                        type: 'agent_error',
+                        iteration,
+                        agentId: agentNode.data.type,
+                        error: agentError instanceof Error ? agentError.message : 'Unknown error',
+                      });
+                    }
+                  }
+                }
               }
             }
 
             send({ type: 'iteration_complete', iteration });
 
-            // Broadcast canvas refresh
-            await supabase.channel(`canvas-${projectId}`).send({
-              type: 'broadcast',
-              event: 'canvas_refresh',
-            });
+            // FIX #5: Removed manual broadcast - rely on RLS-enforced postgres_changes events
           }
 
           send({
@@ -280,6 +354,7 @@ async function executeAgent(
   apiKey: string
 ) {
   const systemPrompt = agentNode.data.systemPrompt;
+  const capabilities = context.capabilities || [];
   
   // Build context prompt
   let contextPrompt = `Current Canvas State:\n`;
@@ -361,8 +436,15 @@ async function executeAgent(
   let nodesAdded = 0, nodesEdited = 0, nodesDeleted = 0;
   let edgesAdded = 0, edgesEdited = 0, edgesDeleted = 0;
 
+  // FIX #3: Validate capabilities before applying changes
+  const canAddNodes = capabilities.length === 0 || capabilities.includes('add_nodes');
+  const canEditNodes = capabilities.length === 0 || capabilities.includes('edit_nodes');
+  const canDeleteNodes = capabilities.length === 0 || capabilities.includes('delete_nodes');
+  const canAddEdges = capabilities.length === 0 || capabilities.includes('add_edges');
+  const canDeleteEdges = capabilities.length === 0 || capabilities.includes('delete_edges');
+
   // Add nodes
-  if (aiResponse.nodesToAdd) {
+  if (aiResponse.nodesToAdd && canAddNodes) {
     for (const nodeData of aiResponse.nodesToAdd) {
       try {
         await supabase.rpc('upsert_canvas_node_with_token', {
@@ -378,10 +460,12 @@ async function executeAgent(
         console.error('Error adding node:', err);
       }
     }
+  } else if (aiResponse.nodesToAdd && !canAddNodes) {
+    console.warn(`Agent lacks 'add_nodes' capability, skipping ${aiResponse.nodesToAdd.length} node additions`);
   }
 
   // Edit nodes
-  if (aiResponse.nodesToEdit) {
+  if (aiResponse.nodesToEdit && canEditNodes) {
     for (const edit of aiResponse.nodesToEdit) {
       try {
         const existingNode = context.currentNodes.find((n: any) => n.id === edit.id);
@@ -400,10 +484,12 @@ async function executeAgent(
         console.error('Error editing node:', err);
       }
     }
+  } else if (aiResponse.nodesToEdit && !canEditNodes) {
+    console.warn(`Agent lacks 'edit_nodes' capability, skipping ${aiResponse.nodesToEdit.length} node edits`);
   }
 
   // Delete nodes
-  if (aiResponse.nodesToDelete) {
+  if (aiResponse.nodesToDelete && canDeleteNodes) {
     for (const nodeId of aiResponse.nodesToDelete) {
       try {
         await supabase.rpc('delete_canvas_node_with_token', {
@@ -415,10 +501,12 @@ async function executeAgent(
         console.error('Error deleting node:', err);
       }
     }
+  } else if (aiResponse.nodesToDelete && !canDeleteNodes) {
+    console.warn(`Agent lacks 'delete_nodes' capability, skipping ${aiResponse.nodesToDelete.length} node deletions`);
   }
 
   // Add edges
-  if (aiResponse.edgesToAdd) {
+  if (aiResponse.edgesToAdd && canAddEdges) {
     for (const edgeData of aiResponse.edgesToAdd) {
       try {
         await supabase.rpc('upsert_canvas_edge_with_token', {
@@ -436,10 +524,12 @@ async function executeAgent(
         console.error('Error adding edge:', err);
       }
     }
+  } else if (aiResponse.edgesToAdd && !canAddEdges) {
+    console.warn(`Agent lacks 'add_edges' capability, skipping ${aiResponse.edgesToAdd.length} edge additions`);
   }
 
   // Delete edges
-  if (aiResponse.edgesToDelete) {
+  if (aiResponse.edgesToDelete && canDeleteEdges) {
     for (const edgeId of aiResponse.edgesToDelete) {
       try {
         await supabase.rpc('delete_canvas_edge_with_token', {
@@ -451,6 +541,8 @@ async function executeAgent(
         console.error('Error deleting edge:', err);
       }
     }
+  } else if (aiResponse.edgesToDelete && !canDeleteEdges) {
+    console.warn(`Agent lacks 'delete_edges' capability, skipping ${aiResponse.edgesToDelete.length} edge deletions`);
   }
 
   return {
