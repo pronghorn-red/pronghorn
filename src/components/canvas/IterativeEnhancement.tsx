@@ -428,9 +428,9 @@ export function IterativeEnhancement({
   };
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row gap-2 md:gap-4 min-h-0 overflow-hidden">
+    <div className="flex-1 flex flex-col gap-2 md:gap-4 min-h-0 overflow-y-auto md:overflow-hidden md:flex-row">
       {/* Left Sidebar */}
-      <div className="w-full md:w-64 flex flex-col md:border-r md:pr-4 overflow-y-auto">
+      <div className="w-full md:w-64 flex flex-col md:border-r md:pr-4 shrink-0">
           <div className="space-y-4">
           {/* Context Options */}
           <div className="space-y-2">
@@ -585,7 +585,7 @@ export function IterativeEnhancement({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col gap-4 overflow-y-auto min-h-0">
+      <div className="flex-1 flex flex-col gap-4 md:overflow-y-auto min-h-0 shrink-0">
         {/* Agent Flow Canvas */}
         <Card className="flex-shrink-0">
           <div className="p-4">
@@ -603,7 +603,7 @@ export function IterativeEnhancement({
                 </Button>
               )}
             </div>
-            <div className="h-[500px] border rounded-lg overflow-hidden">
+            <div className="h-[400px] md:h-[500px] border rounded-lg overflow-hidden">
               <AgentFlow 
                 onFlowChange={handleFlowChange} 
                 agentDefinitions={agentDefinitions}
@@ -619,9 +619,9 @@ export function IterativeEnhancement({
         </Card>
 
         {/* Visualization - Full Width */}
-        <div className="space-y-2">
+        <Card className="flex-shrink-0 p-4">
           {/* Visualization mode toggle */}
-          <div className="flex justify-end gap-2 mb-2">
+          <div className="flex justify-end gap-2 mb-4">
             <Button
               size="sm"
               variant={visualizationMode === 'chart' ? 'default' : 'outline'}
@@ -648,28 +648,30 @@ export function IterativeEnhancement({
             </Button>
           </div>
           
-          {visualizationMode === 'chart' ? (
-            <IterationVisualizer
-              metrics={metrics}
-              currentIteration={currentIteration}
-              totalIterations={iterations}
-              changeLogs={changeLogs}
-              onSaveAsArtifact={handleSaveAsArtifact}
-            />
-          ) : visualizationMode === 'heatmap' ? (
-            <ChangeHeatmap
-              metrics={metrics}
-              currentIteration={currentIteration}
-              totalIterations={iterations}
-            />
-          ) : (
-            <BlackboardViewer
-              blackboard={blackboard}
-              currentIteration={currentIteration}
-              totalIterations={iterations}
-            />
-          )}
-        </div>
+          <div className="min-h-[300px]">
+            {visualizationMode === 'chart' ? (
+              <IterationVisualizer
+                metrics={metrics}
+                currentIteration={currentIteration}
+                totalIterations={iterations}
+                changeLogs={changeLogs}
+                onSaveAsArtifact={handleSaveAsArtifact}
+              />
+            ) : visualizationMode === 'heatmap' ? (
+              <ChangeHeatmap
+                metrics={metrics}
+                currentIteration={currentIteration}
+                totalIterations={iterations}
+              />
+            ) : (
+              <BlackboardViewer
+                blackboard={blackboard}
+                currentIteration={currentIteration}
+                totalIterations={iterations}
+              />
+            )}
+          </div>
+        </Card>
       </div>
 
       {/* Project Selector Modal */}
