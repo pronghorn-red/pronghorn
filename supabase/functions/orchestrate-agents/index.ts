@@ -638,7 +638,7 @@ async function executeAgent(
           p_token: context.shareToken,
           p_type: nodeType,
           p_position: { x: Math.random() * 500, y: Math.random() * 500 },
-          p_data: { label: nodeData.label, description: nodeData.description },
+          p_data: { label: nodeData.label, description: nodeData.description, type: nodeType },
         });
         
         if (error) {
@@ -671,7 +671,7 @@ async function executeAgent(
             p_token: context.shareToken,
             p_type: existingNode.type,
             p_position: existingNode.position,
-            p_data: { ...existingNode.data, ...edit.updates },
+            p_data: { ...existingNode.data, ...edit.updates, type: existingNode.type },
           });
           
           if (error) {
