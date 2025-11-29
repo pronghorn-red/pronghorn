@@ -404,6 +404,15 @@ ${artifact.content}`;
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                        {artifact.image_url && (
+                          <div className="rounded-lg border overflow-hidden bg-muted">
+                            <img 
+                              src={artifact.image_url} 
+                              alt={artifact.ai_title || "Artifact image"}
+                              className="w-full h-auto object-contain max-h-96"
+                            />
+                          </div>
+                        )}
                         {(artifact.ai_summary || streamingSummary[artifact.id]) && (
                           <Accordion type="single" collapsible defaultValue="summary">
                             <AccordionItem value="summary" className="border-none">
@@ -442,7 +451,16 @@ ${artifact.content}`;
                       {filteredAndSortedArtifacts.map((artifact) => (
                         <TableRow key={artifact.id}>
                           <TableCell className="font-medium">
-                            {artifact.ai_title || "Untitled Artifact"}
+                            <div className="space-y-1">
+                              <div>{artifact.ai_title || "Untitled Artifact"}</div>
+                              {artifact.image_url && (
+                                <img 
+                                  src={artifact.image_url} 
+                                  alt={artifact.ai_title || "Artifact image"}
+                                  className="w-32 h-auto object-contain rounded border"
+                                />
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="max-w-md">
                             <p className="text-sm text-muted-foreground truncate">

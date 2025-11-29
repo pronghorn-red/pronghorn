@@ -10,6 +10,7 @@ export interface Artifact {
   ai_summary: string | null;
   source_type: string | null;
   source_id: string | null;
+  image_url: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -71,7 +72,7 @@ export const useRealtimeArtifacts = (
     };
   }, [projectId, enabled, shareToken]);
 
-  const addArtifact = async (content: string, sourceType?: string, sourceId?: string) => {
+  const addArtifact = async (content: string, sourceType?: string, sourceId?: string, imageUrl?: string) => {
     if (!projectId) return;
 
     // Generate temporary ID for optimistic update
@@ -84,6 +85,7 @@ export const useRealtimeArtifacts = (
       ai_summary: null,
       source_type: sourceType || null,
       source_id: sourceId || null,
+      image_url: imageUrl || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       created_by: null,
@@ -99,6 +101,7 @@ export const useRealtimeArtifacts = (
         p_content: content,
         p_source_type: sourceType || null,
         p_source_id: sourceId || null,
+        p_image_url: imageUrl || null,
       });
 
       if (error) throw error;
@@ -132,7 +135,8 @@ export const useRealtimeArtifacts = (
     id: string,
     content?: string,
     aiTitle?: string,
-    aiSummary?: string
+    aiSummary?: string,
+    imageUrl?: string
   ) => {
     // Store original for rollback
     const originalArtifacts = artifacts;
@@ -147,6 +151,7 @@ export const useRealtimeArtifacts = (
                 ...(content !== undefined && { content }),
                 ...(aiTitle !== undefined && { ai_title: aiTitle }),
                 ...(aiSummary !== undefined && { ai_summary: aiSummary }),
+                ...(imageUrl !== undefined && { image_url: imageUrl }),
                 updated_at: new Date().toISOString(),
               }
             : artifact
@@ -159,6 +164,7 @@ export const useRealtimeArtifacts = (
         p_content: content || null,
         p_ai_title: aiTitle || null,
         p_ai_summary: aiSummary || null,
+        p_image_url: imageUrl || null,
       });
 
       if (error) throw error;

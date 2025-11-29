@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Download, FileText, Trash2, RefreshCw, ImagePlus, X, Menu } from "lucide-react";
+import { Loader2, Download, FileText, Trash2, RefreshCw, ImagePlus, X, Menu, Save } from "lucide-react";
 import { toast } from "sonner";
 import { ProjectSelector, type ProjectSelectionResult } from "@/components/project/ProjectSelector";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import JSZip from "jszip";
+import { useRealtimeArtifacts } from "@/hooks/useRealtimeArtifacts";
 
 interface GeneratedImage {
   id: string;
@@ -57,6 +58,9 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
   const [graphicStyles, setGraphicStyles] = useState<GraphicStyles | null>(null);
   const [fullScreenImage, setFullScreenImage] = useState<GeneratedImage | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isSavingArtifact, setIsSavingArtifact] = useState<string | null>(null);
+  
+  const { addArtifact } = useRealtimeArtifacts(projectId, shareToken, true);
 
   useEffect(() => {
     // Load graphic styles from JSON
@@ -244,6 +248,91 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
       toast.success("All images downloaded as ZIP");
     } catch (error) {
       toast.error("Failed to create ZIP file");
+    }
+  };
+
+  const saveImageAsArtifact = async (image: GeneratedImage) => {
+    setIsSavingArtifact(image.id);
+    try {
+      // Convert base64 to blob
+      const response = await fetch(image.imageUrl);
+      const blob = await response.blob();
+      
+      // Upload to storage
+      const fileName = `${projectId}/${image.id}-${Date.now()}.png`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('artifact-images')
+        .upload(fileName, blob, {
+          contentType: 'image/png',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('artifact-images')
+        .getPublicUrl(fileName);
+
+      // Create artifact with image URL
+      const styleLabel = availableStyles.find(s => s.id === image.style)?.label || image.style;
+      const typeLabel = graphicStyles?.generationTypes.find(t => t.id === image.generationType)?.label || image.generationType;
+      const content = image.customPrompt || `Generated ${typeLabel} - ${styleLabel}`;
+      
+      await addArtifact(content, 'infographic', image.id, publicUrl);
+      
+      toast.success("Image saved as artifact");
+    } catch (error: any) {
+      console.error("Error saving image as artifact:", error);
+      toast.error(error.message || "Failed to save image as artifact");
+    } finally {
+      setIsSavingArtifact(null);
+    }
+  };
+
+  const saveAllImagesAsArtifacts = async () => {
+    if (generatedImages.length === 0) {
+      toast.error("No images to save");
+      return;
+    }
+
+    setIsSavingArtifact('all');
+    let successCount = 0;
+    
+    try {
+      for (const image of generatedImages) {
+        try {
+          const response = await fetch(image.imageUrl);
+          const blob = await response.blob();
+          
+          const fileName = `${projectId}/${image.id}-${Date.now()}.png`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('artifact-images')
+            .upload(fileName, blob, {
+              contentType: 'image/png',
+              upsert: false
+            });
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('artifact-images')
+            .getPublicUrl(fileName);
+
+          const styleLabel = availableStyles.find(s => s.id === image.style)?.label || image.style;
+          const typeLabel = graphicStyles?.generationTypes.find(t => t.id === image.generationType)?.label || image.generationType;
+          const content = image.customPrompt || `Generated ${typeLabel} - ${styleLabel}`;
+          
+          await addArtifact(content, 'infographic', image.id, publicUrl);
+          successCount++;
+        } catch (err) {
+          console.error(`Error saving image ${image.id}:`, err);
+        }
+      }
+      
+      toast.success(`Saved ${successCount} of ${generatedImages.length} images as artifacts`);
+    } finally {
+      setIsSavingArtifact(null);
     }
   };
 
@@ -447,14 +536,22 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
                           )}
                           <div className="flex gap-2">
                             <Button
+                              onClick={() => saveImageAsArtifact(image)}
+                              disabled={isSavingArtifact === image.id}
+                              variant="default"
+                              size="sm"
+                              className="flex-1"
+                            >
+                              <Save className="w-3 h-3 mr-2" />
+                              {isSavingArtifact === image.id ? "Saving..." : "Save"}
+                            </Button>
+                            <Button
                               onClick={() => regenerateImage(image)}
                               disabled={isGenerating}
                               variant="outline"
                               size="sm"
-                              className="flex-1"
                             >
-                              <RefreshCw className="w-3 h-3 mr-2" />
-                              Regenerate
+                              <RefreshCw className="w-3 h-3" />
                             </Button>
                             <Button
                               onClick={() => downloadSingleImage(image)}
@@ -480,16 +577,27 @@ export function InfographicDialog({ projectId, shareToken, open, onOpenChange }:
               </ScrollArea>
 
               {/* Bottom Action Buttons */}
-              <div className="p-6 border-t bg-muted/30 flex justify-end gap-2 flex-shrink-0">
+              <div className="p-6 border-t bg-muted/30 flex justify-end gap-2 flex-shrink-0 flex-wrap">
               {generatedImages.length > 0 && (
-                <Button
-                  onClick={downloadAllAsZip}
-                  variant="outline"
-                  size="sm"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Download All ({generatedImages.length})
-                </Button>
+                <>
+                  <Button
+                    onClick={saveAllImagesAsArtifacts}
+                    disabled={isSavingArtifact === 'all'}
+                    variant="default"
+                    size="sm"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {isSavingArtifact === 'all' ? 'Saving...' : `Save All as Artifacts (${generatedImages.length})`}
+                  </Button>
+                  <Button
+                    onClick={downloadAllAsZip}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download All ({generatedImages.length})
+                  </Button>
+                </>
               )}
               <Button
                 onClick={generateInfographic}
