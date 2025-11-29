@@ -21,6 +21,7 @@ interface IterativeEnhancementProps {
   existingNodes: any[];
   existingEdges: any[];
   onArchitectureGenerated: (nodes: any[], edges: any[]) => void;
+  onCanvasRefresh?: () => void;
 }
 
 export function IterativeEnhancement({
@@ -29,6 +30,7 @@ export function IterativeEnhancement({
   existingNodes,
   existingEdges,
   onArchitectureGenerated,
+  onCanvasRefresh,
 }: IterativeEnhancementProps) {
   const [agentFlowNodes, setAgentFlowNodes] = useState<Node[]>([]);
   const [agentFlowEdges, setAgentFlowEdges] = useState<Edge[]>([]);
@@ -69,15 +71,16 @@ export function IterativeEnhancement({
     setAgentFlowEdges(edges);
   };
 
-  const createStandardFlow = (flowType: 'simple' | 'standard' | 'full') => {
+  const createStandardFlow = (flowType: 'simple' | 'standard' | 'full' | 'simplify') => {
     const flowDefinitions = {
       simple: ['architect', 'developer'],
-      standard: ['architect', 'developer', 'dba', 'qa', 'cyber-security'],
-      full: ['architect', 'standards', 'developer', 'dba', 'cloud-ops', 'qa', 'uat', 'cyber-security'],
-    };
+      standard: ['architect', 'developer', 'dba', 'qa', 'cyber'],
+      full: ['architect', 'standards', 'developer', 'dba', 'cloudops', 'qa', 'uat', 'cyber'],
+      simplify: ['architect', 'simplifier', 'integrator', 'architect'],
+    } as const;
 
     const agentIds = flowDefinitions[flowType];
-    const agents = agentIds.map(id => agentDefinitions.find(a => a.id === id)).filter(Boolean);
+    const agents = agentIds.map(id => agentDefinitions.find((a) => a.id === id)).filter(Boolean);
 
     if (agents.length === 0) {
       toast.error('Agent definitions not loaded yet');
@@ -98,7 +101,7 @@ export function IterativeEnhancement({
         type: 'agentNode',
         position: { 
           x: col * horizontalSpacing + 50, 
-          y: row * verticalSpacing + 50 
+          y: row * verticalSpacing + 50,
         },
         data: {
           type: agent.id,
@@ -125,24 +128,26 @@ export function IterativeEnhancement({
           width: 20,
           height: 20,
         },
-        style: { strokeWidth: 2 }
+        style: { strokeWidth: 2 },
       });
     }
 
     // Add final edge back to first node (Architect)
-    newEdges.push({
-      id: `edge-loop-${Date.now()}`,
-      source: newNodes[newNodes.length - 1].id,
-      target: newNodes[0].id,
-      type: 'bezier',
-      animated: true,
-      markerEnd: {
-        type: 'arrowclosed' as any,
-        width: 20,
-        height: 20,
-      },
-      style: { strokeWidth: 2 }
-    });
+    if (newNodes.length > 1) {
+      newEdges.push({
+        id: `edge-loop-${Date.now()}`,
+        source: newNodes[newNodes.length - 1].id,
+        target: newNodes[0].id,
+        type: 'bezier',
+        animated: true,
+        markerEnd: {
+          type: 'arrowclosed' as any,
+          width: 20,
+          height: 20,
+        },
+        style: { strokeWidth: 2 },
+      });
+    }
 
     setAgentFlowNodes(newNodes);
     setAgentFlowEdges(newEdges);
@@ -335,6 +340,8 @@ export function IterativeEnhancement({
               toast.success(`Completed ${iterations} iterations!`);
               setIsRunning(false);
               setAbortController(null);
+              // Ensure the main canvas reloads with the final state
+              onCanvasRefresh?.();
             } else if (event.type === 'error') {
               throw new Error(event.message);
             }

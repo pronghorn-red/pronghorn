@@ -18,6 +18,7 @@ interface AIArchitectDialogProps {
   onArchitectureGenerated: (nodes: any[], edges: any[]) => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onCanvasRefresh?: () => void;
 }
 
 export function AIArchitectDialog({ 
@@ -26,7 +27,8 @@ export function AIArchitectDialog({
   existingEdges, 
   onArchitectureGenerated,
   open: controlledOpen,
-  onOpenChange: controlledOnOpenChange
+  onOpenChange: controlledOnOpenChange,
+  onCanvasRefresh,
 }: AIArchitectDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -426,6 +428,7 @@ export function AIArchitectDialog({
               existingNodes={existingNodes}
               existingEdges={existingEdges}
               onArchitectureGenerated={onArchitectureGenerated}
+              onCanvasRefresh={onCanvasRefresh}
             />
           </TabsContent>
         </Tabs>

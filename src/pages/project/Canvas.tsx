@@ -920,6 +920,7 @@ function CanvasFlow() {
                     loadCanvasData();
                   }
                 }}
+                onCanvasRefresh={loadCanvasData}
               />
               
               <InfographicDialog
