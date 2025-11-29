@@ -120,11 +120,81 @@ export function IterativeEnhancement({
     setChangeLogs([]);
     setMetrics([]);
 
-    // TODO: Implement actual agent orchestration
-    toast.success(`Starting ${iterations} iterations...`);
-    
-    // Placeholder for agent execution
-    // This will be implemented in Phase 2
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/orchestrate-agents`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            projectId,
+            shareToken,
+            agentFlow: {
+              nodes: agentFlowNodes,
+              edges: agentFlowEdges,
+            },
+            attachedContext: selectedContext,
+            iterations,
+          }),
+        }
+      );
+
+      if (!response.ok || !response.body) {
+        throw new Error('Failed to start agent orchestration');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+          let line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const jsonStr = line.slice(6).trim();
+
+          try {
+            const event = JSON.parse(jsonStr);
+
+            if (event.type === 'iteration_start') {
+              setCurrentIteration(event.iteration);
+            } else if (event.type === 'agent_complete') {
+              setChangeLogs((prev) => [...prev, event.changeLog]);
+              setMetrics((prev) => [...prev, event.metric]);
+              onArchitectureGenerated([], []); // Trigger refresh
+            } else if (event.type === 'agent_error') {
+              toast.error(`Agent error: ${event.error}`);
+            } else if (event.type === 'complete') {
+              toast.success(`Completed ${iterations} iterations!`);
+              setIsRunning(false);
+            } else if (event.type === 'error') {
+              throw new Error(event.message);
+            }
+          } catch (parseErr) {
+            buffer = line + '\n' + buffer;
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Iteration error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to run iteration');
+      setIsRunning(false);
+    }
   };
 
   const stopIteration = () => {
@@ -132,9 +202,36 @@ export function IterativeEnhancement({
     toast.info('Iteration stopped');
   };
 
-  const handleSaveAsArtifact = () => {
-    // TODO: Save change logs as artifact
-    toast.success('Change log saved as artifact');
+  const handleSaveAsArtifact = async () => {
+    try {
+      const changeLogContent = changeLogs
+        .map((log) => {
+          return `## Iteration ${log.iteration} - ${log.agentLabel}\n**Time:** ${new Date(log.timestamp).toLocaleString()}\n\n**Reasoning:**\n${log.reasoning}\n\n**Changes:**\n${log.changes}\n\n---\n`;
+        })
+        .join('\n');
+
+      await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-artifact-image`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            projectId,
+            shareToken,
+            content: changeLogContent,
+            sourceType: 'iterative_enhancement',
+          }),
+        }
+      );
+
+      toast.success('Change log saved as artifact');
+    } catch (error) {
+      console.error('Error saving change log:', error);
+      toast.error('Failed to save change log');
+    }
   };
 
   return (

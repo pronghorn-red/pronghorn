@@ -45,3 +45,6 @@ verify_jwt = false
 
 [functions.upload-artifact-image]
 verify_jwt = false
+
+[functions.orchestrate-agents]
+verify_jwt = false

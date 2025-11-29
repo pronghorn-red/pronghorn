@@ -18,8 +18,8 @@ serve(async (req) => {
       throw new Error('Project ID is required');
     }
 
-    if (!imageData) {
-      throw new Error('Image data is required');
+    if (!content) {
+      throw new Error('Content is required');
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -42,28 +42,35 @@ serve(async (req) => {
       throw new Error('Unauthorized: Invalid project access');
     }
 
-    // Convert base64 to blob
-    const base64Data = imageData.split(',')[1] || imageData;
-    const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-    
-    // Upload to storage
-    const storagePath = `${projectId}/${fileName}`;
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('artifact-images')
-      .upload(storagePath, binaryData, {
-        contentType: 'image/png',
-        upsert: false
-      });
+    let publicUrl = null;
 
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError);
-      throw new Error(`Failed to upload image: ${uploadError.message}`);
+    // Only upload image if imageData is provided
+    if (imageData) {
+      // Convert base64 to blob
+      const base64Data = imageData.split(',')[1] || imageData;
+      const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+      
+      // Upload to storage
+      const storagePath = `${projectId}/${fileName || `${Date.now()}.png`}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('artifact-images')
+        .upload(storagePath, binaryData, {
+          contentType: 'image/png',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        throw new Error(`Failed to upload image: ${uploadError.message}`);
+      }
+
+      // Get public URL
+      const { data: { publicUrl: url } } = supabase.storage
+        .from('artifact-images')
+        .getPublicUrl(storagePath);
+      
+      publicUrl = url;
     }
-
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('artifact-images')
-      .getPublicUrl(storagePath);
 
     // Create artifact using token-based RPC
     const { data: artifact, error: artifactError } = await supabase.rpc('insert_artifact_with_token', {
