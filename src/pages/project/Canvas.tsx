@@ -24,7 +24,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image, ChevronRight, Wrench, Sparkles, FileSearch, AlignLeft, AlignVerticalJustifyStart, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Grid3x3, ImagePlus } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image, ChevronRight, Wrench, Sparkles, FileSearch, AlignLeft, AlignVerticalJustifyStart, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Grid3x3, ImagePlus, Eye } from "lucide-react";
 import { AIArchitectDialog } from "@/components/canvas/AIArchitectDialog";
 import { InfographicDialog } from "@/components/canvas/InfographicDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -63,6 +63,7 @@ function CanvasFlow() {
     new Set(ALL_NODE_TYPES)
   );
   const [isLassoActive, setIsLassoActive] = useState(false);
+  const [isIsolateActive, setIsIsolateActive] = useState(false);
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
   const [isAIArchitectOpen, setIsAIArchitectOpen] = useState(false);
   const [isInfographicOpen, setIsInfographicOpen] = useState(false);
@@ -99,8 +100,34 @@ function CanvasFlow() {
       return nodeInLayers.some((layer) => layer.visible); // Show if in at least one visible layer
     });
     
+    // Apply isolate filter if active
+    if (isIsolateActive) {
+      const selectedNodeIds = new Set(layerFiltered.filter(n => n.selected).map(n => n.id));
+      
+      // If no nodes selected, show nothing
+      if (selectedNodeIds.size === 0) {
+        return [];
+      }
+      
+      // Find all nodes connected to selected nodes
+      const connectedNodeIds = new Set<string>();
+      edges.forEach(edge => {
+        if (selectedNodeIds.has(edge.source)) {
+          connectedNodeIds.add(edge.target);
+        }
+        if (selectedNodeIds.has(edge.target)) {
+          connectedNodeIds.add(edge.source);
+        }
+      });
+      
+      // Show selected nodes + connected nodes
+      return layerFiltered.filter(node => 
+        selectedNodeIds.has(node.id) || connectedNodeIds.has(node.id)
+      );
+    }
+    
     return layerFiltered;
-  }, [nodes, visibleNodeTypes, layers]);
+  }, [nodes, visibleNodeTypes, layers, isIsolateActive, edges]);
 
   const visibleEdges = useMemo(() => {
     if (!edges || !Array.isArray(edges)) return [];
@@ -954,9 +981,13 @@ function CanvasFlow() {
                           <Sparkles className="h-4 w-4 mr-2" />
                           AI Architect
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setIsLassoActive(!isLassoActive)}>
+                         <DropdownMenuItem onClick={() => setIsLassoActive(!isLassoActive)}>
                           <LassoIcon className="h-4 w-4 mr-2" />
                           {isLassoActive ? "Disable" : "Enable"} Lasso Select
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setIsIsolateActive(!isIsolateActive)}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          {isIsolateActive ? "Disable" : "Enable"} Isolate
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleDownloadSnapshot('png')}>
                           <Image className="h-4 w-4 mr-2" />
@@ -1028,6 +1059,21 @@ function CanvasFlow() {
                         </TooltipTrigger>
                         <TooltipContent side="bottom">
                           <p>Lasso Select</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            onClick={() => setIsIsolateActive(!isIsolateActive)}
+                            variant={isIsolateActive ? "default" : "outline"}
+                            className={isIsolateActive ? "" : "bg-card/80"}
+                            size="icon"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          <p>Isolate Selection</p>
                         </TooltipContent>
                       </Tooltip>
                       <Tooltip>

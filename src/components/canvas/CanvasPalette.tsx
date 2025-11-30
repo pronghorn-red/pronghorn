@@ -123,7 +123,7 @@ export function CanvasPalette({
   };
 
   return (
-    <div className="w-80 border-r border-border bg-card flex flex-col h-full overflow-hidden">
+    <div className="w-80 border-r border-border bg-card flex flex-col h-screen overflow-hidden">
       <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
           <Button
