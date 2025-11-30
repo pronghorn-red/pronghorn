@@ -7,17 +7,17 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface TechStackItem {
   id: string;
-  type: string;
+  type: string | null;
   name: string;
-  description?: string;
-  parent_id?: string;
+  description?: string | null;
+  parent_id?: string | null;
   children?: TechStackItem[];
 }
 
 interface TechStack {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   items: TechStackItem[];
 }
 
@@ -47,18 +47,16 @@ export function TechStackTreeSelector({
       const stacksWithItems: TechStack[] = [];
 
       for (const stack of initialTechStacks) {
-        const { data: items } = await supabase
+        // Load all child items for this tech stack (where parent_id = stack.id)
+        const { data: childItems } = await supabase
           .from("tech_stacks")
-          .select("metadata")
-          .eq("id", stack.id)
-          .single();
+          .select("*")
+          .eq("parent_id", stack.id)
+          .order("order_index");
 
-        const metadata = items?.metadata as any;
-        const itemsArray = metadata?.items || [];
-        
         stacksWithItems.push({
           ...stack,
-          items: buildItemsHierarchy(itemsArray),
+          items: buildItemsHierarchy(childItems || []),
         });
       }
 
@@ -80,6 +78,8 @@ export function TechStackTreeSelector({
 
     flatItems.forEach((item) => {
       const node = map.get(item.id)!;
+      // For tech stack items, we need to check if parent_id exists in our fetched items
+      // If not, it's a root item (direct child of the tech stack parent)
       if (item.parent_id && map.has(item.parent_id)) {
         map.get(item.parent_id)!.children!.push(node);
       } else {
@@ -249,7 +249,8 @@ export function TechStackTreeSelector({
             htmlFor={`item-${item.id}`}
             className="text-sm cursor-pointer flex-1"
           >
-            <span className="font-medium">{item.type}</span> - {item.name}
+            {item.type && <span className="font-medium">{item.type}</span>}
+            {item.type && " - "}{item.name}
           </Label>
         </div>
         {hasChildren && isExpanded && (

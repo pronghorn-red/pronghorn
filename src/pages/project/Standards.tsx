@@ -98,8 +98,6 @@ export default function Standards() {
       });
 
       setSelectedStandards(new Set(projectStandards?.map((ps) => ps.standard_id) || []));
-      
-      // Tech stack items are saved directly (like standards), just load them
       setSelectedTechStackItems(new Set(projectTechStacks?.map((pts) => pts.tech_stack_id) || []));
     } catch (error: any) {
       toast.error("Failed to load standards: " + error.message);

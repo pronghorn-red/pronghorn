@@ -311,41 +311,15 @@ export function ProjectSelector({
         standards.push(...(standardsData || []));
       }
 
-      // Fetch tech stacks - map selected item IDs back to parent tech stack IDs
+      // Fetch tech stacks - tech stack items are now separate rows
       const techStacksData = [];
       if (selectedTechStacks.size > 0) {
-        // Determine which parent tech stacks have selected items
-        const parentTechStackIds = new Set<string>();
+        const { data: tsData } = await supabase
+          .from("tech_stacks")
+          .select("*")
+          .in("id", Array.from(selectedTechStacks));
         
-        techStacks.forEach((stack) => {
-          const metadata = stack.metadata as any;
-          const items = metadata?.items || [];
-          
-          // Recursively check all items in this stack
-          const hasSelectedItem = (itemList: any[]): boolean => {
-            return itemList.some((item) => {
-              if (selectedTechStacks.has(item.id)) return true;
-              if (item.children && item.children.length > 0) {
-                return hasSelectedItem(item.children);
-              }
-              return false;
-            });
-          };
-          
-          if (hasSelectedItem(items)) {
-            parentTechStackIds.add(stack.id);
-          }
-        });
-        
-        // Fetch the actual parent tech stack records
-        if (parentTechStackIds.size > 0) {
-          const { data: tsData } = await supabase
-            .from("tech_stacks")
-            .select("*")
-            .in("id", Array.from(parentTechStackIds));
-          
-          techStacksData.push(...(tsData || []));
-        }
+        techStacksData.push(...(tsData || []));
       }
 
       // Fetch canvas nodes

@@ -21,7 +21,12 @@ export default function TechStacks() {
   }, []);
 
   const loadTechStacks = async () => {
-    const { data } = await supabase.from("tech_stacks").select("*").order("name");
+    // Only load top-level tech stacks (parent_id IS NULL)
+    const { data } = await supabase
+      .from("tech_stacks")
+      .select("*")
+      .is("parent_id", null)
+      .order("name");
     setTechStacks(data || []);
   };
 

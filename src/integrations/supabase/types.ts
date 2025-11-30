@@ -982,7 +982,10 @@ export type Database = {
           id: string
           metadata: Json | null
           name: string
+          order_index: number
           org_id: string | null
+          parent_id: string | null
+          type: string | null
           updated_at: string
         }
         Insert: {
@@ -994,7 +997,10 @@ export type Database = {
           id?: string
           metadata?: Json | null
           name: string
+          order_index?: number
           org_id?: string | null
+          parent_id?: string | null
+          type?: string | null
           updated_at?: string
         }
         Update: {
@@ -1006,7 +1012,10 @@ export type Database = {
           id?: string
           metadata?: Json | null
           name?: string
+          order_index?: number
           org_id?: string | null
+          parent_id?: string | null
+          type?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1015,6 +1024,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tech_stacks_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "tech_stacks"
             referencedColumns: ["id"]
           },
         ]

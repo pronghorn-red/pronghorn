@@ -11,11 +11,10 @@ import { useAdmin } from "@/contexts/AdminContext";
 
 interface TechStackItem {
   id: string;
-  type: string;
+  type: string | null;
   name: string;
   description?: string | null;
-  url?: string | null;
-  version?: string | null;
+  parent_id?: string | null;
   children?: TechStackItem[];
 }
 
@@ -46,32 +45,38 @@ export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeMa
   }, [techStackId]);
 
   const loadItems = async () => {
+    // Load all child items of this tech stack
     const { data } = await supabase
       .from("tech_stacks")
       .select("*")
-      .eq("id", techStackId)
-      .single();
+      .eq("parent_id", techStackId)
+      .order("order_index");
 
-    if (data?.metadata && typeof data.metadata === 'object' && 'items' in data.metadata) {
-      setItems((data.metadata as any).items || []);
+    if (data) {
+      setItems(buildHierarchy(data));
     }
   };
 
-  const saveItems = async (newItems: TechStackItem[]) => {
-    const { error } = await supabase
-      .from("tech_stacks")
-      .update({ 
-        metadata: { items: newItems } as any,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", techStackId);
+  const buildHierarchy = (flatItems: any[]): TechStackItem[] => {
+    const map = new Map<string, TechStackItem>();
+    const roots: TechStackItem[] = [];
 
-    if (error) {
-      toast.error("Failed to save items");
-    } else {
-      setItems(newItems);
-      onRefresh();
-    }
+    flatItems.forEach((item) => {
+      map.set(item.id, { ...item, children: [] });
+    });
+
+    flatItems.forEach((item) => {
+      const node = map.get(item.id)!;
+      // If parent_id matches another item in this set, it's a child
+      // Otherwise it's a direct child of the tech stack
+      if (item.parent_id && item.parent_id !== techStackId && map.has(item.parent_id)) {
+        map.get(item.parent_id)!.children!.push(node);
+      } else {
+        roots.push(node);
+      }
+    });
+
+    return roots;
   };
 
   const handleAdd = async (parentId: string | null, type: string, name: string) => {
@@ -83,30 +88,24 @@ export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeMa
       }
     }
 
-    const newItem: TechStackItem = {
-      id: crypto.randomUUID(),
-      type,
-      name,
-      children: [],
-    };
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: profile } = await supabase.from("profiles").select("org_id").eq("user_id", user?.id).single();
 
-    if (parentId === null) {
-      await saveItems([...items, newItem]);
+    const { error } = await supabase.from("tech_stacks").insert({
+      name,
+      type,
+      parent_id: parentId || techStackId, // If parentId is null, use techStackId as parent
+      org_id: profile?.org_id || null,
+      created_by: user?.id,
+    });
+
+    if (error) {
+      toast.error("Failed to add item");
     } else {
-      const addToParent = (items: TechStackItem[]): TechStackItem[] => {
-        return items.map(item => {
-          if (item.id === parentId) {
-            return { ...item, children: [...(item.children || []), newItem] };
-          }
-          if (item.children) {
-            return { ...item, children: addToParent(item.children) };
-          }
-          return item;
-        });
-      };
-      await saveItems(addToParent(items));
+      toast.success("Item added");
+      loadItems();
+      onRefresh();
     }
-    toast.success("Item added");
   };
 
   const handleDelete = async (id: string) => {
@@ -118,34 +117,41 @@ export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeMa
       }
     }
 
-    if (!confirm("Delete this item?")) return;
+    if (!confirm("Delete this item and all its children?")) return;
 
-    const deleteItem = (items: TechStackItem[]): TechStackItem[] => {
-      return items.filter(item => item.id !== id).map(item => ({
-        ...item,
-        children: item.children ? deleteItem(item.children) : []
-      }));
-    };
+    // Cascade delete handled by database ON DELETE CASCADE
+    const { error } = await supabase.from("tech_stacks").delete().eq("id", id);
 
-    await saveItems(deleteItem(items));
-    toast.success("Item deleted");
+    if (error) {
+      toast.error("Failed to delete item");
+    } else {
+      toast.success("Item deleted");
+      loadItems();
+      onRefresh();
+    }
   };
 
   const handleUpdate = async (id: string, updates: Partial<TechStackItem>) => {
-    const updateItem = (items: TechStackItem[]): TechStackItem[] => {
-      return items.map(item => {
-        if (item.id === id) {
-          return { ...item, ...updates };
-        }
-        if (item.children) {
-          return { ...item, children: updateItem(item.children) };
-        }
-        return item;
-      });
-    };
+    if (!isAdmin) {
+      const granted = await requestAdminAccess();
+      if (!granted) {
+        toast.error("Admin access required");
+        return;
+      }
+    }
 
-    await saveItems(updateItem(items));
-    toast.success("Item updated");
+    const { error } = await supabase
+      .from("tech_stacks")
+      .update(updates)
+      .eq("id", id);
+
+    if (error) {
+      toast.error("Failed to update item");
+    } else {
+      toast.success("Item updated");
+      loadItems();
+      onRefresh();
+    }
   };
 
   return (
@@ -241,11 +247,9 @@ function TechStackItemNode({
   const [isAddingChild, setIsAddingChild] = useState(false);
   const [name, setName] = useState(item.name);
   const [description, setDescription] = useState(item.description || "");
-  const [url, setUrl] = useState(item.url || "");
-  const [version, setVersion] = useState(item.version || "");
 
   const handleSave = async () => {
-    onUpdate(item.id, { name, description, url, version });
+    onUpdate(item.id, { name, description });
     setIsEditing(false);
   };
 
@@ -279,18 +283,6 @@ function TechStackItemNode({
                 rows={2}
                 className="text-sm"
               />
-              <Input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="URL (optional)"
-                className="text-sm"
-              />
-              <Input
-                value={version}
-                onChange={(e) => setVersion(e.target.value)}
-                placeholder="Version (optional)"
-                className="text-sm"
-              />
               <div className="flex gap-2 flex-wrap">
                 <Button size="sm" onClick={handleSave}>Save</Button>
                 <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
@@ -303,18 +295,11 @@ function TechStackItemNode({
               <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1 md:gap-2 flex-wrap">
-                    <Badge variant="outline" className="text-[10px] md:text-xs flex-shrink-0">{item.type}</Badge>
+                    {item.type && <Badge variant="outline" className="text-[10px] md:text-xs flex-shrink-0">{item.type}</Badge>}
                     <span className="font-medium text-sm md:text-base truncate">{item.name}</span>
-                    {item.version && <Badge variant="secondary" className="text-[10px] md:text-xs flex-shrink-0">v{item.version}</Badge>}
                   </div>
                   {item.description && (
                     <p className="text-xs md:text-sm text-muted-foreground mt-1 break-words">{item.description}</p>
-                  )}
-                  {item.url && (
-                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-[10px] md:text-xs text-primary hover:underline flex items-center gap-1 mt-1 break-all">
-                      <LinkIcon className="h-2.5 w-2.5 md:h-3 md:w-3 flex-shrink-0" />
-                      <span className="truncate">{item.url}</span>
-                    </a>
                   )}
                 </div>
 
