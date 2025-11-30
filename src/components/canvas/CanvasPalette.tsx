@@ -95,6 +95,17 @@ export function CanvasPalette({
     "TECH_STACK",
   ];
 
+  const handleToggleAllNodeTypes = () => {
+    const allVisible = nodeTypes.every((type) => visibleNodeTypes.has(type));
+    nodeTypes.forEach((type) => {
+      if (allVisible && visibleNodeTypes.has(type)) {
+        onToggleVisibility(type);
+      } else if (!allVisible && !visibleNodeTypes.has(type)) {
+        onToggleVisibility(type);
+      }
+    });
+  };
+
   const handleToggleAllLayers = () => {
     const allVisible = layers.every((layer) => layer.visible);
     layers.forEach((layer) => {
@@ -130,7 +141,23 @@ export function CanvasPalette({
             <div className="p-4">
               <Accordion type="multiple" defaultValue={["nodes", "layers"]} className="space-y-2">
                 <AccordionItem value="nodes" className="border rounded-lg px-3">
-                  <AccordionTrigger className="text-sm py-2 hover:no-underline">Node Types</AccordionTrigger>
+                  <AccordionTrigger className="text-sm py-2 hover:no-underline">
+                    <div className="flex items-center justify-between w-full pr-2">
+                      <span>Node Types</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="p-1 h-6 w-6"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleAllNodeTypes();
+                        }}
+                        title="Toggle all node types visibility"
+                      >
+                        {nodeTypes.every((type) => visibleNodeTypes.has(type)) ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                      </Button>
+                    </div>
+                  </AccordionTrigger>
                   <AccordionContent className="space-y-1 pb-2">
                     {nodeTypes.map((type) => (
                       <div key={type} className="flex items-center justify-between gap-2 group">
