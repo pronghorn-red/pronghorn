@@ -52,6 +52,7 @@ serve(async (req) => {
       attachedContext,
       iterations,
       orchestratorEnabled = true,
+      drawEdges = true,
       startFromNodeId,
       agentPrompts = {},
       selectedModel = 'gemini-2.5-flash',
@@ -180,6 +181,7 @@ serve(async (req) => {
                     maxTokens,
                     thinkingEnabled,
                     thinkingBudget,
+                    drawEdges,
                   },
                   supabase,
                   apiKey,
@@ -387,6 +389,7 @@ serve(async (req) => {
                         maxTokens,
                         thinkingEnabled,
                         thinkingBudget,
+                        drawEdges,
                       },
                       supabase,
                       apiKey,
@@ -547,6 +550,7 @@ async function executeAgent(
   const maxTokens = context.maxTokens || 32768;
   const thinkingEnabled = context.thinkingEnabled || false;
   const thinkingBudget = context.thinkingBudget || -1;
+  const drawEdges = context.drawEdges !== undefined ? context.drawEdges : true;
   
   // Allowed node types in main canvas enum
   const allowedNodeTypes = [
@@ -924,8 +928,8 @@ async function executeAgent(
     console.warn(`Agent lacks 'delete_nodes' capability, skipping ${aiResponse.nodesToDelete.length} node deletions`);
   }
 
-  // Add edges
-  if (aiResponse.edgesToAdd && canAddEdges) {
+  // Add edges (only if drawEdges is enabled)
+  if (drawEdges && aiResponse.edgesToAdd && canAddEdges) {
     console.log(`Adding ${aiResponse.edgesToAdd.length} edges...`);
 
     // Only allow edges between known node IDs to avoid invalid UUID errors
@@ -970,10 +974,12 @@ async function executeAgent(
     }
   } else if (aiResponse.edgesToAdd && !canAddEdges) {
     console.warn(`Agent lacks 'add_edges' capability, skipping ${aiResponse.edgesToAdd.length} edge additions`);
+  } else if (!drawEdges && aiResponse.edgesToAdd) {
+    console.warn(`Draw Edges disabled, skipping ${aiResponse.edgesToAdd.length} edge additions`);
   }
 
-  // Delete edges
-  if (aiResponse.edgesToDelete && canDeleteEdges) {
+  // Delete edges (only if drawEdges is enabled)
+  if (drawEdges && aiResponse.edgesToDelete && canDeleteEdges) {
     console.log(`Deleting ${aiResponse.edgesToDelete.length} edges...`);
     for (const edgeId of aiResponse.edgesToDelete) {
       try {
@@ -996,6 +1002,8 @@ async function executeAgent(
     }
   } else if (aiResponse.edgesToDelete && !canDeleteEdges) {
     console.warn(`Agent lacks 'delete_edges' capability, skipping ${aiResponse.edgesToDelete.length} edge deletions`);
+  } else if (!drawEdges && aiResponse.edgesToDelete) {
+    console.warn(`Draw Edges disabled, skipping ${aiResponse.edgesToDelete.length} edge deletions`);
   }
 
   return {

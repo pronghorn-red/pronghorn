@@ -44,6 +44,7 @@ export function IterativeEnhancement({
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [visualizationMode, setVisualizationMode] = useState<'chart' | 'heatmap' | 'blackboard'>('chart');
   const [orchestratorEnabled, setOrchestratorEnabled] = useState(true);
+  const [drawEdges, setDrawEdges] = useState(true);
   const [blackboard, setBlackboard] = useState<string[]>([]);
   const [agentDefinitions, setAgentDefinitions] = useState<any[]>([]);
   const [executingAgentId, setExecutingAgentId] = useState<string | null>(null);
@@ -274,6 +275,7 @@ export function IterativeEnhancement({
             attachedContext: selectedContext,
             iterations,
             orchestratorEnabled,
+            drawEdges,
             startFromNodeId,
             agentPrompts,
             // Pass LLM settings from project
@@ -492,6 +494,19 @@ export function IterativeEnhancement({
               />
               <Label htmlFor="orchestrator" className="text-sm cursor-pointer">
                 Enable Orchestrator
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="drawEdges"
+                checked={drawEdges}
+                onChange={(e) => setDrawEdges(e.target.checked)}
+                disabled={isRunning}
+                className="w-4 h-4"
+              />
+              <Label htmlFor="drawEdges" className="text-sm cursor-pointer">
+                Draw Edges
               </Label>
             </div>
           </div>
