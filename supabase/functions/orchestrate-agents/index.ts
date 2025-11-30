@@ -1012,8 +1012,8 @@ async function executeAgent(
       nodesToAdd: aiResponse.nodesToAdd || [],
       nodesToEdit: aiResponse.nodesToEdit || [],
       nodesToDelete: aiResponse.nodesToDelete || [],
-      edgesToAdd: aiResponse.edgesToAdd || [],
-      edgesToDelete: aiResponse.edgesToDelete || [],
+      edgesToAdd: drawEdges ? (aiResponse.edgesToAdd || []) : [],
+      edgesToDelete: drawEdges ? (aiResponse.edgesToDelete || []) : [],
     }, null, 2),
     metrics: {
       nodesAdded,
@@ -1023,13 +1023,13 @@ async function executeAgent(
       edgesEdited,
       edgesDeleted,
     },
-    // Return actual arrays for delta tracking
+    // Return actual arrays for delta tracking - filter edges if drawEdges is false
     nodesToAdd: aiResponse.nodesToAdd || [],
     nodesToEdit: aiResponse.nodesToEdit || [],
     nodesToDelete: aiResponse.nodesToDelete || [],
-    edgesToAdd: aiResponse.edgesToAdd || [],
-    edgesToEdit: aiResponse.edgesToEdit || [],
-    edgesToDelete: aiResponse.edgesToDelete || [],
+    edgesToAdd: drawEdges ? (aiResponse.edgesToAdd || []) : [],
+    edgesToEdit: drawEdges ? (aiResponse.edgesToEdit || []) : [],
+    edgesToDelete: drawEdges ? (aiResponse.edgesToDelete || []) : [],
     newNodeIds,  // IDs of nodes created in this execution
   };
 }
