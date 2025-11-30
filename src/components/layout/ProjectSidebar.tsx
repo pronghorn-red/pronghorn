@@ -88,8 +88,13 @@ export function ProjectSidebar({ projectId, isOpen = false, onOpenChange }: Proj
         `}
       >
         <div className="h-full flex flex-col">
-          {/* Header with close/collapse button */}
+          {/* Header with project name and close/collapse button */}
           <div className="flex items-center justify-between p-2 border-b border-border">
+            {!isCollapsed && !isMobile && projectName && (
+              <h2 className="text-sm font-semibold text-foreground truncate flex-1 mr-2 px-1" title={projectName}>
+                {projectName}
+              </h2>
+            )}
             {isMobile && (
               <span className="px-2 text-sm font-semibold">Menu</span>
             )}
@@ -111,15 +116,6 @@ export function ProjectSidebar({ projectId, isOpen = false, onOpenChange }: Proj
 
           {/* Navigation */}
           <nav className="flex-1 p-2 space-y-1 flex flex-col overflow-y-auto">
-            {/* Project Name */}
-            {(isMobile || !isCollapsed) && projectName && (
-              <div className="px-3 py-2 mb-2 border-b border-border">
-                <p className="text-sm font-semibold text-foreground truncate" title={projectName}>
-                  {projectName}
-                </p>
-              </div>
-            )}
-            
             <div className="space-y-1">
               {activeNavItems.map((item) => (
                 <NavLink
