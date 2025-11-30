@@ -43,7 +43,7 @@ export default function Standards() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [techStacks, setTechStacks] = useState<TechStack[]>([]);
   const [selectedStandards, setSelectedStandards] = useState<Set<string>>(new Set());
-  const [selectedTechStacks, setSelectedTechStacks] = useState<Set<string>>(new Set());
+  const [selectedTechStackItems, setSelectedTechStackItems] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -98,8 +98,29 @@ export default function Standards() {
       });
 
       setSelectedStandards(new Set(projectStandards?.map((ps) => ps.standard_id) || []));
-      // Map project tech stack IDs to the parent tech stack IDs for the tree selector
-      setSelectedTechStacks(new Set(projectTechStacks?.map((pts) => pts.tech_stack_id) || []));
+
+      // Initialize selected tech stack items based on project tech stack links
+      const initialTechStackIds = new Set(projectTechStacks?.map((pts) => pts.tech_stack_id) || []);
+      const initialTechStackItemIds = new Set<string>();
+
+      (techStacksData || []).forEach((stack: any) => {
+        if (!initialTechStackIds.has(stack.id)) return;
+        const metadata = stack.metadata as any;
+        const items = metadata?.items || [];
+
+        const collectItems = (arr: any[]) => {
+          arr.forEach((item) => {
+            initialTechStackItemIds.add(item.id as string);
+            if (item.children && item.children.length > 0) {
+              collectItems(item.children);
+            }
+          });
+        };
+
+        collectItems(items);
+      });
+
+      setSelectedTechStackItems(initialTechStackItemIds);
     } catch (error: any) {
       toast.error("Failed to load standards: " + error.message);
     } finally {
@@ -146,14 +167,33 @@ export default function Standards() {
       const standardsToAdd = Array.from(selectedStandards).filter(id => !existingStandardIds.has(id));
       const standardsToRemove = (existingStandards || []).filter(ps => !selectedStandards.has(ps.standard_id));
 
-      // Calculate deltas for tech stacks
-      const existingTechStackIds = new Set(existingTechStacks?.map(pts => pts.tech_stack_id) || []);
-      // Only include tech stack IDs that actually exist in the tech_stacks table
-      const validTechStackIds = new Set(techStacks.map(ts => ts.id));
-      const techStacksToAdd = Array.from(selectedTechStacks).filter(id => 
-        !existingTechStackIds.has(id) && validTechStackIds.has(id)
-      );
-      const techStacksToRemove = (existingTechStacks || []).filter(pts => !selectedTechStacks.has(pts.tech_stack_id));
+      // Calculate deltas for tech stacks based on selected item IDs
+      const selectedStackIds = new Set<string>();
+
+      techStacks.forEach((stack: any) => {
+        const metadata = stack.metadata as any;
+        const items = metadata?.items || [];
+
+        const hasSelectedItem = (arr: any[]): boolean => {
+          for (const item of arr) {
+            if (selectedTechStackItems.has(item.id as string)) {
+              return true;
+            }
+            if (item.children && item.children.length > 0 && hasSelectedItem(item.children)) {
+              return true;
+            }
+          }
+          return false;
+        };
+
+        if (hasSelectedItem(items)) {
+          selectedStackIds.add(stack.id as string);
+        }
+      });
+
+      const existingTechStackIds = new Set((existingTechStacks || []).map((pts: any) => pts.tech_stack_id as string));
+      const techStacksToAdd = Array.from(selectedStackIds).filter((id) => !existingTechStackIds.has(id));
+      const techStacksToRemove = (existingTechStacks || []).filter((pts: any) => !selectedStackIds.has(pts.tech_stack_id as string));
 
       // Delete only removed standards
       for (const existing of standardsToRemove) {
@@ -237,8 +277,8 @@ export default function Standards() {
                   <ScrollArea className="h-[400px]">
                     <TechStackTreeSelector
                       techStacks={techStacks.map(ts => ({ ...ts, items: [] }))}
-                      selectedItems={selectedTechStacks}
-                      onSelectionChange={setSelectedTechStacks}
+                      selectedItems={selectedTechStackItems}
+                      onSelectionChange={setSelectedTechStackItems}
                     />
                   </ScrollArea>
                 </CardContent>
@@ -265,7 +305,7 @@ export default function Standards() {
 
               {/* Action Buttons */}
               <div className="flex gap-3 justify-end">
-                <Button variant="outline" onClick={() => { setSelectedStandards(new Set()); setSelectedTechStacks(new Set()); }}>
+                <Button variant="outline" onClick={() => { setSelectedStandards(new Set()); setSelectedTechStackItems(new Set()); }}>
                   Reset
                 </Button>
                 <Button onClick={handleSave} disabled={saving}>
