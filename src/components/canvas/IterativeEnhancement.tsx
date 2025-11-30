@@ -167,15 +167,18 @@ export function IterativeEnhancement({
       return false;
     }
 
-    if (agentFlowEdges.length === 0) {
+    // Only check for edges if there are multiple nodes
+    if (agentFlowNodes.length > 1 && agentFlowEdges.length === 0) {
       toast.error('Please connect agents to form a flow');
       return false;
     }
 
-    // Check if flow forms a loop
-    const hasLoop = checkForLoop(agentFlowNodes, agentFlowEdges);
-    if (!hasLoop) {
-      toast.warning('Agent flow should form a loop for optimal iteration');
+    // Check if flow forms a loop (only for multiple nodes)
+    if (agentFlowNodes.length > 1) {
+      const hasLoop = checkForLoop(agentFlowNodes, agentFlowEdges);
+      if (!hasLoop) {
+        toast.warning('Agent flow should form a loop for optimal iteration');
+      }
     }
 
     if (!selectedContext) {
@@ -430,8 +433,9 @@ export function IterativeEnhancement({
   return (
     <div className="flex-1 flex flex-col gap-2 md:gap-4 min-h-0 overflow-y-auto md:overflow-hidden md:flex-row">
       {/* Left Sidebar */}
-      <div className="w-full md:w-64 flex flex-col md:border-r md:pr-4 shrink-0">
-          <div className="space-y-4">
+      <div className="w-full md:w-64 flex flex-col md:border-r md:pr-4 shrink-0 md:h-full md:overflow-hidden">
+        <ScrollArea className="flex-1 md:h-full">
+          <div className="space-y-4 pr-4">
           {/* Context Options */}
           <div className="space-y-2">
             <h3 className="font-medium text-sm">Context Options</h3>
@@ -581,7 +585,8 @@ export function IterativeEnhancement({
               </Button>
             </div>
           </div>
-        </div>
+          </div>
+        </ScrollArea>
       </div>
 
       {/* Main Content Area */}
