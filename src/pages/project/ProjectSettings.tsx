@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useAuth } from "@/contexts/AuthContext";
+import { DeleteProjectDialog } from "@/components/dashboard/DeleteProjectDialog";
 
 import { Switch } from "@/components/ui/switch";
 
@@ -22,6 +23,7 @@ export default function ProjectSettings() {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
   const { user } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
@@ -456,6 +458,35 @@ export default function ProjectSettings() {
                     </Button>
                   </CardContent>
                 </Card>
+
+                {/* Danger Zone - Project Deletion */}
+                {user && project?.created_by === user.id && (
+                  <Card className="border-destructive">
+                    <CardHeader>
+                      <CardTitle className="text-destructive">Danger Zone</CardTitle>
+                      <CardDescription>
+                        Irreversible actions that will permanently delete your project and all associated data.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-start gap-3 p-3 rounded-md bg-destructive/10">
+                        <div className="flex-1 space-y-2">
+                          <p className="text-sm text-muted-foreground">
+                            Deleting this project will permanently remove all associated data including requirements, canvas nodes, standards, chat sessions, and artifacts. This action cannot be undone.
+                          </p>
+                          <DeleteProjectDialog
+                            projectId={projectId!}
+                            projectName={project?.name || "this project"}
+                            onDelete={() => {
+                              toast.success("Project deleted successfully");
+                              navigate("/dashboard");
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
           </div>
         </main>
