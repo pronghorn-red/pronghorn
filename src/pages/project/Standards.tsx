@@ -98,29 +98,9 @@ export default function Standards() {
       });
 
       setSelectedStandards(new Set(projectStandards?.map((ps) => ps.standard_id) || []));
-
-      // Initialize selected tech stack items based on project tech stack links
-      const initialTechStackIds = new Set(projectTechStacks?.map((pts) => pts.tech_stack_id) || []);
-      const initialTechStackItemIds = new Set<string>();
-
-      (techStacksData || []).forEach((stack: any) => {
-        if (!initialTechStackIds.has(stack.id)) return;
-        const metadata = stack.metadata as any;
-        const items = metadata?.items || [];
-
-        const collectItems = (arr: any[]) => {
-          arr.forEach((item) => {
-            initialTechStackItemIds.add(item.id as string);
-            if (item.children && item.children.length > 0) {
-              collectItems(item.children);
-            }
-          });
-        };
-
-        collectItems(items);
-      });
-
-      setSelectedTechStackItems(initialTechStackItemIds);
+      
+      // Tech stack items are saved directly (like standards), just load them
+      setSelectedTechStackItems(new Set(projectTechStacks?.map((pts) => pts.tech_stack_id) || []));
     } catch (error: any) {
       toast.error("Failed to load standards: " + error.message);
     } finally {
@@ -167,33 +147,10 @@ export default function Standards() {
       const standardsToAdd = Array.from(selectedStandards).filter(id => !existingStandardIds.has(id));
       const standardsToRemove = (existingStandards || []).filter(ps => !selectedStandards.has(ps.standard_id));
 
-      // Calculate deltas for tech stacks based on selected item IDs
-      const selectedStackIds = new Set<string>();
-
-      techStacks.forEach((stack: any) => {
-        const metadata = stack.metadata as any;
-        const items = metadata?.items || [];
-
-        const hasSelectedItem = (arr: any[]): boolean => {
-          for (const item of arr) {
-            if (selectedTechStackItems.has(item.id as string)) {
-              return true;
-            }
-            if (item.children && item.children.length > 0 && hasSelectedItem(item.children)) {
-              return true;
-            }
-          }
-          return false;
-        };
-
-        if (hasSelectedItem(items)) {
-          selectedStackIds.add(stack.id as string);
-        }
-      });
-
+      // Calculate deltas for tech stacks - save each selected item ID directly (like standards)
       const existingTechStackIds = new Set((existingTechStacks || []).map((pts: any) => pts.tech_stack_id as string));
-      const techStacksToAdd = Array.from(selectedStackIds).filter((id) => !existingTechStackIds.has(id));
-      const techStacksToRemove = (existingTechStacks || []).filter((pts: any) => !selectedStackIds.has(pts.tech_stack_id as string));
+      const techStacksToAdd = Array.from(selectedTechStackItems).filter((id) => !existingTechStackIds.has(id));
+      const techStacksToRemove = (existingTechStacks || []).filter((pts: any) => !selectedTechStackItems.has(pts.tech_stack_id as string));
 
       // Delete only removed standards
       for (const existing of standardsToRemove) {
