@@ -164,7 +164,7 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete, project
 
   if (!isOpen) {
     return (
-      <div className="w-12 border-l border-border bg-card flex flex-col items-center py-4 h-full z-50">
+      <div className="w-12 border-l border-border bg-card flex flex-col items-center py-4 h-full z-50 animate-slide-in-right">
         <Button
           variant="ghost"
           size="icon"
@@ -178,7 +178,7 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete, project
   }
 
   return (
-    <div className="w-80 border-l border-border bg-card flex flex-col h-full z-50">
+    <div className="w-80 border-l border-border bg-card flex flex-col h-full z-50 animate-slide-in-right">
       <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
         <h3 className="font-semibold text-lg">Node Properties</h3>
         <Button variant="ghost" size="icon" onClick={onToggle}>

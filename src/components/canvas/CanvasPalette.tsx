@@ -102,7 +102,7 @@ export function CanvasPalette({
 
   if (isCollapsed) {
     return (
-      <div className="w-12 border-r border-border bg-card flex flex-col items-center py-4 h-full">
+      <div className="w-12 border-r border-border bg-card flex flex-col items-center py-4 h-full animate-slide-in-left">
         <Button
           variant="ghost"
           size="icon"
@@ -123,7 +123,7 @@ export function CanvasPalette({
   };
 
   return (
-    <div className="w-80 border-r border-border bg-card flex flex-col h-full overflow-hidden">
+    <div className="w-80 border-r border-border bg-card flex flex-col h-full overflow-hidden animate-slide-in-left">
       <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
           <Button
