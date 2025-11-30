@@ -730,6 +730,17 @@ function CanvasFlow() {
     return visibleNodes.filter((n) => n.selected);
   }, [visibleNodes]);
 
+  // Auto-disable isolate when no nodes are selected
+  useEffect(() => {
+    if (isIsolateActive && selectedNodesList.length === 0) {
+      setIsIsolateActive(false);
+      toast({
+        title: "Isolate disabled",
+        description: "No nodes selected",
+      });
+    }
+  }, [isIsolateActive, selectedNodesList.length, toast]);
+
   // Alignment functions for multiple selected nodes
   const handleAlignLeft = useCallback(() => {
     if (selectedNodesList.length <= 1) return;

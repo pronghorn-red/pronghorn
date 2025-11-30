@@ -6,6 +6,8 @@ import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useProjectUrl } from "@/hooks/useProjectUrl";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { supabase } from "@/integrations/supabase/client";
+import { useShareToken } from "@/hooks/useShareToken";
 
 interface ProjectSidebarProps {
   projectId: string;
@@ -30,8 +32,10 @@ const comingSoonItems = [
 
 export function ProjectSidebar({ projectId, isOpen = false, onOpenChange }: ProjectSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [projectName, setProjectName] = useState<string>("");
   const isMobile = useIsMobile();
   const { buildUrl } = useProjectUrl(projectId);
+  const { token } = useShareToken(projectId);
   
   const isMobileOpen = isMobile ? isOpen : false;
   const setIsMobileOpen = (open: boolean) => {
@@ -39,6 +43,24 @@ export function ProjectSidebar({ projectId, isOpen = false, onOpenChange }: Proj
       onOpenChange(open);
     }
   };
+
+  // Load project name
+  useEffect(() => {
+    const loadProject = async () => {
+      const { data, error } = await supabase.rpc("get_project_with_token", {
+        p_project_id: projectId,
+        p_token: token || null,
+      });
+      
+      if (data && !error) {
+        setProjectName(data.name);
+      }
+    };
+    
+    if (projectId) {
+      loadProject();
+    }
+  }, [projectId, token]);
 
   // Don't render on mobile if not open
   if (isMobile && !isMobileOpen) {
@@ -89,6 +111,15 @@ export function ProjectSidebar({ projectId, isOpen = false, onOpenChange }: Proj
 
           {/* Navigation */}
           <nav className="flex-1 p-2 space-y-1 flex flex-col overflow-y-auto">
+            {/* Project Name */}
+            {(isMobile || !isCollapsed) && projectName && (
+              <div className="px-3 py-2 mb-2 border-b border-border">
+                <p className="text-sm font-semibold text-foreground truncate" title={projectName}>
+                  {projectName}
+                </p>
+              </div>
+            )}
+            
             <div className="space-y-1">
               {activeNavItems.map((item) => (
                 <NavLink
