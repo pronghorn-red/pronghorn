@@ -57,7 +57,7 @@ export const CanvasNode = memo(({ data, selected }: NodeProps) => {
         transition-all duration-200
       `}
     >
-      <Handle type="target" position={Position.Left} className="w-2 h-2" />
+      <Handle type="target" position={Position.Left} className="w-3 h-3" />
       
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 flex-shrink-0" />
@@ -73,7 +73,7 @@ export const CanvasNode = memo(({ data, selected }: NodeProps) => {
         </div>
       </div>
       
-      <Handle type="source" position={Position.Right} className="w-2 h-2" />
+      <Handle type="source" position={Position.Right} className="w-3 h-3" />
     </div>
   );
 });
