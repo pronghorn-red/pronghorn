@@ -246,17 +246,43 @@ export function ProjectSelector({
       // Store all linked tech stack item IDs so the tree can filter to project-linked items only
       setLinkedTechStackIds(new Set(linkedStackIds));
 
-      // Fetch only linked top-level parents (parent_id IS NULL and type IS NULL)
-      const { data: linkedParents } = await supabase
+      // Fetch all linked tech stack items to find their parents
+      const { data: linkedItems } = await supabase
         .from("tech_stacks")
         .select("*")
-        .in("id", linkedStackIds)
-        .is("parent_id", null)
-        .is("type", null)
+        .in("id", linkedStackIds);
+
+      if (!linkedItems || linkedItems.length === 0) {
+        setTechStacks([]);
+        return;
+      }
+
+      // Find unique parent IDs from linked items
+      const parentIds = new Set<string>();
+      linkedItems.forEach((item) => {
+        if (item.parent_id && item.type !== null) {
+          // This is a child item, find its ultimate parent
+          const findRootParent = (currentItem: any): string | null => {
+            if (!currentItem.parent_id) return currentItem.id;
+            const parent = linkedItems.find(i => i.id === currentItem.parent_id);
+            return parent ? findRootParent(parent) : currentItem.parent_id;
+          };
+          const rootId = findRootParent(item);
+          if (rootId) parentIds.add(rootId);
+        } else if (!item.parent_id && item.type === null) {
+          // This is already a parent
+          parentIds.add(item.id);
+        }
+      });
+
+      // Fetch only those parent tech stacks
+      const { data: parentStacks } = await supabase
+        .from("tech_stacks")
+        .select("*")
+        .in("id", Array.from(parentIds))
         .order("order_index");
 
-      setTechStacks(linkedParents || []);
-      // Don't pre-select - user must choose which to include
+      setTechStacks(parentStacks || []);
     } catch (error) {
       console.error("Error loading tech stacks:", error);
     }
