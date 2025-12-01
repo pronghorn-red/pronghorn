@@ -31,32 +31,20 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
 
   // Real-time subscription for new messages across all sessions
   useEffect(() => {
-    if (!projectId || !shareToken) return;
-
-    // Set the share token in the session for RLS validation
-    const setToken = async () => {
-      await supabase.rpc('set_share_token', { token: shareToken });
-    };
-    setToken();
+    if (!projectId) return;
 
     const channel = supabase
       .channel(`agent-messages-project-${projectId}`)
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "agent_messages",
         },
         (payload) => {
-          console.log("New agent message received:", payload);
-          const newMessage = payload.new as AgentMessage;
-          // Add to top of list (newest first)
-          setMessages((prev) => {
-            // Prevent duplicates
-            if (prev.some(m => m.id === newMessage.id)) return prev;
-            return [newMessage, ...prev];
-          });
+          console.log("Agent messages change:", payload);
+          loadInitialMessages();
         }
       )
       .subscribe();
