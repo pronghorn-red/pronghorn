@@ -587,7 +587,13 @@ Think step-by-step and continue until the task is complete.`;
                 }
                 
                 // Apply edit to the correct base content
-                baseLines.splice(startIdx, endIdx - startIdx + 1, op.params.new_content);
+                // Split new_content into lines (agent provides content with \n separators)
+                const newContentLines = op.params.new_content.split('\n');
+                // Remove trailing empty line if new_content ended with \n
+                if (newContentLines.length > 0 && newContentLines[newContentLines.length - 1] === '') {
+                  newContentLines.pop();
+                }
+                baseLines.splice(startIdx, endIdx - startIdx + 1, ...newContentLines);
                 let finalContent = baseLines.join('\n');
                 let jsonParseWarning: string | undefined;
                 
