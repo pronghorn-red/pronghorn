@@ -203,12 +203,87 @@ export default function Repository() {
     // TODO: Load file content via RPC
   };
 
-  const handleSync = () => {
-    toast({
-      title: "Syncing repositories",
-      description: "Pushing changes to GitHub",
-    });
-    // TODO: Call sync edge function
+  const handleSync = async () => {
+    if (repos.length === 0) {
+      toast({
+        title: "No repositories",
+        description: "Please add a repository first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Push to all repos
+      const pushPromises = repos.map(async (repo) => {
+        const { data, error } = await supabase.functions.invoke('sync-repo-push', {
+          body: {
+            repoId: repo.id,
+            projectId: projectId,
+            shareToken: shareToken,
+            commitMessage: `Sync from Pronghorn at ${new Date().toISOString()}`,
+          },
+        });
+
+        if (error) throw error;
+        return { repo: `${repo.organization}/${repo.repo}`, ...data };
+      });
+
+      const results = await Promise.all(pushPromises);
+
+      toast({
+        title: "Sync complete",
+        description: `Pushed to ${results.length} repository(ies)`,
+      });
+    } catch (error: any) {
+      console.error("Sync error:", error);
+      toast({
+        title: "Sync failed",
+        description: error.message || "Failed to sync repositories",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePull = async () => {
+    if (repos.length === 0) {
+      toast({
+        title: "No repositories",
+        description: "Please add a repository first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Pull from all repos
+      const pullPromises = repos.map(async (repo) => {
+        const { data, error } = await supabase.functions.invoke('sync-repo-pull', {
+          body: {
+            repoId: repo.id,
+            projectId: projectId,
+            shareToken: shareToken,
+          },
+        });
+
+        if (error) throw error;
+        return { repo: `${repo.organization}/${repo.repo}`, ...data };
+      });
+
+      const results = await Promise.all(pullPromises);
+
+      toast({
+        title: "Pull complete",
+        description: `Pulled from ${results.length} repository(ies)`,
+      });
+    } catch (error: any) {
+      console.error("Pull error:", error);
+      toast({
+        title: "Pull failed",
+        description: error.message || "Failed to pull from repositories",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -338,12 +413,12 @@ export default function Repository() {
                       <Button onClick={handleSync}>
                         Push to GitHub
                       </Button>
-                      <Button variant="outline">
+                      <Button variant="outline" onClick={handlePull}>
                         Pull from GitHub
                       </Button>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Sync functionality will be available once RPC and Edge functions are implemented
+                      Push changes from database to GitHub, or pull latest changes from GitHub to database
                     </p>
                   </CardContent>
                 </Card>

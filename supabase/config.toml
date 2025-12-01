@@ -48,3 +48,9 @@ verify_jwt = false
 
 [functions.orchestrate-agents]
 verify_jwt = false
+
+[functions.sync-repo-push]
+verify_jwt = false
+
+[functions.sync-repo-pull]
+verify_jwt = false
