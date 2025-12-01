@@ -184,30 +184,99 @@ serve(async (req) => {
       }
     }
 
-    // Build context summary from ProjectSelector data
+    // Build rich context summary from ProjectSelector data
     let contextSummary = "";
     if (projectContext) {
-      const parts = [];
+      const parts: string[] = [];
+      
       if (projectContext.projectMetadata) {
-        parts.push(`Project: ${projectContext.projectMetadata.name}`);
-        if (projectContext.projectMetadata.description) {
-          parts.push(`Description: ${projectContext.projectMetadata.description}`);
-        }
+        const meta = projectContext.projectMetadata as any;
+        parts.push(
+          `Project: ${meta.name}\n` +
+          (meta.description ? `Description: ${meta.description}\n` : "") +
+          (meta.organization ? `Organization: ${meta.organization}\n` : "") +
+          (meta.scope ? `Scope: ${meta.scope}\n` : "")
+        );
       }
+      
       if (projectContext.artifacts?.length > 0) {
-        parts.push(`${projectContext.artifacts.length} artifacts available`);
+        const artifacts = projectContext.artifacts as any[];
+        const preview = artifacts
+          .slice(0, 5)
+          .map((a, index) => {
+            const title = a.ai_title || a.title || `Artifact ${index + 1}`;
+            const summary = a.ai_summary || (a.content ? String(a.content).slice(0, 160) : "");
+            return `- ${title}: ${summary}`;
+          })
+          .join("\n");
+        parts.push(`Artifacts (${artifacts.length} total, showing up to 5):\n${preview}`);
       }
+
       if (projectContext.requirements?.length > 0) {
-        parts.push(`${projectContext.requirements.length} requirements`);
+        const reqs = projectContext.requirements as any[];
+        const preview = reqs
+          .slice(0, 10)
+          .map((r) => {
+            const code = r.code ? `${r.code} - ` : "";
+            const contentSnippet = r.content ? String(r.content).slice(0, 160) : "";
+            return `- ${code}${r.title}: ${contentSnippet}`;
+          })
+          .join("\n");
+        parts.push(`Requirements (${reqs.length} total, showing up to 10):\n${preview}`);
       }
+
       if (projectContext.standards?.length > 0) {
-        parts.push(`${projectContext.standards.length} standards`);
+        const stds = projectContext.standards as any[];
+        const preview = stds
+          .slice(0, 10)
+          .map((s) => {
+            const code = s.code ? `${s.code} - ` : "";
+            const desc = s.description ? String(s.description).slice(0, 160) : "";
+            return `- ${code}${s.title}: ${desc}`;
+          })
+          .join("\n");
+        parts.push(`Standards (${stds.length} total, showing up to 10):\n${preview}`);
       }
+
+      if (projectContext.techStacks?.length > 0) {
+        const stacks = projectContext.techStacks as any[];
+        const preview = stacks
+          .slice(0, 10)
+          .map((t) => {
+            const type = t.type ? ` [${t.type}]` : "";
+            const desc = t.description ? String(t.description).slice(0, 120) : "";
+            return `- ${t.name}${type}: ${desc}`;
+          })
+          .join("\n");
+        parts.push(`Tech Stacks (${stacks.length} total, showing up to 10):\n${preview}`);
+      }
+
       if (projectContext.canvasNodes?.length > 0) {
-        parts.push(`${projectContext.canvasNodes.length} canvas nodes`);
+        const nodes = projectContext.canvasNodes as any[];
+        const preview = nodes
+          .slice(0, 20)
+          .map((n) => {
+            const data = (n.data || {}) as any;
+            const type = data.type || n.type || "node";
+            const label = data.label || data.title || data.name || n.id;
+            return `- [${type}] ${label}`;
+          })
+          .join("\n");
+        parts.push(`Canvas Nodes (${nodes.length} total, showing up to 20):\n${preview}`);
       }
-      contextSummary = parts.join("\n");
+
+      if (projectContext.canvasEdges?.length > 0) {
+        const edges = projectContext.canvasEdges as any[];
+        const preview = edges
+          .slice(0, 20)
+          .map((e) => `- ${e.source_id} -> ${e.target_id}${e.label ? ` (${e.label})` : ""}`)
+          .join("\n");
+        parts.push(`Canvas Edges (${edges.length} total, showing up to 20):\n${preview}`);
+      }
+      
+      contextSummary = parts.join("\n\n");
     }
+
 
     // Build system prompt
     const systemPrompt = `You are CodingAgent, an autonomous coding agent with the following capabilities:
@@ -422,9 +491,10 @@ Think step-by-step and continue until the task is complete.`;
 
       // Execute operations
       const operationResults = [];
+      let filesChanged = false;
       for (const op of agentResponse.operations || []) {
         console.log("Executing operation:", op.type);
-
+ 
         // Log operation start
         const { data: logEntry } = await supabase.rpc("log_agent_operation_with_token", {
           p_session_id: session.id,
@@ -434,7 +504,7 @@ Think step-by-step and continue until the task is complete.`;
           p_details: op.params,
           p_token: shareToken,
         });
-
+ 
         try {
           let result;
           
@@ -543,16 +613,21 @@ Think step-by-step and continue until the task is complete.`;
               }
               break;
           }
-
+ 
           if (result?.error) throw result.error;
 
+          // Mark that files have changed for broadcast purposes
+          if (["edit_lines", "create_file", "delete_file", "rename_file"].includes(op.type)) {
+            filesChanged = true;
+          }
+ 
           // Update operation log to completed
           await supabase.rpc("update_agent_operation_status_with_token", {
             p_operation_id: logEntry.id,
             p_status: "completed",
             p_token: shareToken,
           });
-
+ 
           operationResults.push({ type: op.type, success: true, data: result?.data });
         } catch (error) {
           console.error("Operation failed:", error);
@@ -575,7 +650,7 @@ Think step-by-step and continue until the task is complete.`;
             p_error_message: errorMessage,
             p_token: shareToken,
           });
-
+ 
           operationResults.push({ 
             type: op.type, 
             success: false, 
@@ -584,8 +659,22 @@ Think step-by-step and continue until the task is complete.`;
         }
       }
 
+      // If any file changes occurred in this iteration, broadcast a refresh event
+      if (filesChanged) {
+        try {
+          const broadcastChannel = supabase.channel(`repo-changes-${projectId}`);
+          await broadcastChannel.send({
+            type: "broadcast",
+            event: "repo_files_refresh",
+            payload: { projectId, repoId },
+          });
+        } catch (broadcastError) {
+          console.error("Failed to broadcast repo files refresh:", broadcastError);
+        }
+      }
+ 
       allOperationResults.push(...operationResults);
-
+ 
       // Add operation results to conversation history for next iteration
       const resultsMessage = `Operation results:\n${JSON.stringify(operationResults, null, 2)}`;
       conversationHistory.push({

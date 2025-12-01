@@ -46,34 +46,42 @@ export default function Build() {
     console.log("Setting up file tree real-time subscriptions for project:", projectId);
 
     const channel = supabase
-      .channel(`repo-changes-${projectId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "repo_files",
-          filter: `project_id=eq.${projectId}`,
-        },
-        (payload) => {
-          console.log("File change detected:", payload);
-          loadFiles();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "repo_staging",
-          filter: `repo_id=eq.${defaultRepo.id}`,
-        },
-        (payload) => {
-          console.log("Staging change detected:", payload);
-          loadFiles();
-        }
-      )
-      .subscribe();
+       .channel(`repo-changes-${projectId}`)
+       .on(
+         "postgres_changes",
+         {
+           event: "*",
+           schema: "public",
+           table: "repo_files",
+           filter: `project_id=eq.${projectId}`,
+         },
+         (payload) => {
+           console.log("File change detected:", payload);
+           loadFiles();
+         }
+       )
+       .on(
+         "postgres_changes",
+         {
+           event: "*",
+           schema: "public",
+           table: "repo_staging",
+           filter: `repo_id=eq.${defaultRepo.id}`,
+         },
+         (payload) => {
+           console.log("Staging change detected:", payload);
+           loadFiles();
+         }
+       )
+       .on(
+         "broadcast",
+         { event: "repo_files_refresh" },
+         (payload) => {
+           console.log("Received repo files refresh broadcast:", payload);
+           loadFiles();
+         }
+       )
+       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
@@ -195,10 +203,10 @@ export default function Build() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <PrimaryNav />
 
-      <div className="flex relative">
+      <div className="flex flex-1 relative overflow-hidden">
         <ProjectSidebar
           projectId={projectId}
           isOpen={isProjectSidebarOpen}
@@ -206,7 +214,7 @@ export default function Build() {
         />
 
         <main className="flex-1 w-full">
-          <div className="flex flex-col h-screen">
+          <div className="flex flex-col h-full">
             <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
               <div className="flex h-14 items-center gap-2 px-3 md:px-6">
                 <Button

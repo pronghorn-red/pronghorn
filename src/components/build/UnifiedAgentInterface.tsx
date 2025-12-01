@@ -166,16 +166,24 @@ export function UnifiedAgentInterface({
     // Add optimistic user message to timeline immediately
     const optimisticUserMessage = {
       id: `temp-${Date.now()}`,
-      session_id: 'temp',
-      role: 'user',
+      session_id: "temp",
+      role: "user",
       content: userMessageContent,
       metadata: {},
       created_at: new Date().toISOString(),
     };
-
+ 
     // Temporarily add to messages state for immediate display
     const previousMessages = messages;
     setMessages((prev: any[]) => [...prev, optimisticUserMessage]);
+
+    // Immediately scroll to the new message
+    setTimeout(() => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+      }
+    }, 0);
+
 
     try {
       const { error } = await supabase.functions.invoke('coding-agent-orchestrator', {
