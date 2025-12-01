@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
         owner: organization,
         name: repoName,
         description: `Repository for ${project.name} (from ${templateOrg}/${templateRepo})`,
-        private: false,
+        private: true,
       }),
     });
 

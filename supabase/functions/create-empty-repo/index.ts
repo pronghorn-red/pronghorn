@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         name: repoName,
-        private: false,
+        private: true,
         auto_init: true, // Initialize with README
         description: `Repository for ${project.name}`,
       }),
