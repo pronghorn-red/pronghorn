@@ -136,7 +136,7 @@ export function AgentProgressMonitor({ projectId, shareToken }: AgentProgressMon
       )}
 
       {/* Operations Section */}
-      <Card className="flex flex-col flex-1">
+      <Card className="flex flex-col flex-1 min-h-0">
         <div className="p-3 border-b">
           <h3 className="text-sm font-semibold">File Operations</h3>
           <p className="text-xs text-muted-foreground mt-1">
@@ -144,7 +144,7 @@ export function AgentProgressMonitor({ projectId, shareToken }: AgentProgressMon
           </p>
         </div>
 
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 overflow-y-auto">
           <div className="p-3 space-y-2">
             {operations.length === 0 && loading ? (
               <div className="flex items-center justify-center py-8">
