@@ -10,7 +10,7 @@ import { CommitHistory } from "@/components/build/CommitHistory";
 import { CodeEditor } from "@/components/repository/CodeEditor";
 import { AgentFileTree } from "@/components/build/AgentFileTree";
 import { AgentPromptPanel } from "@/components/build/AgentPromptPanel";
-import { DiffViewer } from "@/components/build/DiffViewer";
+import { MonacoDiffEditor } from "@/components/build/MonacoDiffEditor";
 import { AgentProgressMonitor } from "@/components/build/AgentProgressMonitor";
 import { AgentChatViewer } from "@/components/build/AgentChatViewer";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
@@ -354,7 +354,7 @@ export default function Build() {
                       </div>
                       <div className="flex-1 min-h-0 overflow-hidden">
                         {selectedDiff ? (
-                          <DiffViewer
+                          <MonacoDiffEditor
                             oldContent={selectedDiff.old}
                             newContent={selectedDiff.new}
                             filePath={selectedDiff.path}
@@ -472,7 +472,7 @@ export default function Build() {
                 <ResizablePanel defaultSize={40} minSize={30}>
                   <div className="h-full">
                     {selectedDiff ? (
-                      <DiffViewer
+                      <MonacoDiffEditor
                         oldContent={selectedDiff.old}
                         newContent={selectedDiff.new}
                         filePath={selectedDiff.path}
