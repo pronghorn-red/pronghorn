@@ -525,19 +525,32 @@ Think step-by-step and continue until the task is complete.`;
               break;
               
             case "edit_lines":
+              // Get committed file data first
               const { data: fileData } = await supabase.rpc("get_file_content_with_token", {
                 p_file_id: op.params.file_id,
                 p_token: shareToken,
               });
               
               if (fileData?.[0]) {
-                const lines = fileData[0].content.split('\n');
+                // Check if file is already staged to accumulate edits correctly
+                const { data: stagedChanges } = await supabase.rpc("get_staged_changes_with_token", {
+                  p_repo_id: repoId,
+                  p_token: shareToken,
+                });
+                
+                const existingStaged = stagedChanges?.find((s: any) => s.file_path === fileData[0].path);
+                
+                // Use staged new_content as base if exists, otherwise use committed content
+                const baseContent = existingStaged ? existingStaged.new_content : fileData[0].content;
+                
+                // Apply edit to the correct base content
+                const lines = baseContent.split('\n');
                 const startIdx = op.params.start_line - 1;
                 const endIdx = op.params.end_line - 1;
                 lines.splice(startIdx, endIdx - startIdx + 1, op.params.new_content);
                 const newContent = lines.join('\n');
                 
-                // Stage the change (UPSERT automatically handles duplicates and preserves baseline)
+                // Stage the change (UPSERT will preserve original old_content baseline)
                 result = await supabase.rpc("stage_file_change_with_token", {
                   p_repo_id: repoId,
                   p_token: shareToken,
@@ -567,13 +580,32 @@ Think step-by-step and continue until the task is complete.`;
               });
               
               if (deleteFileData?.[0]) {
-                result = await supabase.rpc("stage_file_change_with_token", {
+                // Check if file was newly created (staged as "add")
+                const { data: stagedForDelete } = await supabase.rpc("get_staged_changes_with_token", {
                   p_repo_id: repoId,
                   p_token: shareToken,
-                  p_operation_type: "delete",
-                  p_file_path: deleteFileData[0].path,
-                  p_old_content: deleteFileData[0].content,
                 });
+                
+                const newlyCreated = stagedForDelete?.find(
+                  (s: any) => s.file_path === deleteFileData[0].path && s.operation_type === 'add'
+                );
+                
+                if (newlyCreated) {
+                  // Just unstage the add operation instead of staging a delete
+                  result = await supabase.rpc("unstage_file_with_token", {
+                    p_staging_id: newlyCreated.id,
+                    p_token: shareToken,
+                  });
+                } else {
+                  // Stage the delete for a committed file
+                  result = await supabase.rpc("stage_file_change_with_token", {
+                    p_repo_id: repoId,
+                    p_token: shareToken,
+                    p_operation_type: "delete",
+                    p_file_path: deleteFileData[0].path,
+                    p_old_content: deleteFileData[0].content,
+                  });
+                }
               }
               break;
               
@@ -584,14 +616,35 @@ Think step-by-step and continue until the task is complete.`;
               });
               
               if (renameFileData?.[0]) {
-                result = await supabase.rpc("stage_file_change_with_token", {
+                // Check if file is already staged
+                const { data: stagedForRename } = await supabase.rpc("get_staged_changes_with_token", {
                   p_repo_id: repoId,
                   p_token: shareToken,
-                  p_operation_type: "rename",
-                  p_file_path: op.params.new_path,
-                  p_old_path: renameFileData[0].path,
-                  p_new_content: renameFileData[0].content,
                 });
+                
+                const stagedFile = stagedForRename?.find((s: any) => s.file_path === renameFileData[0].path);
+                
+                if (stagedFile) {
+                  // Update the staged entry's path instead of creating new rename
+                  result = await supabase.rpc("stage_file_change_with_token", {
+                    p_repo_id: repoId,
+                    p_token: shareToken,
+                    p_operation_type: stagedFile.operation_type, // Preserve operation type
+                    p_file_path: op.params.new_path,
+                    p_old_content: stagedFile.old_content,
+                    p_new_content: stagedFile.new_content,
+                  });
+                } else {
+                  // Stage rename for committed file
+                  result = await supabase.rpc("stage_file_change_with_token", {
+                    p_repo_id: repoId,
+                    p_token: shareToken,
+                    p_operation_type: "rename",
+                    p_file_path: op.params.new_path,
+                    p_old_path: renameFileData[0].path,
+                    p_new_content: renameFileData[0].content,
+                  });
+                }
               }
               break;
           }
