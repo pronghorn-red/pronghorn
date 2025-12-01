@@ -19,7 +19,8 @@ import {
   XCircle,
   Clock,
   Zap,
-  GitCommit
+  GitCommit,
+  ChevronDown
 } from 'lucide-react';
 import { useInfiniteAgentMessages } from '@/hooks/useInfiniteAgentMessages';
 import { useInfiniteAgentOperations } from '@/hooks/useInfiniteAgentOperations';
@@ -487,7 +488,7 @@ export function UnifiedAgentInterface({
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Timeline */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden relative">
         <ScrollArea className="h-full" ref={scrollViewportRef}>
           <div className="p-4 space-y-4">
             {timeline.length === 0 && !messagesLoading ? (
@@ -513,6 +514,21 @@ export function UnifiedAgentInterface({
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
+
+        {/* Scroll to bottom button */}
+        {!isAutoScrollEnabled && (
+          <Button
+            variant="outline"
+            size="icon"
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full h-10 w-10 shadow-lg z-10 bg-background hover:bg-accent"
+            onClick={() => {
+              messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+              setIsAutoScrollEnabled(true);
+            }}
+          >
+            <ChevronDown className="h-5 w-5" />
+          </Button>
+        )}
       </div>
 
       {/* Input Area */}
