@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { useParams, useSearchParams } from "react-router-dom";
@@ -7,45 +7,135 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RepoCard } from "@/components/repository/RepoCard";
 import { FileTree } from "@/components/repository/FileTree";
+import { CodeEditor } from "@/components/repository/CodeEditor";
 import { CreateRepoDialog } from "@/components/repository/CreateRepoDialog";
 import { ManagePATDialog } from "@/components/repository/ManagePATDialog";
 import { GitBranch, FileCode, Settings, Database } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { supabase } from "@/integrations/supabase/client";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+
+interface FileNode {
+  name: string;
+  path: string;
+  type: "file" | "folder";
+  children?: FileNode[];
+}
 
 export default function Repository() {
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
   const { toast } = useToast();
-  const [selectedFile, setSelectedFile] = useState<string>();
   const [managePATDialogOpen, setManagePATDialogOpen] = useState(false);
   const [selectedRepoForPAT, setSelectedRepoForPAT] = useState<{id: string; name: string} | null>(null);
+  const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
+  const [fileStructure, setFileStructure] = useState<FileNode[]>([]);
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [loadingFiles, setLoadingFiles] = useState(false);
 
   const { repos, loading, refetch } = useRealtimeRepos(projectId);
 
-  const mockFiles = [
-    {
-      name: "src",
-      path: "src",
-      type: "folder" as const,
-      children: [
-        {
-          name: "components",
-          path: "src/components",
-          type: "folder" as const,
-          children: [
-            { name: "Button.tsx", path: "src/components/Button.tsx", type: "file" as const },
-            { name: "Card.tsx", path: "src/components/Card.tsx", type: "file" as const },
-          ],
-        },
-        { name: "index.ts", path: "src/index.ts", type: "file" as const },
-      ],
-    },
-    { name: "README.md", path: "README.md", type: "file" as const },
-    { name: "package.json", path: "package.json", type: "file" as const },
-  ];
+  useEffect(() => {
+    if (repos.length > 0 && !selectedRepoId) {
+      const defaultRepo = repos.find(r => r.is_default) || repos[0];
+      setSelectedRepoId(defaultRepo.id);
+    }
+  }, [repos, selectedRepoId]);
+
+  useEffect(() => {
+    if (selectedRepoId) {
+      loadFileStructure();
+    }
+  }, [selectedRepoId]);
+
+  const loadFileStructure = async () => {
+    if (!selectedRepoId) return;
+    
+    setLoadingFiles(true);
+    try {
+      const { data, error } = await supabase.rpc("get_file_structure_with_token", {
+        p_repo_id: selectedRepoId,
+        p_token: shareToken || null,
+      });
+
+      if (error) throw error;
+
+      const tree = buildFileTree((data as any[]) || []);
+      setFileStructure(tree);
+    } catch (error) {
+      console.error("Error loading file structure:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load file structure",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
+  const buildFileTree = (files: any[]): FileNode[] => {
+    const root: FileNode[] = [];
+    const map: Record<string, FileNode> = {};
+
+    files.sort((a, b) => a.path.localeCompare(b.path));
+
+    files.forEach((file) => {
+      const parts = file.path.split("/");
+      let currentLevel = root;
+      let currentPath = "";
+
+      parts.forEach((part, index) => {
+        currentPath += (currentPath ? "/" : "") + part;
+        
+        if (!map[currentPath]) {
+          const node: FileNode = {
+            name: part,
+            path: currentPath,
+            type: index === parts.length - 1 ? "file" : "folder",
+            children: index === parts.length - 1 ? undefined : [],
+          };
+          
+          map[currentPath] = node;
+          currentLevel.push(node);
+          
+          if (node.children) {
+            currentLevel = node.children;
+          }
+        } else {
+          if (map[currentPath].children) {
+            currentLevel = map[currentPath].children!;
+          }
+        }
+      });
+    });
+
+    return root;
+  };
+
+  const handleFileSelect = async (path: string) => {
+    setSelectedFilePath(path);
+    
+    try {
+      const { data, error } = await supabase.rpc("get_file_structure_with_token", {
+        p_repo_id: selectedRepoId,
+        p_token: shareToken || null,
+      });
+
+      if (error) throw error;
+      
+      const files = (data as any[]) || [];
+      const file = files.find((f: any) => f.path === path);
+      if (file) {
+        setSelectedFileId(file.id);
+      }
+    } catch (error) {
+      console.error("Error finding file:", error);
+    }
+  };
 
   const handleCreateEmpty = async (name: string) => {
     if (!projectId) return;
@@ -57,7 +147,7 @@ export default function Repository() {
         p_organization: "pronghorn-red",
         p_repo: name,
         p_branch: "main",
-        p_is_default: repos.length === 0, // First repo is default
+        p_is_default: repos.length === 0,
       });
 
       if (error) throw error;
@@ -124,7 +214,6 @@ export default function Repository() {
 
       if (error) throw error;
 
-      // If PAT provided, store it
       if (pat && data) {
         const { error: patError } = await supabase.rpc("insert_repo_pat_with_token", {
           p_repo_id: data.id,
@@ -194,15 +283,6 @@ export default function Repository() {
     }
   };
 
-  const handleFileSelect = (path: string) => {
-    setSelectedFile(path);
-    toast({
-      title: "File selected",
-      description: path,
-    });
-    // TODO: Load file content via RPC
-  };
-
   const handleSync = async () => {
     if (repos.length === 0) {
       toast({
@@ -214,7 +294,6 @@ export default function Repository() {
     }
 
     try {
-      // Push to all repos
       const pushPromises = repos.map(async (repo) => {
         const { data, error } = await supabase.functions.invoke('sync-repo-push', {
           body: {
@@ -256,7 +335,6 @@ export default function Repository() {
     }
 
     try {
-      // Pull from all repos
       const pullPromises = repos.map(async (repo) => {
         const { data, error } = await supabase.functions.invoke('sync-repo-pull', {
           body: {
@@ -276,6 +354,9 @@ export default function Repository() {
         title: "Pull complete",
         description: `Pulled from ${results.length} repository(ies)`,
       });
+      
+      // Reload file structure after pull
+      loadFileStructure();
     } catch (error: any) {
       console.error("Pull error:", error);
       toast({
@@ -359,45 +440,51 @@ export default function Repository() {
               </TabsContent>
 
               <TabsContent value="files" className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>File Structure</CardTitle>
-                      <CardDescription>
-                        Browse project files and folders
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <FileTree
-                        files={mockFiles}
-                        onFileSelect={handleFileSelect}
-                        selectedPath={selectedFile}
-                      />
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>File Content</CardTitle>
-                      <CardDescription>
-                        {selectedFile || "Select a file to view its content"}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {selectedFile ? (
-                        <div className="bg-muted p-4 rounded-md font-mono text-sm">
-                          <p className="text-muted-foreground">
-                            File content will be displayed here
-                          </p>
+                {selectedRepoId ? (
+                  <Card className="p-0 overflow-hidden">
+                    <ResizablePanelGroup direction="horizontal" className="h-[600px]">
+                      <ResizablePanel defaultSize={25} minSize={15}>
+                        <div className="h-full border-r border-border">
+                          <div className="p-4 border-b border-border">
+                            <h3 className="font-semibold">Files</h3>
+                          </div>
+                          {loadingFiles ? (
+                            <div className="flex items-center justify-center h-full">
+                              Loading files...
+                            </div>
+                          ) : (
+                            <FileTree
+                              files={fileStructure}
+                              onFileSelect={handleFileSelect}
+                              selectedPath={selectedFilePath}
+                            />
+                          )}
                         </div>
-                      ) : (
-                        <p className="text-muted-foreground text-center py-8">
-                          No file selected
-                        </p>
-                      )}
+                      </ResizablePanel>
+                      <ResizableHandle />
+                      <ResizablePanel defaultSize={75}>
+                        <CodeEditor
+                          fileId={selectedFileId}
+                          filePath={selectedFilePath}
+                          repoId={selectedRepoId}
+                          onClose={() => {
+                            setSelectedFilePath(null);
+                            setSelectedFileId(null);
+                          }}
+                          onSave={loadFileStructure}
+                        />
+                      </ResizablePanel>
+                    </ResizablePanelGroup>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardContent className="py-8">
+                      <p className="text-muted-foreground text-center">
+                        Please add a repository first to browse files
+                      </p>
                     </CardContent>
                   </Card>
-                </div>
+                )}
               </TabsContent>
 
               <TabsContent value="sync" className="space-y-6">
