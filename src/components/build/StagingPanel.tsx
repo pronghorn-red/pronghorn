@@ -279,36 +279,22 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
   // Show diff viewer if a diff is being viewed
   if (viewingDiff) {
     return (
-      <div className="h-full flex flex-col space-y-2 overflow-hidden">
+      <div className="h-full flex flex-col overflow-hidden">
         <Button
           variant="ghost"
           size="sm"
           onClick={() => setViewingDiff(null)}
-          className="self-start"
+          className="self-start shrink-0 mb-2"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Staging
         </Button>
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <CodeEditor
-              key={`${viewingDiff.id}-${viewingDiff.file_path}`}
-              fileId={viewingDiff.id}
-              filePath={viewingDiff.file_path}
-              repoId={repoId || ""}
-              isStaged={true}
-              initialContent={viewingDiff.new_content || ""}
-              onClose={() => setViewingDiff(null)}
-              onSave={loadRepoAndStagedChanges}
-            />
-          </div>
-          <div className="flex-1 min-h-0 overflow-hidden border-t">
-            <DiffViewer
-              oldContent={viewingDiff.old_content || ""}
-              newContent={viewingDiff.new_content || ""}
-              filePath={viewingDiff.file_path}
-            />
-          </div>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <DiffViewer
+            oldContent={viewingDiff.old_content || ""}
+            newContent={viewingDiff.new_content || ""}
+            filePath={viewingDiff.file_path}
+          />
         </div>
       </div>
     );
