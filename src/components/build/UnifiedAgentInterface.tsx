@@ -194,7 +194,7 @@ export function UnifiedAgentInterface({
           taskDescription: userMessageContent,
           mode: 'task', // Required parameter - can be 'task', 'iterative_loop', or 'continuous_improvement'
           autoCommit,
-          attachedFileIds: attachedFiles.map(f => f.id),
+          attachedFiles: attachedFiles, // Pass full objects with id and path
           projectContext: attachedContext ? {
             projectMetadata: attachedContext.projectMetadata || null,
             artifacts: attachedContext.artifacts.length > 0 ? attachedContext.artifacts : undefined,

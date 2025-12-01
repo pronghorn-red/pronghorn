@@ -172,7 +172,7 @@ serve(async (req) => {
 
     // Load attached files with path metadata
     let attachedFilesContent = "";
-    if (attachedFiles.length > 0) {
+    if (attachedFiles && attachedFiles.length > 0) {
       const { data: files } = await supabase.rpc("agent_read_multiple_files_with_token", {
         p_file_ids: attachedFiles.map(f => f.id),
         p_token: shareToken,
