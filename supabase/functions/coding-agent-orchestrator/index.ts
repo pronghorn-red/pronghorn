@@ -97,19 +97,17 @@ serve(async (req) => {
     if (sessionError) throw sessionError;
     console.log("Created session:", session.id);
 
-    // Load instruction manifest
-    const origin = req.headers.get("origin") || "https://ee63522c-070f-4241-b05a-90b794352667.lovableproject.com";
-    const manifestUrl = `${origin}/data/codingAgentInstructions.json`;
-    console.log("Fetching manifest from:", manifestUrl);
-    
-    const manifestResponse = await fetch(manifestUrl);
-    
-    if (!manifestResponse.ok) {
-      console.error("Failed to fetch manifest:", manifestResponse.status, await manifestResponse.text());
-      throw new Error(`Failed to load instruction manifest: ${manifestResponse.status}`);
-    }
-    
-    const manifest = await manifestResponse.json();
+    // Load instruction manifest (embedded to avoid external HTTP failures)
+    const manifest = {
+      file_operations: {
+        search: { description: "Search file paths and content by keyword" },
+        read_file: { description: "Read complete content of a single file" },
+        edit_lines: { description: "Edit specific line range in a file and stage the change" },
+        create_file: { description: "Create new file and stage as add operation" },
+        delete_file: { description: "Delete file and stage as delete operation" },
+        rename_file: { description: "Rename/move file and stage as rename operation" },
+      },
+    } as const;
 
     // Load attached files
     let attachedFilesContent = "";
