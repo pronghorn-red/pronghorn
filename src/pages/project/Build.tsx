@@ -137,12 +137,40 @@ export default function Build() {
         <main className="flex-1 w-full">
           <div className="flex flex-col h-screen">
             <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-              <div className="flex h-14 items-center px-6">
-                <h1 className="text-lg font-semibold">Build</h1>
+              <div className="flex h-14 items-center px-3 md:px-6">
+                <h1 className="text-base md:text-lg font-semibold">Build</h1>
               </div>
             </div>
 
-            <ResizablePanelGroup direction="horizontal" className="flex-1">
+            {/* Mobile Layout (< md) - Vertical Stack */}
+            <div className="flex-1 flex flex-col md:hidden overflow-hidden">
+              <Tabs defaultValue="agent" className="h-full flex flex-col">
+                <TabsList className="grid w-full grid-cols-3 shrink-0">
+                  <TabsTrigger value="agent">Agent</TabsTrigger>
+                  <TabsTrigger value="staging">Staging</TabsTrigger>
+                  <TabsTrigger value="history">History</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="agent" className="flex-1 overflow-auto mt-0 p-3">
+                  <AgentPromptPanel
+                    attachedFiles={attachedFiles}
+                    onRemoveFile={handleRemoveAttachedFile}
+                    onSubmitTask={handleSubmitTask}
+                  />
+                </TabsContent>
+
+                <TabsContent value="staging" className="flex-1 overflow-auto mt-0 p-3">
+                  <StagingPanel projectId={projectId} onViewDiff={handleViewDiff} />
+                </TabsContent>
+
+                <TabsContent value="history" className="flex-1 overflow-auto mt-0 p-3">
+                  <CommitHistory projectId={projectId} />
+                </TabsContent>
+              </Tabs>
+            </div>
+
+            {/* Desktop Layout (>= md) - Resizable Panels */}
+            <ResizablePanelGroup direction="horizontal" className="hidden md:flex flex-1">
               {/* Left: File Tree */}
               <ResizablePanel defaultSize={20} minSize={15}>
                 <div className="h-full border-r">

@@ -52,6 +52,120 @@ export type Database = {
           },
         ]
       }
+      agent_blackboard: {
+        Row: {
+          content: string
+          created_at: string
+          entry_type: string
+          id: string
+          metadata: Json | null
+          session_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          entry_type: string
+          id?: string
+          metadata?: Json | null
+          session_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          entry_type?: string
+          id?: string
+          metadata?: Json | null
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_blackboard_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "agent_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_session_context: {
+        Row: {
+          context_data: Json
+          context_type: string
+          created_at: string
+          id: string
+          session_id: string
+        }
+        Insert: {
+          context_data: Json
+          context_type: string
+          created_at?: string
+          id?: string
+          session_id: string
+        }
+        Update: {
+          context_data?: Json
+          context_type?: string
+          created_at?: string
+          id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_session_context_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "agent_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_sessions: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          mode: string
+          project_id: string
+          started_at: string
+          status: string
+          task_description: string | null
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mode: string
+          project_id: string
+          started_at?: string
+          status?: string
+          task_description?: string | null
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mode?: string
+          project_id?: string
+          started_at?: string
+          status?: string
+          task_description?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       artifacts: {
         Row: {
           ai_summary: string | null
@@ -1309,6 +1423,50 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_blackboard_entry_with_token: {
+        Args: {
+          p_content: string
+          p_entry_type: string
+          p_metadata?: Json
+          p_session_id: string
+          p_token: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          entry_type: string
+          id: string
+          metadata: Json | null
+          session_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_blackboard"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      add_session_context_with_token: {
+        Args: {
+          p_context_data: Json
+          p_context_type: string
+          p_session_id: string
+          p_token: string
+        }
+        Returns: {
+          context_data: Json
+          context_type: string
+          created_at: string
+          id: string
+          session_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_session_context"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       commit_staged_with_token: {
         Args: {
           p_branch?: string
@@ -1334,6 +1492,32 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "repo_commits"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_agent_session_with_token: {
+        Args: {
+          p_mode: string
+          p_project_id: string
+          p_task_description?: string
+          p_token: string
+        }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          mode: string
+          project_id: string
+          started_at: string
+          status: string
+          task_description: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_sessions"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -1449,6 +1633,27 @@ export type Database = {
         Args: { p_parent_id: string; p_project_id: string; p_type: string }
         Returns: string
       }
+      get_agent_sessions_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          mode: string
+          project_id: string
+          started_at: string
+          status: string
+          task_description: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "agent_sessions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_artifacts_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
@@ -1467,6 +1672,23 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "artifacts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_blackboard_entries_with_token: {
+        Args: { p_session_id: string; p_token: string }
+        Returns: {
+          content: string
+          created_at: string
+          entry_type: string
+          id: string
+          metadata: Json | null
+          session_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "agent_blackboard"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -1798,6 +2020,22 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "requirements"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_session_context_with_token: {
+        Args: { p_session_id: string; p_token: string }
+        Returns: {
+          context_data: Json
+          context_type: string
+          created_at: string
+          id: string
+          session_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "agent_session_context"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -2211,6 +2449,32 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "repo_staging"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_agent_session_status_with_token: {
+        Args: {
+          p_completed_at?: string
+          p_session_id: string
+          p_status: string
+          p_token: string
+        }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          mode: string
+          project_id: string
+          started_at: string
+          status: string
+          task_description: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_sessions"
           isOneToOne: true
           isSetofReturn: false
         }
