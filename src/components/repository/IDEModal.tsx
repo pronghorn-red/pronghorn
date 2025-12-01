@@ -17,6 +17,8 @@ interface IDEModalProps {
   onFileCreate: (path: string, isFolder: boolean) => void;
   onFileRename: (oldPath: string, newPath: string) => void;
   onFileDelete: (path: string) => void;
+  autoSync?: boolean;
+  onAutoSync?: () => void;
 }
 
 export function IDEModal({
@@ -31,22 +33,32 @@ export function IDEModal({
   onFileCreate,
   onFileRename,
   onFileDelete,
+  autoSync,
+  onAutoSync,
 }: IDEModalProps) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[98vw] max-h-[98vh] w-[98vw] h-[98vh] p-0 bg-[#1e1e1e]">
+    <Dialog open={open} onOpenChange={onOpenChange} modal={true}>
+      <DialogContent 
+        className="max-w-[98vw] max-h-[98vh] w-[98vw] h-[98vh] p-0 bg-[#1e1e1e]"
+        onEscapeKeyDown={(e) => {
+          e.preventDefault();
+          onOpenChange(false);
+        }}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-[#252526]">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-[#3e3e42] bg-[#252526]">
             <div className="flex items-center gap-2">
-              <Maximize2 className="h-4 w-4 text-muted-foreground" />
-              <h2 className="font-semibold text-sm text-foreground">Pronghorn IDE</h2>
+              <Maximize2 className="h-4 w-4 text-[#858585]" />
+              <h2 className="font-semibold text-sm text-[#cccccc]">Pronghorn IDE</h2>
             </div>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => onOpenChange(false)}
-              className="h-8 w-8 hover:bg-accent/50"
+              className="h-8 w-8 hover:bg-[#2a2d2e] text-[#cccccc]"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -56,9 +68,9 @@ export function IDEModal({
           <div className="flex-1 overflow-hidden">
             <ResizablePanelGroup direction="horizontal">
               <ResizablePanel defaultSize={20} minSize={15} maxSize={40}>
-                <div className="h-full border-r border-border/50 bg-[#252526]">
-                  <div className="px-3 py-2 border-b border-border/50 bg-[#252526]">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Explorer</p>
+                <div className="h-full border-r border-[#3e3e42] bg-[#252526]">
+                  <div className="px-3 py-2 border-b border-[#3e3e42] bg-[#252526]">
+                    <p className="text-xs font-medium text-[#858585] uppercase tracking-wide">Explorer</p>
                   </div>
                   <EnhancedFileTree
                     files={fileStructure}
@@ -80,6 +92,7 @@ export function IDEModal({
                   repoId={selectedRepoId}
                   onClose={() => onFileSelect("")}
                   onSave={onFileSave}
+                  onAutoSync={autoSync ? onAutoSync : undefined}
                 />
               </ResizablePanel>
             </ResizablePanelGroup>

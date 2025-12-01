@@ -12,9 +12,10 @@ interface CodeEditorProps {
   repoId: string;
   onClose: () => void;
   onSave: () => void;
+  onAutoSync?: () => void;
 }
 
-export function CodeEditor({ fileId, filePath, repoId, onClose, onSave }: CodeEditorProps) {
+export function CodeEditor({ fileId, filePath, repoId, onClose, onSave, onAutoSync }: CodeEditorProps) {
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -75,6 +76,7 @@ export function CodeEditor({ fileId, filePath, repoId, onClose, onSave }: CodeEd
         description: "File saved successfully",
       });
       onSave();
+      if (onAutoSync) onAutoSync();
     } catch (error) {
       console.error("Error saving file:", error);
       toast({
@@ -93,35 +95,52 @@ export function CodeEditor({ fileId, filePath, repoId, onClose, onSave }: CodeEd
     const langMap: Record<string, string> = {
       js: "javascript",
       jsx: "javascript",
+      mjs: "javascript",
+      cjs: "javascript",
       ts: "typescript",
       tsx: "typescript",
+      vue: "html",
       py: "python",
       java: "java",
+      kt: "kotlin",
       cpp: "cpp",
       c: "c",
+      h: "cpp",
       cs: "csharp",
       go: "go",
       rs: "rust",
       rb: "ruby",
       php: "php",
       html: "html",
+      htm: "html",
       css: "css",
       scss: "scss",
+      sass: "scss",
+      less: "less",
       json: "json",
+      jsonc: "json",
       xml: "xml",
+      svg: "xml",
       yaml: "yaml",
       yml: "yaml",
       md: "markdown",
+      markdown: "markdown",
       sql: "sql",
       sh: "shell",
       bash: "shell",
+      zsh: "shell",
+      dockerfile: "dockerfile",
+      toml: "ini",
+      ini: "ini",
+      conf: "ini",
+      properties: "ini",
     };
     return langMap[ext || ""] || "plaintext";
   };
 
   if (!filePath) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
+      <div className="flex items-center justify-center h-full bg-[#1e1e1e] text-[#cccccc]">
         Select a file to edit
       </div>
     );
@@ -129,10 +148,10 @@ export function CodeEditor({ fileId, filePath, repoId, onClose, onSave }: CodeEd
 
   return (
     <div className="flex flex-col h-full bg-[#1e1e1e]">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-[#252526]">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-[#3e3e42] bg-[#252526]">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-          <h3 className="text-sm font-normal truncate text-foreground">{filePath}</h3>
+          <FileText className="h-4 w-4 text-[#cccccc] shrink-0" />
+          <h3 className="text-sm font-normal truncate text-[#cccccc]">{filePath}</h3>
         </div>
         <div className="flex gap-1">
           <Button
@@ -149,7 +168,7 @@ export function CodeEditor({ fileId, filePath, repoId, onClose, onSave }: CodeEd
             size="sm"
             variant="ghost"
             onClick={onClose}
-            className="h-8 hover:bg-accent/50"
+            className="h-8 hover:bg-[#2a2d2e] text-[#cccccc]"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -157,7 +176,7 @@ export function CodeEditor({ fileId, filePath, repoId, onClose, onSave }: CodeEd
       </div>
       <div className="flex-1 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
+          <div className="flex items-center justify-center h-full text-[#cccccc]">
             Loading...
           </div>
         ) : (
@@ -179,6 +198,9 @@ export function CodeEditor({ fileId, filePath, repoId, onClose, onSave }: CodeEd
               smoothScrolling: true,
               renderLineHighlight: "all",
               bracketPairColorization: { enabled: true },
+              wordWrap: "on",
+              tabSize: 2,
+              insertSpaces: true,
             }}
           />
         )}

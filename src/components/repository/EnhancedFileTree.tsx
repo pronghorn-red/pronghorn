@@ -55,6 +55,7 @@ function TreeNode({
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   
+  // Hide .gitkeep files from the tree
   if (node.type === "file" && node.name === ".gitkeep") {
     return null;
   }
@@ -99,13 +100,13 @@ function TreeNode({
           onDelete={() => setDeleteDialogOpen(true)}
         >
           <button
-            className={`w-full text-left px-2 py-1 text-sm hover:bg-accent/50 transition-colors flex items-center gap-2 ${
-              isSelected ? 'bg-accent text-accent-foreground' : 'text-foreground'
+            className={`w-full text-left px-2 py-1 text-sm hover:bg-[#2a2d2e] transition-colors flex items-center gap-2 ${
+              isSelected ? 'bg-[#37373d] text-[#ffffff]' : 'text-[#cccccc]'
             }`}
             style={{ paddingLeft: `${level * 16 + 8}px` }}
             onClick={() => onFileSelect?.(node.path)}
           >
-            <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <File className="h-4 w-4 shrink-0 text-[#858585]" />
             <span className="truncate text-sm">{node.name}</span>
           </button>
         </FileTreeContextMenu>
@@ -153,19 +154,19 @@ function TreeNode({
         onDelete={() => setDeleteDialogOpen(true)}
       >
         <button
-          className="w-full text-left px-2 py-1 text-sm hover:bg-accent/50 transition-colors flex items-center gap-1"
+          className="w-full text-left px-2 py-1 text-sm hover:bg-[#2a2d2e] transition-colors flex items-center gap-1 text-[#cccccc]"
           style={{ paddingLeft: `${level * 16 + 8}px` }}
           onClick={() => setIsOpen(!isOpen)}
         >
           {isOpen ? (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
           )}
           {isOpen ? (
-            <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <FolderOpen className="h-4 w-4 shrink-0 text-[#dcb67a]" />
           ) : (
-            <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <Folder className="h-4 w-4 shrink-0 text-[#dcb67a]" />
           )}
           <span className="truncate text-sm font-medium">{node.name}</span>
         </button>
@@ -245,7 +246,7 @@ export function EnhancedFileTree({ files, onFileSelect, selectedPath, onFileCrea
           <div className="py-1 min-h-full">
             {files.length === 0 ? (
               <div className="px-4 py-8 text-center space-y-4">
-                <p className="text-sm text-muted-foreground">No files yet</p>
+                <p className="text-sm text-[#858585]">No files yet</p>
                 <div className="flex flex-col gap-2">
                   <Button
                     variant="outline"

@@ -41,25 +41,25 @@ export function RepoCard({ repo, onDelete, onManagePAT }: RepoCardProps) {
       </CardHeader>
       <CardContent>
         <div className="flex gap-2">
-          {!repo.is_default && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onManagePAT?.(repo.id)}
-              >
-                <Key className="h-4 w-4 mr-2" />
-                Manage PAT
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onDelete?.(repo.id)}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Remove
-              </Button>
-            </>
+          {!repo.is_default && onManagePAT && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onManagePAT(repo.id)}
+            >
+              <Key className="h-4 w-4 mr-2" />
+              Manage PAT
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(repo.id)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {repo.is_default ? 'Disconnect' : 'Remove'}
+            </Button>
           )}
         </div>
       </CardContent>

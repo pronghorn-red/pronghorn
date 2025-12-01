@@ -11,7 +11,9 @@ import { CodeEditor } from "@/components/repository/CodeEditor";
 import { CreateRepoDialog } from "@/components/repository/CreateRepoDialog";
 import { ManagePATDialog } from "@/components/repository/ManagePATDialog";
 import { IDEModal } from "@/components/repository/IDEModal";
+import { SyncDialog, SyncConfig } from "@/components/repository/SyncDialog";
 import { GitBranch, FileCode, Settings, Database, Maximize2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +41,9 @@ export default function Repository() {
   const [syncStatus, setSyncStatus] = useState<{ [key: string]: 'idle' | 'pushing' | 'pulling' | 'success' | 'error' }>({});
   const [lastSyncTime, setLastSyncTime] = useState<{ [key: string]: Date }>({});
   const [ideModalOpen, setIdeModalOpen] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [syncDialogType, setSyncDialogType] = useState<"push" | "pull">("push");
+  const [autoSync, setAutoSync] = useState(false);
 
   const { repos, loading, refetch } = useRealtimeRepos(projectId);
 
@@ -85,9 +90,12 @@ export default function Repository() {
     const root: FileNode[] = [];
     const map: Record<string, FileNode> = {};
 
-    files.sort((a, b) => a.path.localeCompare(b.path));
+    // Filter out .gitkeep files
+    const filteredFiles = files.filter(f => !f.path.endsWith('/.gitkeep'));
 
-    files.forEach((file) => {
+    filteredFiles.sort((a, b) => a.path.localeCompare(b.path));
+
+    filteredFiles.forEach((file) => {
       const parts = file.path.split("/");
       let currentLevel = root;
       let currentPath = "";
@@ -269,7 +277,95 @@ export default function Repository() {
     }
   };
 
-  const handleSync = async () => {
+  const handleSyncWithConfig = async (config: SyncConfig, isPush: boolean) => {
+    try {
+      // Set repos to syncing status
+      const statusUpdates: { [key: string]: 'pushing' | 'pulling' } = {};
+      config.selectedRepos.forEach(repoId => {
+        statusUpdates[repoId] = isPush ? 'pushing' : 'pulling';
+      });
+      setSyncStatus(statusUpdates);
+
+      const syncPromises = config.selectedRepos.map(async (repoId) => {
+        const repo = repos.find(r => r.id === repoId);
+        if (!repo) return;
+
+        try {
+          if (isPush) {
+            const { data, error } = await supabase.functions.invoke('sync-repo-push', {
+              body: {
+                repoId: repoId,
+                projectId: projectId,
+                shareToken: shareToken,
+                commitMessage: config.commitMessage,
+              },
+            });
+
+            if (error) throw error;
+
+            setSyncStatus(prev => ({ ...prev, [repoId]: 'success' }));
+            setLastSyncTime(prev => ({ ...prev, [repoId]: new Date() }));
+            
+            return { repo: `${repo.organization}/${repo.repo}`, success: true, ...data };
+          } else {
+            const { data, error } = await supabase.functions.invoke('sync-repo-pull', {
+              body: {
+                repoId: repoId,
+                projectId: projectId,
+                shareToken: shareToken,
+              },
+            });
+
+            if (error) throw error;
+
+            setSyncStatus(prev => ({ ...prev, [repoId]: 'success' }));
+            setLastSyncTime(prev => ({ ...prev, [repoId]: new Date() }));
+            
+            return { repo: `${repo.organization}/${repo.repo}`, success: true, ...data };
+          }
+        } catch (err) {
+          setSyncStatus(prev => ({ ...prev, [repoId]: 'error' }));
+          throw err;
+        }
+      });
+
+      const results = await Promise.allSettled(syncPromises);
+      
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      if (failed === 0) {
+        toast({
+          title: `${isPush ? "Push" : "Pull"} complete`,
+          description: `Successfully ${isPush ? "pushed to" : "pulled from"} ${successful} repository(ies)`,
+        });
+      } else {
+        toast({
+          title: `${isPush ? "Push" : "Pull"} completed with errors`,
+          description: `${isPush ? "Pushed to" : "Pulled from"} ${successful} repository(ies), ${failed} failed`,
+          variant: "destructive",
+        });
+      }
+
+      if (!isPush) {
+        loadFileStructure();
+      }
+
+      setTimeout(() => {
+        setSyncStatus({});
+      }, 3000);
+    } catch (error: any) {
+      console.error("Sync error:", error);
+      toast({
+        title: `${isPush ? "Push" : "Pull"} failed`,
+        description: error.message || `Failed to ${isPush ? "push to" : "pull from"} repositories`,
+        variant: "destructive",
+      });
+      setSyncStatus({});
+    }
+  };
+
+  const handleSync = () => {
     if (repos.length === 0) {
       toast({
         title: "No repositories",
@@ -278,71 +374,8 @@ export default function Repository() {
       });
       return;
     }
-
-    try {
-      // Set all repos to pushing status
-      const statusUpdates: { [key: string]: 'pushing' } = {};
-      repos.forEach(repo => {
-        statusUpdates[repo.id] = 'pushing';
-      });
-      setSyncStatus(statusUpdates);
-
-      const pushPromises = repos.map(async (repo) => {
-        try {
-          const { data, error } = await supabase.functions.invoke('sync-repo-push', {
-            body: {
-              repoId: repo.id,
-              projectId: projectId,
-              shareToken: shareToken,
-              commitMessage: `Sync from Pronghorn at ${new Date().toISOString()}`,
-            },
-          });
-
-          if (error) throw error;
-
-          // Update status to success
-          setSyncStatus(prev => ({ ...prev, [repo.id]: 'success' }));
-          setLastSyncTime(prev => ({ ...prev, [repo.id]: new Date() }));
-          
-          return { repo: `${repo.organization}/${repo.repo}`, success: true, ...data };
-        } catch (err) {
-          // Update status to error
-          setSyncStatus(prev => ({ ...prev, [repo.id]: 'error' }));
-          throw err;
-        }
-      });
-
-      const results = await Promise.allSettled(pushPromises);
-      
-      const successful = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
-
-      if (failed === 0) {
-        toast({
-          title: "Sync complete",
-          description: `Successfully pushed to ${successful} repository(ies)`,
-        });
-      } else {
-        toast({
-          title: "Sync completed with errors",
-          description: `Pushed to ${successful} repository(ies), ${failed} failed`,
-          variant: "destructive",
-        });
-      }
-
-      // Reset status after delay
-      setTimeout(() => {
-        setSyncStatus({});
-      }, 3000);
-    } catch (error: any) {
-      console.error("Sync error:", error);
-      toast({
-        title: "Sync failed",
-        description: error.message || "Failed to sync repositories",
-        variant: "destructive",
-      });
-      setSyncStatus({});
-    }
+    setSyncDialogType("push");
+    setSyncDialogOpen(true);
   };
 
   const handleFileCreate = async (path: string, isFolder: boolean) => {
@@ -371,6 +404,7 @@ export default function Repository() {
         description: `${isFolder ? "Folder" : "File"} created successfully`,
       });
       loadFileStructure();
+      if (autoSync) performAutoSync();
     } catch (error: any) {
       console.error("Error creating file/folder:", error);
       toast({
@@ -422,6 +456,7 @@ export default function Repository() {
           description: "Renamed successfully",
         });
         loadFileStructure();
+        if (autoSync) performAutoSync();
       }
     } catch (error: any) {
       console.error("Error renaming:", error);
@@ -472,6 +507,7 @@ export default function Repository() {
       }
       
       loadFileStructure();
+      if (autoSync) performAutoSync();
     } catch (error: any) {
       console.error("Error deleting:", error);
       toast({
@@ -482,7 +518,7 @@ export default function Repository() {
     }
   };
 
-  const handlePull = async () => {
+  const handlePull = () => {
     if (repos.length === 0) {
       toast({
         title: "No repositories",
@@ -491,73 +527,20 @@ export default function Repository() {
       });
       return;
     }
+    setSyncDialogType("pull");
+    setSyncDialogOpen(true);
+  };
 
-    try {
-      // Set all repos to pulling status
-      const statusUpdates: { [key: string]: 'pulling' } = {};
-      repos.forEach(repo => {
-        statusUpdates[repo.id] = 'pulling';
-      });
-      setSyncStatus(statusUpdates);
+  const performAutoSync = async () => {
+    if (!autoSync || repos.length === 0) return;
 
-      const pullPromises = repos.map(async (repo) => {
-        try {
-          const { data, error } = await supabase.functions.invoke('sync-repo-pull', {
-            body: {
-              repoId: repo.id,
-              projectId: projectId,
-              shareToken: shareToken,
-            },
-          });
+    const config: SyncConfig = {
+      commitMessage: `Auto-sync from Pronghorn at ${new Date().toISOString()}`,
+      selectedRepos: repos.map(r => r.id),
+      branches: repos.reduce((acc, repo) => ({ ...acc, [repo.id]: repo.branch }), {}),
+    };
 
-          if (error) throw error;
-
-          // Update status to success
-          setSyncStatus(prev => ({ ...prev, [repo.id]: 'success' }));
-          setLastSyncTime(prev => ({ ...prev, [repo.id]: new Date() }));
-          
-          return { repo: `${repo.organization}/${repo.repo}`, success: true, ...data };
-        } catch (err) {
-          // Update status to error
-          setSyncStatus(prev => ({ ...prev, [repo.id]: 'error' }));
-          throw err;
-        }
-      });
-
-      const results = await Promise.allSettled(pullPromises);
-      
-      const successful = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
-
-      if (failed === 0) {
-        toast({
-          title: "Pull complete",
-          description: `Successfully pulled from ${successful} repository(ies)`,
-        });
-      } else {
-        toast({
-          title: "Pull completed with errors",
-          description: `Pulled from ${successful} repository(ies), ${failed} failed`,
-          variant: "destructive",
-        });
-      }
-      
-      // Reload file structure after pull
-      loadFileStructure();
-
-      // Reset status after delay
-      setTimeout(() => {
-        setSyncStatus({});
-      }, 3000);
-    } catch (error: any) {
-      console.error("Pull error:", error);
-      toast({
-        title: "Pull failed",
-        description: error.message || "Failed to pull from repositories",
-        variant: "destructive",
-      });
-      setSyncStatus({});
-    }
+    await handleSyncWithConfig(config, true);
   };
 
   return (
@@ -701,6 +684,7 @@ export default function Repository() {
                             setSelectedFileId(null);
                           }}
                           onSave={loadFileStructure}
+                          onAutoSync={autoSync ? performAutoSync : undefined}
                         />
                       </ResizablePanel>
                     </ResizablePanelGroup>
@@ -718,13 +702,29 @@ export default function Repository() {
 
               <TabsContent value="sync" className="space-y-6">
                 <Card>
-                  <CardHeader>
+                   <CardHeader>
                     <CardTitle>GitHub Synchronization</CardTitle>
                     <CardDescription>
                       Push local changes to GitHub or pull latest from GitHub
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
+                    <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/20">
+                      <Checkbox
+                        id="auto-sync"
+                        checked={autoSync}
+                        onCheckedChange={(checked) => setAutoSync(checked as boolean)}
+                      />
+                      <div className="flex-1">
+                        <label htmlFor="auto-sync" className="text-sm font-medium cursor-pointer">
+                          Auto-sync on changes
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                          Automatically push to GitHub whenever you save, create, rename, or delete files
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="flex gap-4">
                       <Button 
                         onClick={handleSync} 
@@ -837,6 +837,14 @@ export default function Repository() {
         />
       )}
 
+      <SyncDialog
+        open={syncDialogOpen}
+        onOpenChange={setSyncDialogOpen}
+        repos={repos}
+        onConfirm={(config) => handleSyncWithConfig(config, syncDialogType === "push")}
+        type={syncDialogType}
+      />
+
       <IDEModal
         open={ideModalOpen}
         onOpenChange={setIdeModalOpen}
@@ -849,6 +857,8 @@ export default function Repository() {
         onFileCreate={handleFileCreate}
         onFileRename={handleFileRename}
         onFileDelete={handleFileDelete}
+        autoSync={autoSync}
+        onAutoSync={performAutoSync}
       />
     </div>
   );
