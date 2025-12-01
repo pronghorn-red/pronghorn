@@ -310,18 +310,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Update last_commit_sha in database
-    const { error: updateError } = await supabaseClient
-      .from('repo_files')
-      .update({ last_commit_sha: newCommitData.sha })
-      .eq('repo_id', repoId)
-      .in('path', filesToPush.map((f: RepoFile) => f.path));
-
-    if (updateError) {
-      console.error('Failed to update commit SHA in database:', updateError);
-    }
-
     console.log(`Successfully pushed to ${repo.organization}/${repo.repo}: ${newCommitData.sha}`);
+
 
     return new Response(
       JSON.stringify({

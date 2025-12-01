@@ -20,7 +20,16 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create Supabase client
+    // Generate a unique, slugified repo name with short id suffix
+    const baseSlug = repoName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-');
+    const uniqueSuffix = crypto.randomUUID().split('-')[0];
+    const finalRepoName = `${baseSlug}-${uniqueSuffix}`;
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const authHeader = req.headers.get('Authorization');
@@ -58,7 +67,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        name: repoName,
+        name: finalRepoName,
         private: true,
         auto_init: true, // Initialize with README
         description: `Repository for ${project.name}`,
@@ -77,7 +86,7 @@ Deno.serve(async (req) => {
       p_project_id: projectId,
       p_token: shareToken,
       p_organization: organization,
-      p_repo: repoName,
+      p_repo: finalRepoName,
       p_branch: 'main',
       p_is_default: true
     });
@@ -100,7 +109,7 @@ Deno.serve(async (req) => {
     ];
 
     // Get the latest commit SHA from main branch
-    const refResponse = await fetch(`https://api.github.com/repos/${organization}/${repoName}/git/ref/heads/main`, {
+    const refResponse = await fetch(`https://api.github.com/repos/${organization}/${finalRepoName}/git/ref/heads/main`, {
       headers: {
         'Authorization': `token ${githubPat}`,
         'Accept': 'application/vnd.github.v3+json',
@@ -121,13 +130,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`Created empty repository: ${organization}/${repoName}`);
+    console.log(`Created empty repository: ${organization}/${finalRepoName}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         repo: newRepo,
-        githubUrl: repoData.html_url
+        githubUrl: repoData.html_url,
+        visibility: repoData.private ? 'private' : 'public',
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
