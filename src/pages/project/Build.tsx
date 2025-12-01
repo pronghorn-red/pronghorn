@@ -339,12 +339,12 @@ export default function Build() {
                           </div>
                         </div>
                         {selectedFolderPath && (
-                          <div className="text-xs text-[#858585] truncate bg-[#2a2d2e] px-2 py-1 rounded border border-[#3e3e42]">
+                          <div className="text-xs text-[#858585] truncate bg-[#1e2a3a] px-2 py-1 rounded border border-[#3e5a7a]">
                             Creating in: <span className="text-[#4ec9b0]">{selectedFolderPath}</span>
                           </div>
                         )}
                         {!selectedFolderPath && selectedFile && (
-                          <div className="text-xs text-[#858585] truncate bg-[#2a2d2e] px-2 py-1 rounded border border-[#3e3e42]">
+                          <div className="text-xs text-[#858585] truncate bg-[#1e2a3a] px-2 py-1 rounded border border-[#3e5a7a]">
                             Creating in: <span className="text-[#4ec9b0]">root</span>
                           </div>
                         )}
