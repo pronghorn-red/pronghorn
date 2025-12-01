@@ -82,7 +82,7 @@ export function AgentPromptPanel({
           attachedFileIds: attachedFiles.map(f => f.id),
           projectContext: attachedContext || {},
           shareToken,
-          mode: "edit",
+          mode: "task",
           autoCommit,
         },
       });

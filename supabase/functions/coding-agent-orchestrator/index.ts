@@ -12,7 +12,7 @@ interface TaskRequest {
   attachedFileIds: string[];
   projectContext: any;
   shareToken: string;
-  mode: string; // 'review', 'edit', 'audit', 'create', 'refactor'
+  mode: 'task' | 'iterative_loop' | 'continuous_improvement';
   autoCommit?: boolean;
 }
 
