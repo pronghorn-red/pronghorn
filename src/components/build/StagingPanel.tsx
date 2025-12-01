@@ -313,15 +313,15 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
+    <div className="h-full flex flex-col overflow-hidden">
+      <Card className="flex-1 flex flex-col overflow-hidden">
+        <CardHeader className="shrink-0">
           <CardTitle>Staged Changes</CardTitle>
           <CardDescription>
             Review uncommitted changes before committing to the repository
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex-1 overflow-y-auto">
           {stagedChanges.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <GitCommit className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -347,7 +347,7 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
                 </div>
               </div>
 
-              <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+              <div className="space-y-2 max-h-[40vh] overflow-y-auto">
                 {stagedChanges.map((change) => (
                   <div
                     key={change.id}
