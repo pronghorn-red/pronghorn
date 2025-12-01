@@ -233,7 +233,8 @@ Deno.serve(async (req) => {
       console.log(`Deleting ${deletions.length} files from GitHub:`, deletions);
     }
 
-    // Create new tree
+    // Create new tree WITHOUT base_tree to force all files to be included
+    // This ensures new files and deletions are properly reflected in the commit
     const treeUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/trees`;
     const treeResponse = await fetch(treeUrl, {
       method: 'POST',
@@ -244,7 +245,6 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        base_tree: baseTreeSha,
         tree: tree,
       }),
     });

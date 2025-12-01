@@ -47,6 +47,7 @@ export default function Repository() {
   const [autoSync, setAutoSync] = useState(false);
   const [rootCreateDialogOpen, setRootCreateDialogOpen] = useState(false);
   const [rootCreateType, setRootCreateType] = useState<"file" | "folder">("file");
+  const [allFilesWithContent, setAllFilesWithContent] = useState<{ path: string; content: string }[]>([]);
 
   const { repos, loading, refetch } = useRealtimeRepos(projectId);
 
@@ -77,6 +78,22 @@ export default function Repository() {
 
       const tree = buildFileTree((data as any[]) || []);
       setFileStructure(tree);
+
+      // Load all file contents for content search
+      const files = (data as any[]) || [];
+      const filePaths = files.filter((f: any) => f.type === "file").map((f: any) => f.path);
+      
+      if (filePaths.length > 0) {
+        const { data: filesData, error: filesError } = await supabase.rpc("get_repo_files_with_token", {
+          p_repo_id: selectedRepoId,
+          p_token: shareToken || null,
+          p_file_paths: filePaths,
+        });
+
+        if (!filesError && filesData) {
+          setAllFilesWithContent(filesData);
+        }
+      }
     } catch (error) {
       console.error("Error loading file structure:", error);
       toast({
@@ -571,7 +588,7 @@ export default function Repository() {
                 </TabsTrigger>
                 <TabsTrigger value="files" className="flex items-center gap-2">
                   <FileCode className="h-4 w-4" />
-                  Files
+                  Editor
                 </TabsTrigger>
                 <TabsTrigger value="sync" className="flex items-center gap-2">
                   <Database className="h-4 w-4" />
@@ -699,6 +716,7 @@ export default function Repository() {
                               onFileCreate={handleFileCreate}
                               onFileRename={handleFileRename}
                               onFileDelete={handleFileDelete}
+                              allFilesWithContent={allFilesWithContent}
                             />
                           )}
                         </div>
@@ -895,6 +913,7 @@ export default function Repository() {
         onFileDelete={handleFileDelete}
         autoSync={autoSync}
         onAutoSync={performAutoSync}
+        allFilesWithContent={allFilesWithContent}
       />
     </div>
   );

@@ -21,6 +21,7 @@ interface IDEModalProps {
   onFileDelete: (path: string) => void;
   autoSync?: boolean;
   onAutoSync?: () => void;
+  allFilesWithContent?: { path: string; content: string }[];
 }
 
 export function IDEModal({
@@ -37,6 +38,7 @@ export function IDEModal({
   onFileDelete,
   autoSync,
   onAutoSync,
+  allFilesWithContent = [],
 }: IDEModalProps) {
   const [rootCreateDialogOpen, setRootCreateDialogOpen] = useState(false);
   const [rootCreateType, setRootCreateType] = useState<"file" | "folder">("file");
@@ -114,6 +116,7 @@ export function IDEModal({
                     onFileCreate={onFileCreate}
                     onFileRename={onFileRename}
                     onFileDelete={onFileDelete}
+                    allFilesWithContent={allFilesWithContent}
                   />
                 </div>
               </ResizablePanel>

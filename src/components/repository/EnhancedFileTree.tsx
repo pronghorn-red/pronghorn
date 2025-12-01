@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ChevronRight, ChevronDown, File, Folder, FolderOpen, FilePlus, FolderPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { FileTreeContextMenu } from "./FileTreeContextMenu";
 import { CreateFileDialog } from "./CreateFileDialog";
 import { RenameDialog } from "./RenameDialog";
+import { FileTreeSearch } from "./FileTreeSearch";
+import { ContentSearchDialog } from "./ContentSearchDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +32,7 @@ interface EnhancedFileTreeProps {
   onFileCreate: (path: string, isFolder: boolean) => void;
   onFileRename: (oldPath: string, newPath: string) => void;
   onFileDelete: (path: string) => void;
+  allFilesWithContent?: { path: string; content: string }[];
 }
 
 function TreeNode({ 
@@ -221,9 +224,48 @@ function TreeNode({
   );
 }
 
-export function EnhancedFileTree({ files, onFileSelect, selectedPath, onFileCreate, onFileRename, onFileDelete }: EnhancedFileTreeProps) {
+export function EnhancedFileTree({ files, onFileSelect, selectedPath, onFileCreate, onFileRename, onFileDelete, allFilesWithContent = [] }: EnhancedFileTreeProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createType, setCreateType] = useState<"file" | "folder">("file");
+  const [fileNameFilter, setFileNameFilter] = useState("");
+  const [contentSearchOpen, setContentSearchOpen] = useState(false);
+
+  // Filter files based on file name
+  const filteredFiles = useMemo(() => {
+    if (!fileNameFilter.trim()) return files;
+
+    const filterLower = fileNameFilter.toLowerCase();
+    
+    const filterNode = (node: FileNode): FileNode | null => {
+      // Check if this node matches
+      const nameMatches = node.name.toLowerCase().includes(filterLower);
+      
+      if (node.type === "file") {
+        return nameMatches ? node : null;
+      }
+      
+      // For folders, recursively filter children
+      if (node.children) {
+        const filteredChildren = node.children
+          .map(child => filterNode(child))
+          .filter((child): child is FileNode => child !== null);
+        
+        // Include folder if it matches or has matching children
+        if (nameMatches || filteredChildren.length > 0) {
+          return {
+            ...node,
+            children: filteredChildren.length > 0 ? filteredChildren : node.children,
+          };
+        }
+      }
+      
+      return nameMatches ? node : null;
+    };
+
+    return files
+      .map(node => filterNode(node))
+      .filter((node): node is FileNode => node !== null);
+  }, [files, fileNameFilter]);
 
   const handleRootCreate = (name: string) => {
     onFileCreate(name, createType === "folder");
@@ -231,6 +273,12 @@ export function EnhancedFileTree({ files, onFileSelect, selectedPath, onFileCrea
 
   return (
     <>
+      <FileTreeSearch
+        fileNameFilter={fileNameFilter}
+        onFileNameFilterChange={setFileNameFilter}
+        onContentSearch={() => setContentSearchOpen(true)}
+        contentSearchEnabled={allFilesWithContent.length > 0}
+      />
       <ScrollArea className="h-full w-full">
         <FileTreeContextMenu
           type="root"
@@ -275,7 +323,7 @@ export function EnhancedFileTree({ files, onFileSelect, selectedPath, onFileCrea
                 </div>
               </div>
             ) : (
-              files.map((node) => (
+              filteredFiles.map((node) => (
                 <TreeNode
                   key={node.path}
                   node={node}
@@ -295,6 +343,12 @@ export function EnhancedFileTree({ files, onFileSelect, selectedPath, onFileCrea
         onOpenChange={setCreateDialogOpen}
         type={createType}
         onConfirm={handleRootCreate}
+      />
+      <ContentSearchDialog
+        open={contentSearchOpen}
+        onOpenChange={setContentSearchOpen}
+        files={allFilesWithContent}
+        onFileSelect={(path) => onFileSelect?.(path)}
       />
     </>
   );
