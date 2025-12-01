@@ -36,6 +36,7 @@ export function CodeEditor({
   const [originalContent, setOriginalContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showDiffMode, setShowDiffMode] = useState(false);
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
@@ -267,25 +268,38 @@ export function CodeEditor({
           <FileText className="h-4 w-4 text-[#cccccc] shrink-0" />
           <h3 className="text-sm font-normal truncate text-[#cccccc]">{filePath}</h3>
         </div>
-        <div className="flex gap-1">
-          <Button
-            size="sm"
-            onClick={handleSave}
-            disabled={saving || loading}
-            variant="secondary"
-            className="h-8 gap-2"
-          >
-            <Save className="h-4 w-4" />
-            {saving ? "Saving..." : "Save"}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onClose}
-            className="h-8 hover:bg-[#2a2d2e] text-[#cccccc]"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+        <div className="flex items-center gap-3">
+          {isStaged && originalContent !== content && (
+            <label className="flex items-center gap-2 text-xs text-[#cccccc] cursor-pointer hover:text-white">
+              <input
+                type="checkbox"
+                checked={showDiffMode}
+                onChange={(e) => setShowDiffMode(e.target.checked)}
+                className="w-4 h-4"
+              />
+              Show diff
+            </label>
+          )}
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={saving || loading}
+              variant="secondary"
+              className="h-8 gap-2"
+            >
+              <Save className="h-4 w-4" />
+              {saving ? "Saving..." : "Save"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onClose}
+              className="h-8 hover:bg-[#2a2d2e] text-[#cccccc]"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
       <div className="flex-1 overflow-hidden">
@@ -293,9 +307,9 @@ export function CodeEditor({
           <div className="flex items-center justify-center h-full text-[#cccccc]">
             Loading...
           </div>
-        ) : showDiff ? (
+        ) : showDiffMode ? (
           <DiffEditor
-            original={diffOldContent}
+            original={originalContent}
             modified={content}
             language={getLanguage(filePath)}
             theme="vs-dark"

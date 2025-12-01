@@ -485,9 +485,9 @@ export function UnifiedAgentInterface({
     (attachedContext?.canvasNodes?.length || 0);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Timeline */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <ScrollArea className="h-full" ref={scrollViewportRef}>
           <div className="p-4 space-y-4">
             {timeline.length === 0 && !messagesLoading ? (
