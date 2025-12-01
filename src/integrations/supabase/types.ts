@@ -1231,6 +1231,10 @@ export type Database = {
         Args: { p_id: string; p_token: string }
         Returns: undefined
       }
+      delete_file_with_token: {
+        Args: { p_file_id: string; p_token: string }
+        Returns: boolean
+      }
       delete_project_repo_with_token: {
         Args: { p_repo_id: string; p_token: string }
         Returns: undefined
@@ -1375,6 +1379,31 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_file_content_with_token: {
+        Args: { p_file_id: string; p_token: string }
+        Returns: {
+          content: string
+          id: string
+          last_commit_sha: string
+          path: string
+          updated_at: string
+        }[]
+      }
+      get_file_structure_with_token: {
+        Args: { p_repo_id: string; p_token: string }
+        Returns: Json
+      }
+      get_project_files_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          content: string
+          id: string
+          last_commit_sha: string
+          path: string
+          repo_id: string
+          updated_at: string
+        }[]
       }
       get_project_repos_with_token: {
         Args: { p_project_id: string; p_token: string }
@@ -2169,8 +2198,36 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      upsert_file_with_token: {
+        Args: {
+          p_commit_sha?: string
+          p_content: string
+          p_path: string
+          p_repo_id: string
+          p_token: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          last_commit_sha: string
+          path: string
+          updated_at: string
+        }[]
+      }
+      upsert_files_batch_with_token: {
+        Args: { p_files: Json; p_repo_id: string; p_token: string }
+        Returns: {
+          files_updated: number
+          success: boolean
+        }[]
+      }
       validate_project_access: {
         Args: { p_project_id: string; p_token: string }
+        Returns: boolean
+      }
+      validate_repo_access: {
+        Args: { p_repo_id: string; p_token: string }
         Returns: boolean
       }
     }
