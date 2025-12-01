@@ -220,7 +220,7 @@ export default function Repository() {
     }
   };
 
-  const handleCreateEmpty = async (name: string) => {
+  const handleCreateEmpty = async (name: string, isPrivate: boolean) => {
     if (!projectId) return;
     
     try {
@@ -228,7 +228,8 @@ export default function Repository() {
         body: {
           projectId,
           repoName: name,
-          shareToken: shareToken || null
+          shareToken: shareToken || null,
+          isPrivate,
         }
       });
 
@@ -249,7 +250,7 @@ export default function Repository() {
     }
   };
 
-  const handleCreateFromTemplate = async (name: string, templateOrg: string, templateRepo: string) => {
+  const handleCreateFromTemplate = async (name: string, templateOrg: string, templateRepo: string, isPrivate: boolean) => {
     if (!projectId) return;
     
     try {
@@ -259,7 +260,8 @@ export default function Repository() {
           repoName: name,
           templateOrg,
           templateRepo,
-          shareToken: shareToken || null
+          shareToken: shareToken || null,
+          isPrivate,
         }
       });
 

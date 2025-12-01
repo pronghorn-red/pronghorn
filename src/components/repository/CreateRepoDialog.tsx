@@ -11,11 +11,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { Plus } from "lucide-react";
 
 interface CreateRepoDialogProps {
-  onCreateEmpty: (name: string) => void;
-  onCreateFromTemplate: (name: string, templateOrg: string, templateRepo: string) => void;
+  onCreateEmpty: (name: string, isPrivate: boolean) => void;
+  onCreateFromTemplate: (name: string, templateOrg: string, templateRepo: string, isPrivate: boolean) => void;
   onLinkExisting: (org: string, repo: string, branch: string, pat?: string) => void;
 }
 
@@ -26,9 +27,11 @@ export function CreateRepoDialog({
 }: CreateRepoDialogProps) {
   const [open, setOpen] = useState(false);
   const [emptyName, setEmptyName] = useState("");
+  const [emptyPrivate, setEmptyPrivate] = useState(true);
   const [templateName, setTemplateName] = useState("");
   const [templateOrg, setTemplateOrg] = useState("pronghorn-red");
   const [templateRepo, setTemplateRepo] = useState("");
+  const [templatePrivate, setTemplatePrivate] = useState(true);
   const [linkOrg, setLinkOrg] = useState("");
   const [linkRepo, setLinkRepo] = useState("");
   const [linkBranch, setLinkBranch] = useState("main");
@@ -36,19 +39,21 @@ export function CreateRepoDialog({
 
   const handleCreateEmpty = () => {
     if (emptyName.trim()) {
-      onCreateEmpty(emptyName);
+      onCreateEmpty(emptyName, emptyPrivate);
       setOpen(false);
       setEmptyName("");
+      setEmptyPrivate(true);
     }
   };
 
   const handleCreateFromTemplate = () => {
     if (templateName.trim() && templateOrg.trim() && templateRepo.trim()) {
-      onCreateFromTemplate(templateName, templateOrg, templateRepo);
+      onCreateFromTemplate(templateName, templateOrg, templateRepo, templatePrivate);
       setOpen(false);
       setTemplateName("");
       setTemplateOrg("pronghorn-red");
       setTemplateRepo("");
+      setTemplatePrivate(true);
     }
   };
 
@@ -99,6 +104,19 @@ export function CreateRepoDialog({
                 Will be created in pronghorn-red organization
               </p>
             </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="space-y-0.5">
+                <Label>Private repository</Label>
+                <p className="text-sm text-muted-foreground">
+                  When enabled, the GitHub repository will be private.
+                </p>
+              </div>
+              <Switch
+                checked={emptyPrivate}
+                onCheckedChange={setEmptyPrivate}
+                aria-label="Toggle private repository"
+              />
+            </div>
             <Button onClick={handleCreateEmpty} className="w-full">
               Create Empty Repository
             </Button>
@@ -130,6 +148,19 @@ export function CreateRepoDialog({
                 placeholder="my-project"
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="space-y-0.5">
+                <Label>Private repository</Label>
+                <p className="text-sm text-muted-foreground">
+                  When enabled, the GitHub repository will be private.
+                </p>
+              </div>
+              <Switch
+                checked={templatePrivate}
+                onCheckedChange={setTemplatePrivate}
+                aria-label="Toggle private repository"
               />
             </div>
             <Button onClick={handleCreateFromTemplate} className="w-full">
