@@ -241,6 +241,9 @@ Deno.serve(async (req) => {
     // Create blobs for each file
     const tree = await Promise.all(
       filesToPush.map(async (file: RepoFile) => {
+        // Detect if content is base64 (binary file) by checking if it's valid base64 and substantial length
+        const isBase64 = /^[A-Za-z0-9+/\n\r]+=*$/.test(file.content.replace(/\s/g, '')) && file.content.length > 100;
+        
         const blobUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/blobs`;
         const blobResponse = await fetch(blobUrl, {
           method: 'POST',
@@ -252,7 +255,7 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             content: file.content,
-            encoding: 'utf-8',
+            encoding: isBase64 ? 'base64' : 'utf-8',
           }),
         });
 

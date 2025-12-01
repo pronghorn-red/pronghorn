@@ -162,24 +162,10 @@ Deno.serve(async (req) => {
 
     const treeData = await treeResponse.json();
 
-    // Filter for files only (not directories) and exclude binary files
-    const binaryExtensions = [
-      '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.webp', '.bmp',
-      '.woff', '.woff2', '.ttf', '.otf', '.eot',
-      '.mp3', '.mp4', '.avi', '.mov', '.webm', '.wav',
-      '.zip', '.tar', '.gz', '.rar', '.7z',
-      '.exe', '.dll', '.so', '.dylib',
-      '.pdf', '.doc', '.docx',
-      '.bin', '.dat'
-    ];
-    
-    const files = treeData.tree.filter((item: any) => {
-      if (item.type !== 'blob') return false;
-      const ext = item.path.substring(item.path.lastIndexOf('.')).toLowerCase();
-      return !binaryExtensions.includes(ext);
-    });
+    // Filter for files only (not directories)
+    const files = treeData.tree.filter((item: any) => item.type === 'blob');
 
-    console.log(`Found ${files.length} text files to pull (binary files excluded)`);
+    console.log(`Found ${files.length} files to pull (including binary files)`);
 
     // Fetch content for each file
     const fileContents = await Promise.all(
@@ -200,13 +186,9 @@ Deno.serve(async (req) => {
 
         const blobData = await blobResponse.json();
         
-        // Decode base64 content
-        let content: string;
-        if (blobData.encoding === 'base64') {
-          content = atob(blobData.content);
-        } else {
-          content = blobData.content;
-        }
+        // Store content as-is (base64 for binary files, plain text for text files)
+        // Database will store base64 strings for binary files
+        const content = blobData.encoding === 'base64' ? blobData.content : blobData.content;
 
         return {
           path: file.path,
