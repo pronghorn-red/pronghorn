@@ -15,7 +15,7 @@ import { UnifiedAgentInterface } from "@/components/build/UnifiedAgentInterface"
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff } from "lucide-react";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
 
 export default function Build() {
@@ -41,6 +41,7 @@ export default function Build() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createType, setCreateType] = useState<"file" | "folder">("file");
   const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(null);
+  const [showDeletedFiles, setShowDeletedFiles] = useState(true);
 
   // Load files from default repo
   useEffect(() => {
@@ -133,6 +134,10 @@ export default function Build() {
       // Add all committed files (including those staged for deletion)
       (committedFiles || []).forEach((f: any) => {
         const stagedChange = stagedMap.get(f.path);
+        // Filter out deleted files if toggle is off
+        if (!showDeletedFiles && stagedChange?.operation_type === "delete") {
+          return;
+        }
         allFiles.push({
           id: f.id,
           path: f.path,
@@ -328,6 +333,19 @@ export default function Build() {
                               title="New Folder"
                             >
                               <FolderPlus className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setShowDeletedFiles(!showDeletedFiles)}
+                              className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc]"
+                              title={showDeletedFiles ? "Hide deleted files" : "Show deleted files"}
+                            >
+                              {showDeletedFiles ? (
+                                <Eye className="h-3.5 w-3.5" />
+                              ) : (
+                                <EyeOff className="h-3.5 w-3.5" />
+                              )}
                             </Button>
                           </div>
                         </div>
