@@ -59,7 +59,8 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
           filter: `repo_id=eq.${repoId}`,
         },
         () => {
-          loadRepoAndStagedChanges();
+          // Reload staged changes without showing a loading spinner to avoid flicker
+          loadRepoAndStagedChanges(false);
         }
       )
       .subscribe();
@@ -69,11 +70,13 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
     };
   }, [repoId]);
 
-  const loadRepoAndStagedChanges = async () => {
+  const loadRepoAndStagedChanges = async (withLoading: boolean = true) => {
     if (!projectId) return;
 
     try {
-      setLoading(true);
+      if (withLoading) {
+        setLoading(true);
+      }
 
       // Get default repo for this project
       const { data: repos, error: repoError } = await supabase.rpc("get_project_repos_with_token", {
@@ -86,7 +89,9 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
       const defaultRepo = repos?.find((r) => r.is_default) || repos?.[0];
       if (!defaultRepo) {
         setStagedChanges([]);
-        setLoading(false);
+        if (withLoading) {
+          setLoading(false);
+        }
         return;
       }
 
@@ -109,7 +114,9 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      if (withLoading) {
+        setLoading(false);
+      }
     }
   };
 
