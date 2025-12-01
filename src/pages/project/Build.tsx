@@ -13,6 +13,7 @@ import { AgentPromptPanel } from "@/components/build/AgentPromptPanel";
 
 import { AgentProgressMonitor } from "@/components/build/AgentProgressMonitor";
 import { AgentChatViewer } from "@/components/build/AgentChatViewer";
+import { AgentSessionsList } from "@/components/build/AgentSessionsList";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
@@ -561,22 +562,42 @@ export default function Build() {
 
                 <TabsContent
                   value="chat"
-                  className="flex-1 min-h-0 overflow-hidden mt-0 p-3 flex flex-col"
+                  className="flex-1 min-h-0 overflow-hidden mt-0 p-0 flex flex-row gap-0"
                 >
-                  <AgentChatViewer
-                    sessionId={activeSessionId}
-                    shareToken={shareToken}
-                  />
+                  <div className="w-64 border-r flex-shrink-0">
+                    <AgentSessionsList
+                      projectId={projectId!}
+                      shareToken={shareToken}
+                      activeSessionId={activeSessionId}
+                      onSelectSession={setActiveSessionId}
+                    />
+                  </div>
+                  <div className="flex-1 min-h-0 overflow-hidden p-3">
+                    <AgentChatViewer
+                      sessionId={activeSessionId}
+                      shareToken={shareToken}
+                    />
+                  </div>
                 </TabsContent>
 
                 <TabsContent
                   value="progress"
-                  className="flex-1 min-h-0 overflow-hidden mt-0 p-3 flex flex-col"
+                  className="flex-1 min-h-0 overflow-hidden mt-0 p-0 flex flex-row gap-0"
                 >
-                  <AgentProgressMonitor
-                    sessionId={activeSessionId}
-                    shareToken={shareToken}
-                  />
+                  <div className="w-64 border-r flex-shrink-0">
+                    <AgentSessionsList
+                      projectId={projectId!}
+                      shareToken={shareToken}
+                      activeSessionId={activeSessionId}
+                      onSelectSession={setActiveSessionId}
+                    />
+                  </div>
+                  <div className="flex-1 min-h-0 overflow-hidden p-3">
+                    <AgentProgressMonitor
+                      sessionId={activeSessionId}
+                      shareToken={shareToken}
+                    />
+                  </div>
                 </TabsContent>
 
                 <TabsContent
@@ -714,22 +735,42 @@ export default function Build() {
 
                     <TabsContent
                       value="chat"
-                      className="flex-1 overflow-hidden mt-0 p-4 flex flex-col"
+                      className="flex-1 overflow-hidden mt-0 p-0 flex flex-row gap-0"
                     >
-                      <AgentChatViewer
-                        sessionId={activeSessionId}
-                        shareToken={shareToken}
-                      />
+                      <div className="w-64 border-r flex-shrink-0">
+                        <AgentSessionsList
+                          projectId={projectId!}
+                          shareToken={shareToken}
+                          activeSessionId={activeSessionId}
+                          onSelectSession={setActiveSessionId}
+                        />
+                      </div>
+                      <div className="flex-1 min-h-0 overflow-hidden p-4">
+                        <AgentChatViewer
+                          sessionId={activeSessionId}
+                          shareToken={shareToken}
+                        />
+                      </div>
                     </TabsContent>
 
                     <TabsContent
                       value="progress"
-                      className="flex-1 overflow-hidden mt-0 p-4"
+                      className="flex-1 overflow-hidden mt-0 p-0 flex flex-row gap-0"
                     >
-                      <AgentProgressMonitor
-                        sessionId={activeSessionId}
-                        shareToken={shareToken}
-                      />
+                      <div className="w-64 border-r flex-shrink-0">
+                        <AgentSessionsList
+                          projectId={projectId!}
+                          shareToken={shareToken}
+                          activeSessionId={activeSessionId}
+                          onSelectSession={setActiveSessionId}
+                        />
+                      </div>
+                      <div className="flex-1 min-h-0 overflow-hidden p-4">
+                        <AgentProgressMonitor
+                          sessionId={activeSessionId}
+                          shareToken={shareToken}
+                        />
+                      </div>
                     </TabsContent>
 
                     <TabsContent
