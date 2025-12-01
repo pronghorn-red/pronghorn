@@ -87,6 +87,50 @@ export type Database = {
           },
         ]
       }
+      agent_file_operations: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          details: Json | null
+          error_message: string | null
+          file_path: string | null
+          id: string
+          operation_type: string
+          session_id: string
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          details?: Json | null
+          error_message?: string | null
+          file_path?: string | null
+          id?: string
+          operation_type: string
+          session_id: string
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          details?: Json | null
+          error_message?: string | null
+          file_path?: string | null
+          id?: string
+          operation_type?: string
+          session_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_file_operations_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "agent_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_session_context: {
         Row: {
           context_data: Json
@@ -1708,6 +1752,26 @@ export type Database = {
         Args: { p_parent_id: string; p_project_id: string; p_type: string }
         Returns: string
       }
+      get_agent_operations_with_token: {
+        Args: { p_session_id: string; p_token?: string }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          details: Json | null
+          error_message: string | null
+          file_path: string | null
+          id: string
+          operation_type: string
+          session_id: string
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "agent_file_operations"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_agent_sessions_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
@@ -2377,6 +2441,34 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      log_agent_operation_with_token: {
+        Args: {
+          p_details?: Json
+          p_error_message?: string
+          p_file_path: string
+          p_operation_type: string
+          p_session_id: string
+          p_status: string
+          p_token?: string
+        }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          details: Json | null
+          error_message: string | null
+          file_path: string | null
+          id: string
+          operation_type: string
+          session_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_file_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       log_repo_commit_with_token: {
         Args: {
           p_branch: string
@@ -2524,6 +2616,31 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "repo_staging"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_agent_operation_status_with_token: {
+        Args: {
+          p_error_message?: string
+          p_operation_id: string
+          p_status: string
+          p_token?: string
+        }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          details: Json | null
+          error_message: string | null
+          file_path: string | null
+          id: string
+          operation_type: string
+          session_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_file_operations"
           isOneToOne: true
           isSetofReturn: false
         }

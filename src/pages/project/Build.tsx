@@ -9,6 +9,7 @@ import { CodeEditor } from "@/components/repository/CodeEditor";
 import { AgentFileTree } from "@/components/build/AgentFileTree";
 import { AgentPromptPanel } from "@/components/build/AgentPromptPanel";
 import { DiffViewer } from "@/components/build/DiffViewer";
+import { AgentProgressMonitor } from "@/components/build/AgentProgressMonitor";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +30,7 @@ export default function Build() {
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; path: string }>>([]);
   const [stagedChanges, setStagedChanges] = useState<any[]>([]);
   const [selectedDiff, setSelectedDiff] = useState<{ old: string; new: string; path: string } | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   // Load files from default repo
   useEffect(() => {
@@ -145,9 +147,10 @@ export default function Build() {
             {/* Mobile Layout (< md) - Full Screen Tabs */}
             <div className="flex-1 md:hidden overflow-hidden">
               <Tabs defaultValue="files" className="h-full flex flex-col">
-                <TabsList className="grid w-full grid-cols-4 shrink-0">
+                <TabsList className="grid w-full grid-cols-5 shrink-0">
                   <TabsTrigger value="files" className="text-xs">Files</TabsTrigger>
                   <TabsTrigger value="agent" className="text-xs">Agent</TabsTrigger>
+                  <TabsTrigger value="progress" className="text-xs">Progress</TabsTrigger>
                   <TabsTrigger value="staging" className="text-xs">Staging</TabsTrigger>
                   <TabsTrigger value="history" className="text-xs">History</TabsTrigger>
                 </TabsList>
@@ -176,6 +179,13 @@ export default function Build() {
                     attachedFiles={attachedFiles}
                     onRemoveFile={handleRemoveAttachedFile}
                     onSubmitTask={handleSubmitTask}
+                  />
+                </TabsContent>
+
+                <TabsContent value="progress" className="flex-1 overflow-auto mt-0 p-3">
+                  <AgentProgressMonitor 
+                    sessionId={activeSessionId}
+                    shareToken={shareToken}
                   />
                 </TabsContent>
 
@@ -212,7 +222,7 @@ export default function Build() {
               <ResizableHandle />
 
               {/* Center: Code Editor or Diff Viewer */}
-              <ResizablePanel defaultSize={50} minSize={30}>
+              <ResizablePanel defaultSize={40} minSize={30}>
                 <div className="h-full">
                   {selectedDiff ? (
                     <DiffViewer
@@ -237,11 +247,12 @@ export default function Build() {
 
               <ResizableHandle />
 
-              {/* Right: Tabs for Staging/History/Agent */}
-              <ResizablePanel defaultSize={30} minSize={25}>
+              {/* Right: Tabs for Agent/Progress/Staging/History */}
+              <ResizablePanel defaultSize={40} minSize={25}>
                 <Tabs defaultValue="agent" className="h-full flex flex-col">
-                  <TabsList className="grid w-full grid-cols-3 shrink-0">
+                  <TabsList className="grid w-full grid-cols-4 shrink-0">
                     <TabsTrigger value="agent">Agent</TabsTrigger>
+                    <TabsTrigger value="progress">Progress</TabsTrigger>
                     <TabsTrigger value="staging">Staging</TabsTrigger>
                     <TabsTrigger value="history">History</TabsTrigger>
                   </TabsList>
@@ -251,6 +262,13 @@ export default function Build() {
                       attachedFiles={attachedFiles}
                       onRemoveFile={handleRemoveAttachedFile}
                       onSubmitTask={handleSubmitTask}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="progress" className="flex-1 overflow-hidden mt-0 p-4">
+                    <AgentProgressMonitor 
+                      sessionId={activeSessionId}
+                      shareToken={shareToken}
                     />
                   </TabsContent>
 
