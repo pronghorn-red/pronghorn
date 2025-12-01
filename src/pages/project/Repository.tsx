@@ -168,6 +168,15 @@ export default function Repository() {
   };
 
   const handleDeleteRepo = async (repoId: string) => {
+    const repo = repos.find(r => r.id === repoId);
+    if (!repo) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to disconnect "${repo.organization}/${repo.repo}"?\n\nThis will remove the repository connection from this project, but the repository on GitHub will remain intact.`
+    );
+
+    if (!confirmed) return;
+
     try {
       const { error } = await supabase.rpc("delete_project_repo_with_token", {
         p_repo_id: repoId,
@@ -177,16 +186,24 @@ export default function Repository() {
       if (error) throw error;
 
       toast({
-        title: "Repository removed",
-        description: "Repository has been unlinked from this project",
+        title: "Repository disconnected",
+        description: `${repo.organization}/${repo.repo} has been unlinked from this project`,
       });
+
+      // If the deleted repo was selected, clear selection
+      if (selectedRepoId === repoId) {
+        setSelectedRepoId(null);
+        setFileStructure([]);
+        setSelectedFilePath(null);
+        setSelectedFileId(null);
+      }
 
       refetch();
     } catch (error: any) {
       console.error("Error deleting repo:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to remove repository",
+        description: error.message || "Failed to disconnect repository",
         variant: "destructive",
       });
     }

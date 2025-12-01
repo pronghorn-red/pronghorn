@@ -51,14 +51,14 @@ export function RepoCard({ repo, onDelete, onManagePAT }: RepoCardProps) {
               Manage PAT
             </Button>
           )}
-          {onDelete && (
+          {onDelete && !repo.is_default && (
             <Button
-              variant="ghost"
+              variant="destructive"
               size="sm"
               onClick={() => onDelete(repo.id)}
             >
               <Trash2 className="h-4 w-4 mr-2" />
-              {repo.is_default ? 'Disconnect' : 'Remove'}
+              Disconnect
             </Button>
           )}
         </div>
