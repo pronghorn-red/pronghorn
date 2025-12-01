@@ -507,13 +507,13 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
                     </div>
                     {getOperationBadge(change.operation_type)}
                     <div className="flex items-center gap-1">
-                      {(change.operation_type === 'edit' || change.operation_type === 'add') && (
+                      {(change.operation_type === 'edit' || change.operation_type === 'add' || change.operation_type === 'delete') && (
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => setViewingDiff(change)}
                         >
-                          Diff
+                          {change.operation_type === 'delete' ? 'View' : 'Diff'}
                         </Button>
                       )}
                       <Button
