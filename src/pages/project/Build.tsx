@@ -100,21 +100,52 @@ export default function Build() {
 
       if (stagedError) throw stagedError;
 
-      // Combine committed and staged files
-      const committedFilesMap = new Map((committedFiles || []).map(f => [f.path, f]));
-      const allFiles: Array<{ id: string; path: string; isStaged?: boolean }> = (committedFiles || []).map(f => ({
-        id: f.id,
-        path: f.path,
-      }));
+      // Build comprehensive file list including all staged changes
+      const stagedMap = new Map((staged || []).map((s: any) => [s.file_path, s]));
+      const allFiles: Array<{ id: string; path: string; isStaged?: boolean }> = [];
 
-      // Add staged files that aren't in committed files (new files)
-      (staged || []).forEach((change: any) => {
-        if (change.operation_type === 'add' && !committedFilesMap.has(change.file_path)) {
+      // Add all committed files, marking them as staged if they have pending changes
+      (committedFiles || []).forEach((f: any) => {
+        const stagedChange = stagedMap.get(f.path);
+        if (stagedChange && stagedChange.operation_type !== 'delete') {
+          // File has staged edits/renames - mark as staged
           allFiles.push({
-            id: change.id,
-            path: change.file_path,
+            id: f.id,
+            path: f.path,
             isStaged: true,
           });
+        } else if (!stagedChange || stagedChange.operation_type !== 'delete') {
+          // Regular committed file without staged changes (or not being deleted)
+          allFiles.push({
+            id: f.id,
+            path: f.path,
+          });
+        }
+        // Skip deleted files - they won't appear in the tree
+      });
+
+      // Add new staged files that don't exist in committed files
+      (staged || []).forEach((change: any) => {
+        if (change.operation_type === 'add') {
+          const existsInCommitted = (committedFiles || []).some((f: any) => f.path === change.file_path);
+          if (!existsInCommitted) {
+            allFiles.push({
+              id: change.id,
+              path: change.file_path,
+              isStaged: true,
+            });
+          }
+        }
+        // Handle renames - add the new path
+        if (change.operation_type === 'rename' && change.old_path) {
+          const existsInCommitted = (committedFiles || []).some((f: any) => f.path === change.file_path);
+          if (!existsInCommitted) {
+            allFiles.push({
+              id: change.id,
+              path: change.file_path,
+              isStaged: true,
+            });
+          }
         }
       });
 
