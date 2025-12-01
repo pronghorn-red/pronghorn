@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { useInfiniteAgentOperations } from "@/hooks/useInfiniteAgentOperations";
 import { 
   FileText, 
   FilePlus, 
@@ -17,18 +18,6 @@ import {
   Brain
 } from "lucide-react";
 
-interface AgentOperation {
-  id: string;
-  session_id: string;
-  operation_type: string;
-  file_path: string | null;
-  status: string;
-  details: any;
-  error_message: string | null;
-  created_at: string;
-  completed_at: string | null;
-}
-
 interface BlackboardEntry {
   id: string;
   session_id: string;
@@ -39,91 +28,42 @@ interface BlackboardEntry {
 }
 
 interface AgentProgressMonitorProps {
-  sessionId: string | null;
+  projectId: string;
   shareToken: string | null;
 }
 
-export function AgentProgressMonitor({ sessionId, shareToken }: AgentProgressMonitorProps) {
-  const [operations, setOperations] = useState<AgentOperation[]>([]);
+export function AgentProgressMonitor({ projectId, shareToken }: AgentProgressMonitorProps) {
+  const { operations, loading, hasMore, loadMore } = useInfiniteAgentOperations(projectId, shareToken);
   const [blackboard, setBlackboard] = useState<BlackboardEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
 
-  // Load operations and blackboard
+  // Set up intersection observer for infinite scroll
   useEffect(() => {
-    if (!sessionId) {
-      setOperations([]);
-      setBlackboard([]);
-      return;
+    if (loading || !hasMore) return;
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loadMoreTriggerRef.current) {
+      observerRef.current.observe(loadMoreTriggerRef.current);
     }
-
-    loadData();
-  }, [sessionId, shareToken]);
-
-  // Real-time subscription
-  useEffect(() => {
-    if (!sessionId) return;
-
-    const channel = supabase
-      .channel(`agent-progress-${sessionId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "agent_file_operations",
-          filter: `session_id=eq.${sessionId}`,
-        },
-        () => {
-          loadData();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "agent_blackboard",
-          filter: `session_id=eq.${sessionId}`,
-        },
-        () => {
-          loadData();
-        }
-      )
-      .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
     };
-  }, [sessionId]);
+  }, [loading, hasMore, loadMore]);
 
-  const loadData = async () => {
-    if (!sessionId) return;
-
-    setLoading(true);
-    try {
-      // Load operations
-      const { data: opsData, error: opsError } = await supabase.rpc("get_agent_operations_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken || null,
-      });
-
-      if (opsError) throw opsError;
-      setOperations(opsData || []);
-
-      // Load blackboard entries
-      const { data: blackboardData, error: blackboardError } = await supabase.rpc("get_blackboard_entries_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken || null,
-      });
-
-      if (blackboardError) throw blackboardError;
-      setBlackboard(blackboardData || []);
-    } catch (error) {
-      console.error("Error loading agent data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Temporarily hide blackboard since we're showing cross-session operations
+  // const loadBlackboard = async () => { ... };
 
   const getOperationIcon = (type: string, status: string) => {
     if (status === "in_progress") return <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />;
@@ -158,20 +98,10 @@ export function AgentProgressMonitor({ sessionId, shareToken }: AgentProgressMon
     }
   };
 
-  if (!sessionId) {
-    return (
-      <Card className="p-4">
-        <p className="text-sm text-muted-foreground text-center">
-          No active agent session. Submit a task to begin monitoring.
-        </p>
-      </Card>
-    );
-  }
-
   return (
-    <div className="flex flex-col h-full gap-4">
-      {/* Blackboard/Memory Section */}
-      {blackboard.length > 0 && (
+    <div className="flex flex-col h-full">
+      {/* Blackboard temporarily hidden for cross-session view */}
+      {false && blackboard.length > 0 && (
         <Card>
           <div className="p-3 border-b">
             <div className="flex items-center gap-2">
@@ -216,7 +146,7 @@ export function AgentProgressMonitor({ sessionId, shareToken }: AgentProgressMon
 
         <ScrollArea className="flex-1">
           <div className="p-3 space-y-2">
-            {loading && operations.length === 0 ? (
+            {operations.length === 0 && loading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
@@ -225,7 +155,8 @@ export function AgentProgressMonitor({ sessionId, shareToken }: AgentProgressMon
                 No operations yet
               </p>
             ) : (
-              operations.map((op) => (
+              <>
+              {operations.map((op) => (
                 <div
                   key={op.id}
                   className="p-3 border rounded-lg bg-card hover:bg-accent/5 transition-colors"
@@ -261,7 +192,19 @@ export function AgentProgressMonitor({ sessionId, shareToken }: AgentProgressMon
                     </div>
                   </div>
                 </div>
-              ))
+              ))}
+              
+              {/* Load more trigger */}
+              {hasMore && (
+                <div ref={loadMoreTriggerRef} className="flex items-center justify-center py-4">
+                  {loading ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Scroll for more...</p>
+                  )}
+                </div>
+              )}
+              </>
             )}
           </div>
         </ScrollArea>

@@ -1,16 +1,44 @@
+import { useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessageSquare, User, Bot } from 'lucide-react';
-import { useRealtimeAgentMessages } from '@/hooks/useRealtimeAgentMessages';
+import { MessageSquare, User, Bot, Loader2 } from 'lucide-react';
+import { useInfiniteAgentMessages } from '@/hooks/useInfiniteAgentMessages';
 import { Badge } from '@/components/ui/badge';
 
 interface AgentChatViewerProps {
-  sessionId: string | null;
+  projectId: string;
   shareToken: string | null;
 }
 
-export function AgentChatViewer({ sessionId, shareToken }: AgentChatViewerProps) {
-  const { messages, loading } = useRealtimeAgentMessages(sessionId, shareToken);
+export function AgentChatViewer({ projectId, shareToken }: AgentChatViewerProps) {
+  const { messages, loading, hasMore, loadMore } = useInfiniteAgentMessages(projectId, shareToken);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
+
+  // Set up intersection observer for infinite scroll
+  useEffect(() => {
+    if (loading || !hasMore) return;
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loadMoreTriggerRef.current) {
+      observerRef.current.observe(loadMoreTriggerRef.current);
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [loading, hasMore, loadMore]);
 
   const parseAgentContent = (content: string) => {
     try {
@@ -37,8 +65,8 @@ export function AgentChatViewer({ sessionId, shareToken }: AgentChatViewerProps)
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden">
-        <ScrollArea className="h-full w-full pr-4">
-          {loading ? (
+        <ScrollArea className="h-full w-full pr-4" ref={scrollRef}>
+          {messages.length === 0 && loading ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <p className="text-sm">Loading conversation...</p>
             </div>
@@ -140,6 +168,17 @@ export function AgentChatViewer({ sessionId, shareToken }: AgentChatViewerProps)
 
                 return null;
               })}
+              
+              {/* Load more trigger */}
+              {hasMore && (
+                <div ref={loadMoreTriggerRef} className="flex items-center justify-center py-4">
+                  {loading ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Scroll for more...</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </ScrollArea>

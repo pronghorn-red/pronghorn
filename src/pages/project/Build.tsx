@@ -564,7 +564,7 @@ export default function Build() {
                   className="flex-1 min-h-0 overflow-hidden mt-0 p-3 data-[state=inactive]:hidden"
                 >
                   <AgentChatViewer
-                    sessionId={activeSessionId}
+                    projectId={projectId}
                     shareToken={shareToken}
                   />
                 </TabsContent>
@@ -574,7 +574,7 @@ export default function Build() {
                   className="flex-1 min-h-0 overflow-hidden mt-0 p-3 data-[state=inactive]:hidden"
                 >
                   <AgentProgressMonitor
-                    sessionId={activeSessionId}
+                    projectId={projectId}
                     shareToken={shareToken}
                   />
                 </TabsContent>
@@ -717,7 +717,7 @@ export default function Build() {
                       className="flex-1 overflow-hidden mt-0 p-4 data-[state=inactive]:hidden"
                     >
                       <AgentChatViewer
-                        sessionId={activeSessionId}
+                        projectId={projectId}
                         shareToken={shareToken}
                       />
                     </TabsContent>
@@ -727,7 +727,7 @@ export default function Build() {
                       className="flex-1 overflow-hidden mt-0 p-4 data-[state=inactive]:hidden"
                     >
                       <AgentProgressMonitor
-                        sessionId={activeSessionId}
+                        projectId={projectId}
                         shareToken={shareToken}
                       />
                     </TabsContent>

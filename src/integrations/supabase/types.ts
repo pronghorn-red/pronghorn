@@ -1812,6 +1812,22 @@ export type Database = {
         Args: { p_parent_id: string; p_project_id: string; p_type: string }
         Returns: string
       }
+      get_agent_messages_by_project_with_token: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_project_id: string
+          p_token: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          metadata: Json
+          role: string
+          session_id: string
+        }[]
+      }
       get_agent_messages_with_token: {
         Args: { p_session_id: string; p_token: string }
         Returns: {
@@ -1828,6 +1844,25 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_agent_operations_by_project_with_token: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_project_id: string
+          p_token: string
+        }
+        Returns: {
+          completed_at: string
+          created_at: string
+          details: Json
+          error_message: string
+          file_path: string
+          id: string
+          operation_type: string
+          session_id: string
+          status: string
+        }[]
       }
       get_agent_operations_with_token: {
         Args: { p_session_id: string; p_token: string }
