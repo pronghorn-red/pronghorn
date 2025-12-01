@@ -176,7 +176,7 @@ serve(async (req) => {
       const attachedList = attachedFiles
         .map((f) => `- ${f.path} (file_id: ${f.id})`)
         .join("\n");
-      attachedFilesSection = `\n\n🔗 USER HAS ATTACHED ${attachedFiles.length} FILE(S) - THESE FILES ARE YOUR PRIMARY FOCUS:\n${attachedList}\n\nCRITICAL: Use the file tools to work with these attachments. First call list_files to load the file structure and IDs, then use read_file, edit_lines, delete_file, or move_file with the appropriate file_id values. Do NOT assume the full content is already in the prompt; always fetch it via tools.`;
+      attachedFilesSection = `\n\n🔗 USER HAS ATTACHED ${attachedFiles.length} FILE(S) - THESE FILES ARE YOUR PRIMARY FOCUS:\n${attachedList}\n\nCRITICAL: The file_id values are PROVIDED ABOVE. Use read_file directly with these IDs - DO NOT call list_files first. Only use list_files if NO files are attached and you need to search. For attached files, immediately use read_file with the provided file_id.`;
     }
 
     // Build rich context summary from ProjectSelector data
@@ -286,13 +286,16 @@ Auto-commit enabled: ${autoCommit}
 Project Context:
 ${contextSummary}${attachedFilesSection}
 
-CRITICAL INSTRUCTION: Your FIRST operation MUST ALWAYS be:
+CRITICAL INSTRUCTION FOR ATTACHED FILES:
+${attachedFiles && attachedFiles.length > 0 
+  ? `The user has attached specific file(s) with their file_id values listed above. DO NOT call list_files first - use read_file directly with the provided file_id values to work with these files immediately.`
+  : `Your FIRST operation MUST be:
 {
   "type": "list_files",
   "params": { "path_prefix": null }
 }
-
-This loads the complete file structure with all file IDs and paths. You CANNOT edit, read, or delete files without knowing their IDs first. Do NOT skip this step.
+This loads the complete file structure with all file IDs and paths. You CANNOT edit, read, or delete files without knowing their IDs first.`
+}
 
 When responding, structure your response as:
 {
@@ -346,15 +349,24 @@ When responding, structure your response as:
 }
 
 CRITICAL RULES:
-1. ALWAYS call list_files FIRST to load file structure before any other operations
-2. Use file_id from list_files or search results for read_file, edit_lines, delete_file, and move_file operations
-3. Only use path for create_file operation
-4. Work autonomously by chaining operations together
-5. Set status to "in_progress" when you need to continue with more operations
-6. Set status to "requires_commit" when you've made changes ready to be staged
-7. Set status to "completed" when the entire task is done
+1. If user attached files (with file_id provided), use read_file directly with those IDs - DO NOT call list_files first
+2. If no files attached, ALWAYS call list_files FIRST to load file structure before any other operations
+3. Use file_id from list_files or search results for read_file, edit_lines, delete_file, and move_file operations
+4. Only use path for create_file operation
+5. Work autonomously by chaining operations together
+6. Set status to "in_progress" when you need to continue with more operations
+7. Set status to "requires_commit" when you've made changes ready to be staged
+8. Set status to "completed" ONLY after completing the user's request
+
+COMPLETION VALIDATION:
+Before setting status="completed", ask yourself: "Have I actually answered the user's question or completed their task?" 
+- If you only read a file but didn't explain it, you are NOT complete
+- If you identified what to do but didn't execute it, you are NOT complete
+- Review your reasoning and operations to ensure you fulfilled the user's request
+- Only mark complete when you have truly delivered what the user asked for
 
 Think step-by-step and continue until the task is complete.`;
+
 
     // Autonomous iteration loop
     const MAX_ITERATIONS = 10;
