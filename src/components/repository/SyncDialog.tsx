@@ -37,6 +37,7 @@ export interface SyncConfig {
   commitMessage: string;
   selectedRepos: string[];
   branches: { [repoId: string]: string };
+  forcePush?: boolean; // Force push flag
 }
 
 export function SyncDialog({ open, onOpenChange, repos, onConfirm, type }: SyncDialogProps) {
@@ -49,12 +50,22 @@ export function SyncDialog({ open, onOpenChange, repos, onConfirm, type }: SyncD
   const [branches, setBranches] = useState<{ [key: string]: string }>(
     repos.reduce((acc, repo) => ({ ...acc, [repo.id]: repo.branch }), {})
   );
+  const [customBranches, setCustomBranches] = useState<{ [key: string]: string }>({});
 
   const handleConfirm = () => {
+    const finalBranches: { [key: string]: string } = {};
+    selectedRepos.forEach((repoId) => {
+      const branchValue = branches[repoId] || 'main';
+      finalBranches[repoId] = branchValue === 'custom' 
+        ? (customBranches[repoId] || 'main')
+        : branchValue;
+    });
+
     onConfirm({
       commitMessage,
       selectedRepos: Array.from(selectedRepos),
-      branches,
+      branches: finalBranches,
+      forcePush: type === "push", // Always force push to overwrite
     });
     onOpenChange(false);
   };
@@ -112,22 +123,34 @@ export function SyncDialog({ open, onOpenChange, repos, onConfirm, type }: SyncD
                   <Label htmlFor={`branch-${repo.id}`} className="text-xs text-muted-foreground">
                     Branch:
                   </Label>
-                  <Select
-                    value={branches[repo.id] || repo.branch}
-                    onValueChange={(value) => 
-                      setBranches({ ...branches, [repo.id]: value })
-                    }
-                  >
-                    <SelectTrigger className="w-[120px] h-8" id={`branch-${repo.id}`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="main">main</SelectItem>
-                      <SelectItem value="master">master</SelectItem>
-                      <SelectItem value="develop">develop</SelectItem>
-                      <SelectItem value="staging">staging</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={branches[repo.id] || repo.branch}
+                      onValueChange={(value) => 
+                        setBranches({ ...branches, [repo.id]: value })
+                      }
+                    >
+                      <SelectTrigger className="w-[140px] h-8" id={`branch-${repo.id}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="main">main</SelectItem>
+                        <SelectItem value="development">development</SelectItem>
+                        <SelectItem value="uat">uat</SelectItem>
+                        <SelectItem value="custom">custom...</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {branches[repo.id] === 'custom' && (
+                      <Input
+                        placeholder="branch-name"
+                        value={customBranches[repo.id] || ''}
+                        onChange={(e) => 
+                          setCustomBranches({ ...customBranches, [repo.id]: e.target.value })
+                        }
+                        className="w-[140px] h-8"
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

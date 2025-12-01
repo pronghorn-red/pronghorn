@@ -12,6 +12,7 @@ import { CreateRepoDialog } from "@/components/repository/CreateRepoDialog";
 import { ManagePATDialog } from "@/components/repository/ManagePATDialog";
 import { IDEModal } from "@/components/repository/IDEModal";
 import { SyncDialog, SyncConfig } from "@/components/repository/SyncDialog";
+import { CommitLog } from "@/components/repository/CommitLog";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
 import { GitBranch, FileCode, Settings, Database, Maximize2, FilePlus, FolderPlus } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -314,7 +315,9 @@ export default function Repository() {
                 repoId: repoId,
                 projectId: projectId,
                 shareToken: shareToken,
+                branch: config.branches[repoId] || repo.branch,
                 commitMessage: config.commitMessage,
+                forcePush: config.forcePush || false,
               },
             });
 
@@ -330,6 +333,7 @@ export default function Repository() {
                 repoId: repoId,
                 projectId: projectId,
                 shareToken: shareToken,
+                branch: config.branches[repoId] || repo.branch,
               },
             });
 
@@ -559,6 +563,7 @@ export default function Repository() {
       commitMessage: `Auto-sync from Pronghorn at ${new Date().toISOString()}`,
       selectedRepos: repos.map(r => r.id),
       branches: repos.reduce((acc, repo) => ({ ...acc, [repo.id]: repo.branch }), {}),
+      forcePush: true, // Always force push on auto-sync
     };
 
     await handleSyncWithConfig(config, true);
@@ -829,24 +834,16 @@ export default function Repository() {
                     )}
 
                     <div className="border-t pt-4">
-                      <h4 className="text-sm font-medium mb-2">Sync History</h4>
-                      <div className="space-y-2">
-                        {repos.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No repositories connected</p>
-                        ) : (
-                          repos.map(repo => {
-                            const lastSync = lastSyncTime[repo.id];
-                            return (
-                              <div key={repo.id} className="flex items-center justify-between text-sm p-2 rounded bg-muted/30">
-                                <span>{repo.organization}/{repo.repo}</span>
-                                <span className="text-muted-foreground">
-                                  {lastSync ? `Last synced: ${lastSync.toLocaleString()}` : 'Never synced'}
-                                </span>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
+                      <h4 className="text-sm font-medium mb-4">Commit Change Log</h4>
+                      {repos.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No repositories connected</p>
+                      ) : (
+                        <div className="space-y-4">
+                          {repos.map(repo => (
+                            <CommitLog key={repo.id} repoId={repo.id} />
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div className="border-t pt-4">

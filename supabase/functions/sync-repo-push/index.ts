@@ -9,8 +9,10 @@ interface PushRequest {
   repoId: string;
   projectId: string;
   shareToken: string;
+  branch: string; // Target branch for push
   commitMessage?: string;
   filePaths?: string[]; // Optional: push only specific files
+  forcePush?: boolean; // Force push flag
 }
 
 interface RepoFile {
@@ -34,9 +36,9 @@ Deno.serve(async (req) => {
       }
     );
 
-    const { repoId, projectId, shareToken, commitMessage, filePaths }: PushRequest = await req.json();
+    const { repoId, projectId, shareToken, branch, commitMessage, filePaths, forcePush = false }: PushRequest = await req.json();
 
-    console.log('Push request:', { repoId, projectId, filePaths: filePaths?.length || 'all' });
+    console.log('Push request:', { repoId, projectId, branch, filePaths: filePaths?.length || 'all', forcePush });
 
     // Validate project access
     const { error: accessError } = await supabaseClient.rpc('validate_project_access', {
@@ -124,11 +126,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`Pushing ${filesToPush.length} files to ${repo.organization}/${repo.repo}`);
+    console.log(`Pushing ${filesToPush.length} files to ${repo.organization}/${repo.repo} on branch ${branch}`);
 
-    // Get current branch ref
-    const refUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/refs/heads/${repo.branch}`;
-    const refResponse = await fetch(refUrl, {
+    // Check if target branch exists
+    const targetBranchUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/refs/heads/${branch}`;
+    const targetBranchResponse = await fetch(targetBranchUrl, {
       headers: {
         'Authorization': `token ${pat}`,
         'Accept': 'application/vnd.github.v3+json',
@@ -136,16 +138,61 @@ Deno.serve(async (req) => {
       },
     });
 
-    if (!refResponse.ok) {
-      console.error('Failed to get branch ref:', await refResponse.text());
-      return new Response(JSON.stringify({ error: 'Failed to get branch reference' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    let currentSha: string;
 
-    const refData = await refResponse.json();
-    const currentSha = refData.object.sha;
+    if (!targetBranchResponse.ok) {
+      // Branch doesn't exist, create it from main
+      console.log(`Branch ${branch} doesn't exist, creating from main`);
+      
+      const mainRefUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/refs/heads/main`;
+      const mainRefResponse = await fetch(mainRefUrl, {
+        headers: {
+          'Authorization': `token ${pat}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'Pronghorn-Sync',
+        },
+      });
+
+      if (!mainRefResponse.ok) {
+        console.error('Failed to get main branch:', await mainRefResponse.text());
+        return new Response(JSON.stringify({ error: 'Failed to get main branch for creating new branch' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const mainRefData = await mainRefResponse.json();
+      currentSha = mainRefData.object.sha;
+
+      // Create new branch
+      const createBranchUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/refs`;
+      const createBranchResponse = await fetch(createBranchUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `token ${pat}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'Pronghorn-Sync',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ref: `refs/heads/${branch}`,
+          sha: currentSha,
+        }),
+      });
+
+      if (!createBranchResponse.ok) {
+        console.error('Failed to create branch:', await createBranchResponse.text());
+        return new Response(JSON.stringify({ error: `Failed to create branch ${branch}` }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      console.log(`Successfully created branch ${branch} from main`);
+    } else {
+      const refData = await targetBranchResponse.json();
+      currentSha = refData.object.sha;
+    }
 
     // Get current commit
     const commitUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/commits/${currentSha}`;
@@ -291,8 +338,8 @@ Deno.serve(async (req) => {
 
     const newCommitData = await newCommitResponse.json();
 
-    // Update branch ref
-    const updateRefUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/refs/heads/${repo.branch}`;
+    // Update branch ref (with force push support)
+    const updateRefUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/refs/heads/${branch}`;
     const updateRefResponse = await fetch(updateRefUrl, {
       method: 'PATCH',
       headers: {
@@ -303,7 +350,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         sha: newCommitData.sha,
-        force: false,
+        force: forcePush, // Use force push flag from request
       }),
     });
 
@@ -315,7 +362,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`Successfully pushed to ${repo.organization}/${repo.repo}: ${newCommitData.sha}`);
+    console.log(`Successfully pushed to ${repo.organization}/${repo.repo} (branch: ${branch}): ${newCommitData.sha}`);
+
+    // Log commit to database
+    try {
+      await supabaseClient.rpc('log_repo_commit_with_token', {
+        p_repo_id: repoId,
+        p_token: shareToken,
+        p_branch: branch,
+        p_commit_sha: newCommitData.sha,
+        p_commit_message: commitMessage || `Update ${filesToPush.length} file(s) via Pronghorn`,
+        p_files_changed: filesToPush.length,
+      });
+    } catch (logError) {
+      console.error('Failed to log commit:', logError);
+      // Don't fail the entire operation if logging fails
+    }
 
 
     return new Response(
