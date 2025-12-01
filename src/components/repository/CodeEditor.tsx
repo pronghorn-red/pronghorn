@@ -30,8 +30,9 @@ export function CodeEditor({ fileId, filePath, repoId, isStaged, onClose, onSave
       loadFileContent();
     } else {
       setContent("");
+      setOriginalContent("");
     }
-  }, [fileId, isStaged]);
+  }, [fileId, isStaged, filePath]);
 
   const loadFileContent = async () => {
     if (!fileId) return;
