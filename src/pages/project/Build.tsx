@@ -256,7 +256,7 @@ export default function Build() {
             </div>
 
             {/* Mobile Layout (< md) - Full Screen Tabs */}
-            <div className="flex-1 overflow-hidden md:hidden">
+            <div className="flex-1 overflow-hidden block md:hidden">
               <Tabs defaultValue="files" className="h-full flex flex-col">
                 <TabsList className="grid w-full grid-cols-5 shrink-0">
                   <TabsTrigger value="files" className="text-xs">Files</TabsTrigger>
@@ -314,7 +314,7 @@ export default function Build() {
             </div>
 
             {/* Desktop Layout (>= md) - Resizable Panels */}
-            <ResizablePanelGroup direction="horizontal" className="flex-1 hidden md:flex">
+            <ResizablePanelGroup direction="horizontal" className="flex-1 hidden md:flex overflow-hidden">
               {/* Left: File Tree */}
               <ResizablePanel defaultSize={20} minSize={15}>
                 <div className="h-full border-r">
