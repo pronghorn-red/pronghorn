@@ -6,11 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RepoCard } from "@/components/repository/RepoCard";
-import { FileTree } from "@/components/repository/FileTree";
+import { EnhancedFileTree } from "@/components/repository/EnhancedFileTree";
 import { CodeEditor } from "@/components/repository/CodeEditor";
 import { CreateRepoDialog } from "@/components/repository/CreateRepoDialog";
 import { ManagePATDialog } from "@/components/repository/ManagePATDialog";
-import { GitBranch, FileCode, Settings, Database } from "lucide-react";
+import { IDEModal } from "@/components/repository/IDEModal";
+import { GitBranch, FileCode, Settings, Database, Maximize2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,6 +38,7 @@ export default function Repository() {
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{ [key: string]: 'idle' | 'pushing' | 'pulling' | 'success' | 'error' }>({});
   const [lastSyncTime, setLastSyncTime] = useState<{ [key: string]: Date }>({});
+  const [ideModalOpen, setIdeModalOpen] = useState(false);
 
   const { repos, loading, refetch } = useRealtimeRepos(projectId);
 
@@ -343,6 +345,143 @@ export default function Repository() {
     }
   };
 
+  const handleFileCreate = async (path: string, isFolder: boolean) => {
+    if (!selectedRepoId) return;
+
+    try {
+      if (isFolder) {
+        // Create a .gitkeep file in the folder
+        await supabase.rpc("create_file_with_token", {
+          p_repo_id: selectedRepoId,
+          p_path: `${path}/.gitkeep`,
+          p_content: "",
+          p_token: shareToken || null,
+        });
+      } else {
+        await supabase.rpc("create_file_with_token", {
+          p_repo_id: selectedRepoId,
+          p_path: path,
+          p_content: "",
+          p_token: shareToken || null,
+        });
+      }
+
+      toast({
+        title: "Success",
+        description: `${isFolder ? "Folder" : "File"} created successfully`,
+      });
+      loadFileStructure();
+    } catch (error: any) {
+      console.error("Error creating file/folder:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create file/folder",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleFileRename = async (oldPath: string, newPath: string) => {
+    if (!selectedRepoId) return;
+
+    try {
+      // Get file structure to find the file ID
+      const { data, error } = await supabase.rpc("get_file_structure_with_token", {
+        p_repo_id: selectedRepoId,
+        p_token: shareToken || null,
+      });
+
+      if (error) throw error;
+
+      const files = (data as any[]) || [];
+      const file = files.find((f: any) => f.path === oldPath);
+
+      if (file) {
+        // Check if it's a folder (has children)
+        const isFolder = files.some((f: any) => f.path.startsWith(oldPath + "/"));
+
+        if (isFolder) {
+          // Rename folder (updates all files within)
+          await supabase.rpc("rename_folder_with_token", {
+            p_repo_id: selectedRepoId,
+            p_old_folder_path: oldPath,
+            p_new_folder_path: newPath,
+            p_token: shareToken || null,
+          });
+        } else {
+          // Rename single file
+          await supabase.rpc("rename_file_with_token", {
+            p_file_id: file.id,
+            p_new_path: newPath,
+            p_token: shareToken || null,
+          });
+        }
+
+        toast({
+          title: "Success",
+          description: "Renamed successfully",
+        });
+        loadFileStructure();
+      }
+    } catch (error: any) {
+      console.error("Error renaming:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to rename",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleFileDelete = async (path: string) => {
+    if (!selectedRepoId) return;
+
+    try {
+      // Get file structure to determine what to delete
+      const { data, error } = await supabase.rpc("get_file_structure_with_token", {
+        p_repo_id: selectedRepoId,
+        p_token: shareToken || null,
+      });
+
+      if (error) throw error;
+
+      const files = (data as any[]) || [];
+      
+      // Find all files that match this path or are within this folder
+      const filesToDelete = files.filter((f: any) => 
+        f.path === path || f.path.startsWith(path + "/")
+      );
+
+      // Delete all matching files
+      for (const file of filesToDelete) {
+        await supabase.rpc("delete_file_with_token", {
+          p_file_id: file.id,
+          p_token: shareToken || null,
+        });
+      }
+
+      toast({
+        title: "Success",
+        description: "Deleted successfully",
+      });
+      
+      // Clear selection if deleted file was selected
+      if (selectedFilePath === path || selectedFilePath?.startsWith(path + "/")) {
+        setSelectedFilePath(null);
+        setSelectedFileId(null);
+      }
+      
+      loadFileStructure();
+    } catch (error: any) {
+      console.error("Error deleting:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handlePull = async () => {
     if (repos.length === 0) {
       toast({
@@ -531,10 +670,13 @@ export default function Repository() {
                               Loading files...
                             </div>
                           ) : (
-                            <FileTree
+                            <EnhancedFileTree
                               files={fileStructure}
                               onFileSelect={handleFileSelect}
                               selectedPath={selectedFilePath}
+                              onFileCreate={handleFileCreate}
+                              onFileRename={handleFileRename}
+                              onFileDelete={handleFileDelete}
                             />
                           )}
                         </div>
@@ -685,6 +827,20 @@ export default function Repository() {
           onOpenChange={setManagePATDialogOpen}
         />
       )}
+
+      <IDEModal
+        open={ideModalOpen}
+        onOpenChange={setIdeModalOpen}
+        fileStructure={fileStructure}
+        selectedFilePath={selectedFilePath}
+        selectedFileId={selectedFileId}
+        selectedRepoId={selectedRepoId || ""}
+        onFileSelect={handleFileSelect}
+        onFileSave={loadFileStructure}
+        onFileCreate={handleFileCreate}
+        onFileRename={handleFileRename}
+        onFileDelete={handleFileDelete}
+      />
     </div>
   );
 }

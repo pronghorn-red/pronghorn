@@ -1185,6 +1185,30 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_file_with_token: {
+        Args: {
+          p_content?: string
+          p_path: string
+          p_repo_id: string
+          p_token?: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          last_commit_sha: string | null
+          path: string
+          project_id: string
+          repo_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_files"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_project_repo_with_token: {
         Args: {
           p_branch?: string
@@ -1811,6 +1835,34 @@ export type Database = {
       regenerate_share_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: string
+      }
+      rename_file_with_token: {
+        Args: { p_file_id: string; p_new_path: string; p_token?: string }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          last_commit_sha: string | null
+          path: string
+          project_id: string
+          repo_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_files"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      rename_folder_with_token: {
+        Args: {
+          p_new_folder_path: string
+          p_old_folder_path: string
+          p_repo_id: string
+          p_token?: string
+        }
+        Returns: number
       }
       save_anonymous_project_to_user: {
         Args: { p_project_id: string; p_share_token: string }
