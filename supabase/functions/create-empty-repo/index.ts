@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { projectId, repoName, shareToken } = await req.json();
+    const { projectId, repoName, shareToken, isPrivate } = await req.json();
 
     if (!projectId || !repoName || !shareToken) {
       return new Response(
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         name: finalRepoName,
-        private: true,
+        private: isPrivate ?? true,
         auto_init: true, // Initialize with README
         description: `Repository for ${project.name}`,
       }),

@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { projectId, repoName, templateOrg, templateRepo, shareToken } = await req.json();
+    const { projectId, repoName, templateOrg, templateRepo, shareToken, isPrivate } = await req.json();
 
     if (!projectId || !repoName || !templateOrg || !templateRepo || !shareToken) {
       return new Response(
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
         owner: organization,
         name: repoName,
         description: `Repository for ${project.name} (from ${templateOrg}/${templateRepo})`,
-        private: true,
+        private: isPrivate ?? true,
       }),
     });
 
