@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, FilePlus, FileX, FilePenLine, Loader2, GitCommit, X, ArrowLeft } from "lucide-react";
+import { FileText, FilePlus, FileX, FilePenLine, Loader2, GitCommit, X, ArrowLeft, Upload } from "lucide-react";
 import { CodeEditor } from "@/components/repository/CodeEditor";
 
 interface StagedChange {
@@ -35,8 +35,10 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
   const [stagedChanges, setStagedChanges] = useState<StagedChange[]>([]);
   const [loading, setLoading] = useState(true);
   const [committing, setCommitting] = useState(false);
+  const [pushing, setPushing] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
   const [repoId, setRepoId] = useState<string | null>(null);
+  const [repoInfo, setRepoInfo] = useState<any>(null);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [viewingDiff, setViewingDiff] = useState<StagedChange | null>(null);
 
@@ -89,6 +91,7 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
       const defaultRepo = repos?.find((r) => r.is_default) || repos?.[0];
       if (!defaultRepo) {
         setStagedChanges([]);
+        setRepoInfo(null);
         if (withLoading) {
           setLoading(false);
         }
@@ -96,6 +99,7 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
       }
 
       setRepoId(defaultRepo.id);
+      setRepoInfo(defaultRepo);
 
       // Load staged changes
       const { data: staged, error: stagedError } = await supabase.rpc("get_staged_changes_with_token", {
@@ -158,6 +162,51 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
       });
     } finally {
       setCommitting(false);
+    }
+  };
+
+  const handlePushToGitHub = async () => {
+    if (!repoId || !repoInfo || !projectId) {
+      toast({
+        title: "Error",
+        description: "No repository configured",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setPushing(true);
+
+      const { data, error } = await supabase.functions.invoke('sync-repo-push', {
+        body: {
+          repoId: repoId,
+          projectId: projectId,
+          shareToken: shareToken,
+          branch: repoInfo.branch,
+          commitMessage: "Push from Build staging",
+          forcePush: false,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Pushed to ${repoInfo.organization}/${repoInfo.repo}`,
+      });
+
+      // Refresh to show any new sync state
+      loadRepoAndStagedChanges(false);
+    } catch (error: any) {
+      console.error("Error pushing to GitHub:", error);
+      toast({
+        title: "Push Failed",
+        description: error.message || "Failed to push to GitHub",
+        variant: "destructive",
+      });
+    } finally {
+      setPushing(false);
     }
   };
 
@@ -323,9 +372,42 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
         </CardHeader>
         <CardContent className="flex-1 overflow-y-auto">
           {stagedChanges.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <GitCommit className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>No staged changes</p>
+            <div className="space-y-6 py-6">
+              <div className="text-center text-muted-foreground">
+                <GitCommit className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="mb-2">No staged changes</p>
+                {repoInfo && (
+                  <p className="text-sm">Ready to push commits to GitHub</p>
+                )}
+              </div>
+              {repoInfo && (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    <Button
+                      onClick={handlePushToGitHub}
+                      disabled={pushing}
+                      className="w-full"
+                      variant="default"
+                    >
+                      {pushing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Pushing...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4 mr-2" />
+                          Push to Repository
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-center text-muted-foreground">
+                      {repoInfo.organization}/{repoInfo.repo} ({repoInfo.branch})
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
