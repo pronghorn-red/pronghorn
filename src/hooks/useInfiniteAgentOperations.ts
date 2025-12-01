@@ -34,13 +34,7 @@ export function useInfiniteAgentOperations(projectId: string | null, shareToken:
 
   // Real-time subscription for new operations across all sessions
   useEffect(() => {
-    if (!projectId || !shareToken) return;
-
-    // Set the share token in the session for RLS validation
-    const setToken = async () => {
-      await supabase.rpc('set_share_token', { token: shareToken });
-    };
-    setToken();
+    if (!projectId) return;
 
     const channel = supabase
       .channel(`agent-operations-project-${projectId}`)
@@ -52,20 +46,8 @@ export function useInfiniteAgentOperations(projectId: string | null, shareToken:
           table: "agent_file_operations",
         },
         (payload) => {
-          console.log("Agent operation update:", payload);
-          if (payload.eventType === "INSERT") {
-            const newOperation = payload.new as AgentOperation;
-            setOperations((prev) => {
-              // Prevent duplicates
-              if (prev.some(op => op.id === newOperation.id)) return prev;
-              return [newOperation, ...prev];
-            });
-          } else if (payload.eventType === "UPDATE") {
-            const updatedOperation = payload.new as AgentOperation;
-            setOperations((prev) =>
-              prev.map((op) => (op.id === updatedOperation.id ? updatedOperation : op))
-            );
-          }
+          console.log("Agent operations change:", payload);
+          loadInitialOperations();
         }
       )
       .subscribe();

@@ -44,8 +44,8 @@ export function UnifiedAgentInterface({
   attachedFiles,
   onRemoveFile
 }: UnifiedAgentInterfaceProps) {
-  const { messages, loading: messagesLoading, hasMore: hasMoreMessages, loadMore: loadMoreMessages } = useInfiniteAgentMessages(projectId, shareToken);
-  const { operations, loading: operationsLoading, hasMore: hasMoreOperations, loadMore: loadMoreOperations } = useInfiniteAgentOperations(projectId, shareToken);
+  const { messages, loading: messagesLoading, hasMore: hasMoreMessages, loadMore: loadMoreMessages, refetch: refetchMessages } = useInfiniteAgentMessages(projectId, shareToken);
+  const { operations, loading: operationsLoading, hasMore: hasMoreOperations, loadMore: loadMoreOperations, refetch: refetchOperations } = useInfiniteAgentOperations(projectId, shareToken);
   
   const [taskInput, setTaskInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -179,6 +179,10 @@ export function UnifiedAgentInterface({
 
       toast.success('Agent task submitted');
       setTaskInput('');
+
+      // Refresh messages and operations so the new user message and agent work appear promptly
+      refetchMessages();
+      refetchOperations();
 
       // Scroll to new user message after submission
       setTimeout(() => {
