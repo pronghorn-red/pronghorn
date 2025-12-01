@@ -1597,6 +1597,15 @@ export type Database = {
           type: string
         }[]
       }
+      agent_list_files_by_path_with_token: {
+        Args: { p_path_prefix?: string; p_repo_id: string; p_token: string }
+        Returns: {
+          id: string
+          path: string
+          repo_id: string
+          updated_at: string
+        }[]
+      }
       agent_read_file_with_token: {
         Args: { p_file_id: string; p_token: string }
         Returns: {

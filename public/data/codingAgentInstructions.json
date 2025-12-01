@@ -47,18 +47,22 @@
     
     "list_by_path": {
       "rpc_function": "agent_list_files_by_path_with_token",
-      "description": "List files matching a path prefix",
+      "description": "List all files in repository with metadata (id, path, updated_at). Call this at the START of every task to load complete file structure.",
       "parameters": {
         "p_repo_id": "UUID of the repository",
-        "p_path_prefix": "Directory path or file pattern",
+        "p_path_prefix": "Optional directory path filter (e.g., 'src/components/'). Leave null to get all files.",
         "p_token": "Share token for authorization"
       },
-      "returns": "Array of matching files with metadata",
+      "returns": "Array of all files with id, path, repo_id, updated_at metadata",
       "use_cases": [
+        "CRITICAL: Call at task start to understand project structure",
+        "Load complete file inventory before making changes",
+        "Map file paths to file IDs for subsequent operations",
         "List all files in a specific directory",
         "Find all components in src/components/",
         "Locate test files in specific folder"
-      ]
+      ],
+      "important": "ALWAYS call this as first operation to understand where files are located. This is mandatory for successful task execution."
     },
     
     "read_file": {

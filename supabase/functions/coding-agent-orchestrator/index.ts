@@ -10,7 +10,7 @@ interface TaskRequest {
   projectId: string;
   repoId: string;
   taskDescription: string;
-  attachedFileIds: string[];
+  attachedFiles: Array<{ id: string; path: string }>;
   projectContext: any;
   shareToken: string;
   mode: 'task' | 'iterative_loop' | 'continuous_improvement';
@@ -84,7 +84,7 @@ serve(async (req) => {
       projectId,
       repoId,
       taskDescription,
-      attachedFileIds,
+      attachedFiles,
       projectContext,
       mode,
       autoCommit = false,
@@ -153,13 +153,14 @@ serve(async (req) => {
       p_token: shareToken,
       p_role: "user",
       p_content: taskDescription,
-      p_metadata: { attachedFileIds, projectContext },
+      p_metadata: { attachedFiles, projectContext },
     });
     console.log("Created session:", session.id);
 
     // Load instruction manifest
     const manifest = {
       file_operations: {
+        list_files: { description: "List all files with metadata (id, path, updated_at). MUST be called FIRST to load file structure." },
         search: { description: "Search file paths and content by keyword" },
         read_file: { description: "Read complete content of a single file" },
         edit_lines: { description: "Edit specific line range in a file and stage the change" },
@@ -169,11 +170,11 @@ serve(async (req) => {
       },
     } as const;
 
-    // Load attached files
+    // Load attached files with path metadata
     let attachedFilesContent = "";
-    if (attachedFileIds.length > 0) {
+    if (attachedFiles.length > 0) {
       const { data: files } = await supabase.rpc("agent_read_multiple_files_with_token", {
-        p_file_ids: attachedFileIds,
+        p_file_ids: attachedFiles.map(f => f.id),
         p_token: shareToken,
       });
       
@@ -293,22 +294,34 @@ ${contextSummary}
 
 Attached Files: ${attachedFilesContent}
 
+CRITICAL INSTRUCTION: Your FIRST operation MUST ALWAYS be:
+{
+  "type": "list_files",
+  "params": { "path_prefix": null }
+}
+
+This loads the complete file structure with all file IDs and paths. You CANNOT edit, read, or delete files without knowing their IDs first. Do NOT skip this step.
+
 When responding, structure your response as:
 {
   "reasoning": "Your chain-of-thought reasoning about what to do next",
   "operations": [
+    {
+      "type": "list_files",
+      "params": { "path_prefix": null }
+    },
     {
       "type": "search",
       "params": { "keyword": "string to search in paths and content" }
     },
     {
       "type": "read_file",
-      "params": { "file_id": "UUID from search results" }
+      "params": { "file_id": "UUID from list_files or search results" }
     },
     {
       "type": "edit_lines",
       "params": { 
-        "file_id": "UUID from search/read results",
+        "file_id": "UUID from list_files or search results",
         "start_line": 1,
         "end_line": 5,
         "new_content": "replacement text"
@@ -323,12 +336,12 @@ When responding, structure your response as:
     },
     {
       "type": "delete_file",
-      "params": { "file_id": "UUID from search results" }
+      "params": { "file_id": "UUID from list_files or search results" }
     },
     {
       "type": "rename_file",
       "params": { 
-        "file_id": "UUID from search results",
+        "file_id": "UUID from list_files or search results",
         "new_path": "new/path/to/file.ext"
       }
     }
@@ -341,9 +354,9 @@ When responding, structure your response as:
 }
 
 CRITICAL RULES:
-1. Use file_id from search results for read_file, edit_lines, delete_file, and rename_file operations
-2. Only use path for create_file operation
-3. Always search first to get file_id before reading, editing, deleting, or renaming
+1. ALWAYS call list_files FIRST to load file structure before any other operations
+2. Use file_id from list_files or search results for read_file, edit_lines, delete_file, and rename_file operations
+3. Only use path for create_file operation
 4. Work autonomously by chaining operations together
 5. Set status to "in_progress" when you need to continue with more operations
 6. Set status to "requires_commit" when you've made changes ready to be staged
@@ -509,6 +522,14 @@ Think step-by-step and continue until the task is complete.`;
           let result;
           
           switch (op.type) {
+            case "list_files":
+              result = await supabase.rpc("agent_list_files_by_path_with_token", {
+                p_repo_id: repoId,
+                p_token: shareToken,
+                p_path_prefix: op.params.path_prefix || null,
+              });
+              break;
+            
             case "search":
               result = await supabase.rpc("agent_search_files_with_token", {
                 p_project_id: projectId,
