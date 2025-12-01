@@ -48,27 +48,32 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let sessionId: string | null = null;
+  let shareToken: string | null = null;
+  let supabase: any = null;
+
   try {
     const authHeader = req.headers.get("authorization");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    const supabase = createClient(supabaseUrl, supabaseKey, {
+    supabase = createClient(supabaseUrl, supabaseKey, {
       global: {
         headers: authHeader ? { Authorization: authHeader } : {},
       },
     });
 
+    const requestData: TaskRequest = await req.json();
+    shareToken = requestData.shareToken;
     const {
       projectId,
       repoId,
       taskDescription,
       attachedFileIds,
       projectContext,
-      shareToken,
       mode,
       autoCommit = false,
-    }: TaskRequest = await req.json();
+    } = requestData;
 
     console.log("Starting CodingAgent task:", { projectId, mode, taskDescription });
 
@@ -125,7 +130,7 @@ serve(async (req) => {
     if (sessionError) throw sessionError;
     if (!session) throw new Error("Failed to create session");
 
-    const sessionId = session.id;
+    sessionId = session.id;
 
     // Log user's task as first message
     await supabase.rpc("insert_agent_message_with_token", {
@@ -558,11 +563,16 @@ Think step-by-step and continue until the task is complete.`;
       console.log("Continuing to next iteration...");
     }
 
-    // Update session status
+    // Update session status on completion with completed_at timestamp
+    const completedAt = (finalStatus === "completed" || finalStatus === "failed") 
+      ? new Date().toISOString() 
+      : null;
+
     await supabase.rpc("update_agent_session_status_with_token", {
       p_session_id: session.id,
       p_status: finalStatus,
       p_token: shareToken,
+      p_completed_at: completedAt,
     });
 
     console.log("Task completed with status:", finalStatus);
@@ -580,6 +590,21 @@ Think step-by-step and continue until the task is complete.`;
     );
   } catch (error) {
     console.error("Error in coding-agent-orchestrator:", error);
+    
+    // Update session to failed status on error if session was created
+    if (sessionId && shareToken && supabase) {
+      try {
+        await supabase.rpc("update_agent_session_status_with_token", {
+          p_session_id: sessionId,
+          p_status: "failed",
+          p_token: shareToken,
+          p_completed_at: new Date().toISOString(),
+        });
+      } catch (updateError) {
+        console.error("Failed to update session status on error:", updateError);
+      }
+    }
+    
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
       {

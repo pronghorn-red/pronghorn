@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Clock, CheckCircle, XCircle, Loader2, ChevronDown } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface AgentSession {
   id: string;
@@ -33,6 +36,7 @@ export function AgentSessionsList({
 }: AgentSessionsListProps) {
   const [sessions, setSessions] = useState<AgentSession[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
 
   // Load all sessions for this project
   useEffect(() => {
@@ -116,62 +120,72 @@ export function AgentSessionsList({
     );
   };
 
+  const activeSession = sessions.find(s => s.id === activeSessionId);
+
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          Agent Sessions
-        </CardTitle>
-        <CardDescription>
-          Click on a session to view its chat and progress history
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex-1 overflow-hidden">
-        <ScrollArea className="h-full w-full pr-4">
-          {loading ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <p className="text-sm">Loading sessions...</p>
-            </div>
-          ) : sessions.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <p className="text-sm">No agent sessions yet.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {sessions.map((session) => (
-                <Button
-                  key={session.id}
-                  variant={activeSessionId === session.id ? "secondary" : "ghost"}
-                  className="w-full justify-start h-auto p-3"
-                  onClick={() => onSelectSession(session.id)}
-                >
-                  <div className="flex flex-col items-start gap-2 w-full">
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(session.status)}
-                        {getStatusBadge(session.status)}
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(session.created_at).toLocaleString()}
-                      </span>
-                    </div>
-                    {session.task_description && (
-                      <p className="text-sm text-left line-clamp-2">
-                        {session.task_description}
-                      </p>
-                    )}
-                    {!session.task_description && (
-                      <p className="text-sm text-muted-foreground italic">
-                        No task description
-                      </p>
-                    )}
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="border-b bg-muted/30">
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" className="w-full justify-between p-3 h-auto">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold">Session History</span>
+            <Badge variant="outline" className="text-xs">
+              {sessions.length}
+            </Badge>
+          </div>
+          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        </Button>
+      </CollapsibleTrigger>
+      
+      <CollapsibleContent className="max-h-64 overflow-auto">
+        {loading ? (
+          <div className="flex items-center justify-center py-8 text-muted-foreground">
+            <p className="text-sm">Loading sessions...</p>
+          </div>
+        ) : sessions.length === 0 ? (
+          <div className="flex items-center justify-center py-8 text-muted-foreground">
+            <p className="text-sm">No agent sessions yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-1 p-2">
+            {sessions.map((session) => (
+              <Button
+                key={session.id}
+                variant={activeSessionId === session.id ? "secondary" : "ghost"}
+                className="w-full justify-start h-auto p-2 text-left"
+                onClick={() => onSelectSession(session.id)}
+              >
+                <div className="flex flex-col items-start gap-1 w-full min-w-0">
+                  <div className="flex items-center gap-2 w-full">
+                    {getStatusIcon(session.status)}
+                    {getStatusBadge(session.status)}
+                    <span className="text-xs text-muted-foreground ml-auto flex-shrink-0">
+                      {new Date(session.created_at).toLocaleTimeString()}
+                    </span>
                   </div>
-                </Button>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
-      </CardContent>
-    </Card>
+                  {session.task_description && (
+                    <p className="text-xs line-clamp-1 w-full">
+                      {session.task_description}
+                    </p>
+                  )}
+                </div>
+              </Button>
+            ))}
+          </div>
+        )}
+      </CollapsibleContent>
+      
+      {activeSession && (
+        <div className="p-3 border-t bg-background/50">
+          <div className="text-xs text-muted-foreground mb-1">Active Session:</div>
+          <div className="flex items-center gap-2">
+            {getStatusIcon(activeSession.status)}
+            {getStatusBadge(activeSession.status)}
+            <span className="text-xs flex-1 truncate">
+              {activeSession.task_description || "No description"}
+            </span>
+          </div>
+        </div>
+      )}
+    </Collapsible>
   );
 }
