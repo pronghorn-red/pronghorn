@@ -572,27 +572,29 @@ Think step-by-step and continue until the task is complete.`;
                 // Use staged new_content as base if exists, otherwise use committed content
                 const baseContent = existingStaged ? existingStaged.new_content : fileData[0].content;
                 
-                // Validate line numbers
-                const lines = baseContent.split('\n');
-                const totalLines = lines.length;
+                // Validate line numbers against current content
+                const baseLines = baseContent.split('\n');
+                const totalBaseLines = baseLines.length;
                 const startIdx = op.params.start_line - 1;
                 const endIdx = op.params.end_line - 1;
                 
-                if (startIdx < 0 || endIdx >= totalLines || startIdx > endIdx) {
+                if (startIdx < 0 || endIdx >= totalBaseLines || startIdx > endIdx) {
                   throw new Error(
-                    `Invalid line range: start_line=${op.params.start_line}, end_line=${op.params.end_line}. File has ${totalLines} lines.`
+                    `Invalid line range: start_line=${op.params.start_line}, end_line=${op.params.end_line}. File has ${totalBaseLines} lines.`
                   );
                 }
                 
                 // Apply edit to the correct base content
-                lines.splice(startIdx, endIdx - startIdx + 1, op.params.new_content);
-                const newContent = lines.join('\n');
+                baseLines.splice(startIdx, endIdx - startIdx + 1, op.params.new_content);
+                let finalContent = baseLines.join('\n');
                 
-                // For JSON files, validate the result
+                // For JSON files, validate and normalize the result to avoid structural issues like duplicate keys
                 const isJsonFile = fileData[0].path.endsWith('.json');
                 if (isJsonFile) {
                   try {
-                    JSON.parse(newContent);
+                    const parsed = JSON.parse(finalContent);
+                    // Re-stringify to canonical JSON (no duplicate keys, consistent formatting)
+                    finalContent = JSON.stringify(parsed, null, 2) + '\n';
                   } catch (parseError: any) {
                     throw new Error(
                       `Edit resulted in invalid JSON. Original lines ${op.params.start_line}-${op.params.end_line} replaced with invalid content. Error: ${parseError?.message || String(parseError)}`
@@ -607,14 +609,15 @@ Think step-by-step and continue until the task is complete.`;
                   p_operation_type: "edit",
                   p_file_path: fileData[0].path,
                   p_old_content: fileData[0].content,
-                  p_new_content: newContent,
+                  p_new_content: finalContent,
                 });
                 
                 // Include the new content in result for agent to verify
+                const finalLines = finalContent.split('\n');
                 result.data = {
                   ...result.data,
-                  new_content_preview: newContent.split('\n').slice(Math.max(0, startIdx - 2), Math.min(totalLines, endIdx + 3)).join('\n'),
-                  total_lines: lines.length
+                  new_content_preview: finalLines.slice(Math.max(0, startIdx - 2), Math.min(finalLines.length, endIdx + 3)).join('\n'),
+                  total_lines: finalLines.length,
                 };
               }
               break;
