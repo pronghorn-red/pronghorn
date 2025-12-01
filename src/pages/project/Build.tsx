@@ -26,9 +26,10 @@ export default function Build() {
   const { repos, loading: reposLoading } = useRealtimeRepos(projectId);
   const defaultRepo = repos.find(r => r.is_default);
 
-  const [files, setFiles] = useState<Array<{ id: string; path: string }>>([]);
+  const [files, setFiles] = useState<Array<{ id: string; path: string; isStaged?: boolean }>>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [selectedFileIsStaged, setSelectedFileIsStaged] = useState<boolean>(false);
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; path: string }>>([]);
   const [stagedChanges, setStagedChanges] = useState<any[]>([]);
   const [selectedDiff, setSelectedDiff] = useState<{ old: string; new: string; path: string } | null>(null);
@@ -42,12 +43,12 @@ export default function Build() {
     }
   }, [defaultRepo, projectId, shareToken]);
 
-  // Real-time subscription for file changes
+  // Real-time subscription for file and staging changes
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || !defaultRepo) return;
 
     const channel = supabase
-      .channel(`repo-files-${projectId}`)
+      .channel(`repo-changes-${projectId}`)
       .on(
         "postgres_changes",
         {
@@ -60,24 +61,64 @@ export default function Build() {
           loadFiles();
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "repo_staging",
+          filter: `repo_id=eq.${defaultRepo.id}`,
+        },
+        () => {
+          loadFiles();
+        }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [projectId]);
+  }, [projectId, defaultRepo]);
 
   const loadFiles = async () => {
     if (!defaultRepo) return;
 
     try {
-      const { data, error } = await supabase.rpc("get_project_files_with_token", {
+      // Load committed files
+      const { data: committedFiles, error: filesError } = await supabase.rpc("get_project_files_with_token", {
         p_project_id: projectId!,
         p_token: shareToken || null,
       });
 
-      if (error) throw error;
-      setFiles(data || []);
+      if (filesError) throw filesError;
+
+      // Load staged changes
+      const { data: staged, error: stagedError } = await supabase.rpc("get_staged_changes_with_token", {
+        p_repo_id: defaultRepo.id,
+        p_token: shareToken || null,
+      });
+
+      if (stagedError) throw stagedError;
+
+      // Combine committed and staged files
+      const committedFilesMap = new Map((committedFiles || []).map(f => [f.path, f]));
+      const allFiles: Array<{ id: string; path: string; isStaged?: boolean }> = (committedFiles || []).map(f => ({
+        id: f.id,
+        path: f.path,
+      }));
+
+      // Add staged files that aren't in committed files (new files)
+      (staged || []).forEach((change: any) => {
+        if (change.operation_type === 'add' && !committedFilesMap.has(change.file_path)) {
+          allFiles.push({
+            id: change.id,
+            path: change.file_path,
+            isStaged: true,
+          });
+        }
+      });
+
+      setFiles(allFiles);
     } catch (error) {
       console.error("Error loading files:", error);
       toast({
@@ -88,9 +129,10 @@ export default function Build() {
     }
   };
 
-  const handleSelectFile = (fileId: string, path: string) => {
+  const handleSelectFile = (fileId: string, path: string, isStaged?: boolean) => {
     setSelectedFileId(fileId);
     setSelectedFilePath(path);
+    setSelectedFileIsStaged(isStaged || false);
     setSelectedDiff(null);
   };
 
@@ -275,9 +317,11 @@ export default function Build() {
                       fileId={selectedFileId}
                       filePath={selectedFilePath}
                       repoId={defaultRepo?.id || ""}
+                      isStaged={selectedFileIsStaged}
                       onClose={() => {
                         setSelectedFileId(null);
                         setSelectedFilePath(null);
+                        setSelectedFileIsStaged(false);
                       }}
                       onSave={loadFiles}
                     />

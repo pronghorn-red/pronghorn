@@ -10,12 +10,13 @@ interface CodeEditorProps {
   fileId: string | null;
   filePath: string | null;
   repoId: string;
+  isStaged?: boolean;
   onClose: () => void;
   onSave: () => void;
   onAutoSync?: () => void;
 }
 
-export function CodeEditor({ fileId, filePath, repoId, onClose, onSave, onAutoSync }: CodeEditorProps) {
+export function CodeEditor({ fileId, filePath, repoId, isStaged, onClose, onSave, onAutoSync }: CodeEditorProps) {
   const [content, setContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,22 +31,39 @@ export function CodeEditor({ fileId, filePath, repoId, onClose, onSave, onAutoSy
     } else {
       setContent("");
     }
-  }, [fileId]);
+  }, [fileId, isStaged]);
 
   const loadFileContent = async () => {
     if (!fileId) return;
     
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc("get_file_content_with_token", {
-        p_file_id: fileId,
-        p_token: shareToken || null,
-      });
+      if (isStaged) {
+        // Load from repo_staging for staged files
+        const { data, error } = await supabase
+          .from("repo_staging")
+          .select("*")
+          .eq("id", fileId)
+          .single();
 
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setContent(data[0].content);
-        setOriginalContent(data[0].content); // Store original for staging
+        if (error) throw error;
+        if (data) {
+          const content = data.new_content || "";
+          setContent(content);
+          setOriginalContent(content);
+        }
+      } else {
+        // Load from repo_files for committed files
+        const { data, error } = await supabase.rpc("get_file_content_with_token", {
+          p_file_id: fileId,
+          p_token: shareToken || null,
+        });
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+          setContent(data[0].content);
+          setOriginalContent(data[0].content);
+        }
       }
     } catch (error) {
       console.error("Error loading file:", error);

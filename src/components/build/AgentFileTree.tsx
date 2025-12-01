@@ -14,13 +14,14 @@ interface FileNode {
   name: string;
   path: string;
   type: "file" | "folder";
+  isStaged?: boolean;
   children?: FileNode[];
 }
 
 interface AgentFileTreeProps {
-  files: Array<{ id: string; path: string }>;
+  files: Array<{ id: string; path: string; isStaged?: boolean }>;
   selectedFileId: string | null;
-  onSelectFile: (fileId: string, path: string) => void;
+  onSelectFile: (fileId: string, path: string, isStaged?: boolean) => void;
   onAttachToPrompt: (fileId: string, path: string) => void;
   onReviewFile: (fileId: string, path: string) => void;
   onEditFile: (fileId: string, path: string) => void;
@@ -39,11 +40,11 @@ export function AgentFileTree({
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
   // Build tree structure from flat file list
-  const buildTree = (files: Array<{ id: string; path: string }>): FileNode[] => {
+  const buildTree = (files: Array<{ id: string; path: string; isStaged?: boolean }>): FileNode[] => {
     const root: FileNode[] = [];
     const folderMap = new Map<string, FileNode>();
 
-    files.forEach(({ id, path }) => {
+    files.forEach(({ id, path, isStaged }) => {
       const parts = path.split("/");
       let currentLevel = root;
       let currentPath = "";
@@ -58,6 +59,7 @@ export function AgentFileTree({
             name: part,
             path,
             type: "file",
+            isStaged,
           });
         } else {
           let folder = folderMap.get(currentPath);
@@ -127,10 +129,13 @@ export function AgentFileTree({
               isSelected ? "bg-accent" : ""
             }`}
             style={{ paddingLeft: `${level * 12 + 20}px` }}
-            onClick={() => onSelectFile(node.id, node.path)}
+            onClick={() => onSelectFile(node.id, node.path, node.isStaged)}
           >
             <File className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="text-sm truncate">{node.name}</span>
+            {node.isStaged && (
+              <span className="text-xs text-green-500 ml-auto">staged</span>
+            )}
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent>
