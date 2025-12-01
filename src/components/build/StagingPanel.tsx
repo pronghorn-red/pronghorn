@@ -100,7 +100,18 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
 
       if (stagedError) throw stagedError;
 
-      setStagedChanges((staged || []) as StagedChange[]);
+      const stagedArray = (staged || []) as StagedChange[];
+      setStagedChanges(stagedArray);
+
+      // If we're viewing a diff, update it with the latest data
+      if (viewingDiff) {
+        const updatedChange = stagedArray.find(
+          (change) => change.file_path === viewingDiff.file_path
+        );
+        if (updatedChange) {
+          setViewingDiff(updatedChange);
+        }
+      }
     } catch (error: any) {
       console.error("Error loading staged changes:", error);
       toast({
