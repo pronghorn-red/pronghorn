@@ -27,7 +27,7 @@ export function CodeEditor({
   isStaged, 
   initialContent, 
   showDiff = false,
-  diffOldContent = "",
+  diffOldContent,
   onClose, 
   onSave, 
   onAutoSync 
@@ -36,16 +36,21 @@ export function CodeEditor({
   const [originalContent, setOriginalContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showDiffMode, setShowDiffMode] = useState(false);
+  const [showDiffMode, setShowDiffMode] = useState(showDiff ?? false);
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
 
   useEffect(() => {
     if (initialContent !== undefined) {
-      // Use provided content directly
+      // Use provided content directly when passed in (e.g. from StagingPanel)
       setContent(initialContent);
-      setOriginalContent(initialContent);
+      // Use diffOldContent as the original baseline when provided, otherwise fall back to initialContent
+      if (typeof diffOldContent === "string") {
+        setOriginalContent(diffOldContent);
+      } else {
+        setOriginalContent(initialContent);
+      }
       setLoading(false);
     } else if (fileId) {
       loadFileContent();
@@ -53,7 +58,7 @@ export function CodeEditor({
       setContent("");
       setOriginalContent("");
     }
-  }, [fileId, isStaged, filePath, initialContent]);
+  }, [fileId, isStaged, filePath, initialContent, diffOldContent]);
 
   const loadFileContent = async () => {
     if (!filePath && !fileId) return;
@@ -270,7 +275,7 @@ export function CodeEditor({
           <h3 className="text-sm font-normal truncate text-[#cccccc]">{filePath}</h3>
         </div>
         <div className="flex items-center gap-3">
-          {isStaged && originalContent && (
+          {isStaged && (
             <label className="flex items-center gap-2 text-xs text-[#cccccc] cursor-pointer hover:text-white">
               <input
                 type="checkbox"
