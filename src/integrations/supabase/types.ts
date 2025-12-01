@@ -1504,6 +1504,32 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_repo_by_id_with_token: {
+        Args: { p_repo_id: string; p_token: string }
+        Returns: {
+          branch: string
+          created_at: string
+          id: string
+          is_default: boolean
+          organization: string
+          project_id: string
+          repo: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_repos"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_repo_files_with_token: {
+        Args: { p_file_paths?: string[]; p_repo_id: string; p_token: string }
+        Returns: {
+          content: string
+          path: string
+        }[]
+      }
       get_requirement_standards_with_token: {
         Args: { p_requirement_id: string; p_token: string }
         Returns: {

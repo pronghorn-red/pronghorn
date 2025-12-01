@@ -13,6 +13,11 @@ interface PushRequest {
   filePaths?: string[]; // Optional: push only specific files
 }
 
+interface RepoFile {
+  path: string;
+  content: string;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -47,12 +52,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get repo details
-    const { data: repo, error: repoError } = await supabaseClient
-      .from('project_repos')
-      .select('*')
-      .eq('id', repoId)
-      .single();
+    // Get repo details using RPC with token validation
+    const { data: repoData, error: repoError } = await supabaseClient.rpc('get_repo_by_id_with_token', {
+      p_repo_id: repoId,
+      p_token: shareToken || null,
+    });
+
+    const repo = repoData && repoData.length > 0 ? repoData[0] : null;
 
     if (repoError || !repo) {
       console.error('Repo not found:', repoError);
@@ -96,30 +102,12 @@ Deno.serve(async (req) => {
       pat = patData.pat;
     }
 
-    // Get files to push
-    let filesToPush;
-    let filesError;
-    
-    if (filePaths && filePaths.length > 0) {
-      // Get specific files
-      const result = await supabaseClient
-        .from('repo_files')
-        .select('path, content')
-        .eq('repo_id', repoId)
-        .in('path', filePaths);
-      
-      filesToPush = result.data;
-      filesError = result.error;
-    } else {
-      // Get all files
-      const result = await supabaseClient
-        .from('repo_files')
-        .select('path, content')
-        .eq('repo_id', repoId);
-      
-      filesToPush = result.data;
-      filesError = result.error;
-    }
+    // Get files to push using RPC with token validation
+    const { data: filesToPush, error: filesError } = await supabaseClient.rpc('get_repo_files_with_token', {
+      p_repo_id: repoId,
+      p_token: shareToken || null,
+      p_file_paths: filePaths && filePaths.length > 0 ? filePaths : null,
+    });
 
     if (filesError) {
       console.error('Error fetching files:', filesError);
@@ -182,7 +170,7 @@ Deno.serve(async (req) => {
 
     // Create blobs for each file
     const tree = await Promise.all(
-      filesToPush.map(async (file) => {
+      filesToPush.map(async (file: RepoFile) => {
         const blobUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/blobs`;
         const blobResponse = await fetch(blobUrl, {
           method: 'POST',
@@ -294,7 +282,7 @@ Deno.serve(async (req) => {
       .from('repo_files')
       .update({ last_commit_sha: newCommitData.sha })
       .eq('repo_id', repoId)
-      .in('path', filesToPush.map((f) => f.path));
+      .in('path', filesToPush.map((f: RepoFile) => f.path));
 
     if (updateError) {
       console.error('Failed to update commit SHA in database:', updateError);
