@@ -236,7 +236,13 @@ export default function Build() {
       new: change.new_content || "",
       path: change.file_path,
     });
-    setSelectedFileId(null);
+    // Keep file selected so "View Code" can return to editor
+    const fileInfo = files.find(f => f.path === change.file_path);
+    if (fileInfo) {
+      setSelectedFileId(fileInfo.id);
+      setSelectedFilePath(fileInfo.path);
+      setSelectedFileIsStaged(fileInfo.isStaged || false);
+    }
   };
 
   if (!projectId) {
