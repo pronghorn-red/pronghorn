@@ -51,7 +51,7 @@ export function RepoCard({ repo, onDelete, onManagePAT }: RepoCardProps) {
               Manage PAT
             </Button>
           )}
-          {onDelete && !repo.is_default && (
+          {onDelete && (
             <Button
               variant="destructive"
               size="sm"
