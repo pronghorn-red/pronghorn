@@ -16,7 +16,11 @@ import { AgentChatViewer } from "@/components/build/AgentChatViewer";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 
 export default function Build() {
   const { projectId } = useParams();
@@ -25,7 +29,7 @@ export default function Build() {
   const { toast } = useToast();
 
   const { repos, loading: reposLoading } = useRealtimeRepos(projectId);
-  const defaultRepo = repos.find(r => r.is_default);
+  const defaultRepo = repos.find((r) => r.is_default);
 
   const [files, setFiles] = useState<Array<{ id: string; path: string; isStaged?: boolean }>>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -60,7 +64,7 @@ export default function Build() {
         },
         () => {
           loadFiles();
-        }
+        },
       )
       .on(
         "postgres_changes",
@@ -72,7 +76,7 @@ export default function Build() {
         },
         () => {
           loadFiles();
-        }
+        },
       )
       .subscribe();
 
@@ -86,21 +90,27 @@ export default function Build() {
 
     try {
       // Load committed files
-      const { data: committedFiles, error: filesError } = await supabase.rpc("get_project_files_with_token", {
-        p_project_id: projectId!,
-        p_token: shareToken || null,
-      });
+      const { data: committedFiles, error: filesError } = await supabase.rpc(
+        "get_project_files_with_token",
+        {
+          p_project_id: projectId!,
+          p_token: shareToken || null,
+        },
+      );
 
       if (filesError) throw filesError;
 
       // Load staged changes
-      const { data: staged, error: stagedError } = await supabase.rpc("get_staged_changes_with_token", {
-        p_repo_id: defaultRepo.id,
-        p_token: shareToken || null,
-      });
+      const { data: staged, error: stagedError } = await supabase.rpc(
+        "get_staged_changes_with_token",
+        {
+          p_repo_id: defaultRepo.id,
+          p_token: shareToken || null,
+        },
+      );
 
       if (stagedError) throw stagedError;
-      
+
       setStagedChanges(staged || []);
 
       // Build comprehensive file list including all staged changes
@@ -110,14 +120,14 @@ export default function Build() {
       // Add all committed files, marking them as staged if they have pending changes
       (committedFiles || []).forEach((f: any) => {
         const stagedChange = stagedMap.get(f.path);
-        if (stagedChange && stagedChange.operation_type !== 'delete') {
+        if (stagedChange && stagedChange.operation_type !== "delete") {
           // File has staged edits/renames - mark as staged
           allFiles.push({
             id: f.id,
             path: f.path,
             isStaged: true,
           });
-        } else if (!stagedChange || stagedChange.operation_type !== 'delete') {
+        } else if (!stagedChange || stagedChange.operation_type !== "delete") {
           // Regular committed file without staged changes (or not being deleted)
           allFiles.push({
             id: f.id,
@@ -129,8 +139,10 @@ export default function Build() {
 
       // Add new staged files that don't exist in committed files
       (staged || []).forEach((change: any) => {
-        if (change.operation_type === 'add') {
-          const existsInCommitted = (committedFiles || []).some((f: any) => f.path === change.file_path);
+        if (change.operation_type === "add") {
+          const existsInCommitted = (committedFiles || []).some(
+            (f: any) => f.path === change.file_path,
+          );
           if (!existsInCommitted) {
             allFiles.push({
               id: change.id,
@@ -140,8 +152,10 @@ export default function Build() {
           }
         }
         // Handle renames - add the new path
-        if (change.operation_type === 'rename' && change.old_path) {
-          const existsInCommitted = (committedFiles || []).some((f: any) => f.path === change.file_path);
+        if (change.operation_type === "rename" && change.old_path) {
+          const existsInCommitted = (committedFiles || []).some(
+            (f: any) => f.path === change.file_path,
+          );
           if (!existsInCommitted) {
             allFiles.push({
               id: change.id,
@@ -171,7 +185,7 @@ export default function Build() {
   };
 
   const handleAttachToPrompt = (fileId: string, path: string) => {
-    if (!attachedFiles.find(f => f.id === fileId)) {
+    if (!attachedFiles.find((f) => f.id === fileId)) {
       setAttachedFiles([...attachedFiles, { id: fileId, path }]);
       toast({
         title: "File Attached",
@@ -181,7 +195,7 @@ export default function Build() {
   };
 
   const handleRemoveAttachedFile = (fileId: string) => {
-    setAttachedFiles(attachedFiles.filter(f => f.id !== fileId));
+    setAttachedFiles(attachedFiles.filter((f) => f.id !== fileId));
   };
 
   const handleReviewFile = (fileId: string, path: string) => {
@@ -236,10 +250,14 @@ export default function Build() {
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
-      
+
       <div className="flex relative">
-        <ProjectSidebar projectId={projectId} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
-        
+        <ProjectSidebar
+          projectId={projectId}
+          isOpen={isSidebarOpen}
+          onOpenChange={setIsSidebarOpen}
+        />
+
         <main className="flex-1 w-full">
           <div className="flex flex-col h-screen">
             <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -258,18 +276,34 @@ export default function Build() {
             </div>
 
             {/* Mobile Layout (< md) - Full Screen Tabs */}
-            <div className="md:hidden flex-1 overflow-hidden">
+            <div className="md:hidden flex-1 min-h-0 overflow-hidden">
               <Tabs defaultValue="files" className="h-full flex flex-col">
                 <TabsList className="grid w-full grid-cols-6 shrink-0">
-                  <TabsTrigger value="files" className="text-xs">Files</TabsTrigger>
-                  <TabsTrigger value="agent" className="text-xs">Agent</TabsTrigger>
-                  <TabsTrigger value="chat" className="text-xs">Chat</TabsTrigger>
-                  <TabsTrigger value="progress" className="text-xs">Progress</TabsTrigger>
-                  <TabsTrigger value="staging" className="text-xs">Staging</TabsTrigger>
-                  <TabsTrigger value="history" className="text-xs">History</TabsTrigger>
+                  <TabsTrigger value="files" className="text-xs">
+                    Files
+                  </TabsTrigger>
+                  <TabsTrigger value="agent" className="text-xs">
+                    Agent
+                  </TabsTrigger>
+                  <TabsTrigger value="chat" className="text-xs">
+                    Chat
+                  </TabsTrigger>
+                  <TabsTrigger value="progress" className="text-xs">
+                    Progress
+                  </TabsTrigger>
+                  <TabsTrigger value="staging" className="text-xs">
+                    Staging
+                  </TabsTrigger>
+                  <TabsTrigger value="history" className="text-xs">
+                    History
+                  </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="files" className="flex-1 overflow-hidden mt-0 flex flex-col">
+                {/* Files tab: file tree, then code editor / diff viewer */}
+                <TabsContent
+                  value="files"
+                  className="flex-1 min-h-0 overflow-hidden mt-0 flex flex-col"
+                >
                   {selectedFileId || selectedDiff ? (
                     <div className="h-full flex flex-col">
                       <div className="px-3 py-2 border-b flex items-center justify-between">
@@ -289,9 +323,8 @@ export default function Build() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              // Find staged change for this file
                               const stagedChange = stagedChanges.find(
-                                (c: any) => c.file_path === selectedFilePath
+                                (c: any) => c.file_path === selectedFilePath,
                               );
                               if (stagedChange) {
                                 handleViewDiff(stagedChange);
@@ -313,7 +346,7 @@ export default function Build() {
                           </Button>
                         )}
                       </div>
-                      <div className="flex-1 overflow-hidden">
+                      <div className="flex-1 min-h-0 overflow-hidden">
                         {selectedDiff ? (
                           <DiffViewer
                             oldContent={selectedDiff.old}
@@ -341,7 +374,7 @@ export default function Build() {
                       <div className="px-3 py-2 border-b">
                         <h3 className="text-sm font-semibold">Repository Files</h3>
                       </div>
-                      <div className="flex-1 overflow-auto">
+                      <div className="flex-1 min-h-0 overflow-auto">
                         <AgentFileTree
                           files={files}
                           selectedFileId={selectedFileId}
@@ -356,7 +389,10 @@ export default function Build() {
                   )}
                 </TabsContent>
 
-                <TabsContent value="agent" className="flex-1 overflow-hidden mt-0 p-3 flex flex-col">
+                <TabsContent
+                  value="agent"
+                  className="flex-1 min-h-0 overflow-hidden mt-0 p-3 flex flex-col"
+                >
                   <AgentPromptPanel
                     attachedFiles={attachedFiles}
                     onRemoveFile={handleRemoveAttachedFile}
@@ -367,22 +403,37 @@ export default function Build() {
                   />
                 </TabsContent>
 
-                <TabsContent value="chat" className="flex-1 overflow-hidden mt-0 p-3 flex flex-col">
-                  <AgentChatViewer sessionId={activeSessionId} shareToken={shareToken} />
-                </TabsContent>
-
-                <TabsContent value="progress" className="flex-1 overflow-hidden mt-0 p-3 flex flex-col">
-                  <AgentProgressMonitor 
+                <TabsContent
+                  value="chat"
+                  className="flex-1 min-h-0 overflow-hidden mt-0 p-3 flex flex-col"
+                >
+                  <AgentChatViewer
                     sessionId={activeSessionId}
                     shareToken={shareToken}
                   />
                 </TabsContent>
 
-                <TabsContent value="staging" className="flex-1 overflow-hidden mt-0 p-3 flex flex-col">
+                <TabsContent
+                  value="progress"
+                  className="flex-1 min-h-0 overflow-hidden mt-0 p-3 flex flex-col"
+                >
+                  <AgentProgressMonitor
+                    sessionId={activeSessionId}
+                    shareToken={shareToken}
+                  />
+                </TabsContent>
+
+                <TabsContent
+                  value="staging"
+                  className="flex-1 min-h-0 overflow-hidden mt-0 p-3 flex flex-col"
+                >
                   <StagingPanel projectId={projectId} onViewDiff={handleViewDiff} />
                 </TabsContent>
 
-                <TabsContent value="history" className="flex-1 overflow-hidden mt-0 p-3 flex flex-col">
+                <TabsContent
+                  value="history"
+                  className="flex-1 min-h-0 overflow-hidden mt-0 p-3 flex flex-col"
+                >
                   <CommitHistory projectId={projectId} />
                 </TabsContent>
               </Tabs>
@@ -391,97 +442,118 @@ export default function Build() {
             {/* Desktop Layout (>= md) - Resizable Panels */}
             <div className="hidden md:flex flex-1 overflow-hidden">
               <ResizablePanelGroup direction="horizontal" className="w-full h-full">
-              {/* Left: File Tree */}
-              <ResizablePanel defaultSize={20} minSize={15}>
-                <div className="h-full border-r">
-                  <div className="px-3 py-2 border-b">
-                    <h3 className="text-sm font-semibold">Files</h3>
+                {/* Left: File Tree */}
+                <ResizablePanel defaultSize={20} minSize={15}>
+                  <div className="h-full border-r">
+                    <div className="px-3 py-2 border-b">
+                      <h3 className="text-sm font-semibold">Files</h3>
+                    </div>
+                    <AgentFileTree
+                      files={files}
+                      selectedFileId={selectedFileId}
+                      onSelectFile={handleSelectFile}
+                      onAttachToPrompt={handleAttachToPrompt}
+                      onReviewFile={handleReviewFile}
+                      onEditFile={handleEditFile}
+                      onAuditFile={handleAuditFile}
+                    />
                   </div>
-                  <AgentFileTree
-                    files={files}
-                    selectedFileId={selectedFileId}
-                    onSelectFile={handleSelectFile}
-                    onAttachToPrompt={handleAttachToPrompt}
-                    onReviewFile={handleReviewFile}
-                    onEditFile={handleEditFile}
-                    onAuditFile={handleAuditFile}
-                  />
-                </div>
-              </ResizablePanel>
+                </ResizablePanel>
 
-              <ResizableHandle />
+                <ResizableHandle />
 
-              {/* Center: Code Editor or Diff Viewer */}
-              <ResizablePanel defaultSize={40} minSize={30}>
-                <div className="h-full">
-                  {selectedDiff ? (
-                    <DiffViewer
-                      oldContent={selectedDiff.old}
-                      newContent={selectedDiff.new}
-                      filePath={selectedDiff.path}
-                    />
-                  ) : (
-                    <CodeEditor
-                      fileId={selectedFileId}
-                      filePath={selectedFilePath}
-                      repoId={defaultRepo?.id || ""}
-                      isStaged={selectedFileIsStaged}
-                      onClose={() => {
-                        setSelectedFileId(null);
-                        setSelectedFilePath(null);
-                        setSelectedFileIsStaged(false);
-                      }}
-                      onSave={loadFiles}
-                    />
-                  )}
-                </div>
-              </ResizablePanel>
+                {/* Center: Code Editor or Diff Viewer */}
+                <ResizablePanel defaultSize={40} minSize={30}>
+                  <div className="h-full">
+                    {selectedDiff ? (
+                      <DiffViewer
+                        oldContent={selectedDiff.old}
+                        newContent={selectedDiff.new}
+                        filePath={selectedDiff.path}
+                      />
+                    ) : (
+                      <CodeEditor
+                        fileId={selectedFileId}
+                        filePath={selectedFilePath}
+                        repoId={defaultRepo?.id || ""}
+                        isStaged={selectedFileIsStaged}
+                        onClose={() => {
+                          setSelectedFileId(null);
+                          setSelectedFilePath(null);
+                          setSelectedFileIsStaged(false);
+                        }}
+                        onSave={loadFiles}
+                      />
+                    )}
+                  </div>
+                </ResizablePanel>
 
-              <ResizableHandle />
+                <ResizableHandle />
 
-              {/* Right: Tabs for Agent/Progress/Staging/History */}
-              <ResizablePanel defaultSize={40} minSize={25}>
-                <Tabs defaultValue="agent" className="h-full flex flex-col">
-                  <TabsList className="grid w-full grid-cols-5 shrink-0">
-                    <TabsTrigger value="agent">Agent</TabsTrigger>
-                    <TabsTrigger value="chat">Chat</TabsTrigger>
-                    <TabsTrigger value="progress">Progress</TabsTrigger>
-                    <TabsTrigger value="staging">Staging</TabsTrigger>
-                    <TabsTrigger value="history">History</TabsTrigger>
-                  </TabsList>
+                {/* Right: Tabs for Agent/Progress/Staging/History */}
+                <ResizablePanel defaultSize={40} minSize={25}>
+                  <Tabs defaultValue="agent" className="h-full flex flex-col">
+                    <TabsList className="grid w-full grid-cols-5 shrink-0">
+                      <TabsTrigger value="agent">Agent</TabsTrigger>
+                      <TabsTrigger value="chat">Chat</TabsTrigger>
+                      <TabsTrigger value="progress">Progress</TabsTrigger>
+                      <TabsTrigger value="staging">Staging</TabsTrigger>
+                      <TabsTrigger value="history">History</TabsTrigger>
+                    </TabsList>
 
-                  <TabsContent value="agent" className="flex-1 overflow-hidden mt-0 p-4">
-                    <AgentPromptPanel
-                      attachedFiles={attachedFiles}
-                      onRemoveFile={handleRemoveAttachedFile}
-                      onSubmitTask={handleSubmitTask}
-                      projectId={projectId}
-                      repoId={defaultRepo?.id || ""}
-                      shareToken={shareToken}
-                    />
-                  </TabsContent>
+                    <TabsContent
+                      value="agent"
+                      className="flex-1 overflow-hidden mt-0 p-4 flex flex-col"
+                    >
+                      <AgentPromptPanel
+                        attachedFiles={attachedFiles}
+                        onRemoveFile={handleRemoveAttachedFile}
+                        onSubmitTask={handleSubmitTask}
+                        projectId={projectId}
+                        repoId={defaultRepo?.id || ""}
+                        shareToken={shareToken}
+                      />
+                    </TabsContent>
 
-                  <TabsContent value="chat" className="flex-1 overflow-hidden mt-0 p-4 flex flex-col">
-                    <AgentChatViewer sessionId={activeSessionId} shareToken={shareToken} />
-                  </TabsContent>
+                    <TabsContent
+                      value="chat"
+                      className="flex-1 overflow-hidden mt-0 p-4 flex flex-col"
+                    >
+                      <AgentChatViewer
+                        sessionId={activeSessionId}
+                        shareToken={shareToken}
+                      />
+                    </TabsContent>
 
-                  <TabsContent value="progress" className="flex-1 overflow-hidden mt-0 p-4">
-                    <AgentProgressMonitor 
-                      sessionId={activeSessionId}
-                      shareToken={shareToken}
-                    />
-                  </TabsContent>
+                    <TabsContent
+                      value="progress"
+                      className="flex-1 overflow-hidden mt-0 p-4"
+                    >
+                      <AgentProgressMonitor
+                        sessionId={activeSessionId}
+                        shareToken={shareToken}
+                      />
+                    </TabsContent>
 
-                  <TabsContent value="staging" className="flex-1 overflow-auto mt-0 p-4">
-                    <StagingPanel projectId={projectId} onViewDiff={handleViewDiff} />
-                  </TabsContent>
+                    <TabsContent
+                      value="staging"
+                      className="flex-1 overflow-auto mt-0 p-4"
+                    >
+                      <StagingPanel
+                        projectId={projectId}
+                        onViewDiff={handleViewDiff}
+                      />
+                    </TabsContent>
 
-                  <TabsContent value="history" className="flex-1 overflow-auto mt-0 p-4">
-                    <CommitHistory projectId={projectId} />
-                  </TabsContent>
-                </Tabs>
-              </ResizablePanel>
-            </ResizablePanelGroup>
+                    <TabsContent
+                      value="history"
+                      className="flex-1 overflow-auto mt-0 p-4"
+                    >
+                      <CommitHistory projectId={projectId} />
+                    </TabsContent>
+                  </Tabs>
+                </ResizablePanel>
+              </ResizablePanelGroup>
             </div>
           </div>
         </main>
