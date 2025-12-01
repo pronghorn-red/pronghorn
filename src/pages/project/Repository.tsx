@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,6 +18,8 @@ import { GitBranch, FileCode, Settings, Database, Maximize2, FilePlus, FolderPlu
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
+import { useShareToken } from "@/hooks/useShareToken";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
@@ -30,8 +32,9 @@ interface FileNode {
 
 export default function Repository() {
   const { projectId } = useParams<{ projectId: string }>();
-  const [searchParams] = useSearchParams();
-  const shareToken = searchParams.get("token");
+  const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { user } = useAuth();
+  const hasAccessToken = !!shareToken || !!user;
   const { toast } = useToast();
   const [managePATDialogOpen, setManagePATDialogOpen] = useState(false);
   const [selectedRepoForPAT, setSelectedRepoForPAT] = useState<{id: string; name: string} | null>(null);
@@ -52,6 +55,49 @@ export default function Repository() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const { repos, loading, refetch } = useRealtimeRepos(projectId);
+
+  // If user is anonymous and no share token is present, block access
+  if (!projectId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-destructive">Invalid project ID</p>
+      </div>
+    );
+  }
+
+  if (!hasAccessToken) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <div className="flex relative">
+          <ProjectSidebar projectId={projectId} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
+          <main className="flex-1 w-full flex items-center justify-center">
+            <div className="text-center space-y-2 max-w-md px-4">
+              <h1 className="text-xl font-semibold">Share token required</h1>
+              <p className="text-sm text-muted-foreground">
+                This project can only be accessed via its secure sharing link. Please use the full URL that includes the <code>?token=</code> parameter.
+              </p>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // Wait for token to be set before loading data
+  if (shareToken && !isTokenSet) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <div className="flex relative">
+          <ProjectSidebar projectId={projectId} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
+          <main className="flex-1 w-full flex items-center justify-center">
+            <p>Loading...</p>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (repos.length > 0 && !selectedRepoId) {
