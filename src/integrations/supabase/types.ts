@@ -495,6 +495,47 @@ export type Database = {
           },
         ]
       }
+      project_repos: {
+        Row: {
+          branch: string
+          created_at: string
+          id: string
+          is_default: boolean
+          organization: string
+          project_id: string
+          repo: string
+          updated_at: string
+        }
+        Insert: {
+          branch?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          organization: string
+          project_id: string
+          repo: string
+          updated_at?: string
+        }
+        Update: {
+          branch?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          organization?: string
+          project_id?: string
+          repo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_repos_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_specifications: {
         Row: {
           created_at: string
@@ -681,6 +722,86 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repo_files: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          last_commit_sha: string | null
+          path: string
+          project_id: string
+          repo_id: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          last_commit_sha?: string | null
+          path: string
+          project_id: string
+          repo_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          last_commit_sha?: string | null
+          path?: string
+          project_id?: string
+          repo_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repo_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repo_files_repo_id_fkey"
+            columns: ["repo_id"]
+            isOneToOne: false
+            referencedRelation: "project_repos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repo_pats: {
+        Row: {
+          created_at: string
+          id: string
+          pat: string
+          repo_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          pat: string
+          repo_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          pat?: string
+          repo_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repo_pats_repo_id_fkey"
+            columns: ["repo_id"]
+            isOneToOne: false
+            referencedRelation: "project_repos"
             referencedColumns: ["id"]
           },
         ]
