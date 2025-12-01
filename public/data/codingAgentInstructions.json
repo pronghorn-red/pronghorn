@@ -167,7 +167,7 @@
     
     "move_file": {
       "rpc_function": "move_file_with_token",
-      "description": "Move or rename file to a new path and stage as rename operation. IMPORTANT: Use this for moving files between directories, not just renaming in place. Properly tracks both old_path and new_path.",
+      "description": "Move or rename file to a new path and stage as rename operation. This single tool handles ALL path changes: simple renames, directory moves, and combined move+rename operations. Properly tracks both old_path and new_path in staging.",
       "parameters": {
         "p_file_id": "UUID of the file to move/rename",
         "p_new_path": "Complete new file path including directory and filename (e.g., 'src/composables/useAuth.ts')",
@@ -175,13 +175,47 @@
       },
       "returns": "Staged rename operation record with old_path and new_path tracked",
       "use_cases": [
-        "Move files to different directories (e.g., 'composables/useAuth.ts' -> 'src/composables/useAuth.ts')",
+        "SIMPLE RENAME (same directory): Change filename only while keeping same directory",
+        "DIRECTORY MOVE (same filename): Move file to different directory keeping same filename", 
+        "COMBINED MOVE+RENAME: Move to new directory AND change filename in one operation",
         "Reorganize file structure across folders",
-        "Rename files while keeping them in same directory",
-        "Consolidate files from multiple directories into one"
+        "Consolidate files from multiple directories into one target directory"
       ],
+      "examples": {
+        "simple_rename": {
+          "scenario": "Rename useAuthentication.ts to useAuth.ts in same directory",
+          "old_path": "src/composables/useAuthentication.ts",
+          "new_path": "src/composables/useAuth.ts",
+          "explanation": "Only the filename changes, directory stays 'src/composables/'"
+        },
+        "directory_move": {
+          "scenario": "Move useAuth.ts from composables/ to src/composables/",
+          "old_path": "composables/useAuth.ts",
+          "new_path": "src/composables/useAuth.ts",
+          "explanation": "Filename stays 'useAuth.ts', directory changes from 'composables/' to 'src/composables/'"
+        },
+        "combined_move_rename": {
+          "scenario": "Move and rename: utils/authentication.ts to src/composables/useAuth.ts",
+          "old_path": "utils/authentication.ts",
+          "new_path": "src/composables/useAuth.ts",
+          "explanation": "Both directory changes (utils/ -> src/composables/) AND filename changes (authentication.ts -> useAuth.ts)"
+        },
+        "consolidation": {
+          "scenario": "Move all files from composables/ to src/composables/",
+          "approach": "Call move_file once for each file with new_path='src/composables/{filename}'",
+          "old_paths": ["composables/useAuth.ts", "composables/useUser.ts", "composables/useApi.ts"],
+          "new_paths": ["src/composables/useAuth.ts", "src/composables/useUser.ts", "src/composables/useApi.ts"],
+          "explanation": "Multiple move_file calls to consolidate files into target directory"
+        }
+      },
       "workflow": "Creates 'rename' operation in repo_staging table with proper old_path tracking",
-      "important": "ALWAYS use complete new path including all directory segments. This function handles both directory moves and simple renames."
+      "critical_rules": [
+        "ALWAYS specify the COMPLETE new path including all directory segments and filename",
+        "For simple renames: new_path must include the existing directory + new filename",
+        "For directory moves: new_path must include new directory + existing filename",
+        "For combined operations: new_path includes both new directory and new filename",
+        "NEVER use relative paths like '../' - always use complete paths from repository root"
+      ]
     },
     
     "batch_stage": {
