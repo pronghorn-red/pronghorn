@@ -282,6 +282,39 @@ export default function Repository() {
     }
   };
 
+  const handleClonePublic = async (name: string, sourceOrg: string, sourceRepo: string, sourceBranch: string, isPrivate: boolean) => {
+    if (!projectId) return;
+    
+    try {
+      const { error } = await supabase.functions.invoke('clone-public-repo', {
+        body: {
+          projectId,
+          repoName: name,
+          sourceOrg,
+          sourceRepo,
+          sourceBranch,
+          shareToken: shareToken || null,
+          isPrivate,
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Repository cloned",
+        description: "Public repository cloned successfully",
+      });
+      refetch();
+    } catch (error) {
+      console.error('Error cloning public repository:', error);
+      toast({
+        title: "Error",
+        description: "Failed to clone public repository",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleLinkExisting = async (org: string, repo: string, branch: string, pat?: string) => {
     if (!projectId) return;
     
@@ -637,6 +670,7 @@ export default function Repository() {
                       <CreateRepoDialog
                         onCreateEmpty={handleCreateEmpty}
                         onCreateFromTemplate={handleCreateFromTemplate}
+                        onClonePublic={handleClonePublic}
                         onLinkExisting={handleLinkExisting}
                       />
                     </div>

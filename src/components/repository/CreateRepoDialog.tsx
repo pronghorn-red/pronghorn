@@ -17,12 +17,14 @@ import { Plus } from "lucide-react";
 interface CreateRepoDialogProps {
   onCreateEmpty: (name: string, isPrivate: boolean) => void;
   onCreateFromTemplate: (name: string, templateOrg: string, templateRepo: string, isPrivate: boolean) => void;
+  onClonePublic: (name: string, sourceOrg: string, sourceRepo: string, sourceBranch: string, isPrivate: boolean) => void;
   onLinkExisting: (org: string, repo: string, branch: string, pat?: string) => void;
 }
 
 export function CreateRepoDialog({
   onCreateEmpty,
   onCreateFromTemplate,
+  onClonePublic,
   onLinkExisting,
 }: CreateRepoDialogProps) {
   const [open, setOpen] = useState(false);
@@ -32,6 +34,11 @@ export function CreateRepoDialog({
   const [templateOrg, setTemplateOrg] = useState("pronghorn-red");
   const [templateRepo, setTemplateRepo] = useState("");
   const [templatePrivate, setTemplatePrivate] = useState(true);
+  const [cloneName, setCloneName] = useState("");
+  const [cloneOrg, setCloneOrg] = useState("");
+  const [cloneRepo, setCloneRepo] = useState("");
+  const [cloneBranch, setCloneBranch] = useState("main");
+  const [clonePrivate, setClonePrivate] = useState(true);
   const [linkOrg, setLinkOrg] = useState("");
   const [linkRepo, setLinkRepo] = useState("");
   const [linkBranch, setLinkBranch] = useState("main");
@@ -54,6 +61,18 @@ export function CreateRepoDialog({
       setTemplateOrg("pronghorn-red");
       setTemplateRepo("");
       setTemplatePrivate(true);
+    }
+  };
+
+  const handleClonePublic = () => {
+    if (cloneName.trim() && cloneOrg.trim() && cloneRepo.trim()) {
+      onClonePublic(cloneName, cloneOrg, cloneRepo, cloneBranch, clonePrivate);
+      setOpen(false);
+      setCloneName("");
+      setCloneOrg("");
+      setCloneRepo("");
+      setCloneBranch("main");
+      setClonePrivate(true);
     }
   };
 
@@ -85,9 +104,10 @@ export function CreateRepoDialog({
         </DialogHeader>
 
         <Tabs defaultValue="empty">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="empty">Create Empty</TabsTrigger>
             <TabsTrigger value="template">From Template</TabsTrigger>
+            <TabsTrigger value="clone">Clone Public</TabsTrigger>
             <TabsTrigger value="link">Link Existing</TabsTrigger>
           </TabsList>
 
@@ -165,6 +185,61 @@ export function CreateRepoDialog({
             </div>
             <Button onClick={handleCreateFromTemplate} className="w-full">
               Create from Template
+            </Button>
+          </TabsContent>
+
+          <TabsContent value="clone" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="clone-org">Source Organization/Owner</Label>
+              <Input
+                id="clone-org"
+                placeholder="developmentation"
+                value={cloneOrg}
+                onChange={(e) => setCloneOrg(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="clone-repo">Source Repository</Label>
+              <Input
+                id="clone-repo"
+                placeholder="ai-starter-template"
+                value={cloneRepo}
+                onChange={(e) => setCloneRepo(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="clone-branch">Source Branch</Label>
+              <Input
+                id="clone-branch"
+                placeholder="main"
+                value={cloneBranch}
+                onChange={(e) => setCloneBranch(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="clone-name">New Repository Name</Label>
+              <Input
+                id="clone-name"
+                placeholder="my-project"
+                value={cloneName}
+                onChange={(e) => setCloneName(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="space-y-0.5">
+                <Label>Private repository</Label>
+                <p className="text-sm text-muted-foreground">
+                  When enabled, the GitHub repository will be private.
+                </p>
+              </div>
+              <Switch
+                checked={clonePrivate}
+                onCheckedChange={setClonePrivate}
+                aria-label="Toggle private repository"
+              />
+            </div>
+            <Button onClick={handleClonePublic} className="w-full">
+              Clone Public Repository
             </Button>
           </TabsContent>
 
