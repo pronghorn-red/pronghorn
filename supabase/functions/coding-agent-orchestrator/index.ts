@@ -172,16 +172,21 @@ serve(async (req) => {
 
     // Load attached files with path metadata
     let attachedFilesContent = "";
+    let attachedFilesSection = "";
     if (attachedFiles && attachedFiles.length > 0) {
-      const { data: files } = await supabase.rpc("agent_read_multiple_files_with_token", {
+      const { data: files, error: filesError } = await supabase.rpc("agent_read_multiple_files_with_token", {
         p_file_ids: attachedFiles.map(f => f.id),
         p_token: shareToken,
       });
       
-      if (files) {
+      if (filesError) {
+        console.error("Error loading attached files:", filesError);
+        attachedFilesSection = `\n\n⚠️ ATTACHED FILES (${attachedFiles.length} files attached but failed to load content):\n${attachedFiles.map(f => `- ${f.path} (ID: ${f.id})`).join("\n")}`;
+      } else if (files && files.length > 0) {
         attachedFilesContent = files.map(
-          (f: any) => `\n\n### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
-        ).join("");
+          (f: any) => `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
+        ).join("\n\n");
+        attachedFilesSection = `\n\n🔗 USER HAS ATTACHED ${files.length} FILE(S) - THESE FILES ARE YOUR PRIMARY FOCUS:\n\n${attachedFilesContent}\n\n⚠️ CRITICAL: The user has specifically attached these files for you to work with. Your task likely involves modifying, analyzing, or completing these files. Reference them by their paths shown above.`;
       }
     }
 
@@ -290,9 +295,7 @@ Your task mode is: ${mode}
 Auto-commit enabled: ${autoCommit}
 
 Project Context:
-${contextSummary}
-
-Attached Files: ${attachedFilesContent}
+${contextSummary}${attachedFilesSection}
 
 CRITICAL INSTRUCTION: Your FIRST operation MUST ALWAYS be:
 {
