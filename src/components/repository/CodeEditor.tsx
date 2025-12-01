@@ -69,7 +69,10 @@ export function CodeEditor({
           },
         );
 
-        if (stagedError) throw stagedError;
+        if (stagedError) {
+          console.error("Error loading staged changes:", stagedError);
+          throw stagedError;
+        }
 
         const changesForFile = (staged || []).filter(
           (change: any) => change.file_path === filePath,
@@ -85,7 +88,10 @@ export function CodeEditor({
           setContent(stagedContent);
           // Preserve the original baseline content for diffs/commits
           setOriginalContent(latestChange.old_content || stagedContent);
+          console.log("Loaded staged content for:", filePath);
           return;
+        } else {
+          console.log("No staged changes found for:", filePath);
         }
       }
 
@@ -96,7 +102,10 @@ export function CodeEditor({
           p_token: shareToken || null,
         });
 
-        if (error) throw error;
+        if (error) {
+          console.error("Error loading file content:", error);
+          throw error;
+        }
         if (data && data.length > 0) {
           setContent(data[0].content);
           setOriginalContent(data[0].content);

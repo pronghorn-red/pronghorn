@@ -26,7 +26,12 @@ export default function Build() {
   const defaultRepo = repos.find((r) => r.is_default);
 
   const [files, setFiles] = useState<Array<{ id: string; path: string; isStaged?: boolean }>>([]);
-  const [selectedFile, setSelectedFile] = useState<{ id: string; path: string; isStaged?: boolean } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ 
+    id: string; 
+    path: string; 
+    isStaged?: boolean;
+    stagingId?: string;
+  } | null>(null);
   const [stagedChanges, setStagedChanges] = useState<any[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; path: string }>>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -160,7 +165,25 @@ export default function Build() {
     }
   };
 
-  const handleSelectFile = (fileId: string, path: string, isStaged?: boolean) => {
+  const handleSelectFile = async (fileId: string, path: string, isStaged?: boolean) => {
+    // For staged-only files (newly created by agent), we need to load content from staging
+    if (isStaged) {
+      const stagedFile = stagedChanges.find(
+        (s) => s.file_path === path && (s.operation_type === "add" || s.operation_type === "edit")
+      );
+      
+      if (stagedFile) {
+        // Set selected file with staging info so CodeEditor knows to load from staging
+        setSelectedFile({ 
+          id: fileId, 
+          path, 
+          isStaged: true,
+          stagingId: stagedFile.id 
+        });
+        return;
+      }
+    }
+    
     setSelectedFile({ id: fileId, path, isStaged });
   };
 
@@ -203,7 +226,7 @@ export default function Build() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex h-screen flex-col bg-background">
       <PrimaryNav />
 
       <div className="flex flex-1 relative overflow-hidden">
@@ -262,6 +285,7 @@ export default function Build() {
                     <div className="h-full">
                       {selectedFile ? (
                         <CodeEditor
+                          key={selectedFile.path}
                           fileId={selectedFile.id}
                           filePath={selectedFile.path}
                           repoId={defaultRepo?.id || ""}
