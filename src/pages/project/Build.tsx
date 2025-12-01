@@ -202,7 +202,7 @@ export default function Build() {
             </div>
 
             {/* Desktop Layout (>= md) - Resizable Panels */}
-            <ResizablePanelGroup direction="horizontal" className="hidden md:flex md:flex-1">
+            <ResizablePanelGroup direction="horizontal" className="flex-1 hidden md:flex">
               {/* Left: File Tree */}
               <ResizablePanel defaultSize={20} minSize={15}>
                 <div className="h-full border-r">

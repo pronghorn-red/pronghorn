@@ -335,7 +335,7 @@ Execute file operations carefully and document your reasoning.`;
             break;
             
           case "create_file":
-            result = await supabase.rpc("agent_create_file_with_token", {
+            result = await supabase.rpc("create_file_with_token", {
               p_repo_id: op.params.repo_id,
               p_path: op.params.path,
               p_content: op.params.content,
