@@ -98,9 +98,17 @@ serve(async (req) => {
     console.log("Created session:", session.id);
 
     // Load instruction manifest
-    const manifestResponse = await fetch(
-      `${req.headers.get("origin")}/data/codingAgentInstructions.json`
-    );
+    const origin = req.headers.get("origin") || "https://ee63522c-070f-4241-b05a-90b794352667.lovableproject.com";
+    const manifestUrl = `${origin}/data/codingAgentInstructions.json`;
+    console.log("Fetching manifest from:", manifestUrl);
+    
+    const manifestResponse = await fetch(manifestUrl);
+    
+    if (!manifestResponse.ok) {
+      console.error("Failed to fetch manifest:", manifestResponse.status, await manifestResponse.text());
+      throw new Error(`Failed to load instruction manifest: ${manifestResponse.status}`);
+    }
+    
     const manifest = await manifestResponse.json();
 
     // Load attached files
