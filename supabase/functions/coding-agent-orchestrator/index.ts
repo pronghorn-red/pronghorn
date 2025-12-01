@@ -589,6 +589,7 @@ Think step-by-step and continue until the task is complete.`;
                 // Apply edit to the correct base content
                 baseLines.splice(startIdx, endIdx - startIdx + 1, op.params.new_content);
                 let finalContent = baseLines.join('\n');
+                let jsonParseWarning: string | undefined;
                 
                 // For JSON files, validate and normalize the result to avoid structural issues like duplicate keys
                 const isJsonFile = fileData[0].path.endsWith('.json');
@@ -606,9 +607,8 @@ Think step-by-step and continue until the task is complete.`;
                       `Error: ${parseError?.message || String(parseError)}. ` +
                       `Staging anyway to allow iterative fixes.`
                     );
-                    // Include error in result for agent awareness
-                    if (!result.data) result.data = {};
-                    result.data.json_parse_warning = parseError?.message || String(parseError);
+                    // Store warning to include in result after RPC call
+                    jsonParseWarning = parseError?.message || String(parseError);
                   }
                 }
                 
@@ -625,10 +625,15 @@ Think step-by-step and continue until the task is complete.`;
                 // Include the new content in result for agent to verify
                 const finalLines = finalContent.split('\n');
                 result.data = {
-                  ...result.data,
+                  ...(result.data || {}),
                   new_content_preview: finalLines.slice(Math.max(0, startIdx - 2), Math.min(finalLines.length, endIdx + 3)).join('\n'),
                   total_lines: finalLines.length,
                 };
+                
+                // Add JSON parse warning if there was one
+                if (jsonParseWarning) {
+                  result.data.json_parse_warning = jsonParseWarning;
+                }
               }
               break;
               
