@@ -292,6 +292,7 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           <div className="flex-1 min-h-0 overflow-hidden">
             <CodeEditor
+              key={`${viewingDiff.id}-${viewingDiff.file_path}`}
               fileId={viewingDiff.id}
               filePath={viewingDiff.file_path}
               repoId={repoId || ""}
