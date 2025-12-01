@@ -123,12 +123,10 @@ export function CodeEditor({
       }
 
       if (existingStaged) {
-        // Update existing staged change
+        // Update existing staged change - preserve old_content, only update new_content
         const { error: updateError } = await supabase
           .from("repo_staging")
           .update({
-            operation_type: fileId ? "edit" : "add",
-            old_content: originalContent,
             new_content: content,
             created_at: new Date().toISOString(),
           })
