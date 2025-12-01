@@ -1,0 +1,684 @@
+{
+  "agent_identity": {
+    "name": "CodingAgent",
+    "version": "1.0.0",
+    "description": "Autonomous coding agent capable of reading, editing, creating, and managing repository files with full project context awareness",
+    "capabilities": [
+      "File operations (read, edit, create, delete, rename)",
+      "Code search and analysis",
+      "Project context integration (requirements, standards, tech stack, canvas)",
+      "Staged change management",
+      "Episodic memory and chain-of-thought reasoning",
+      "Real-time progress tracking"
+    ]
+  },
+  
+  "file_operations": {
+    "search": {
+      "rpc_function": "agent_search_files_with_token",
+      "description": "Search file paths and content by keyword",
+      "parameters": {
+        "p_project_id": "UUID of the project",
+        "p_keyword": "Search term to find in paths or content",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Array of matching files with id, path, and content snippets",
+      "use_cases": [
+        "Find files containing specific functions or classes",
+        "Locate configuration files",
+        "Discover related code files"
+      ]
+    },
+    
+    "get_file_tree": {
+      "rpc_function": "agent_get_file_tree_with_token",
+      "description": "Retrieve complete file structure with metadata",
+      "parameters": {
+        "p_repo_id": "UUID of the repository",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Array of all files with id, path, updated_at, size",
+      "use_cases": [
+        "Understand project structure",
+        "Plan multi-file operations",
+        "Identify file organization patterns"
+      ]
+    },
+    
+    "list_by_path": {
+      "rpc_function": "agent_list_files_by_path_with_token",
+      "description": "List files matching a path prefix",
+      "parameters": {
+        "p_repo_id": "UUID of the repository",
+        "p_path_prefix": "Directory path or file pattern",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Array of matching files with metadata",
+      "use_cases": [
+        "List all files in a specific directory",
+        "Find all components in src/components/",
+        "Locate test files in specific folder"
+      ]
+    },
+    
+    "read_file": {
+      "rpc_function": "agent_read_file_with_token",
+      "description": "Read complete content of a single file",
+      "parameters": {
+        "p_file_id": "UUID of the file to read",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "File content, path, last_commit_sha",
+      "use_cases": [
+        "Review code before editing",
+        "Analyze implementation details",
+        "Understand existing logic"
+      ]
+    },
+    
+    "read_multiple": {
+      "rpc_function": "agent_read_multiple_files_with_token",
+      "description": "Read content of multiple files in batch",
+      "parameters": {
+        "p_file_ids": "Array of file UUIDs to read",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Array of file contents with paths",
+      "use_cases": [
+        "Load related files together",
+        "Analyze multi-file features",
+        "Batch context loading"
+      ]
+    },
+    
+    "edit_lines": {
+      "rpc_function": "agent_edit_file_lines_with_token",
+      "description": "Edit specific line range in a file and stage the change",
+      "parameters": {
+        "p_file_id": "UUID of the file to edit",
+        "p_start_line": "First line number to replace (1-indexed)",
+        "p_end_line": "Last line number to replace (1-indexed)",
+        "p_new_content": "New content to insert",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Staged change record",
+      "use_cases": [
+        "Modify specific functions",
+        "Update configuration sections",
+        "Fix bugs in targeted code blocks"
+      ],
+      "workflow": "Creates 'edit' operation in repo_staging table"
+    },
+    
+    "replace_file": {
+      "rpc_function": "agent_replace_file_with_token",
+      "description": "Replace entire file content and stage the change",
+      "parameters": {
+        "p_file_id": "UUID of the file to replace",
+        "p_new_content": "Complete new file content",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Staged change record",
+      "use_cases": [
+        "Rewrite entire component",
+        "Replace configuration file",
+        "Update complete module"
+      ],
+      "workflow": "Creates 'edit' operation in repo_staging table"
+    },
+    
+    "create_file": {
+      "rpc_function": "agent_create_file_with_token",
+      "description": "Create new file and stage as add operation",
+      "parameters": {
+        "p_repo_id": "UUID of the repository",
+        "p_path": "Full path for new file (e.g., 'src/components/NewComponent.tsx')",
+        "p_content": "Initial file content",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Staged add operation record",
+      "use_cases": [
+        "Add new components",
+        "Create utility files",
+        "Generate test files"
+      ],
+      "workflow": "Creates 'add' operation in repo_staging table"
+    },
+    
+    "delete_file": {
+      "rpc_function": "agent_delete_file_with_token",
+      "description": "Delete file and stage as delete operation",
+      "parameters": {
+        "p_file_id": "UUID of the file to delete",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Staged delete operation record",
+      "use_cases": [
+        "Remove deprecated files",
+        "Clean up unused components",
+        "Delete temporary files"
+      ],
+      "workflow": "Creates 'delete' operation in repo_staging table"
+    },
+    
+    "rename_file": {
+      "rpc_function": "agent_rename_file_with_token",
+      "description": "Rename/move file and stage as rename operation",
+      "parameters": {
+        "p_file_id": "UUID of the file to rename",
+        "p_new_path": "New file path",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Staged rename operation record",
+      "use_cases": [
+        "Reorganize file structure",
+        "Rename components",
+        "Move files to new directories"
+      ],
+      "workflow": "Creates 'rename' operation in repo_staging table"
+    },
+    
+    "batch_stage": {
+      "rpc_function": "agent_batch_stage_with_token",
+      "description": "Stage multiple file operations at once",
+      "parameters": {
+        "p_repo_id": "UUID of the repository",
+        "p_operations": "Array of operation objects with type, file_path, content, etc.",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Array of staged operation records",
+      "use_cases": [
+        "Multi-file refactoring",
+        "Feature implementation across files",
+        "Batch file cleanup"
+      ],
+      "workflow": "Creates multiple entries in repo_staging table"
+    }
+  },
+  
+  "staging_workflow": {
+    "description": "All file modifications go through staging before commit",
+    "stages": [
+      {
+        "stage": "1. Stage Changes",
+        "description": "Agent performs file operations which automatically create staged changes in repo_staging table",
+        "operations": ["edit", "create", "delete", "rename"],
+        "visibility": "User can view all staged changes in Staging Panel"
+      },
+      {
+        "stage": "2. Review (Optional)",
+        "description": "User reviews staged changes before commit",
+        "actions": [
+          "View diffs in DiffViewer",
+          "Discard unwanted changes",
+          "Request agent modifications"
+        ]
+      },
+      {
+        "stage": "3. Commit",
+        "description": "Staged changes are committed to database and history",
+        "trigger": "User clicks commit or auto_commit is enabled",
+        "rpc_function": "commit_staged_with_token",
+        "outcome": "Changes applied to repo_files, recorded in repo_commits"
+      },
+      {
+        "stage": "4. Push (Future)",
+        "description": "Committed changes pushed to GitHub repository",
+        "status": "To be implemented in later phase"
+      }
+    ],
+    
+    "auto_commit": {
+      "description": "When enabled, changes automatically commit without manual review",
+      "flag": "auto_commit boolean on project_repos table",
+      "use_cases": [
+        "Rapid prototyping",
+        "Trusted agent operations",
+        "Automated workflows"
+      ]
+    },
+    
+    "agent_signaling": {
+      "description": "How agent indicates readiness for commit",
+      "methods": [
+        {
+          "method": "Explicit Statement",
+          "example": "All changes have been staged and are ready for commit.",
+          "when": "After completing all file operations"
+        },
+        {
+          "method": "Blackboard Entry",
+          "example": "Add entry with entry_type='next_steps' stating 'Ready for commit'",
+          "when": "As part of episodic memory tracking"
+        },
+        {
+          "method": "Status Update",
+          "example": "Update session status to 'pending_commit'",
+          "when": "Task completion checkpoint"
+        }
+      ]
+    }
+  },
+  
+  "memory_system": {
+    "description": "Persistent episodic memory and chain-of-thought tracking",
+    
+    "agent_sessions": {
+      "description": "Track complete agent task execution lifecycle",
+      "rpc_create": "create_agent_session_with_token",
+      "rpc_update": "update_agent_session_status_with_token",
+      "rpc_get": "get_agent_sessions_with_token",
+      "fields": {
+        "id": "UUID of session",
+        "project_id": "Associated project",
+        "mode": "Execution mode (e.g., 'file_operations', 'review', 'audit')",
+        "status": "Current status (running, completed, failed, pending_commit)",
+        "task_description": "User's original task instruction",
+        "started_at": "Session start timestamp",
+        "completed_at": "Session completion timestamp"
+      },
+      "lifecycle": [
+        "Create session when task begins",
+        "Update status as task progresses",
+        "Mark completed when all work finished",
+        "Session persists for historical tracking"
+      ]
+    },
+    
+    "blackboard": {
+      "description": "Episodic memory entries documenting agent reasoning and progress",
+      "rpc_add": "add_blackboard_entry_with_token",
+      "rpc_get": "get_blackboard_entries_with_token",
+      "entry_types": {
+        "planning": {
+          "description": "Initial task analysis and execution plan",
+          "example": "Breaking down task into 3 steps: 1) Search for existing auth logic, 2) Create new AuthProvider component, 3) Update App.tsx to use provider"
+        },
+        "progress": {
+          "description": "Incremental updates during execution",
+          "example": "Completed step 1: Found 4 files with authentication logic. Proceeding to step 2."
+        },
+        "decision": {
+          "description": "Key decisions made during execution",
+          "example": "Decided to use Context API instead of Redux based on project size and existing patterns"
+        },
+        "reasoning": {
+          "description": "Explanation of why specific approach was chosen",
+          "example": "Choosing to edit existing file rather than create new one to maintain consistency with project structure"
+        },
+        "next_steps": {
+          "description": "What comes next in execution sequence",
+          "example": "Next: Update routing to require authentication for protected routes"
+        },
+        "reflection": {
+          "description": "Looking back at completed work and outcomes",
+          "example": "Successfully implemented authentication. All tests passing. Ready for commit."
+        }
+      },
+      "best_practices": [
+        "Add planning entry at start of task",
+        "Log progress after each major operation",
+        "Document decisions that affect implementation",
+        "Explain reasoning for non-obvious choices",
+        "Update next_steps as task evolves",
+        "Add reflection entry when task complete"
+      ]
+    },
+    
+    "session_context": {
+      "description": "Contextual data attached to agent session",
+      "rpc_add": "add_session_context_with_token",
+      "rpc_get": "get_session_context_with_token",
+      "context_types": {
+        "project_metadata": "Project settings and configuration",
+        "requirements": "Selected requirements for this task",
+        "standards": "Relevant standards to follow",
+        "tech_stack": "Technologies being used",
+        "artifacts": "Reference materials",
+        "canvas": "Architecture diagram data"
+      },
+      "usage": "Store complex context data that agent needs throughout session"
+    }
+  },
+  
+  "project_context_access": {
+    "description": "Agent can access complete ProjectSelector data to inform decisions",
+    
+    "project_metadata": {
+      "rpc_function": "agent_get_project_metadata_with_token",
+      "returns": {
+        "id": "Project UUID",
+        "name": "Project name",
+        "description": "Project description",
+        "organization": "Organization name",
+        "budget": "Project budget",
+        "scope": "Project scope",
+        "priority": "Priority level",
+        "selected_model": "Configured LLM model",
+        "max_tokens": "Token limit",
+        "thinking_enabled": "Extended thinking mode",
+        "timeline_start": "Project start date",
+        "timeline_end": "Project end date"
+      },
+      "use_cases": [
+        "Understand project constraints",
+        "Align with project priorities",
+        "Respect token limits"
+      ]
+    },
+    
+    "requirements": {
+      "rpc_function": "agent_search_requirements_with_token",
+      "parameters": {
+        "p_project_id": "Project UUID",
+        "p_search_term": "Optional keyword search",
+        "p_token": "Share token"
+      },
+      "returns": {
+        "id": "Requirement UUID",
+        "code": "Hierarchical code (e.g., 'EPIC1.FEAT2.STORY3')",
+        "title": "Requirement title",
+        "content": "Detailed content",
+        "type": "Type (epic, feature, story, acceptance_criteria)",
+        "parent_id": "Parent requirement UUID",
+        "order_index": "Position in tree"
+      },
+      "use_cases": [
+        "Verify implementation meets requirements",
+        "Find related requirements",
+        "Audit code against specifications"
+      ]
+    },
+    
+    "standards": {
+      "rpc_function": "agent_search_standards_with_token",
+      "parameters": {
+        "p_project_id": "Project UUID",
+        "p_search_term": "Optional keyword search",
+        "p_token": "Share token"
+      },
+      "returns": {
+        "id": "Standard UUID",
+        "code": "Standard code",
+        "title": "Standard title",
+        "description": "Standard description",
+        "content": "Detailed content",
+        "category_id": "Category UUID",
+        "category_name": "Category name (e.g., 'Cyber Security', 'Accessibility')"
+      },
+      "use_cases": [
+        "Ensure code follows standards",
+        "Find security requirements",
+        "Check accessibility guidelines"
+      ]
+    },
+    
+    "tech_stacks": {
+      "rpc_function": "agent_get_tech_stacks_with_token",
+      "parameters": {
+        "p_project_id": "Project UUID",
+        "p_token": "Share token"
+      },
+      "returns": {
+        "id": "Tech stack UUID",
+        "name": "Technology name",
+        "description": "Description",
+        "type": "Type (framework, library, tool, etc.)",
+        "parent_id": "Parent tech stack UUID"
+      },
+      "use_cases": [
+        "Know which technologies to use",
+        "Follow framework patterns",
+        "Use correct libraries"
+      ]
+    },
+    
+    "canvas_summary": {
+      "rpc_function": "agent_get_canvas_summary_with_token",
+      "parameters": {
+        "p_project_id": "Project UUID",
+        "p_token": "Share token"
+      },
+      "returns": {
+        "nodes_count": "Total nodes",
+        "edges_count": "Total edges",
+        "layers_count": "Total layers",
+        "nodes": "Array of node objects with type, label, data",
+        "edges": "Array of edge connections",
+        "node_types": "Summary of node types (PAGE, COMPONENT, API, DATABASE, etc.)"
+      },
+      "use_cases": [
+        "Understand system architecture",
+        "Know what components exist",
+        "See data flow patterns"
+      ]
+    },
+    
+    "artifacts": {
+      "rpc_function": "agent_get_artifacts_with_token",
+      "parameters": {
+        "p_project_id": "Project UUID",
+        "p_search_term": "Optional keyword search",
+        "p_token": "Share token"
+      },
+      "returns": {
+        "id": "Artifact UUID",
+        "ai_title": "AI-generated title",
+        "ai_summary": "AI-generated summary",
+        "content": "Full artifact content",
+        "source_type": "Source type",
+        "created_at": "Creation timestamp"
+      },
+      "use_cases": [
+        "Access reference documentation",
+        "Review design decisions",
+        "Find implementation notes"
+      ]
+    }
+  },
+  
+  "progress_tracking": {
+    "description": "Real-time logging of agent operations for user visibility",
+    
+    "log_operation": {
+      "rpc_function": "log_agent_operation_with_token",
+      "description": "Log each file operation as it occurs",
+      "parameters": {
+        "p_session_id": "Current agent session UUID",
+        "p_operation_type": "Type (search, read, edit, create, delete, rename, batch)",
+        "p_file_path": "File path being operated on",
+        "p_status": "Status (pending, in_progress, completed, failed)",
+        "p_details": "JSONB with operation-specific details",
+        "p_error_message": "Error message if failed",
+        "p_token": "Share token"
+      },
+      "workflow": [
+        "Log 'pending' when starting operation",
+        "Update to 'in_progress' during execution",
+        "Update to 'completed' when done",
+        "Update to 'failed' if error occurs"
+      ],
+      "visibility": "User sees real-time updates in AgentProgressMonitor"
+    },
+    
+    "update_status": {
+      "rpc_function": "update_agent_operation_status_with_token",
+      "description": "Update status of existing operation log",
+      "use_cases": [
+        "Mark operation complete",
+        "Record error details",
+        "Track completion time"
+      ]
+    },
+    
+    "best_practices": [
+      "Log operation before starting",
+      "Include meaningful details (lines modified, file size, etc.)",
+      "Always update to final status (completed/failed)",
+      "Log batch operations as single entry with counts",
+      "Include error messages for debugging"
+    ]
+  },
+  
+  "api_configuration": {
+    "description": "Agent must use project-configured API keys and models",
+    
+    "model_selection": {
+      "source": "project.selected_model field",
+      "options": [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro", 
+        "claude-sonnet-4-5",
+        "claude-opus-4-1-20250805",
+        "grok-beta"
+      ],
+      "api_keys": {
+        "gemini": "GEMINI_API_KEY environment variable",
+        "claude": "ANTHROPIC_API_KEY environment variable",
+        "grok": "XAI_API_KEY environment variable"
+      },
+      "critical": "NEVER use hardcoded API keys or models. Always read from project settings and select appropriate key based on selectedModel field."
+    },
+    
+    "token_limits": {
+      "source": "project.max_tokens field",
+      "description": "Maximum context window size",
+      "usage": "Respect this limit when building prompts with context"
+    },
+    
+    "thinking_mode": {
+      "source": "project.thinking_enabled and project.thinking_budget fields",
+      "description": "Extended reasoning mode for complex tasks",
+      "when_to_use": [
+        "Complex multi-file refactoring",
+        "Architecture decisions",
+        "Debugging difficult issues"
+      ]
+    },
+    
+    "error_handling": {
+      "402_payment_required": "User needs to add credits to their API account",
+      "429_rate_limit": "Too many requests, need to slow down",
+      "action": "Surface these errors clearly to user via progress tracking"
+    }
+  },
+  
+  "task_patterns": {
+    "review_file": {
+      "description": "Analyze file and provide feedback without changes",
+      "steps": [
+        "Read file content",
+        "Access related requirements/standards",
+        "Analyze code quality, patterns, issues",
+        "Log findings to blackboard",
+        "Do NOT stage any changes"
+      ]
+    },
+    
+    "edit_file": {
+      "description": "Make specific modifications to file",
+      "steps": [
+        "Read current file content",
+        "Understand context and requirements",
+        "Determine exact changes needed",
+        "Use edit_lines or replace_file appropriately",
+        "Log operation for progress tracking",
+        "Document changes in blackboard"
+      ]
+    },
+    
+    "audit_file": {
+      "description": "Compare file against requirements",
+      "steps": [
+        "Read file content",
+        "Fetch relevant requirements via agent_search_requirements_with_token",
+        "Compare implementation to specifications",
+        "Identify gaps or violations",
+        "Log audit findings to blackboard",
+        "Optionally suggest fixes"
+      ]
+    },
+    
+    "create_feature": {
+      "description": "Implement new feature across multiple files",
+      "steps": [
+        "Break down requirements into files needed",
+        "Log plan to blackboard",
+        "Search for related existing code",
+        "Create new files as needed",
+        "Edit existing files for integration",
+        "Log progress for each file",
+        "Reflection entry when complete"
+      ]
+    },
+    
+    "refactor": {
+      "description": "Restructure code without changing functionality",
+      "steps": [
+        "Analyze current structure",
+        "Plan refactoring approach (blackboard)",
+        "Batch read related files",
+        "Stage changes using batch_stage for efficiency",
+        "Log all operations",
+        "Verify no functionality changed"
+      ]
+    }
+  },
+  
+  "activation_strings": {
+    "description": "Keywords that trigger specific agent modes",
+    "patterns": {
+      "review": ["review", "analyze", "check", "inspect"],
+      "edit": ["edit", "modify", "update", "change", "fix"],
+      "create": ["create", "add", "implement", "build"],
+      "delete": ["delete", "remove", "clean"],
+      "audit": ["audit", "compare", "verify", "validate"],
+      "refactor": ["refactor", "restructure", "reorganize"]
+    },
+    "context_attachment": {
+      "description": "When files are attached to prompt, they should be included in context",
+      "usage": "Read attached files first, then proceed with task"
+    }
+  },
+  
+  "guidelines": {
+    "code_quality": [
+      "Follow existing code style and patterns",
+      "Use TypeScript types properly",
+      "Add comments for complex logic",
+      "Keep functions small and focused",
+      "Follow DRY principle"
+    ],
+    
+    "file_organization": [
+      "Respect existing directory structure",
+      "Place new files in appropriate locations",
+      "Follow naming conventions",
+      "Organize imports consistently"
+    ],
+    
+    "testing": [
+      "Create test files when implementing new features",
+      "Follow existing test patterns",
+      "Test edge cases",
+      "Mock external dependencies"
+    ],
+    
+    "documentation": [
+      "Update README when adding features",
+      "Document complex algorithms",
+      "Add JSDoc comments for public APIs",
+      "Keep comments up to date"
+    ],
+    
+    "security": [
+      "Never expose API keys or secrets",
+      "Validate user inputs",
+      "Follow security standards from standards library",
+      "Use secure coding practices"
+    ]
+  },
+  
+  "version": "1.0.0",
+  "last_updated": "2025-12-01"
+}
