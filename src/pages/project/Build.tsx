@@ -308,34 +308,46 @@ export default function Build() {
                   {/* Left: File Tree */}
                   <ResizablePanel defaultSize={20} minSize={15}>
                     <div className="h-full flex flex-col border-r bg-[#1e1e1e]">
-                      <div className="p-2 border-b border-[#3e3e42] flex items-center justify-between bg-[#252526]">
-                        <span className="text-sm font-semibold text-[#cccccc]">Files</span>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setCreateType("file");
-                              setCreateDialogOpen(true);
-                            }}
-                            className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc]"
-                            title="New File"
-                          >
-                            <FilePlus className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setCreateType("folder");
-                              setCreateDialogOpen(true);
-                            }}
-                            className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc]"
-                            title="New Folder"
-                          >
-                            <FolderPlus className="h-3.5 w-3.5" />
-                          </Button>
+                      <div className="p-2 border-b border-[#3e3e42] bg-[#252526]">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-semibold text-[#cccccc]">Files</span>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setCreateType("file");
+                                setCreateDialogOpen(true);
+                              }}
+                              className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc]"
+                              title="New File"
+                            >
+                              <FilePlus className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setCreateType("folder");
+                                setCreateDialogOpen(true);
+                              }}
+                              className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc]"
+                              title="New Folder"
+                            >
+                              <FolderPlus className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
+                        {selectedFolderPath && (
+                          <div className="text-xs text-[#858585] truncate bg-[#2a2d2e] px-2 py-1 rounded border border-[#3e3e42]">
+                            Creating in: <span className="text-[#4ec9b0]">{selectedFolderPath}</span>
+                          </div>
+                        )}
+                        {!selectedFolderPath && selectedFile && (
+                          <div className="text-xs text-[#858585] truncate bg-[#2a2d2e] px-2 py-1 rounded border border-[#3e3e42]">
+                            Creating in: <span className="text-[#4ec9b0]">root</span>
+                          </div>
+                        )}
                       </div>
                       <div className="flex-1 min-h-0 overflow-hidden">
                         <AgentFileTree
