@@ -24,11 +24,10 @@ const activeNavItems = [
   { icon: Layout, label: "Canvas", path: "canvas" },
   { icon: GitBranch, label: "Repository", path: "repository" },
   { icon: FileText, label: "Specifications", path: "specifications" },
+  { icon: Hammer, label: "Build", path: "build" },
 ];
 
-const comingSoonItems = [
-  { icon: Hammer, label: "Build" },
-];
+const comingSoonItems: Array<{ icon: any; label: string }> = [];
 
 export function ProjectSidebar({ projectId, isOpen = false, onOpenChange }: ProjectSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -132,27 +131,29 @@ export function ProjectSidebar({ projectId, isOpen = false, onOpenChange }: Proj
             </div>
 
             {/* Coming Soon Section */}
-            <div className="mt-auto pt-4 border-t border-border space-y-1">
-              {(isMobile || !isCollapsed) && (
-                <div className="px-3 py-2 text-xs font-semibold text-muted-foreground">
-                  Coming Soon
-                </div>
-              )}
-              {comingSoonItems.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground/50 cursor-not-allowed"
-                >
-                  <item.icon className="h-4 w-4 flex-shrink-0" />
-                  {(isMobile || !isCollapsed) && (
-                    <div className="flex items-center justify-between flex-1">
-                      <span>{item.label}</span>
-                      <Badge variant="secondary" className="text-xs">Soon</Badge>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+            {comingSoonItems.length > 0 && (
+              <div className="mt-auto pt-4 border-t border-border space-y-1">
+                {(isMobile || !isCollapsed) && (
+                  <div className="px-3 py-2 text-xs font-semibold text-muted-foreground">
+                    Coming Soon
+                  </div>
+                )}
+                {comingSoonItems.map((item) => (
+                  <div
+                    key={item.label}
+                    className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground/50 cursor-not-allowed"
+                  >
+                    <item.icon className="h-4 w-4 flex-shrink-0" />
+                    {(isMobile || !isCollapsed) && (
+                      <div className="flex items-center justify-between flex-1">
+                        <span>{item.label}</span>
+                        <Badge variant="secondary" className="text-xs">Soon</Badge>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </nav>
         </div>
       </aside>

@@ -497,6 +497,7 @@ export type Database = {
       }
       project_repos: {
         Row: {
+          auto_commit: boolean | null
           branch: string
           created_at: string
           id: string
@@ -507,6 +508,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_commit?: boolean | null
           branch?: string
           created_at?: string
           id?: string
@@ -517,6 +519,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_commit?: boolean | null
           branch?: string
           created_at?: string
           id?: string
@@ -735,7 +738,9 @@ export type Database = {
           committed_by: string | null
           created_at: string
           files_changed: number
+          files_metadata: Json | null
           id: string
+          parent_commit_id: string | null
           project_id: string
           repo_id: string
         }
@@ -747,7 +752,9 @@ export type Database = {
           committed_by?: string | null
           created_at?: string
           files_changed?: number
+          files_metadata?: Json | null
           id?: string
+          parent_commit_id?: string | null
           project_id: string
           repo_id: string
         }
@@ -759,11 +766,20 @@ export type Database = {
           committed_by?: string | null
           created_at?: string
           files_changed?: number
+          files_metadata?: Json | null
           id?: string
+          parent_commit_id?: string | null
           project_id?: string
           repo_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "repo_commits_parent_commit_id_fkey"
+            columns: ["parent_commit_id"]
+            isOneToOne: false
+            referencedRelation: "repo_commits"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "repo_commits_project_id_fkey"
             columns: ["project_id"]
@@ -853,6 +869,60 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "repo_pats_repo_id_fkey"
+            columns: ["repo_id"]
+            isOneToOne: false
+            referencedRelation: "project_repos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repo_staging: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          file_path: string
+          id: string
+          new_content: string | null
+          old_content: string | null
+          old_path: string | null
+          operation_type: string
+          project_id: string
+          repo_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          file_path: string
+          id?: string
+          new_content?: string | null
+          old_content?: string | null
+          old_path?: string | null
+          operation_type: string
+          project_id: string
+          repo_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          file_path?: string
+          id?: string
+          new_content?: string | null
+          old_content?: string | null
+          old_path?: string | null
+          operation_type?: string
+          project_id?: string
+          repo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repo_staging_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repo_staging_repo_id_fkey"
             columns: ["repo_id"]
             isOneToOne: false
             referencedRelation: "project_repos"
@@ -1239,6 +1309,35 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      commit_staged_with_token: {
+        Args: {
+          p_branch?: string
+          p_commit_message: string
+          p_commit_sha?: string
+          p_repo_id: string
+          p_token: string
+        }
+        Returns: {
+          branch: string
+          commit_message: string
+          commit_sha: string
+          committed_at: string
+          committed_by: string | null
+          created_at: string
+          files_changed: number
+          files_metadata: Json | null
+          id: string
+          parent_commit_id: string | null
+          project_id: string
+          repo_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_commits"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_file_with_token: {
         Args: {
           p_content?: string
@@ -1273,6 +1372,7 @@ export type Database = {
           p_token: string
         }
         Returns: {
+          auto_commit: boolean | null
           branch: string
           created_at: string
           id: string
@@ -1340,6 +1440,10 @@ export type Database = {
       delete_requirement_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
+      }
+      discard_staged_with_token: {
+        Args: { p_repo_id: string; p_token: string }
+        Returns: number
       }
       generate_requirement_code: {
         Args: { p_parent_id: string; p_project_id: string; p_type: string }
@@ -1458,6 +1562,34 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_commit_history_with_token: {
+        Args: {
+          p_branch?: string
+          p_limit?: number
+          p_repo_id: string
+          p_token: string
+        }
+        Returns: {
+          branch: string
+          commit_message: string
+          commit_sha: string
+          committed_at: string
+          committed_by: string | null
+          created_at: string
+          files_changed: number
+          files_metadata: Json | null
+          id: string
+          parent_commit_id: string | null
+          project_id: string
+          repo_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "repo_commits"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_file_content_with_token: {
         Args: { p_file_id: string; p_token: string }
         Returns: {
@@ -1486,6 +1618,7 @@ export type Database = {
       get_project_repos_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
+          auto_commit: boolean | null
           branch: string
           created_at: string
           id: string
@@ -1585,6 +1718,7 @@ export type Database = {
       get_repo_by_id_with_token: {
         Args: { p_repo_id: string; p_token: string }
         Returns: {
+          auto_commit: boolean | null
           branch: string
           created_at: string
           id: string
@@ -1611,7 +1745,9 @@ export type Database = {
           committed_by: string | null
           created_at: string
           files_changed: number
+          files_metadata: Json | null
           id: string
+          parent_commit_id: string | null
           project_id: string
           repo_id: string
         }[]
@@ -1662,6 +1798,27 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "requirements"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_staged_changes_with_token: {
+        Args: { p_repo_id: string; p_token: string }
+        Returns: {
+          created_at: string | null
+          created_by: string | null
+          file_path: string
+          id: string
+          new_content: string | null
+          old_content: string | null
+          old_path: string | null
+          operation_type: string
+          project_id: string
+          repo_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "repo_staging"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -1924,7 +2081,9 @@ export type Database = {
           committed_by: string | null
           created_at: string
           files_changed: number
+          files_metadata: Json | null
           id: string
+          parent_commit_id: string | null
           project_id: string
           repo_id: string
         }
@@ -1966,6 +2125,10 @@ export type Database = {
           p_token?: string
         }
         Returns: number
+      }
+      rollback_to_commit_with_token: {
+        Args: { p_commit_id: string; p_repo_id: string; p_token: string }
+        Returns: boolean
       }
       save_anonymous_project_to_user: {
         Args: { p_project_id: string; p_share_token: string }
@@ -2023,6 +2186,35 @@ export type Database = {
         }
       }
       set_share_token: { Args: { token: string }; Returns: undefined }
+      stage_file_change_with_token: {
+        Args: {
+          p_file_path: string
+          p_new_content?: string
+          p_old_content?: string
+          p_old_path?: string
+          p_operation_type: string
+          p_repo_id: string
+          p_token: string
+        }
+        Returns: {
+          created_at: string | null
+          created_by: string | null
+          file_path: string
+          id: string
+          new_content: string | null
+          old_content: string | null
+          old_path: string | null
+          operation_type: string
+          project_id: string
+          repo_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_staging"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_artifact_with_token:
         | {
             Args: {

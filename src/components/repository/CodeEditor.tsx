@@ -17,6 +17,7 @@ interface CodeEditorProps {
 
 export function CodeEditor({ fileId, filePath, repoId, onClose, onSave, onAutoSync }: CodeEditorProps) {
   const [content, setContent] = useState("");
+  const [originalContent, setOriginalContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -44,6 +45,7 @@ export function CodeEditor({ fileId, filePath, repoId, onClose, onSave, onAutoSy
       if (error) throw error;
       if (data && data.length > 0) {
         setContent(data[0].content);
+        setOriginalContent(data[0].content); // Store original for staging
       }
     } catch (error) {
       console.error("Error loading file:", error);
@@ -62,26 +64,28 @@ export function CodeEditor({ fileId, filePath, repoId, onClose, onSave, onAutoSy
     
     setSaving(true);
     try {
-      const { error } = await supabase.rpc("upsert_file_with_token", {
+      // Stage the file change instead of directly saving to repo_files
+      const { error } = await supabase.rpc("stage_file_change_with_token", {
         p_repo_id: repoId,
-        p_path: filePath,
-        p_content: content,
         p_token: shareToken || null,
+        p_operation_type: fileId ? "edit" : "add",
+        p_file_path: filePath,
+        p_old_content: originalContent,
+        p_new_content: content,
       });
 
       if (error) throw error;
 
       toast({
-        title: "Success",
-        description: "File saved successfully",
+        title: "Staged",
+        description: "File changes staged successfully. Commit from Build page to persist.",
       });
       onSave();
-      if (onAutoSync) onAutoSync();
     } catch (error) {
-      console.error("Error saving file:", error);
+      console.error("Error staging file:", error);
       toast({
         title: "Error",
-        description: "Failed to save file",
+        description: "Failed to stage file changes",
         variant: "destructive",
       });
     } finally {
