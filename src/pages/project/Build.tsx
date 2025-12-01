@@ -343,11 +343,6 @@ export default function Build() {
                             Creating in: <span className="text-[#4ec9b0]">{selectedFolderPath}</span>
                           </div>
                         )}
-                        {!selectedFolderPath && selectedFile && (
-                          <div className="text-xs text-[#858585] truncate bg-[#1e2a3a] px-2 py-1 rounded border border-[#3e5a7a]">
-                            Creating in: <span className="text-[#4ec9b0]">root</span>
-                          </div>
-                        )}
                       </div>
                       <div className="flex-1 min-h-0 overflow-hidden">
                         <AgentFileTree
