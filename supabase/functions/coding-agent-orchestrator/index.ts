@@ -17,6 +17,32 @@ interface TaskRequest {
   autoCommit?: boolean;
 }
 
+function parseAgentResponseText(rawText: string): any {
+  let text = rawText.trim();
+
+  // Try to extract JSON from a ```json ... ``` fenced block if present
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenceMatch && fenceMatch[1]) {
+    text = fenceMatch[1].trim();
+  } else {
+    // Strip stray markdown fences if present
+    text = text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Fallback: grab from first '{' to last '}'
+    const firstBrace = text.indexOf("{");
+    const lastBrace = text.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const candidate = text.slice(firstBrace, lastBrace + 1);
+      return JSON.parse(candidate);
+    }
+    throw new Error("Unable to parse agent JSON response");
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -267,17 +293,17 @@ Execute file operations carefully and document your reasoning.`;
     const llmData = await llmResponse.json();
     console.log("LLM response received");
 
-    // Parse LLM response
+    // Parse LLM response with robust markdown/code-fence handling
     let agentResponse: any;
     if (selectedModel.startsWith("gemini")) {
-      const text = llmData.candidates[0].content.parts[0].text;
-      agentResponse = JSON.parse(text);
+      const text = llmData.candidates[0].content.parts[0].text as string;
+      agentResponse = parseAgentResponseText(text);
     } else if (selectedModel.startsWith("claude")) {
-      const text = llmData.content[0].text;
-      agentResponse = JSON.parse(text);
+      const text = llmData.content[0].text as string;
+      agentResponse = parseAgentResponseText(text);
     } else if (selectedModel.startsWith("grok")) {
-      const text = llmData.choices[0].message.content;
-      agentResponse = JSON.parse(text);
+      const text = llmData.choices[0].message.content as string;
+      agentResponse = parseAgentResponseText(text);
     }
 
     console.log("Parsed agent response:", agentResponse);
