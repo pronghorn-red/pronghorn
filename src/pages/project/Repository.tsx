@@ -14,7 +14,7 @@ import { IDEModal } from "@/components/repository/IDEModal";
 import { SyncDialog, SyncConfig } from "@/components/repository/SyncDialog";
 import { CommitLog } from "@/components/repository/CommitLog";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
-import { GitBranch, FileCode, Settings, Database, Maximize2, FilePlus, FolderPlus } from "lucide-react";
+import { GitBranch, FileCode, Settings, Database, Maximize2, FilePlus, FolderPlus, Menu } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
@@ -49,6 +49,7 @@ export default function Repository() {
   const [rootCreateDialogOpen, setRootCreateDialogOpen] = useState(false);
   const [rootCreateType, setRootCreateType] = useState<"file" | "folder">("file");
   const [allFilesWithContent, setAllFilesWithContent] = useState<{ path: string; content: string }[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const { repos, loading, refetch } = useRealtimeRepos(projectId);
 
@@ -626,15 +627,28 @@ export default function Repository() {
       <PrimaryNav />
       
       <div className="flex relative">
-        <ProjectSidebar projectId={projectId!} />
+        <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
         
         <main className="flex-1 w-full">
           <div className="container px-6 py-8 max-w-7xl">
             <div className="mb-6">
-              <h1 className="text-3xl font-bold mb-2">Repository</h1>
-              <p className="text-muted-foreground">
-                Manage GitHub repositories, files, and synchronization
-              </p>
+              <div className="flex items-start gap-2 md:gap-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="shrink-0 h-8 w-8 md:h-9 md:w-9 mt-1 md:hidden"
+                  aria-label="Open menu"
+                >
+                  <Menu className="h-4 w-4 md:h-5 md:w-5" />
+                </Button>
+                <div className="flex-1">
+                  <h1 className="text-3xl font-bold mb-2">Repository</h1>
+                  <p className="text-muted-foreground">
+                    Manage GitHub repositories, files, and synchronization
+                  </p>
+                </div>
+              </div>
             </div>
 
             <Tabs defaultValue="repos" className="space-y-6">

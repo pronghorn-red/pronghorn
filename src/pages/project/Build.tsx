@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
+import { Button } from "@/components/ui/button";
+import { Menu } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StagingPanel } from "@/components/build/StagingPanel";
 import { CommitHistory } from "@/components/build/CommitHistory";
@@ -31,6 +33,7 @@ export default function Build() {
   const [stagedChanges, setStagedChanges] = useState<any[]>([]);
   const [selectedDiff, setSelectedDiff] = useState<{ old: string; new: string; path: string } | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Load files from default repo
   useEffect(() => {
@@ -134,12 +137,21 @@ export default function Build() {
       <PrimaryNav />
       
       <div className="flex relative">
-        <ProjectSidebar projectId={projectId} />
+        <ProjectSidebar projectId={projectId} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
         
         <main className="flex-1 w-full">
           <div className="flex flex-col h-screen">
             <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-              <div className="flex h-14 items-center px-3 md:px-6">
+              <div className="flex h-14 items-center gap-2 px-3 md:px-6">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="shrink-0 h-8 w-8 md:hidden"
+                  aria-label="Open menu"
+                >
+                  <Menu className="h-4 w-4" />
+                </Button>
                 <h1 className="text-base md:text-lg font-semibold">Build</h1>
               </div>
             </div>
