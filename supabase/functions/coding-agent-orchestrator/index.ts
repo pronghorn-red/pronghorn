@@ -170,24 +170,13 @@ serve(async (req) => {
       },
     } as const;
 
-    // Load attached files with path metadata
-    let attachedFilesContent = "";
+    // Describe attached files by id and path only (let the agent read them via tools)
     let attachedFilesSection = "";
     if (attachedFiles && attachedFiles.length > 0) {
-      const { data: files, error: filesError } = await supabase.rpc("agent_read_multiple_files_with_token", {
-        p_file_ids: attachedFiles.map(f => f.id),
-        p_token: shareToken,
-      });
-      
-      if (filesError) {
-        console.error("Error loading attached files:", filesError);
-        attachedFilesSection = `\n\n⚠️ ATTACHED FILES (${attachedFiles.length} files attached but failed to load content):\n${attachedFiles.map(f => `- ${f.path} (ID: ${f.id})`).join("\n")}`;
-      } else if (files && files.length > 0) {
-        attachedFilesContent = files.map(
-          (f: any) => `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
-        ).join("\n\n");
-        attachedFilesSection = `\n\n🔗 USER HAS ATTACHED ${files.length} FILE(S) - THESE FILES ARE YOUR PRIMARY FOCUS:\n\n${attachedFilesContent}\n\n⚠️ CRITICAL: The user has specifically attached these files for you to work with. Your task likely involves modifying, analyzing, or completing these files. Reference them by their paths shown above.`;
-      }
+      const attachedList = attachedFiles
+        .map((f) => `- ${f.path} (file_id: ${f.id})`)
+        .join("\n");
+      attachedFilesSection = `\n\n🔗 USER HAS ATTACHED ${attachedFiles.length} FILE(S) - THESE FILES ARE YOUR PRIMARY FOCUS:\n${attachedList}\n\nCRITICAL: Use the file tools to work with these attachments. First call list_files to load the file structure and IDs, then use read_file, edit_lines, delete_file, or move_file with the appropriate file_id values. Do NOT assume the full content is already in the prompt; always fetch it via tools.`;
     }
 
     // Build rich context summary from ProjectSelector data
