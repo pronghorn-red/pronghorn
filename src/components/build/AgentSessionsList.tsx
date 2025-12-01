@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Clock, CheckCircle, XCircle, Loader2, ChevronDown } from "lucide-react";
+import { Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 interface AgentSession {
   id: string;
@@ -36,7 +37,6 @@ export function AgentSessionsList({
 }: AgentSessionsListProps) {
   const [sessions, setSessions] = useState<AgentSession[]>([]);
   const [loading, setLoading] = useState(false);
-  const [isOpen, setIsOpen] = useState(true);
 
   // Load all sessions for this project
   useEffect(() => {
@@ -121,71 +121,73 @@ export function AgentSessionsList({
   };
 
   const activeSession = sessions.find(s => s.id === activeSessionId);
+  const displayedSessions = sessions.slice(0, 10);
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="border-b bg-muted/30">
-      <CollapsibleTrigger asChild>
-        <Button variant="ghost" className="w-full justify-between p-3 h-auto">
+    <Accordion type="single" collapsible defaultValue="current" className="border-b bg-muted/30">
+      <AccordionItem value="current" className="border-none">
+        <AccordionTrigger className="px-3 py-2 hover:no-underline">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold">Session History</span>
             <Badge variant="outline" className="text-xs">
               {sessions.length}
             </Badge>
           </div>
-          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-        </Button>
-      </CollapsibleTrigger>
-      
-      <CollapsibleContent className="max-h-64 overflow-auto">
-        {loading ? (
-          <div className="flex items-center justify-center py-8 text-muted-foreground">
-            <p className="text-sm">Loading sessions...</p>
-          </div>
-        ) : sessions.length === 0 ? (
-          <div className="flex items-center justify-center py-8 text-muted-foreground">
-            <p className="text-sm">No agent sessions yet.</p>
-          </div>
-        ) : (
-          <div className="space-y-1 p-2">
-            {sessions.map((session) => (
-              <Button
-                key={session.id}
-                variant={activeSessionId === session.id ? "secondary" : "ghost"}
-                className="w-full justify-start h-auto p-2 text-left"
-                onClick={() => onSelectSession(session.id)}
-              >
-                <div className="flex flex-col items-start gap-1 w-full min-w-0">
-                  <div className="flex items-center gap-2 w-full">
-                    {getStatusIcon(session.status)}
-                    {getStatusBadge(session.status)}
-                    <span className="text-xs text-muted-foreground ml-auto flex-shrink-0">
-                      {new Date(session.created_at).toLocaleTimeString()}
-                    </span>
+        </AccordionTrigger>
+        
+        <AccordionContent className="px-2 pb-2">
+          {loading ? (
+            <div className="flex items-center justify-center py-4 text-muted-foreground">
+              <p className="text-xs">Loading sessions...</p>
+            </div>
+          ) : sessions.length === 0 ? (
+            <div className="flex items-center justify-center py-4 text-muted-foreground">
+              <p className="text-xs">No agent sessions yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {displayedSessions.map((session) => (
+                <Button
+                  key={session.id}
+                  variant={activeSessionId === session.id ? "secondary" : "ghost"}
+                  className="w-full justify-start h-auto p-2 text-left"
+                  onClick={() => onSelectSession(session.id)}
+                >
+                  <div className="flex flex-col items-start gap-0.5 w-full min-w-0">
+                    <div className="flex items-center gap-2 w-full">
+                      {getStatusIcon(session.status)}
+                      {getStatusBadge(session.status)}
+                      <span className="text-xs text-muted-foreground ml-auto flex-shrink-0">
+                        {new Date(session.created_at).toLocaleDateString()} {new Date(session.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    {session.task_description && (
+                      <p className="text-xs line-clamp-1 w-full text-muted-foreground">
+                        {session.task_description}
+                      </p>
+                    )}
                   </div>
-                  {session.task_description && (
-                    <p className="text-xs line-clamp-1 w-full">
-                      {session.task_description}
-                    </p>
-                  )}
-                </div>
-              </Button>
-            ))}
-          </div>
-        )}
-      </CollapsibleContent>
+                </Button>
+              ))}
+            </div>
+          )}
+        </AccordionContent>
+      </AccordionItem>
       
       {activeSession && (
-        <div className="p-3 border-t bg-background/50">
-          <div className="text-xs text-muted-foreground mb-1">Active Session:</div>
+        <div className="px-3 py-2 border-t bg-background/50">
           <div className="flex items-center gap-2">
             {getStatusIcon(activeSession.status)}
             {getStatusBadge(activeSession.status)}
             <span className="text-xs flex-1 truncate">
               {activeSession.task_description || "No description"}
             </span>
+            <span className="text-xs text-muted-foreground flex-shrink-0">
+              {new Date(activeSession.created_at).toLocaleDateString()}
+            </span>
           </div>
         </div>
       )}
-    </Collapsible>
+    </Accordion>
   );
 }
