@@ -193,10 +193,20 @@ export function AgentFileTree({
             style={{ paddingLeft: `${level * 12 + 20}px` }}
             onClick={() => onSelectFile(node.id, node.path, node.isStaged)}
           >
-            <File className={`h-4 w-4 shrink-0 ${getFileColor(node.operationType)}`} />
-            <span className={`text-sm truncate ${getFileColor(node.operationType)}`}>{node.name}</span>
+            <File className={`h-4 w-4 shrink-0 ${getFileColor(node.operationType)} ${
+              node.operationType === "delete" ? "opacity-60" : ""
+            }`} />
+            <span className={`text-sm truncate ${getFileColor(node.operationType)} ${
+              node.operationType === "delete" ? "line-through opacity-60" : ""
+            }`}>
+              {node.name}
+            </span>
             {node.isStaged && (
-              <span className="text-xs text-green-400 ml-auto">staged</span>
+              <span className={`text-xs ml-auto ${
+                node.operationType === "delete" ? "text-red-400" : "text-green-400"
+              }`}>
+                {node.operationType === "delete" ? "deleting" : "staged"}
+              </span>
             )}
           </div>
         </ContextMenuTrigger>

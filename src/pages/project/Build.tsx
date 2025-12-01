@@ -130,21 +130,14 @@ export default function Build() {
       const stagedMap = new Map((staged || []).map((s: any) => [s.file_path, s]));
       const allFiles: Array<{ id: string; path: string; isStaged?: boolean }> = [];
 
-      // Add all committed files
+      // Add all committed files (including those staged for deletion)
       (committedFiles || []).forEach((f: any) => {
         const stagedChange = stagedMap.get(f.path);
-        if (stagedChange && stagedChange.operation_type !== "delete") {
-          allFiles.push({
-            id: f.id,
-            path: f.path,
-            isStaged: true,
-          });
-        } else if (!stagedChange || stagedChange.operation_type !== "delete") {
-          allFiles.push({
-            id: f.id,
-            path: f.path,
-          });
-        }
+        allFiles.push({
+          id: f.id,
+          path: f.path,
+          isStaged: stagedChange ? true : false,
+        });
       });
 
       // Add new staged files
