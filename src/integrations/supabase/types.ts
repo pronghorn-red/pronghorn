@@ -726,6 +726,60 @@ export type Database = {
           },
         ]
       }
+      repo_commits: {
+        Row: {
+          branch: string
+          commit_message: string
+          commit_sha: string
+          committed_at: string
+          committed_by: string | null
+          created_at: string
+          files_changed: number
+          id: string
+          project_id: string
+          repo_id: string
+        }
+        Insert: {
+          branch: string
+          commit_message: string
+          commit_sha: string
+          committed_at?: string
+          committed_by?: string | null
+          created_at?: string
+          files_changed?: number
+          id?: string
+          project_id: string
+          repo_id: string
+        }
+        Update: {
+          branch?: string
+          commit_message?: string
+          commit_sha?: string
+          committed_at?: string
+          committed_by?: string | null
+          created_at?: string
+          files_changed?: number
+          id?: string
+          project_id?: string
+          repo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repo_commits_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repo_commits_repo_id_fkey"
+            columns: ["repo_id"]
+            isOneToOne: false
+            referencedRelation: "project_repos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       repo_files: {
         Row: {
           content: string
@@ -1547,6 +1601,27 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_repo_commits_with_token: {
+        Args: { p_branch?: string; p_repo_id: string; p_token: string }
+        Returns: {
+          branch: string
+          commit_message: string
+          commit_sha: string
+          committed_at: string
+          committed_by: string | null
+          created_at: string
+          files_changed: number
+          id: string
+          project_id: string
+          repo_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "repo_commits"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_repo_files_with_token: {
         Args: { p_file_paths?: string[]; p_repo_id: string; p_token: string }
         Returns: {
@@ -1828,6 +1903,34 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "requirements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      log_repo_commit_with_token: {
+        Args: {
+          p_branch: string
+          p_commit_message: string
+          p_commit_sha: string
+          p_files_changed: number
+          p_repo_id: string
+          p_token: string
+        }
+        Returns: {
+          branch: string
+          commit_message: string
+          commit_sha: string
+          committed_at: string
+          committed_by: string | null
+          created_at: string
+          files_changed: number
+          id: string
+          project_id: string
+          repo_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_commits"
           isOneToOne: true
           isSetofReturn: false
         }
