@@ -269,7 +269,7 @@ export function CodeEditor({
           <h3 className="text-sm font-normal truncate text-[#cccccc]">{filePath}</h3>
         </div>
         <div className="flex items-center gap-3">
-          {isStaged && originalContent !== content && (
+          {isStaged && originalContent && (
             <label className="flex items-center gap-2 text-xs text-[#cccccc] cursor-pointer hover:text-white">
               <input
                 type="checkbox"
