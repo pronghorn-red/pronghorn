@@ -160,9 +160,10 @@ export function UnifiedAgentInterface({
           repoId,
           shareToken: shareToken || null,
           taskDescription: taskInput,
+          mode: 'task', // Required parameter - can be 'task', 'iterative_loop', or 'continuous_improvement'
           autoCommit,
-          attachedFiles: attachedFiles.map(f => f.id),
-          attachedContext: attachedContext ? {
+          attachedFileIds: attachedFiles.map(f => f.id),
+          projectContext: attachedContext ? {
             projectMetadata: attachedContext.projectMetadata || null,
             artifacts: attachedContext.artifacts.length > 0 ? attachedContext.artifacts : undefined,
             requirements: attachedContext.requirements.length > 0 ? attachedContext.requirements : undefined,
@@ -170,7 +171,7 @@ export function UnifiedAgentInterface({
             techStacks: attachedContext.techStacks.length > 0 ? attachedContext.techStacks : undefined,
             canvasNodes: attachedContext.canvasNodes.length > 0 ? attachedContext.canvasNodes : undefined,
             canvasEdges: attachedContext.canvasEdges.length > 0 ? attachedContext.canvasEdges : undefined,
-          } : undefined,
+          } : {},
         },
       });
 
