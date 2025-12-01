@@ -186,9 +186,12 @@ Deno.serve(async (req) => {
 
         const blobData = await blobResponse.json();
         
-        // Store content as-is (base64 for binary files, plain text for text files)
-        // Database will store base64 strings for binary files
-        const content = blobData.encoding === 'base64' ? blobData.content : blobData.content;
+        // Decode base64 content to UTF-8 text for storage
+        let content = blobData.content;
+        if (blobData.encoding === 'base64') {
+          // Decode base64 to plain text
+          content = atob(blobData.content.replace(/\n/g, ''));
+        }
 
         return {
           path: file.path,
