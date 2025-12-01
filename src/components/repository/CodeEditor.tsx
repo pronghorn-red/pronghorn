@@ -55,29 +55,38 @@ export function CodeEditor({
   }, [fileId, isStaged, filePath, initialContent]);
 
   const loadFileContent = async () => {
-    if (!fileId && !filePath) return;
-    
+    if (!filePath && !fileId) return;
+
     setLoading(true);
     try {
-      if (isStaged && filePath) {
-        // Prefer loading latest staged content for this file path
-        const { data, error } = await supabase
-          .from("repo_staging")
-          .select("*")
-          .eq("repo_id", repoId)
-          .eq("file_path", filePath)
-          .order("created_at", { ascending: false });
+      // If we have staged content for this file, prefer that
+      if (repoId && filePath && isStaged) {
+        const { data: staged, error: stagedError } = await supabase.rpc(
+          "get_staged_changes_with_token",
+          {
+            p_repo_id: repoId,
+            p_token: shareToken || null,
+          },
+        );
 
-        if (error) throw error;
+        if (stagedError) throw stagedError;
 
-        if (data && data.length > 0) {
-          const staged = data[0];
-          const content = staged.new_content || "";
-          setContent(content);
-          setOriginalContent(content);
+        const changesForFile = (staged || []).filter(
+          (change: any) => change.file_path === filePath,
+        );
+
+        if (changesForFile.length > 0) {
+          // Use the most recent staged change
+          const latestChange = changesForFile.reduce((latest: any, current: any) =>
+            new Date(current.created_at) > new Date(latest.created_at) ? current : latest,
+          changesForFile[0]);
+
+          const stagedContent = latestChange.new_content || "";
+          setContent(stagedContent);
+          // Preserve the original baseline content for diffs/commits
+          setOriginalContent(latestChange.old_content || stagedContent);
           return;
         }
-        // If no staged row found, fall through to committed file load
       }
 
       if (fileId) {
@@ -106,50 +115,64 @@ export function CodeEditor({
   };
 
   const handleSave = async () => {
-    if (!filePath) return;
-    
+    if (!filePath || !repoId) return;
+
     setSaving(true);
     try {
-      // First, check if there's already a staged change for this file
-      const { data: existingStaged, error: checkError } = await supabase
-        .from("repo_staging")
-        .select("id")
-        .eq("repo_id", repoId)
-        .eq("file_path", filePath)
-        .maybeSingle();
-
-      if (checkError && checkError.code !== "PGRST116") {
-        throw checkError;
-      }
-
-      if (existingStaged) {
-        // Update existing staged change - preserve old_content, only update new_content
-        const { error: updateError } = await supabase
-          .from("repo_staging")
-          .update({
-            new_content: content,
-            created_at: new Date().toISOString(),
-          })
-          .eq("id", existingStaged.id);
-
-        if (updateError) throw updateError;
-      } else {
-        // Stage new file change
-        const { error } = await supabase.rpc("stage_file_change_with_token", {
+      // Check if there's already a staged change for this file via RPC
+      const { data: staged, error: stagedError } = await supabase.rpc(
+        "get_staged_changes_with_token",
+        {
           p_repo_id: repoId,
           p_token: shareToken || null,
-          p_operation_type: fileId ? "edit" : "add",
+        },
+      );
+
+      if (stagedError) throw stagedError;
+
+      const existing = (staged || []).find(
+        (change: any) => change.file_path === filePath,
+      );
+
+      // Preserve the original baseline content for this file
+      let oldContentToUse = originalContent;
+
+      if (existing) {
+        if (existing.old_content) {
+          oldContentToUse = existing.old_content;
+        }
+
+        // Remove existing staged row so we maintain a single staged entry per file
+        const { error: unstageError } = await supabase.rpc("unstage_file_with_token", {
+          p_repo_id: repoId,
           p_file_path: filePath,
-          p_old_content: originalContent,
-          p_new_content: content,
+          p_token: shareToken || null,
         });
 
-        if (error) throw error;
+        if (unstageError) throw unstageError;
       }
+
+      const operationType = existing
+        ? existing.operation_type
+        : fileId
+          ? "edit"
+          : "add";
+
+      const { error } = await supabase.rpc("stage_file_change_with_token", {
+        p_repo_id: repoId,
+        p_token: shareToken || null,
+        p_operation_type: operationType,
+        p_file_path: filePath,
+        p_old_content: oldContentToUse,
+        p_new_content: content,
+      });
+
+      if (error) throw error;
 
       toast({
         title: "Staged",
-        description: "File changes staged successfully. Commit from Build page to persist.",
+        description:
+          "File changes staged successfully. Commit from Build page to persist.",
       });
       onSave();
     } catch (error) {
