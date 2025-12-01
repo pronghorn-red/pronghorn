@@ -15,7 +15,9 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Brain
+  Brain,
+  Zap,
+  GitCommit
 } from "lucide-react";
 
 interface BlackboardEntry {
@@ -98,6 +100,48 @@ export function AgentProgressMonitor({ projectId, shareToken }: AgentProgressMon
     }
   };
 
+  const formatDuration = (createdAt: string, completedAt: string | null) => {
+    if (!completedAt) return null;
+    const duration = new Date(completedAt).getTime() - new Date(createdAt).getTime();
+    if (duration < 1000) return `${duration}ms`;
+    if (duration < 60000) return `${(duration / 1000).toFixed(1)}s`;
+    return `${(duration / 60000).toFixed(1)}m`;
+  };
+
+  const renderOperationDetails = (details: any, operationType: string) => {
+    if (!details || Object.keys(details).length === 0) return null;
+
+    return (
+      <div className="mt-2 pt-2 border-t border-border/50">
+        <div className="flex flex-wrap gap-2">
+          {details.lines_changed && (
+            <Badge variant="outline" className="text-xs">
+              <GitCommit className="h-3 w-3 mr-1" />
+              {details.lines_changed} lines
+            </Badge>
+          )}
+          {details.files_found && (
+            <Badge variant="outline" className="text-xs">
+              <FileText className="h-3 w-3 mr-1" />
+              {details.files_found} files found
+            </Badge>
+          )}
+          {details.reason && (
+            <p className="text-xs text-muted-foreground w-full mt-1">
+              {details.reason}
+            </p>
+          )}
+          {details.search_keyword && (
+            <Badge variant="outline" className="text-xs">
+              <FolderSearch className="h-3 w-3 mr-1" />
+              "{details.search_keyword}"
+            </Badge>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Blackboard temporarily hidden for cross-session view */}
@@ -167,28 +211,43 @@ export function AgentProgressMonitor({ projectId, shareToken }: AgentProgressMon
                     </div>
                     
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="text-sm font-medium capitalize">
                           {op.operation_type}
                         </span>
                         {getStatusBadge(op.status)}
+                        {op.completed_at && formatDuration(op.created_at, op.completed_at) && (
+                          <Badge variant="secondary" className="text-xs">
+                            <Zap className="h-3 w-3 mr-1" />
+                            {formatDuration(op.created_at, op.completed_at)}
+                          </Badge>
+                        )}
                       </div>
                       
                       {op.file_path && (
-                        <p className="text-xs text-muted-foreground truncate">
+                        <p className="text-xs font-mono text-muted-foreground truncate bg-muted/30 px-2 py-1 rounded">
                           {op.file_path}
                         </p>
                       )}
                       
                       {op.error_message && (
-                        <p className="text-xs text-destructive mt-1">
+                        <p className="text-xs text-destructive mt-1 bg-destructive/10 px-2 py-1 rounded">
                           {op.error_message}
                         </p>
                       )}
+
+                      {renderOperationDetails(op.details, op.operation_type)}
                       
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {new Date(op.created_at).toLocaleTimeString()}
-                      </p>
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(op.created_at).toLocaleTimeString()}
+                        </p>
+                        {op.completed_at && (
+                          <p className="text-xs text-muted-foreground">
+                            → {new Date(op.completed_at).toLocaleTimeString()}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
