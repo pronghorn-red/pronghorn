@@ -66,8 +66,23 @@ Deno.serve(async (req) => {
     });
 
     if (!createRepoResponse.ok) {
-      const errorData = await createRepoResponse.json();
-      throw new Error(`GitHub API error: ${errorData.message || 'Failed to create repository from template'}`);
+      const errorText = await createRepoResponse.text();
+      console.error(`GitHub API error (${createRepoResponse.status}):`, errorText);
+      
+      let errorMessage = 'Failed to create repository from template';
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorMessage;
+      } catch {
+        errorMessage = errorText || errorMessage;
+      }
+      
+      // Add helpful context for common errors
+      if (createRepoResponse.status === 404) {
+        errorMessage += ` - Template repository '${templateOrg}/${templateRepo}' not found. Please verify: 1) The repository exists, 2) It's marked as a template, 3) The GITHUB_PAT has access to it.`;
+      }
+      
+      throw new Error(`GitHub API error: ${errorMessage}`);
     }
 
     const repoData = await createRepoResponse.json();
