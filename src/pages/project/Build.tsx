@@ -36,6 +36,7 @@ export default function Build() {
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; path: string }>>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isProjectSidebarOpen, setIsProjectSidebarOpen] = useState(false);
+  const [showDiff, setShowDiff] = useState(false);
 
   // Load files from default repo
   useEffect(() => {
@@ -290,6 +291,8 @@ export default function Build() {
                           filePath={selectedFile.path}
                           repoId={defaultRepo?.id || ""}
                           isStaged={selectedFile.isStaged}
+                          showDiff={showDiff}
+                          onShowDiffChange={setShowDiff}
                           onClose={() => setSelectedFile(null)}
                           onSave={loadFiles}
                         />
@@ -401,6 +404,8 @@ export default function Build() {
                         filePath={selectedFile.path}
                         repoId={defaultRepo?.id || ""}
                         isStaged={selectedFile.isStaged}
+                        showDiff={showDiff}
+                        onShowDiffChange={setShowDiff}
                         onClose={() => setSelectedFile(null)}
                         onSave={loadFiles}
                       />

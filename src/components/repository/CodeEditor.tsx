@@ -15,6 +15,7 @@ interface CodeEditorProps {
   initialContent?: string;
   showDiff?: boolean;
   diffOldContent?: string;
+  onShowDiffChange?: (show: boolean) => void;
   onClose: () => void;
   onSave?: () => void;
   onAutoSync?: () => void;
@@ -28,6 +29,7 @@ export function CodeEditor({
   initialContent, 
   showDiff = false,
   diffOldContent,
+  onShowDiffChange,
   onClose, 
   onSave, 
   onAutoSync 
@@ -36,7 +38,10 @@ export function CodeEditor({
   const [originalContent, setOriginalContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showDiffMode, setShowDiffMode] = useState(showDiff ?? false);
+  const showDiffMode = showDiff ?? false;
+  const handleShowDiffToggle = (checked: boolean) => {
+    onShowDiffChange?.(checked);
+  };
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
@@ -280,7 +285,7 @@ export function CodeEditor({
               <input
                 type="checkbox"
                 checked={showDiffMode}
-                onChange={(e) => setShowDiffMode(e.target.checked)}
+                onChange={(e) => handleShowDiffToggle(e.target.checked)}
                 className="w-4 h-4"
               />
               Show diff
