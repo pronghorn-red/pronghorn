@@ -13,6 +13,7 @@ interface TaskRequest {
   projectContext: any;
   shareToken: string;
   mode: string; // 'review', 'edit', 'audit', 'create', 'refactor'
+  autoCommit?: boolean;
 }
 
 serve(async (req) => {
@@ -38,6 +39,7 @@ serve(async (req) => {
       projectContext,
       shareToken,
       mode,
+      autoCommit = false,
     }: TaskRequest = await req.json();
 
     console.log("Starting CodingAgent task:", { projectId, mode, taskDescription });
@@ -116,6 +118,31 @@ serve(async (req) => {
       }
     }
 
+    // Build context summary from ProjectSelector data
+    let contextSummary = "";
+    if (projectContext) {
+      const parts = [];
+      if (projectContext.projectMetadata) {
+        parts.push(`Project: ${projectContext.projectMetadata.name}`);
+        if (projectContext.projectMetadata.description) {
+          parts.push(`Description: ${projectContext.projectMetadata.description}`);
+        }
+      }
+      if (projectContext.artifacts?.length > 0) {
+        parts.push(`${projectContext.artifacts.length} artifacts available`);
+      }
+      if (projectContext.requirements?.length > 0) {
+        parts.push(`${projectContext.requirements.length} requirements`);
+      }
+      if (projectContext.standards?.length > 0) {
+        parts.push(`${projectContext.standards.length} standards`);
+      }
+      if (projectContext.canvasNodes?.length > 0) {
+        parts.push(`${projectContext.canvasNodes.length} canvas nodes`);
+      }
+      contextSummary = parts.join("\n");
+    }
+
     // Build system prompt
     const systemPrompt = `You are CodingAgent, an autonomous coding agent with the following capabilities:
 
@@ -124,7 +151,11 @@ ${JSON.stringify(manifest.file_operations, null, 2)}
 You can execute these file operations by responding with structured JSON containing the operations to perform.
 
 Your task mode is: ${mode}
-Project Context: ${JSON.stringify(projectContext, null, 2)}
+Auto-commit enabled: ${autoCommit}
+
+Project Context:
+${contextSummary}
+
 Attached Files: ${attachedFilesContent}
 
 When responding, structure your response as:
