@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import Editor from "@monaco-editor/react";
+import { DiffEditor } from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,12 +13,25 @@ interface CodeEditorProps {
   repoId: string;
   isStaged?: boolean;
   initialContent?: string;
+  showDiff?: boolean;
+  diffOldContent?: string;
   onClose: () => void;
   onSave: () => void;
   onAutoSync?: () => void;
 }
 
-export function CodeEditor({ fileId, filePath, repoId, isStaged, initialContent, onClose, onSave, onAutoSync }: CodeEditorProps) {
+export function CodeEditor({ 
+  fileId, 
+  filePath, 
+  repoId, 
+  isStaged, 
+  initialContent, 
+  showDiff = false,
+  diffOldContent = "",
+  onClose, 
+  onSave, 
+  onAutoSync 
+}: CodeEditorProps) {
   const [content, setContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [loading, setLoading] = useState(false);
@@ -208,6 +222,40 @@ export function CodeEditor({ fileId, filePath, repoId, isStaged, initialContent,
           <div className="flex items-center justify-center h-full text-[#cccccc]">
             Loading...
           </div>
+        ) : showDiff ? (
+          <DiffEditor
+            original={diffOldContent}
+            modified={content}
+            language={getLanguage(filePath)}
+            theme="vs-dark"
+            onMount={(editor) => {
+              const modifiedEditor = editor.getModifiedEditor();
+              modifiedEditor.onDidChangeModelContent(() => {
+                const value = modifiedEditor.getValue();
+                setContent(value);
+              });
+            }}
+            options={{
+              readOnly: false,
+              minimap: { enabled: false },
+              fontSize: 14,
+              lineNumbers: "on",
+              renderSideBySide: false, // Inline diff mode with green/red overlays
+              renderOverviewRuler: false,
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              wordWrap: "on",
+              diffWordWrap: "on",
+              enableSplitViewResizing: false,
+              renderIndicators: true,
+              ignoreTrimWhitespace: false,
+              fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', monospace",
+              fontLigatures: true,
+              cursorBlinking: "smooth",
+              smoothScrolling: true,
+              renderLineHighlight: "all",
+            }}
+          />
         ) : (
           <Editor
             height="100%"

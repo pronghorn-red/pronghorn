@@ -10,7 +10,7 @@ import { CommitHistory } from "@/components/build/CommitHistory";
 import { CodeEditor } from "@/components/repository/CodeEditor";
 import { AgentFileTree } from "@/components/build/AgentFileTree";
 import { AgentPromptPanel } from "@/components/build/AgentPromptPanel";
-import { MonacoDiffEditor } from "@/components/build/MonacoDiffEditor";
+
 import { AgentProgressMonitor } from "@/components/build/AgentProgressMonitor";
 import { AgentChatViewer } from "@/components/build/AgentChatViewer";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
@@ -354,10 +354,20 @@ export default function Build() {
                       </div>
                       <div className="flex-1 min-h-0 overflow-hidden">
                         {selectedDiff ? (
-                          <MonacoDiffEditor
-                            oldContent={selectedDiff.old}
-                            newContent={selectedDiff.new}
+                          <CodeEditor
+                            fileId={selectedFileId}
                             filePath={selectedDiff.path}
+                            repoId={defaultRepo?.id || ""}
+                            isStaged={selectedFileIsStaged}
+                            initialContent={selectedDiff.new}
+                            showDiff={true}
+                            diffOldContent={selectedDiff.old}
+                            onClose={() => {
+                              setSelectedFileId(null);
+                              setSelectedFilePath(null);
+                              setSelectedDiff(null);
+                            }}
+                            onSave={loadFiles}
                           />
                         ) : (
                           <CodeEditor
@@ -472,10 +482,20 @@ export default function Build() {
                 <ResizablePanel defaultSize={40} minSize={30}>
                   <div className="h-full">
                     {selectedDiff ? (
-                      <MonacoDiffEditor
-                        oldContent={selectedDiff.old}
-                        newContent={selectedDiff.new}
+                      <CodeEditor
+                        fileId={selectedFileId}
                         filePath={selectedDiff.path}
+                        repoId={defaultRepo?.id || ""}
+                        isStaged={selectedFileIsStaged}
+                        initialContent={selectedDiff.new}
+                        showDiff={true}
+                        diffOldContent={selectedDiff.old}
+                        onClose={() => {
+                          setSelectedFileId(null);
+                          setSelectedFilePath(null);
+                          setSelectedDiff(null);
+                        }}
+                        onSave={loadFiles}
                       />
                     ) : (
                       <CodeEditor

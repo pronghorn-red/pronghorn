@@ -10,8 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, FilePlus, FileX, FilePenLine, Loader2, GitCommit, X, ArrowLeft } from "lucide-react";
-import { MonacoDiffEditor } from "./MonacoDiffEditor";
-import { CodeEditor } from "../repository/CodeEditor";
+import { CodeEditor } from "@/components/repository/CodeEditor";
 
 interface StagedChange {
   id: string;
@@ -290,14 +289,17 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
           Back to Staging
         </Button>
         <div className="flex-1 min-h-0 overflow-hidden">
-          <MonacoDiffEditor
-            oldContent={viewingDiff.old_content || ""}
-            newContent={viewingDiff.new_content || ""}
+          <CodeEditor
+            key={`${viewingDiff.id}-${viewingDiff.file_path}`}
+            fileId={viewingDiff.id}
             filePath={viewingDiff.file_path}
-            onContentChange={(content) => {
-              // Update staged content when user edits in diff view
-              console.log("Content changed in diff editor:", content);
-            }}
+            repoId={repoId || ""}
+            isStaged={true}
+            initialContent={viewingDiff.new_content || ""}
+            showDiff={true}
+            diffOldContent={viewingDiff.old_content || ""}
+            onClose={() => setViewingDiff(null)}
+            onSave={loadRepoAndStagedChanges}
           />
         </div>
       </div>
