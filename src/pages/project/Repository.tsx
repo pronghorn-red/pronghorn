@@ -35,6 +35,8 @@ export default function Repository() {
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{ [key: string]: 'idle' | 'pushing' | 'pulling' | 'success' | 'error' }>({});
+  const [lastSyncTime, setLastSyncTime] = useState<{ [key: string]: Date }>({});
 
   const { repos, loading, refetch } = useRealtimeRepos(projectId);
 
@@ -276,26 +278,60 @@ export default function Repository() {
     }
 
     try {
+      // Set all repos to pushing status
+      const statusUpdates: { [key: string]: 'pushing' } = {};
+      repos.forEach(repo => {
+        statusUpdates[repo.id] = 'pushing';
+      });
+      setSyncStatus(statusUpdates);
+
       const pushPromises = repos.map(async (repo) => {
-        const { data, error } = await supabase.functions.invoke('sync-repo-push', {
-          body: {
-            repoId: repo.id,
-            projectId: projectId,
-            shareToken: shareToken,
-            commitMessage: `Sync from Pronghorn at ${new Date().toISOString()}`,
-          },
+        try {
+          const { data, error } = await supabase.functions.invoke('sync-repo-push', {
+            body: {
+              repoId: repo.id,
+              projectId: projectId,
+              shareToken: shareToken,
+              commitMessage: `Sync from Pronghorn at ${new Date().toISOString()}`,
+            },
+          });
+
+          if (error) throw error;
+
+          // Update status to success
+          setSyncStatus(prev => ({ ...prev, [repo.id]: 'success' }));
+          setLastSyncTime(prev => ({ ...prev, [repo.id]: new Date() }));
+          
+          return { repo: `${repo.organization}/${repo.repo}`, success: true, ...data };
+        } catch (err) {
+          // Update status to error
+          setSyncStatus(prev => ({ ...prev, [repo.id]: 'error' }));
+          throw err;
+        }
+      });
+
+      const results = await Promise.allSettled(pushPromises);
+      
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      if (failed === 0) {
+        toast({
+          title: "Sync complete",
+          description: `Successfully pushed to ${successful} repository(ies)`,
         });
+      } else {
+        toast({
+          title: "Sync completed with errors",
+          description: `Pushed to ${successful} repository(ies), ${failed} failed`,
+          variant: "destructive",
+        });
+      }
 
-        if (error) throw error;
-        return { repo: `${repo.organization}/${repo.repo}`, ...data };
-      });
-
-      const results = await Promise.all(pushPromises);
-
-      toast({
-        title: "Sync complete",
-        description: `Pushed to ${results.length} repository(ies)`,
-      });
+      // Reset status after delay
+      setTimeout(() => {
+        setSyncStatus({});
+      }, 3000);
     } catch (error: any) {
       console.error("Sync error:", error);
       toast({
@@ -303,6 +339,7 @@ export default function Repository() {
         description: error.message || "Failed to sync repositories",
         variant: "destructive",
       });
+      setSyncStatus({});
     }
   };
 
@@ -317,28 +354,62 @@ export default function Repository() {
     }
 
     try {
+      // Set all repos to pulling status
+      const statusUpdates: { [key: string]: 'pulling' } = {};
+      repos.forEach(repo => {
+        statusUpdates[repo.id] = 'pulling';
+      });
+      setSyncStatus(statusUpdates);
+
       const pullPromises = repos.map(async (repo) => {
-        const { data, error } = await supabase.functions.invoke('sync-repo-pull', {
-          body: {
-            repoId: repo.id,
-            projectId: projectId,
-            shareToken: shareToken,
-          },
+        try {
+          const { data, error } = await supabase.functions.invoke('sync-repo-pull', {
+            body: {
+              repoId: repo.id,
+              projectId: projectId,
+              shareToken: shareToken,
+            },
+          });
+
+          if (error) throw error;
+
+          // Update status to success
+          setSyncStatus(prev => ({ ...prev, [repo.id]: 'success' }));
+          setLastSyncTime(prev => ({ ...prev, [repo.id]: new Date() }));
+          
+          return { repo: `${repo.organization}/${repo.repo}`, success: true, ...data };
+        } catch (err) {
+          // Update status to error
+          setSyncStatus(prev => ({ ...prev, [repo.id]: 'error' }));
+          throw err;
+        }
+      });
+
+      const results = await Promise.allSettled(pullPromises);
+      
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      if (failed === 0) {
+        toast({
+          title: "Pull complete",
+          description: `Successfully pulled from ${successful} repository(ies)`,
         });
-
-        if (error) throw error;
-        return { repo: `${repo.organization}/${repo.repo}`, ...data };
-      });
-
-      const results = await Promise.all(pullPromises);
-
-      toast({
-        title: "Pull complete",
-        description: `Pulled from ${results.length} repository(ies)`,
-      });
+      } else {
+        toast({
+          title: "Pull completed with errors",
+          description: `Pulled from ${successful} repository(ies), ${failed} failed`,
+          variant: "destructive",
+        });
+      }
       
       // Reload file structure after pull
       loadFileStructure();
+
+      // Reset status after delay
+      setTimeout(() => {
+        setSyncStatus({});
+      }, 3000);
     } catch (error: any) {
       console.error("Pull error:", error);
       toast({
@@ -346,6 +417,7 @@ export default function Repository() {
         description: error.message || "Failed to pull from repositories",
         variant: "destructive",
       });
+      setSyncStatus({});
     }
   };
 
@@ -408,14 +480,38 @@ export default function Repository() {
                     ) : repos.length === 0 ? (
                       <p className="text-muted-foreground text-center py-4">No repositories connected</p>
                     ) : (
-                      repos.map((repo) => (
-                        <RepoCard
-                          key={repo.id}
-                          repo={repo}
-                          onDelete={handleDeleteRepo}
-                          onManagePAT={handleManagePAT}
-                        />
-                      ))
+                      repos.map((repo) => {
+                        const status = syncStatus[repo.id];
+                        const lastSync = lastSyncTime[repo.id];
+                        
+                        return (
+                          <div key={repo.id} className="space-y-2">
+                            <RepoCard
+                              repo={repo}
+                              onDelete={handleDeleteRepo}
+                              onManagePAT={handleManagePAT}
+                            />
+                            {status && (
+                              <div className={`text-xs px-3 py-1 rounded ${
+                                status === 'pushing' ? 'bg-blue-500/10 text-blue-500' :
+                                status === 'pulling' ? 'bg-purple-500/10 text-purple-500' :
+                                status === 'success' ? 'bg-green-500/10 text-green-500' :
+                                'bg-red-500/10 text-red-500'
+                              }`}>
+                                {status === 'pushing' && 'Pushing to GitHub...'}
+                                {status === 'pulling' && 'Pulling from GitHub...'}
+                                {status === 'success' && 'Sync successful'}
+                                {status === 'error' && 'Sync failed'}
+                              </div>
+                            )}
+                            {lastSync && !status && (
+                              <div className="text-xs text-muted-foreground px-3">
+                                Last synced: {lastSync.toLocaleString()}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
                     )}
                   </CardContent>
                 </Card>
@@ -472,23 +568,91 @@ export default function Repository() {
               <TabsContent value="sync" className="space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Synchronization</CardTitle>
+                    <CardTitle>GitHub Synchronization</CardTitle>
                     <CardDescription>
-                      Push and pull changes between database and GitHub
+                      Push local changes to GitHub or pull latest from GitHub
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-6">
                     <div className="flex gap-4">
-                      <Button onClick={handleSync}>
+                      <Button 
+                        onClick={handleSync} 
+                        className="flex-1"
+                        disabled={Object.values(syncStatus).some(s => s === 'pushing' || s === 'pulling')}
+                      >
+                        <GitBranch className="h-4 w-4 mr-2" />
                         Push to GitHub
                       </Button>
-                      <Button variant="outline" onClick={handlePull}>
+                      <Button 
+                        onClick={handlePull} 
+                        variant="outline" 
+                        className="flex-1"
+                        disabled={Object.values(syncStatus).some(s => s === 'pushing' || s === 'pulling')}
+                      >
+                        <GitBranch className="h-4 w-4 mr-2" />
                         Pull from GitHub
                       </Button>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      Push changes from database to GitHub, or pull latest changes from GitHub to database
-                    </p>
+
+                    {Object.keys(syncStatus).length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium">Sync Status</h4>
+                        <div className="space-y-1">
+                          {repos.map(repo => {
+                            const status = syncStatus[repo.id];
+                            if (!status) return null;
+                            
+                            return (
+                              <div key={repo.id} className="flex items-center justify-between text-sm p-2 rounded bg-muted/50">
+                                <span className="font-medium">{repo.organization}/{repo.repo}</span>
+                                <span className={
+                                  status === 'pushing' ? 'text-blue-500' :
+                                  status === 'pulling' ? 'text-purple-500' :
+                                  status === 'success' ? 'text-green-500' :
+                                  'text-red-500'
+                                }>
+                                  {status === 'pushing' && 'Pushing...'}
+                                  {status === 'pulling' && 'Pulling...'}
+                                  {status === 'success' && '✓ Success'}
+                                  {status === 'error' && '✗ Failed'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="border-t pt-4">
+                      <h4 className="text-sm font-medium mb-2">Sync History</h4>
+                      <div className="space-y-2">
+                        {repos.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No repositories connected</p>
+                        ) : (
+                          repos.map(repo => {
+                            const lastSync = lastSyncTime[repo.id];
+                            return (
+                              <div key={repo.id} className="flex items-center justify-between text-sm p-2 rounded bg-muted/30">
+                                <span>{repo.organization}/{repo.repo}</span>
+                                <span className="text-muted-foreground">
+                                  {lastSync ? `Last synced: ${lastSync.toLocaleString()}` : 'Never synced'}
+                                </span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-4">
+                      <h4 className="text-sm font-medium mb-2">Tips</h4>
+                      <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                        <li>Push sends your local changes to GitHub</li>
+                        <li>Pull retrieves the latest changes from GitHub</li>
+                        <li>Always pull before making major changes to avoid conflicts</li>
+                        <li>Sync operations may take a few moments for large repositories</li>
+                      </ul>
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>
