@@ -321,6 +321,7 @@ When responding, structure your response as:
         "end_line": 5,
         "new_content": "replacement text"
       }
+      // NOTE: You MUST call read_file first to see current content and count lines accurately
     },
     {
       "type": "create_file",
@@ -357,6 +358,9 @@ CRITICAL RULES:
 6. Set status to "in_progress" when you need to continue with more operations
 7. Set status to "requires_commit" when you've made changes ready to be staged
 8. Set status to "completed" ONLY after completing the user's request
+9. MANDATORY BEFORE EDIT_LINES: You MUST call read_file first to see the full current file content and understand line numbers
+10. For edit_lines: Count lines carefully in the read_file result to determine correct start_line and end_line
+11. For JSON/structured files: Ensure your edits maintain valid structure (no duplicate keys, proper syntax)
 
 COMPLETION VALIDATION:
 Before setting status="completed", ask yourself: "Have I actually answered the user's question or completed their task?" 
@@ -568,12 +572,33 @@ Think step-by-step and continue until the task is complete.`;
                 // Use staged new_content as base if exists, otherwise use committed content
                 const baseContent = existingStaged ? existingStaged.new_content : fileData[0].content;
                 
-                // Apply edit to the correct base content
+                // Validate line numbers
                 const lines = baseContent.split('\n');
+                const totalLines = lines.length;
                 const startIdx = op.params.start_line - 1;
                 const endIdx = op.params.end_line - 1;
+                
+                if (startIdx < 0 || endIdx >= totalLines || startIdx > endIdx) {
+                  throw new Error(
+                    `Invalid line range: start_line=${op.params.start_line}, end_line=${op.params.end_line}. File has ${totalLines} lines.`
+                  );
+                }
+                
+                // Apply edit to the correct base content
                 lines.splice(startIdx, endIdx - startIdx + 1, op.params.new_content);
                 const newContent = lines.join('\n');
+                
+                // For JSON files, validate the result
+                const isJsonFile = fileData[0].path.endsWith('.json');
+                if (isJsonFile) {
+                  try {
+                    JSON.parse(newContent);
+                  } catch (parseError: any) {
+                    throw new Error(
+                      `Edit resulted in invalid JSON. Original lines ${op.params.start_line}-${op.params.end_line} replaced with invalid content. Error: ${parseError?.message || String(parseError)}`
+                    );
+                  }
+                }
                 
                 // Stage the change (UPSERT will preserve original old_content baseline)
                 result = await supabase.rpc("stage_file_change_with_token", {
@@ -584,6 +609,13 @@ Think step-by-step and continue until the task is complete.`;
                   p_old_content: fileData[0].content,
                   p_new_content: newContent,
                 });
+                
+                // Include the new content in result for agent to verify
+                result.data = {
+                  ...result.data,
+                  new_content_preview: newContent.split('\n').slice(Math.max(0, startIdx - 2), Math.min(totalLines, endIdx + 3)).join('\n'),
+                  total_lines: lines.length
+                };
               }
               break;
               
