@@ -101,13 +101,39 @@ export default function Build() {
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "INSERT",
           schema: "public",
           table: "repo_files",
           filter: `project_id=eq.${projectId}`,
         },
-        () => {
-          console.log("repo_files changed, reloading...");
+        (payload) => {
+          console.log("New file created:", payload.new);
+          loadFiles();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "repo_files",
+          filter: `project_id=eq.${projectId}`,
+        },
+        (payload) => {
+          console.log("File updated:", payload.new);
+          loadFiles();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "repo_files",
+          filter: `project_id=eq.${projectId}`,
+        },
+        (payload) => {
+          console.log("File deleted:", payload.old);
           loadFiles();
         },
       )
@@ -119,8 +145,8 @@ export default function Build() {
           table: "repo_staging",
           filter: `repo_id=eq.${defaultRepo.id}`,
         },
-        () => {
-          console.log("repo_staging changed, reloading...");
+        (payload) => {
+          console.log("Staging changed:", payload);
           loadFiles();
         },
       )
@@ -130,6 +156,67 @@ export default function Build() {
       supabase.removeChannel(channel);
     };
   }, [projectId, defaultRepo]);
+
+  // Real-time subscription for agent session completion
+  useEffect(() => {
+    if (!activeSessionId || !projectId) return;
+
+    const sessionChannel = supabase
+      .channel(`agent-session-${activeSessionId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "agent_sessions",
+          filter: `id=eq.${activeSessionId}`,
+        },
+        (payload) => {
+          console.log("Agent session updated:", payload.new);
+          const newStatus = (payload.new as any)?.status;
+          if (newStatus === "completed" || newStatus === "failed") {
+            console.log(`Agent session ${newStatus}, reloading files...`);
+            loadFiles();
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(sessionChannel);
+    };
+  }, [activeSessionId, projectId]);
+
+  // Real-time subscription for agent file operations
+  useEffect(() => {
+    if (!activeSessionId) return;
+
+    const operationsChannel = supabase
+      .channel(`agent-operations-${activeSessionId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "agent_file_operations",
+          filter: `session_id=eq.${activeSessionId}`,
+        },
+        (payload) => {
+          console.log("Agent file operation:", payload.new);
+          const operation = payload.new as any;
+          // Reload files when agent completes file operations
+          if (operation.status === "completed" && operation.operation_type !== "search" && operation.operation_type !== "read") {
+            console.log("Agent file operation completed, reloading files...");
+            loadFiles();
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(operationsChannel);
+    };
+  }, [activeSessionId]);
 
   const loadFiles = async () => {
     if (!defaultRepo) return;
