@@ -22,7 +22,8 @@ import {
   GitCommit,
   ChevronDown,
   Settings,
-  Square
+  Square,
+  BookOpen
 } from 'lucide-react';
 import { useInfiniteAgentMessages } from '@/hooks/useInfiniteAgentMessages';
 import { useInfiniteAgentOperations } from '@/hooks/useInfiniteAgentOperations';
@@ -747,8 +748,9 @@ export function UnifiedAgentInterface({
               onClick={() => setIsSettingsOpen(true)}
               disabled={isSubmitting}
               title="Chat History Settings"
+              className={chatHistorySettings.includeHistory ? "border-primary text-primary" : ""}
             >
-              <Settings className="h-4 w-4" />
+              <BookOpen className="h-4 w-4" />
             </Button>
           </div>
           <Textarea
