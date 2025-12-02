@@ -1664,6 +1664,21 @@ export type Database = {
           title: string
         }[]
       }
+      agent_wildcard_search_with_token: {
+        Args: {
+          p_project_id: string
+          p_search_terms: string[]
+          p_token: string
+        }
+        Returns: {
+          content_preview: string
+          id: string
+          is_staged: boolean
+          match_count: number
+          matched_terms: string[]
+          path: string
+        }[]
+      }
       commit_staged_with_token: {
         Args: {
           p_branch?: string

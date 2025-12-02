@@ -203,9 +203,10 @@ serve(async (req) => {
     const manifest = {
       file_operations: {
         list_files: { description: "List all files with metadata (id, path, updated_at). MUST be called FIRST to load file structure." },
-        search: { description: "Search file paths and content by keyword" },
-        read_file: { description: "Read complete content of a single file" },
-        edit_lines: { description: "Edit specific line range in a file and stage the change" },
+        wildcard_search: { description: "Multi-term search across all files. Returns ranked results by match count. Use for finding files by concept." },
+        search: { description: "Search file paths and content by single keyword" },
+        read_file: { description: "Read complete content of a single file. Returns content WITH LINE NUMBERS prefixed as <<N>>." },
+        edit_lines: { description: "Edit specific line range in a file and stage the change. Use line numbers from <<N>> prefix in read_file output." },
         create_file: { description: "Create new file and stage as add operation" },
         delete_file: { description: "Delete file and stage as delete operation" },
         move_file: { description: "Move or rename file to a new path (handles directory moves properly)" },
@@ -356,8 +357,12 @@ When responding, structure your response as:
       "params": { "path_prefix": null }
     },
     {
+      "type": "wildcard_search",
+      "params": { "query": "multiple search terms separated by spaces (e.g., 'weather api fetch')" }
+    },
+    {
       "type": "search",
-      "params": { "keyword": "string to search in paths and content" }
+      "params": { "keyword": "single keyword to search in paths and content" }
     },
     {
       "type": "read_file",
@@ -365,7 +370,7 @@ When responding, structure your response as:
     },
     {
       "type": "edit_lines",
-      "params": { 
+      "params": {
         "file_id": "UUID from list_files or search results",
         "start_line": 1,
         "end_line": 5,
@@ -399,19 +404,36 @@ When responding, structure your response as:
   "status": "in_progress" | "completed" | "requires_commit"
 }
 
+READ_FILE LINE NUMBER FORMAT:
+When you call read_file, the content is returned with line numbers prefixed as <<N>> where N is the line number.
+Example output from read_file:
+<<1>> function Example() {
+<<2>>   return <div>Hello</div>;
+<<3>> }
+<<4>> 
+<<5>> export default Example;
+
+IMPORTANT LINE NUMBER RULES:
+- The <<N>> markers are for YOUR REFERENCE ONLY - NEVER include <<N>> in your edit_lines new_content
+- When specifying start_line and end_line for edit_lines, use the numbers shown in <<N>>
+- Line 1 is always the first line of the file
+- total_lines in the response tells you the file's total line count
+
 CRITICAL RULES:
 1. If user attached files (with file_id provided), use read_file directly with those IDs - DO NOT call list_files first
-2. If no files attached, ALWAYS call list_files FIRST to load file structure before any other operations
-3. Use file_id from list_files or search results for read_file, edit_lines, delete_file, and move_file operations
-4. Only use path for create_file operation
-5. Work autonomously by chaining operations together - DO NOT STOP AFTER A SINGLE OPERATION
-6. Set status to "in_progress" when you need to continue with more operations
-7. Set status to "requires_commit" when you've made changes ready to be staged
-8. Set status to "completed" ONLY after EXHAUSTIVELY completing the user's request AND performing final validation
-9. MANDATORY BEFORE EDIT_LINES: You MUST call read_file first to see the full current file content and understand line numbers
-10. For edit_lines: Count lines carefully in the read_file result to determine correct start_line and end_line
-11. CRITICAL AFTER EDIT_LINES: The operation result includes a 'verification' object showing the file's actual state after your edit. Always check verification.content_sample to confirm your edit worked as intended. If the result is unexpected, read_file again to see the full current state.
-12. For JSON/structured files: Ensure your edits maintain valid structure (no duplicate keys, proper syntax)
+2. If no files attached, start with EITHER list_files OR wildcard_search (if you have keywords to search)
+3. Use wildcard_search when you have concepts/keywords to find (e.g., "authentication login session")
+4. Use file_id from list_files, wildcard_search, or search results for read_file, edit_lines, delete_file, and move_file operations
+5. Only use path for create_file operation
+6. Work autonomously by chaining operations together - DO NOT STOP AFTER A SINGLE OPERATION
+7. Set status to "in_progress" when you need to continue with more operations
+8. Set status to "requires_commit" when you've made changes ready to be staged
+9. Set status to "completed" ONLY after EXHAUSTIVELY completing the user's request AND performing final validation
+10. MANDATORY BEFORE EDIT_LINES: You MUST call read_file first to see the numbered content and use those line numbers
+11. For edit_lines: Use the <<N>> line numbers from read_file output - do NOT guess line numbers
+12. CRITICAL AFTER EDIT_LINES: The operation result includes a 'verification' object showing the file's actual state after your edit. Always check verification.content_sample to confirm your edit worked as intended. If the result is unexpected, read_file again to see the full current state.
+13. For JSON/structured files: Ensure your edits maintain valid structure (no duplicate keys, proper syntax)
+14. NEVER include <<N>> markers in your new_content - they are display-only for your reference
 
 ITERATION PHILOSOPHY - DRIVE DEEP, NOT SHALLOW:
 You have up to 30 iterations available. USE THEM. The typical task requires 20-30 iterations to complete properly.
@@ -687,11 +709,42 @@ Start your response with { and end with }. Nothing else.`;
               });
               break;
               
+            case "wildcard_search":
+              // Split query into search terms (filter out very short terms)
+              const searchTerms = (op.params.query || "")
+                .toLowerCase()
+                .split(/\s+/)
+                .filter((term: string) => term.length > 2);
+              
+              if (searchTerms.length === 0) {
+                result = { data: [], error: null };
+              } else {
+                result = await supabase.rpc("agent_wildcard_search_with_token", {
+                  p_project_id: projectId,
+                  p_token: shareToken,
+                  p_search_terms: searchTerms,
+                });
+              }
+              break;
+              
             case "read_file":
               result = await supabase.rpc("agent_read_file_with_token", {
                 p_file_id: op.params.file_id,
                 p_token: shareToken,
               });
+              
+              // Add line numbers to content for LLM clarity
+              if (result.data?.[0]?.content) {
+                const lines = result.data[0].content.split('\n');
+                const numberedContent = lines
+                  .map((line: string, idx: number) => `<<${idx + 1}>> ${line}`)
+                  .join('\n');
+                
+                result.data[0].numbered_content = numberedContent;
+                result.data[0].total_lines = lines.length;
+                // Replace content with numbered version for agent consumption
+                result.data[0].content = numberedContent;
+              }
               break;
               
             case "edit_lines":
@@ -777,8 +830,11 @@ Start your response with { and end with }. Nothing else.`;
                 }
                 
                 // Apply edit to the correct base content
+                // Strip any accidental <<N>> markers from new_content (agent shouldn't include them, but safeguard)
+                let cleanedNewContent = op.params.new_content.replace(/^<<\d+>>\s*/gm, '');
+                
                 // Split new_content into lines (agent provides content with \n separators)
-                const newContentLines = op.params.new_content.split('\n');
+                const newContentLines = cleanedNewContent.split('\n');
                 // Remove trailing empty line if new_content ended with \n
                 if (newContentLines.length > 0 && newContentLines[newContentLines.length - 1] === '') {
                   newContentLines.pop();
