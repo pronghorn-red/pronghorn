@@ -11,7 +11,8 @@ interface PushRequest {
   shareToken: string;
   branch: string; // Target branch for push
   commitMessage?: string;
-  filePaths?: string[]; // Optional: push only specific files
+  filePaths?: string[]; // Optional: push only specific files (add/edit)
+  deletePaths?: string[]; // Optional: explicit files to delete from GitHub
   forcePush?: boolean; // Force push flag
   sourceRepoId?: string; // Optional: fetch files from this repo instead of repoId (for Prime->Mirror sync)
 }
@@ -37,12 +38,12 @@ Deno.serve(async (req) => {
       }
     );
 
-    const { repoId, projectId, shareToken, branch, commitMessage, filePaths, forcePush = false, sourceRepoId }: PushRequest = await req.json();
+    const { repoId, projectId, shareToken, branch, commitMessage, filePaths, deletePaths, forcePush = false, sourceRepoId }: PushRequest = await req.json();
 
     // Use sourceRepoId if provided (for Prime->Mirror sync), otherwise use repoId
     const fileSourceRepoId = sourceRepoId || repoId;
 
-    console.log('Push request:', { repoId, projectId, branch, filePaths: filePaths?.length || 'all', forcePush, sourceRepoId: sourceRepoId || 'same as target' });
+    console.log('Push request:', { repoId, projectId, branch, filePaths: filePaths?.length || 'all', deletePaths: deletePaths?.length || 0, forcePush, sourceRepoId: sourceRepoId || 'same as target' });
 
     // Validate project access
     const { error: accessError } = await supabaseClient.rpc('validate_project_access', {
@@ -124,14 +125,18 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!filesToPush || filesToPush.length === 0) {
+    // Allow push to proceed if there are files to push OR explicit deletions
+    const hasFilesToPush = filesToPush && filesToPush.length > 0;
+    const hasDeletions = deletePaths && deletePaths.length > 0;
+
+    if (!hasFilesToPush && !hasDeletions) {
       return new Response(JSON.stringify({ error: 'No files to push' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log(`Pushing ${filesToPush.length} files to ${repo.organization}/${repo.repo} on branch ${branch}`);
+    console.log(`Pushing ${filesToPush?.length || 0} files, deleting ${deletePaths?.length || 0} files to ${repo.organization}/${repo.repo} on branch ${branch}`);
 
     // Check if target branch exists
     const targetBranchUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/refs/heads/${branch}`;
@@ -243,9 +248,12 @@ Deno.serve(async (req) => {
     );
     const dbFilePaths = new Set(filesToPush.map((f: RepoFile) => f.path));
 
-    // Create blobs for each file
-    const tree = await Promise.all(
-      filesToPush.map(async (file: RepoFile) => {
+    // Create blobs for each file (only if there are files to push)
+    const tree: any[] = [];
+    
+    if (hasFilesToPush) {
+      const fileBlobs = await Promise.all(
+        filesToPush.map(async (file: RepoFile) => {
         // Detect if content is base64 (binary file) by checking if it's valid base64 and substantial length
         const isBase64 = /^[A-Za-z0-9+/\n\r]+=*$/.test(file.content.replace(/\s/g, '')) && file.content.length > 100;
         
@@ -276,7 +284,22 @@ Deno.serve(async (req) => {
           sha: blobData.sha,
         };
       })
-    );
+      );
+      tree.push(...fileBlobs);
+    }
+
+    // Handle explicit deletions from deletePaths (delta mode)
+    if (hasDeletions) {
+      deletePaths!.forEach(path => {
+        tree.push({
+          path,
+          mode: '100644',
+          type: 'blob',
+          sha: null, // null sha = delete
+        });
+      });
+      console.log(`Delta push: explicitly deleting ${deletePaths!.length} files:`, deletePaths);
+    }
 
     // Handle deletions ONLY when doing a full sync (no filePaths filter)
     // When filePaths is provided, we're doing a delta push - only push changed files
@@ -329,6 +352,7 @@ Deno.serve(async (req) => {
 
     // Create new commit
     const newCommitUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/commits`;
+    const totalChanges = (filesToPush?.length || 0) + (deletePaths?.length || 0);
     const newCommitResponse = await fetch(newCommitUrl, {
       method: 'POST',
       headers: {
@@ -338,7 +362,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        message: commitMessage || `Update ${filesToPush.length} file(s) via Pronghorn`,
+        message: commitMessage || `Update ${totalChanges} file(s) via Pronghorn`,
         tree: treeData.sha,
         parents: [currentSha],
       }),
@@ -387,8 +411,8 @@ Deno.serve(async (req) => {
         p_token: shareToken,
         p_branch: branch,
         p_commit_sha: newCommitData.sha,
-        p_commit_message: commitMessage || `Update ${filesToPush.length} file(s) via Pronghorn`,
-        p_files_changed: filesToPush.length,
+        p_commit_message: commitMessage || `Update ${totalChanges} file(s) via Pronghorn`,
+        p_files_changed: totalChanges,
       });
     } catch (logError) {
       console.error('Failed to log commit:', logError);
@@ -400,7 +424,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         commitSha: newCommitData.sha,
-        filesCount: filesToPush.length,
+        filesCount: filesToPush?.length || 0,
+        deletedCount: deletePaths?.length || 0,
         commitUrl: newCommitData.html_url,
       }),
       {

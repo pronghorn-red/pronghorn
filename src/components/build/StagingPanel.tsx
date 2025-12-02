@@ -211,13 +211,18 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
       const primeRepo = allRepos.find(r => r.is_prime) || allRepos[0];
       const mirrorRepos = allRepos.filter(r => r.id !== primeRepo.id);
 
-      // Collect unique file paths from all pending commits
-      const allFilePaths = new Set<string>();
+      // Collect file paths from all pending commits, separating adds/edits from deletes
+      const addEditPaths = new Set<string>();
+      const deletePaths = new Set<string>();
       pendingCommits.forEach(commit => {
         if (commit.files_metadata && Array.isArray(commit.files_metadata)) {
           commit.files_metadata.forEach((file: any) => {
             if (file.path) {
-              allFilePaths.add(file.path);
+              if (file.operation === 'delete') {
+                deletePaths.add(file.path);
+              } else {
+                addEditPaths.add(file.path);
+              }
             }
           });
         }
@@ -234,7 +239,8 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
           shareToken: shareToken,
           branch: primeRepo.branch,
           commitMessage: commitMessage,
-          filePaths: allFilePaths.size > 0 ? Array.from(allFilePaths) : undefined,
+          filePaths: addEditPaths.size > 0 ? Array.from(addEditPaths) : undefined,
+          deletePaths: deletePaths.size > 0 ? Array.from(deletePaths) : undefined,
           forcePush: false,
         },
       });
