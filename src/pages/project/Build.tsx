@@ -17,6 +17,7 @@ import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff } from "lucide-react";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
+import { cn } from "@/lib/utils";
 
 export default function Build() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -276,7 +277,7 @@ export default function Build() {
     <div className="flex flex-col bg-background h-screen">
       <PrimaryNav />
 
-      <div className="flex flex-1 min-h-0 relative overflow-hidden">
+      <div className={cn("flex flex-1 min-h-0 relative", !isMobile && "overflow-hidden")}>
         <ProjectSidebar
           projectId={projectId}
           isOpen={isProjectSidebarOpen}
