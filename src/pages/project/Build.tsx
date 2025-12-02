@@ -17,7 +17,7 @@ import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff, Upload, Trash2 } from "lucide-react";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
-
+import { RenameDialog } from "@/components/repository/RenameDialog";
 const BINARY_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'pdf', 'zip', 'tar', 'gz', 'exe', 'dll', 'so', 'dylib', 'woff', 'woff2', 'ttf', 'eot', 'mp3', 'mp4', 'wav', 'ogg', 'webm', 'avi', 'mov'];
 
 function isBinaryFile(filename: string): boolean {
@@ -53,6 +53,35 @@ export default function Build() {
   const [showDeletedFiles, setShowDeletedFiles] = useState(true);
   const [mobileActiveTab, setMobileActiveTab] = useState("files");
   const [editorRefreshKey, setEditorRefreshKey] = useState(0);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [itemToRename, setItemToRename] = useState<{ id: string; path: string; type: "file" | "folder" } | null>(null);
+
+  // Helper function to get unique file path with " (Copy)" suffix
+  const getUniqueFilePath = (desiredPath: string, existingPaths: string[]): string => {
+    if (!existingPaths.includes(desiredPath)) {
+      return desiredPath;
+    }
+    
+    // Split path into directory, name, and extension
+    const lastSlash = desiredPath.lastIndexOf('/');
+    const directory = lastSlash >= 0 ? desiredPath.substring(0, lastSlash + 1) : '';
+    const filename = lastSlash >= 0 ? desiredPath.substring(lastSlash + 1) : desiredPath;
+    
+    const lastDot = filename.lastIndexOf('.');
+    const baseName = lastDot > 0 ? filename.substring(0, lastDot) : filename;
+    const extension = lastDot > 0 ? filename.substring(lastDot) : '';
+    
+    // Append " (Copy)" until unique
+    let copyNumber = 1;
+    let newPath: string;
+    do {
+      const suffix = copyNumber === 1 ? ' (Copy)' : ` (Copy ${copyNumber})`;
+      newPath = `${directory}${baseName}${suffix}${extension}`;
+      copyNumber++;
+    } while (existingPaths.includes(newPath));
+    
+    return newPath;
+  };
 
   // Load files from default repo
   useEffect(() => {
@@ -236,9 +265,18 @@ export default function Build() {
     if (!defaultRepo || !projectId) return;
 
     try {
-      const fullPath = selectedFolderPath && selectedFolderPath !== '/'
+      let fullPath = selectedFolderPath && selectedFolderPath !== '/'
         ? `${selectedFolderPath}/${name}` 
         : name;
+
+      // Get unique path to prevent duplicates
+      const existingPaths = files.map(f => f.path);
+      const originalPath = fullPath;
+      fullPath = getUniqueFilePath(fullPath, existingPaths);
+      
+      if (fullPath !== originalPath) {
+        toast.warning(`Path already exists. Creating as: ${fullPath.split('/').pop()}`);
+      }
 
       if (createType === "folder") {
         // Create .gitkeep file in folder
@@ -276,16 +314,112 @@ export default function Build() {
     setAttachedFiles((prev) => prev.filter((f) => f.id !== fileId));
   };
 
-  const handleReviewFile = (fileId: string, path: string) => {
-    toast.info(`CodingAgent will review ${path}`);
+  const handleRenameFile = (fileId: string, path: string) => {
+    const isFolder = !path.includes('.') || path.endsWith('/');
+    setItemToRename({ id: fileId, path, type: isFolder ? "folder" : "file" });
+    setRenameDialogOpen(true);
   };
 
-  const handleEditFile = (fileId: string, path: string) => {
-    toast.info(`CodingAgent will edit ${path}`);
+  const handleConfirmRename = async (newName: string) => {
+    if (!itemToRename || !defaultRepo || !projectId) return;
+    
+    const oldPath = itemToRename.path;
+    const lastSlash = oldPath.lastIndexOf('/');
+    const directory = lastSlash >= 0 ? oldPath.substring(0, lastSlash + 1) : '';
+    let newPath = `${directory}${newName}`;
+    
+    // Check for duplicates and get unique path
+    const existingPaths = files.map(f => f.path);
+    newPath = getUniqueFilePath(newPath, existingPaths.filter(p => p !== oldPath));
+    
+    if (newPath !== `${directory}${newName}`) {
+      toast.warning(`Path already exists. Renamed to: ${newPath.split('/').pop()}`);
+    }
+    
+    try {
+      // Get old content for staging
+      let oldContent: string | null = null;
+      const stagedFile = stagedChanges.find(s => s.file_path === oldPath);
+      
+      if (stagedFile?.new_content) {
+        oldContent = stagedFile.new_content;
+      } else {
+        const fileRecord = files.find(f => f.path === oldPath);
+        if (fileRecord) {
+          const { data: fileData } = await supabase.rpc("get_file_content_with_token", {
+            p_file_id: fileRecord.id,
+            p_token: shareToken || null,
+          });
+          if (fileData && fileData.length > 0) {
+            oldContent = fileData[0].content;
+          }
+        }
+      }
+      
+      // Stage the rename
+      const { error } = await supabase.rpc("stage_file_change_with_token", {
+        p_repo_id: defaultRepo.id,
+        p_token: shareToken || null,
+        p_operation_type: "rename",
+        p_file_path: newPath,
+        p_old_path: oldPath,
+        p_old_content: oldContent,
+        p_new_content: oldContent,
+      });
+
+      if (error) throw error;
+
+      toast.success(`Renamed to ${newPath.split('/').pop()}`);
+      setRenameDialogOpen(false);
+      setItemToRename(null);
+      loadFiles();
+    } catch (error: any) {
+      console.error("Error renaming file:", error);
+      toast.error(error.message || "Failed to rename file");
+    }
   };
 
-  const handleAuditFile = (fileId: string, path: string) => {
-    toast.info(`CodingAgent will audit ${path} against requirements`);
+  const handleDeleteFromContext = async (fileId: string, path: string) => {
+    if (!defaultRepo || !projectId) {
+      toast.error("No repository available");
+      return;
+    }
+
+    try {
+      let oldContent: string | null = null;
+      const stagedFile = stagedChanges.find(s => s.file_path === path);
+      
+      if (!stagedFile) {
+        const { data: fileData } = await supabase.rpc("get_file_content_with_token", {
+          p_file_id: fileId,
+          p_token: shareToken || null,
+        });
+        
+        if (fileData && fileData.length > 0) {
+          oldContent = fileData[0].content;
+        }
+      }
+
+      const { error } = await supabase.rpc("stage_file_change_with_token", {
+        p_repo_id: defaultRepo.id,
+        p_token: shareToken || null,
+        p_operation_type: "delete",
+        p_file_path: path,
+        p_old_content: oldContent,
+        p_new_content: null,
+      });
+
+      if (error) throw error;
+
+      toast.success(`Staged for deletion: ${path}`);
+      if (selectedFile?.path === path) {
+        setSelectedFile(null);
+      }
+      loadFiles();
+    } catch (error: any) {
+      console.error("Error staging file for deletion:", error);
+      toast.error(error.message || "Failed to stage file for deletion");
+    }
   };
 
   const handleViewDiff = (change: any) => {
@@ -299,11 +433,24 @@ export default function Build() {
     const uploadedFiles = event.target.files;
     if (!uploadedFiles || uploadedFiles.length === 0 || !defaultRepo || !projectId) return;
 
+    const existingPaths = files.map(f => f.path);
+
     for (const file of Array.from(uploadedFiles)) {
       try {
-        const fullPath = selectedFolderPath && selectedFolderPath !== '/'
+        let fullPath = selectedFolderPath && selectedFolderPath !== '/'
           ? `${selectedFolderPath}/${file.name}`
           : file.name;
+
+        // Get unique path to prevent duplicates
+        const originalPath = fullPath;
+        fullPath = getUniqueFilePath(fullPath, existingPaths);
+        
+        if (fullPath !== originalPath) {
+          toast.warning(`Path already exists. Uploading as: ${fullPath.split('/').pop()}`);
+        }
+        
+        // Add to existing paths for subsequent files in the same upload
+        existingPaths.push(fullPath);
 
         const isBinary = isBinaryFile(file.name);
         let content: string;
@@ -341,7 +488,7 @@ export default function Build() {
 
         if (error) throw error;
 
-        toast.success(`Uploaded and staged: ${file.name}`);
+        toast.success(`Uploaded and staged: ${fullPath.split('/').pop()}`);
       } catch (error: any) {
         console.error("Error uploading file:", error);
         toast.error(`Failed to upload ${file.name}: ${error.message || "Unknown error"}`);
@@ -529,9 +676,8 @@ export default function Build() {
                           onSelectFile={handleSelectFile}
                           onFolderSelect={setSelectedFolderPath}
                           onAttachToPrompt={handleAttachToPrompt}
-                          onReviewFile={handleReviewFile}
-                          onEditFile={handleEditFile}
-                          onAuditFile={handleAuditFile}
+                          onRenameFile={handleRenameFile}
+                          onDeleteFile={handleDeleteFromContext}
                         />
                       </div>
                     </div>
@@ -726,9 +872,8 @@ export default function Build() {
                           onSelectFile={handleSelectFile}
                           onFolderSelect={setSelectedFolderPath}
                           onAttachToPrompt={handleAttachToPrompt}
-                          onReviewFile={handleReviewFile}
-                          onEditFile={handleEditFile}
-                          onAuditFile={handleAuditFile}
+                          onRenameFile={handleRenameFile}
+                          onDeleteFile={handleDeleteFromContext}
                         />
                       </div>
                     </div>
@@ -784,6 +929,14 @@ export default function Build() {
         type={createType}
         onConfirm={handleCreateFile}
         basePath={selectedFolderPath || undefined}
+      />
+
+      <RenameDialog
+        open={renameDialogOpen}
+        onOpenChange={setRenameDialogOpen}
+        currentName={itemToRename?.path.split('/').pop() || ''}
+        type={itemToRename?.type || "file"}
+        onConfirm={handleConfirmRename}
       />
     </div>
   );

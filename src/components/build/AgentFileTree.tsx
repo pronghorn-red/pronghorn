@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ChevronRight, ChevronDown, File, Folder, FolderOpen } from "lucide-react";
+import { ChevronRight, ChevronDown, File, Folder, FolderOpen, Edit, Trash2, Paperclip } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   ContextMenu,
@@ -30,9 +30,8 @@ interface AgentFileTreeProps {
   onSelectFile: (fileId: string, path: string, isStaged?: boolean) => void;
   onFolderSelect: (folderPath: string) => void;
   onAttachToPrompt: (fileId: string, path: string) => void;
-  onReviewFile: (fileId: string, path: string) => void;
-  onEditFile: (fileId: string, path: string) => void;
-  onAuditFile: (fileId: string, path: string) => void;
+  onRenameFile: (fileId: string, path: string) => void;
+  onDeleteFile: (fileId: string, path: string) => void;
 }
 
 export function AgentFileTree({
@@ -42,9 +41,8 @@ export function AgentFileTree({
   onSelectFile,
   onFolderSelect,
   onAttachToPrompt,
-  onReviewFile,
-  onEditFile,
-  onAuditFile,
+  onRenameFile,
+  onDeleteFile,
 }: AgentFileTreeProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
@@ -165,26 +163,44 @@ export function AgentFileTree({
       const folderBgColor = getFolderColor(node);
       
       return (
-        <div key={node.id}>
-          <div
-            className={`flex items-center gap-1 px-2 py-1 hover:bg-[#2a2d2e] cursor-pointer transition-colors ${folderBgColor}`}
-            style={{ paddingLeft: `${level * 12 + 8}px` }}
-            onClick={() => handleFolderClick(node.path)}
-          >
-            {isExpanded ? (
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
-            )}
-            {isExpanded ? (
-              <FolderOpen className="h-4 w-4 shrink-0 text-[#dcb67a]" />
-            ) : (
-              <Folder className="h-4 w-4 shrink-0 text-[#dcb67a]" />
-            )}
-            <span className="text-sm truncate text-[#cccccc] font-medium">{node.name}</span>
-          </div>
+        <ContextMenu key={node.id}>
+          <ContextMenuTrigger>
+            <div
+              className={`flex items-center gap-1 px-2 py-1 hover:bg-[#2a2d2e] cursor-pointer transition-colors ${folderBgColor}`}
+              style={{ paddingLeft: `${level * 12 + 8}px` }}
+              onClick={() => handleFolderClick(node.path)}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
+              )}
+              {isExpanded ? (
+                <FolderOpen className="h-4 w-4 shrink-0 text-[#dcb67a]" />
+              ) : (
+                <Folder className="h-4 w-4 shrink-0 text-[#dcb67a]" />
+              )}
+              <span className="text-sm truncate text-[#cccccc] font-medium">{node.name}</span>
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent className="bg-[#252526] border-[#3e3e42]">
+            <ContextMenuItem 
+              onClick={() => onRenameFile(node.id, node.path)}
+              className="text-[#cccccc] focus:bg-[#2a2d2e] focus:text-[#ffffff]"
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Rename
+            </ContextMenuItem>
+            <ContextMenuItem 
+              onClick={() => onDeleteFile(node.id, node.path)}
+              className="text-red-400 focus:bg-[#2a2d2e] focus:text-red-300"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </ContextMenuItem>
+          </ContextMenuContent>
           {isExpanded && node.children?.map((child) => renderNode(child, level + 1))}
-        </div>
+        </ContextMenu>
       );
     }
 
@@ -220,26 +236,23 @@ export function AgentFileTree({
             onClick={() => onAttachToPrompt(node.id, node.path)}
             className="text-[#cccccc] focus:bg-[#2a2d2e] focus:text-[#ffffff]"
           >
+            <Paperclip className="h-4 w-4 mr-2" />
             Attach to Prompt
           </ContextMenuItem>
           <ContextMenuSeparator className="bg-[#3e3e42]" />
           <ContextMenuItem 
-            onClick={() => onReviewFile(node.id, node.path)}
+            onClick={() => onRenameFile(node.id, node.path)}
             className="text-[#cccccc] focus:bg-[#2a2d2e] focus:text-[#ffffff]"
           >
-            Review File
+            <Edit className="h-4 w-4 mr-2" />
+            Rename
           </ContextMenuItem>
           <ContextMenuItem 
-            onClick={() => onEditFile(node.id, node.path)}
-            className="text-[#cccccc] focus:bg-[#2a2d2e] focus:text-[#ffffff]"
+            onClick={() => onDeleteFile(node.id, node.path)}
+            className="text-red-400 focus:bg-[#2a2d2e] focus:text-red-300"
           >
-            Edit File
-          </ContextMenuItem>
-          <ContextMenuItem 
-            onClick={() => onAuditFile(node.id, node.path)}
-            className="text-[#cccccc] focus:bg-[#2a2d2e] focus:text-[#ffffff]"
-          >
-            Audit Against Requirements
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
