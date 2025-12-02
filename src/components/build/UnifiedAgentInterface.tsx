@@ -20,7 +20,8 @@ import {
   Clock,
   Zap,
   GitCommit,
-  ChevronDown
+  ChevronDown,
+  Settings
 } from 'lucide-react';
 import { useInfiniteAgentMessages } from '@/hooks/useInfiniteAgentMessages';
 import { useInfiniteAgentOperations } from '@/hooks/useInfiniteAgentOperations';
@@ -684,6 +685,15 @@ export function UnifiedAgentInterface({
             disabled={isSubmitting}
           >
             <Paperclip className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setIsSettingsOpen(true)}
+            disabled={isSubmitting}
+            title="Chat History Settings"
+          >
+            <Settings className="h-4 w-4" />
           </Button>
           <Textarea
             placeholder="Describe the task for the agent..."
