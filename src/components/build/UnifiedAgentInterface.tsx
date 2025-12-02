@@ -69,6 +69,7 @@ export function UnifiedAgentInterface({
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
   const [attachedContext, setAttachedContext] = useState<ProjectSelectionResult | null>(null);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
   
   // Chat history settings state
   const [chatHistorySettings, setChatHistorySettings] = useState<ChatHistorySettings>({
@@ -85,6 +86,28 @@ export function UnifiedAgentInterface({
   const operationObserverRef = useRef<IntersectionObserver | null>(null);
   const messageLoadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const operationLoadMoreTriggerRef = useRef<HTMLDivElement>(null);
+
+  // Detect when component becomes visible (for mobile tab switching)
+  useEffect(() => {
+    const container = scrollViewportRef.current;
+    if (!container) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting);
+        // Scroll to bottom when becoming visible
+        if (entry.isIntersecting && messagesEndRef.current) {
+          setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+          }, 100);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   // Sync loaded messages with local state
   useEffect(() => {
