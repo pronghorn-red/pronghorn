@@ -162,9 +162,9 @@ Deno.serve(async (req) => {
 
     const treeData = await treeResponse.json();
 
-    // Binary file extensions to skip (can't store in PostgreSQL text columns)
+    // Binary file extensions - stored as base64 with is_binary flag
     const binaryExtensions = [
-      '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.bmp', '.svg',
+      '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.bmp',
       '.pdf', '.zip', '.tar', '.gz', '.rar', '.7z',
       '.woff', '.woff2', '.ttf', '.eot', '.otf',
       '.mp3', '.mp4', '.wav', '.avi', '.mov', '.webm',
@@ -173,14 +173,10 @@ Deno.serve(async (req) => {
       '.lock', '.lockb'
     ];
 
-    // Filter for text files only (not directories, not binary)
-    const files = treeData.tree.filter((item: any) => {
-      if (item.type !== 'blob') return false;
-      const ext = item.path.toLowerCase().substring(item.path.lastIndexOf('.'));
-      return !binaryExtensions.includes(ext);
-    });
+    // Filter for files only (not directories)
+    const files = treeData.tree.filter((item: any) => item.type === 'blob');
 
-    console.log(`Found ${files.length} text files to pull (binary files skipped)`);
+    console.log(`Found ${files.length} files to pull`);
 
     // Fetch content for each file
     const fileContents = await Promise.all(
@@ -201,17 +197,37 @@ Deno.serve(async (req) => {
 
         const blobData = await blobResponse.json();
         
-        // Decode base64 content to UTF-8 text for storage
+        // Check if file is binary by extension
+        const ext = file.path.toLowerCase().substring(file.path.lastIndexOf('.'));
+        const isBinary = binaryExtensions.includes(ext);
+        
         let content = blobData.content;
         if (blobData.encoding === 'base64') {
-          // Decode base64 to plain text
-          content = atob(blobData.content.replace(/\n/g, ''));
+          if (isBinary) {
+            // Keep binary files as base64 encoded
+            content = blobData.content.replace(/\n/g, '');
+          } else {
+            // Decode text files to plain text
+            try {
+              content = atob(blobData.content.replace(/\n/g, ''));
+            } catch (e) {
+              // If decode fails, treat as binary
+              console.log(`Treating ${file.path} as binary due to decode error`);
+              return {
+                path: file.path,
+                content: blobData.content.replace(/\n/g, ''),
+                commit_sha: targetSha,
+                is_binary: true,
+              };
+            }
+          }
         }
 
         return {
           path: file.path,
           content: content,
           commit_sha: targetSha,
+          is_binary: isBinary,
         };
       })
     );

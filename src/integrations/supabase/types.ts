@@ -997,6 +997,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          is_binary: boolean
           last_commit_sha: string | null
           path: string
           project_id: string
@@ -1007,6 +1008,7 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          is_binary?: boolean
           last_commit_sha?: string | null
           path: string
           project_id: string
@@ -1017,6 +1019,7 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          is_binary?: boolean
           last_commit_sha?: string | null
           path?: string
           project_id?: string
@@ -1078,6 +1081,7 @@ export type Database = {
           created_by: string | null
           file_path: string
           id: string
+          is_binary: boolean
           new_content: string | null
           old_content: string | null
           old_path: string | null
@@ -1090,6 +1094,7 @@ export type Database = {
           created_by?: string | null
           file_path: string
           id?: string
+          is_binary?: boolean
           new_content?: string | null
           old_content?: string | null
           old_path?: string | null
@@ -1102,6 +1107,7 @@ export type Database = {
           created_by?: string | null
           file_path?: string
           id?: string
+          is_binary?: boolean
           new_content?: string | null
           old_content?: string | null
           old_path?: string | null
@@ -1725,6 +1731,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          is_binary: boolean
           last_commit_sha: string | null
           path: string
           project_id: string
@@ -2334,6 +2341,7 @@ export type Database = {
           created_by: string | null
           file_path: string
           id: string
+          is_binary: boolean
           new_content: string | null
           old_content: string | null
           old_path: string | null
@@ -2677,6 +2685,7 @@ export type Database = {
           created_by: string | null
           file_path: string
           id: string
+          is_binary: boolean
           new_content: string | null
           old_content: string | null
           old_path: string | null
@@ -2701,6 +2710,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          is_binary: boolean
           last_commit_sha: string | null
           path: string
           project_id: string
@@ -2802,6 +2812,7 @@ export type Database = {
           created_by: string | null
           file_path: string
           id: string
+          is_binary: boolean
           new_content: string | null
           old_content: string | null
           old_path: string | null
@@ -3134,6 +3145,7 @@ export type Database = {
           created_by: string | null
           file_path: string
           id: string
+          is_binary: boolean
           new_content: string | null
           old_content: string | null
           old_path: string | null
@@ -3265,6 +3277,7 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          is_binary: boolean
           last_commit_sha: string | null
           path: string
           project_id: string
