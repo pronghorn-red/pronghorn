@@ -574,15 +574,17 @@ export function UnifiedAgentInterface({
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="text-sm font-semibold">Agent</span>
-                <span className="text-xs text-muted-foreground">
-                  {new Date(item.created_at).toLocaleTimeString()}
-                </span>
+                {verbosity !== 'minimal' && (
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(item.created_at).toLocaleTimeString()}
+                  </span>
+                )}
                 {item.metadata?.iteration && (
                   <Badge variant="outline" className="text-xs">
                     Iteration {item.metadata.iteration}
                   </Badge>
                 )}
-                {parsed.status && (
+                {verbosity !== 'minimal' && parsed.status && (
                   <Badge 
                     variant={
                       parsed.status === 'completed' ? 'default' :
@@ -595,52 +597,57 @@ export function UnifiedAgentInterface({
                   </Badge>
                 )}
               </div>
-              <div className="p-3 rounded-lg bg-muted/30 border">
-                {/* DETAILED: Show raw JSON */}
-                {verbosity === 'detailed' && (
-                  <div className="mb-3">
-                    <p className="text-xs font-semibold mb-1 text-muted-foreground">Raw Response:</p>
-                    <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-48 whitespace-pre-wrap break-words">
-                      {item.content}
-                    </pre>
-                  </div>
-                )}
-                
-                {/* STANDARD & DETAILED: Show reasoning */}
-                {verbosity !== 'minimal' && parsed.reasoning && (
-                  <div className="mb-3">
-                    <p className="text-xs font-semibold mb-1 text-muted-foreground">Reasoning:</p>
-                    <p className="text-sm whitespace-pre-wrap">{parsed.reasoning}</p>
-                  </div>
-                )}
-                
-                {/* ALL MODES: Show operations */}
-                {parsed.operations.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold mb-2 text-muted-foreground">Operations:</p>
-                    <div className="space-y-1">
-                      {parsed.operations.map((op: any, idx: number) => (
-                        <div key={idx} className="flex items-center gap-2 text-xs">
-                          <Badge variant="outline" className="text-xs">
-                            {op.type}
-                          </Badge>
-                          <span className="text-muted-foreground truncate max-w-[200px]" title={
-                            op.params?.path || 
-                            (verbosity === 'detailed' ? op.params?.file_id : resolveFileId(op.params?.file_id)) || 
-                            op.params?.keyword || 
-                            'N/A'
-                          }>
-                            {op.params?.path || 
-                             (verbosity === 'detailed' ? op.params?.file_id : resolveFileId(op.params?.file_id)) || 
-                             op.params?.keyword || 
-                             'N/A'}
-                          </span>
-                        </div>
-                      ))}
+              {/* Only show content box if there's something to display */}
+              {(verbosity === 'detailed' || 
+                (verbosity === 'standard' && parsed.reasoning) || 
+                parsed.operations.length > 0) && (
+                <div className="p-3 rounded-lg bg-muted/30 border">
+                  {/* DETAILED: Show raw JSON */}
+                  {verbosity === 'detailed' && (
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold mb-1 text-muted-foreground">Raw Response:</p>
+                      <pre className="text-xs bg-muted p-2 rounded max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
+                        {item.content}
+                      </pre>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                  
+                  {/* STANDARD & DETAILED: Show reasoning */}
+                  {verbosity !== 'minimal' && parsed.reasoning && (
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold mb-1 text-muted-foreground">Reasoning:</p>
+                      <p className="text-sm whitespace-pre-wrap">{parsed.reasoning}</p>
+                    </div>
+                  )}
+                  
+                  {/* ALL MODES: Show operations */}
+                  {parsed.operations.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold mb-2 text-muted-foreground">Operations:</p>
+                      <div className="space-y-1">
+                        {parsed.operations.map((op: any, idx: number) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs">
+                            <Badge variant="outline" className="text-xs">
+                              {op.type}
+                            </Badge>
+                            <span className="text-muted-foreground truncate max-w-[200px]" title={
+                              op.params?.path || 
+                              (verbosity === 'detailed' ? op.params?.file_id : resolveFileId(op.params?.file_id)) || 
+                              op.params?.keyword || 
+                              'N/A'
+                            }>
+                              {op.params?.path || 
+                               (verbosity === 'detailed' ? op.params?.file_id : resolveFileId(op.params?.file_id)) || 
+                               op.params?.keyword || 
+                               'N/A'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         );
