@@ -523,7 +523,7 @@ export function UnifiedAgentInterface({
     }
   };
 
-  const renderTimelineItem = (item: any, index: number) => {
+  const renderTimelineItem = (item: any, index: number, timelineArray: any[]) => {
     const isMessage = 'role' in item;
     const isOperation = 'operation_type' in item;
     const isLastUserMessage = index === timeline.length - 1 && isMessage && item.role === 'user';
@@ -563,6 +563,40 @@ export function UnifiedAgentInterface({
       if (isAgent) {
         const parsed = parseAgentContent(item.content);
         const { verbosity } = chatHistorySettings;
+        
+        // Determine if this agent message should show reasoning in minimal mode
+        // Show reasoning for: first agent after user input, OR last agent before user input/end
+        const shouldShowReasoningInMinimal = (() => {
+          // Look backwards to find if this is the first agent after a user message
+          let isFirstAgentAfterUser = false;
+          for (let i = index - 1; i >= 0; i--) {
+            const prevItem = timelineArray[i];
+            if ('role' in prevItem) {
+              if (prevItem.role === 'user') {
+                isFirstAgentAfterUser = true;
+              }
+              break;
+            }
+          }
+          
+          // Look forwards to find if this is the last agent before a user message or end
+          let isLastAgentBeforeUserOrEnd = false;
+          if (index === timelineArray.length - 1) {
+            isLastAgentBeforeUserOrEnd = true;
+          } else {
+            for (let i = index + 1; i < timelineArray.length; i++) {
+              const nextItem = timelineArray[i];
+              if ('role' in nextItem) {
+                if (nextItem.role === 'user') {
+                  isLastAgentBeforeUserOrEnd = true;
+                }
+                break;
+              }
+            }
+          }
+          
+          return isFirstAgentAfterUser || isLastAgentBeforeUserOrEnd;
+        })();
         
         return (
           <div key={item.id} data-timeline-id={item.id} className="flex gap-3">
@@ -612,8 +646,8 @@ export function UnifiedAgentInterface({
                     </div>
                   )}
                   
-                  {/* STANDARD & DETAILED: Show reasoning */}
-                  {verbosity !== 'minimal' && parsed.reasoning && (
+                  {/* STANDARD & DETAILED: Show reasoning (also show in minimal for first/last agent) */}
+                  {(verbosity !== 'minimal' || shouldShowReasoningInMinimal) && parsed.reasoning && (
                     <div className="mb-3">
                       <p className="text-xs font-semibold mb-1 text-muted-foreground">Reasoning:</p>
                       <p className="text-sm whitespace-pre-wrap">{parsed.reasoning}</p>
@@ -688,16 +722,18 @@ export function UnifiedAgentInterface({
 
             {renderOperationDetails(item.details)}
             
-            <div className="flex items-center justify-between mt-2">
-              <p className="text-xs text-muted-foreground">
-                {new Date(item.created_at).toLocaleTimeString()}
-              </p>
-              {item.completed_at && (
+            {chatHistorySettings.verbosity !== 'minimal' && (
+              <div className="flex items-center justify-between mt-2">
                 <p className="text-xs text-muted-foreground">
-                  → {new Date(item.completed_at).toLocaleTimeString()}
+                  {new Date(item.created_at).toLocaleTimeString()}
                 </p>
-              )}
-            </div>
+                {item.completed_at && (
+                  <p className="text-xs text-muted-foreground">
+                    → {new Date(item.completed_at).toLocaleTimeString()}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       );
@@ -745,7 +781,7 @@ export function UnifiedAgentInterface({
                   </div>
                 )}
                 
-                {timeline.map((item, index) => renderTimelineItem(item, index))}
+                {timeline.map((item, index) => renderTimelineItem(item, index, timeline))}
               </>
             )}
             <div ref={messagesEndRef} />
