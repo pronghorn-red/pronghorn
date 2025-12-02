@@ -337,15 +337,27 @@ Auto-commit enabled: ${autoCommit}
 Project Context:
 ${contextSummary}${attachedFilesSection}${chatHistorySection}
 
+⚠️ CRITICAL WARNING ABOUT FILE IDs FROM CHAT HISTORY:
+Any file IDs mentioned in the RECENT CONVERSATION CONTEXT above are from PREVIOUS sessions and are STALE/INVALID.
+File IDs change when:
+- Files are committed (staging is cleared, new IDs assigned)
+- Files are deleted and re-created
+- New agent sessions start
+
+NEVER use file IDs from chat history directly!
+ALWAYS call list_files or wildcard_search FIRST to get CURRENT, VALID file IDs for THIS session.
+Even if chat history shows "file_id: abc123", that ID is INVALID - you MUST get fresh IDs.
+
 CRITICAL INSTRUCTION FOR ATTACHED FILES:
 ${attachedFiles && attachedFiles.length > 0 
   ? `The user has attached specific file(s) with their file_id values listed above. DO NOT call list_files first - use read_file directly with the provided file_id values to work with these files immediately.`
-  : `Your FIRST operation MUST be:
+  : `Your FIRST operation MUST be list_files or wildcard_search to get CURRENT file IDs.
+File IDs from chat history are STALE and INVALID - never reuse them!
 {
   "type": "list_files",
   "params": { "path_prefix": null }
 }
-This loads the complete file structure with all file IDs and paths. You CANNOT edit, read, or delete files without knowing their IDs first.`
+This loads the complete file structure with all CURRENT file IDs and paths. You CANNOT edit, read, or delete files without getting their IDs from THIS session first.`
 }
 
 When responding, structure your response as:
