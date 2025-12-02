@@ -1,17 +1,41 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Editor from "@monaco-editor/react";
 import { DiffEditor } from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams } from "react-router-dom";
-import { Save, X, FileText } from "lucide-react";
+import { Save, X, FileText, ImageIcon } from "lucide-react";
+
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg'];
+
+function isImageFile(path: string | null): boolean {
+  if (!path) return false;
+  const ext = path.split('.').pop()?.toLowerCase();
+  return IMAGE_EXTENSIONS.includes(ext || '');
+}
+
+function getImageMimeType(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase();
+  const mimeMap: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    bmp: 'image/bmp',
+    ico: 'image/x-icon',
+    svg: 'image/svg+xml',
+  };
+  return mimeMap[ext || ''] || 'image/png';
+}
 
 interface CodeEditorProps {
   fileId: string | null;
   filePath: string | null;
   repoId: string;
   isStaged?: boolean;
+  isBinary?: boolean;
   initialContent?: string;
   showDiff?: boolean;
   diffOldContent?: string;
@@ -25,7 +49,8 @@ export function CodeEditor({
   fileId, 
   filePath, 
   repoId, 
-  isStaged, 
+  isStaged,
+  isBinary, 
   initialContent, 
   showDiff = false,
   diffOldContent,
@@ -264,6 +289,15 @@ export function CodeEditor({
     return langMap[ext || ""] || "plaintext";
   };
 
+  // Check if this is an image file that should be displayed as an image
+  const isImage = isImageFile(filePath);
+  const imageDataUrl = useMemo(() => {
+    if (!isImage || !content) return null;
+    const mimeType = getImageMimeType(filePath || '');
+    // Content is already base64 encoded for binary files
+    return `data:${mimeType};base64,${content}`;
+  }, [isImage, content, filePath]);
+
   if (!filePath) {
     return (
       <div className="flex items-center justify-center h-full bg-[#1e1e1e] text-[#cccccc]">
@@ -276,11 +310,15 @@ export function CodeEditor({
     <div className="flex flex-col h-full bg-[#1e1e1e]">
       <div className="flex items-center justify-between px-4 py-2 border-b border-[#3e3e42] bg-[#252526]">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <FileText className="h-4 w-4 text-[#cccccc] shrink-0" />
+          {isImage ? (
+            <ImageIcon className="h-4 w-4 text-[#cccccc] shrink-0" />
+          ) : (
+            <FileText className="h-4 w-4 text-[#cccccc] shrink-0" />
+          )}
           <h3 className="text-sm font-normal truncate text-[#cccccc]">{filePath}</h3>
         </div>
         <div className="flex items-center gap-3">
-          {isStaged && (
+          {isStaged && !isImage && (
             <label className="flex items-center gap-2 text-xs text-[#cccccc] cursor-pointer hover:text-white">
               <input
                 type="checkbox"
@@ -292,16 +330,18 @@ export function CodeEditor({
             </label>
           )}
           <div className="flex gap-1">
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={saving || loading}
-              variant="secondary"
-              className="h-8 gap-2"
-            >
-              <Save className="h-4 w-4" />
-              {saving ? "Saving..." : "Save"}
-            </Button>
+            {!isImage && (
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={saving || loading}
+                variant="secondary"
+                className="h-8 gap-2"
+              >
+                <Save className="h-4 w-4" />
+                {saving ? "Saving..." : "Save"}
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -317,6 +357,21 @@ export function CodeEditor({
         {loading ? (
           <div className="flex items-center justify-center h-full text-[#cccccc]">
             Loading...
+          </div>
+        ) : isImage && imageDataUrl ? (
+          <div className="flex items-center justify-center h-full p-4 bg-[#1e1e1e]">
+            <img 
+              src={imageDataUrl} 
+              alt={filePath}
+              className="max-w-full max-h-full object-contain"
+              onError={() => {
+                toast({
+                  title: "Image Error",
+                  description: "Failed to load image preview",
+                  variant: "destructive",
+                });
+              }}
+            />
           </div>
         ) : showDiffMode ? (
           <DiffEditor
