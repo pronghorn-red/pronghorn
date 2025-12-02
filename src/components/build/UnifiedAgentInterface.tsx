@@ -89,7 +89,7 @@ export function UnifiedAgentInterface({
   const messageLoadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const operationLoadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const scrollMetricsBeforeLoad = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
+  const anchorIdBeforeLoad = useRef<string | null>(null);
 
   // Detect when component becomes visible (for mobile tab switching)
   useEffect(() => {
@@ -157,13 +157,20 @@ export function UnifiedAgentInterface({
     messageObserverRef.current = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          // Capture scroll metrics BEFORE loading more
+          // Find the first timeline item that's visible in viewport and store its ID
           const viewport = scrollViewportRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
           if (viewport) {
-            scrollMetricsBeforeLoad.current = {
-              scrollTop: viewport.scrollTop,
-              scrollHeight: viewport.scrollHeight,
-            };
+            const viewportRect = viewport.getBoundingClientRect();
+            const timelineItems = viewport.querySelectorAll('[data-timeline-id]');
+            
+            for (const item of timelineItems) {
+              const itemRect = item.getBoundingClientRect();
+              // Find first item that's at least partially visible in the viewport
+              if (itemRect.top >= viewportRect.top && itemRect.top < viewportRect.bottom) {
+                anchorIdBeforeLoad.current = item.getAttribute('data-timeline-id');
+                break;
+              }
+            }
           }
           loadMoreMessages();
         }
@@ -182,22 +189,21 @@ export function UnifiedAgentInterface({
     };
   }, [messagesLoading, hasMoreMessages, loadMoreMessages]);
 
-  // Restore scroll position after lazy load to prevent jump
+  // Restore scroll position after lazy load by scrolling to the anchor element
   useEffect(() => {
-    if (scrollMetricsBeforeLoad.current) {
-      const viewport = scrollViewportRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
-      if (viewport) {
-        // Use requestAnimationFrame to ensure DOM has updated
-        requestAnimationFrame(() => {
-          if (scrollMetricsBeforeLoad.current) {
-            const heightDifference = viewport.scrollHeight - scrollMetricsBeforeLoad.current.scrollHeight;
-            if (heightDifference > 0) {
-              viewport.scrollTop = scrollMetricsBeforeLoad.current.scrollTop + heightDifference;
-            }
-            scrollMetricsBeforeLoad.current = null;
-          }
-        });
-      }
+    if (anchorIdBeforeLoad.current) {
+      const anchorId = anchorIdBeforeLoad.current;
+      // Use setTimeout to ensure DOM has fully updated after render
+      setTimeout(() => {
+        const anchorElement = scrollViewportRef.current?.querySelector(
+          `[data-timeline-id="${anchorId}"]`
+        ) as HTMLElement;
+        
+        if (anchorElement) {
+          anchorElement.scrollIntoView({ block: 'start', behavior: 'instant' });
+        }
+        anchorIdBeforeLoad.current = null;
+      }, 50);
     }
   }, [timeline.length]);
 
@@ -519,6 +525,7 @@ export function UnifiedAgentInterface({
         return (
           <div 
             key={item.id} 
+            data-timeline-id={item.id}
             ref={isLastUserMessage ? lastUserMessageRef : null}
             className="flex gap-3"
           >
@@ -545,7 +552,7 @@ export function UnifiedAgentInterface({
       if (isAgent) {
         const parsed = parseAgentContent(item.content);
         return (
-          <div key={item.id} className="flex gap-3">
+          <div key={item.id} data-timeline-id={item.id} className="flex gap-3">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center">
                 <Bot className="w-4 h-4 text-secondary" />
@@ -608,7 +615,7 @@ export function UnifiedAgentInterface({
 
     if (isOperation) {
       return (
-        <div key={item.id} className="flex gap-3">
+        <div key={item.id} data-timeline-id={item.id} className="flex gap-3">
           <div className="flex-shrink-0">
             {getOperationIcon(item.operation_type, item.status)}
           </div>
