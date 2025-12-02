@@ -189,8 +189,32 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
       return;
     }
 
+    if (pendingCommits.length === 0) {
+      toast({
+        title: "Error",
+        description: "No pending commits to push",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setPushing(true);
+
+      // Collect unique file paths from all pending commits
+      const allFilePaths = new Set<string>();
+      pendingCommits.forEach(commit => {
+        if (commit.files_metadata && Array.isArray(commit.files_metadata)) {
+          commit.files_metadata.forEach((file: any) => {
+            if (file.path) {
+              allFilePaths.add(file.path);
+            }
+          });
+        }
+      });
+
+      // Use the most recent commit message (first in the list)
+      const commitMessage = pendingCommits[0]?.commit_message || "Push from Build staging";
 
       const { data, error } = await supabase.functions.invoke('sync-repo-push', {
         body: {
@@ -198,7 +222,8 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
           projectId: projectId,
           shareToken: shareToken,
           branch: repoInfo.branch,
-          commitMessage: "Push from Build staging",
+          commitMessage: commitMessage,
+          filePaths: allFilePaths.size > 0 ? Array.from(allFilePaths) : undefined,
           forcePush: false,
         },
       });
@@ -207,7 +232,7 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
 
       toast({
         title: "Success",
-        description: `Pushed to ${repoInfo.organization}/${repoInfo.repo}`,
+        description: `Pushed ${allFilePaths.size} file(s) to ${repoInfo.organization}/${repoInfo.repo}`,
       });
 
       // Refresh to clear pending commits and show new sync state
