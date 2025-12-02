@@ -732,10 +732,23 @@ Start your response with { and end with }. Nothing else.`;
                   );
                 }
                 
+                // If the requested edit range is near the end of the file,
+                // treat it as a tail rewrite and extend to EOF to avoid leaving
+                // behind malformed/duplicate trailing code across iterations.
+                const TAIL_REWRITE_THRESHOLD = 15; // lines from EOF
+                if (endIdx >= totalBaseLines - TAIL_REWRITE_THRESHOLD) {
+                  console.log(
+                    `[AGENT] edit_lines: Extending end_line from ${endIdx + 1} to end of file (${totalBaseLines}) for tail rewrite`
+                  );
+                  endIdx = totalBaseLines - 1;
+                }
+                
                 // If startIdx > endIdx after capping, it's a pure append operation
                 // (agent wants to insert after the last line)
                 if (startIdx > endIdx) {
-                  console.log(`[AGENT] edit_lines: Pure append operation detected (start ${startIdx} > end ${endIdx}), appending to end of file`);
+                  console.log(
+                    `[AGENT] edit_lines: Pure append operation detected (start ${startIdx} > end ${endIdx}), appending to end of file`
+                  );
                   // Append: splice at totalBaseLines with 0 deletions
                   startIdx = totalBaseLines;
                   endIdx = totalBaseLines - 1; // Will result in 0 deletions
