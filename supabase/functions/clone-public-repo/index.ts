@@ -23,6 +23,16 @@ Deno.serve(async (req) => {
 
     const branch = sourceBranch || 'main';
 
+    // Generate unique slugified repo name (same pattern as create-empty-repo)
+    const baseSlug = repoName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-');
+    const uniqueSuffix = crypto.randomUUID().split('-')[0];
+    const finalRepoName = `${baseSlug}-${uniqueSuffix}`;
+
     // Create Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -52,7 +62,7 @@ Deno.serve(async (req) => {
 
     const organization = 'pronghorn-red';
 
-    console.log(`Cloning ${sourceOrg}/${sourceRepo} (${branch}) to ${organization}/${repoName}`);
+    console.log(`Cloning ${sourceOrg}/${sourceRepo} (${branch}) to ${organization}/${finalRepoName}`);
 
     // Create empty repository in pronghorn-red
     const createRepoResponse = await fetch(`https://api.github.com/orgs/${organization}/repos`, {
@@ -63,7 +73,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        name: repoName,
+        name: finalRepoName,
         private: isPrivate ?? true,
         auto_init: true,
         description: `Cloned from ${sourceOrg}/${sourceRepo}`,
@@ -129,7 +139,7 @@ Deno.serve(async (req) => {
 
     // Get the initial commit SHA from new repo
     const refResponse = await fetch(
-      `https://api.github.com/repos/${organization}/${repoName}/git/ref/heads/main`,
+      `https://api.github.com/repos/${organization}/${finalRepoName}/git/ref/heads/main`,
       {
         headers: {
           'Authorization': `token ${githubPat}`,
@@ -143,7 +153,7 @@ Deno.serve(async (req) => {
 
     // Get current tree
     const commitResponse = await fetch(
-      `https://api.github.com/repos/${organization}/${repoName}/git/commits/${latestCommitSha}`,
+      `https://api.github.com/repos/${organization}/${finalRepoName}/git/commits/${latestCommitSha}`,
       {
         headers: {
           'Authorization': `token ${githubPat}`,
@@ -164,7 +174,7 @@ Deno.serve(async (req) => {
     }));
 
     const createTreeResponse = await fetch(
-      `https://api.github.com/repos/${organization}/${repoName}/git/trees`,
+      `https://api.github.com/repos/${organization}/${finalRepoName}/git/trees`,
       {
         method: 'POST',
         headers: {
@@ -188,7 +198,7 @@ Deno.serve(async (req) => {
 
     // Create commit
     const createCommitResponse = await fetch(
-      `https://api.github.com/repos/${organization}/${repoName}/git/commits`,
+      `https://api.github.com/repos/${organization}/${finalRepoName}/git/commits`,
       {
         method: 'POST',
         headers: {
@@ -213,7 +223,7 @@ Deno.serve(async (req) => {
 
     // Update reference
     const updateRefResponse = await fetch(
-      `https://api.github.com/repos/${organization}/${repoName}/git/refs/heads/main`,
+      `https://api.github.com/repos/${organization}/${finalRepoName}/git/refs/heads/main`,
       {
         method: 'PATCH',
         headers: {
@@ -233,14 +243,14 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to update reference: ${errorData.message}`);
     }
 
-    console.log(`Successfully pushed ${fileContents.length} files to ${organization}/${repoName}`);
+    console.log(`Successfully pushed ${fileContents.length} files to ${organization}/${finalRepoName}`);
 
     // Link repository to project
     const { data: newRepo, error: repoError } = await supabase.rpc('create_project_repo_with_token', {
       p_project_id: projectId,
       p_token: shareToken,
       p_organization: organization,
-      p_repo: repoName,
+      p_repo: finalRepoName,
       p_branch: 'main',
       p_is_default: true
     });
@@ -263,7 +273,7 @@ Deno.serve(async (req) => {
       console.error('Error pulling cloned files:', pullError);
     }
 
-    console.log(`Cloned repository: ${organization}/${repoName} from ${sourceOrg}/${sourceRepo}`);
+    console.log(`Cloned repository: ${organization}/${finalRepoName} from ${sourceOrg}/${sourceRepo}`);
 
     return new Response(
       JSON.stringify({

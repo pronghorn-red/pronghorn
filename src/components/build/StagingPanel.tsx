@@ -39,6 +39,7 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
   const [commitMessage, setCommitMessage] = useState("");
   const [repoId, setRepoId] = useState<string | null>(null);
   const [repoInfo, setRepoInfo] = useState<any>(null);
+  const [allRepos, setAllRepos] = useState<any[]>([]); // Track all repos for multi-push
   const [pendingCommits, setPendingCommits] = useState<any[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [viewingDiff, setViewingDiff] = useState<StagedChange | null>(null);
@@ -88,6 +89,9 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
       });
 
       if (repoError) throw repoError;
+
+      // Store all repos for multi-push support
+      setAllRepos(repos || []);
 
       const defaultRepo = repos?.find((r) => r.is_default) || repos?.[0];
       if (!defaultRepo) {
@@ -180,10 +184,10 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
   };
 
   const handlePushToGitHub = async () => {
-    if (!repoId || !repoInfo || !projectId) {
+    if (!projectId || allRepos.length === 0) {
       toast({
         title: "Error",
-        description: "No repository configured",
+        description: "No repositories configured",
         variant: "destructive",
       });
       return;
@@ -216,24 +220,60 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
       // Use the most recent commit message (first in the list)
       const commitMessage = pendingCommits[0]?.commit_message || "Push from Build staging";
 
-      const { data, error } = await supabase.functions.invoke('sync-repo-push', {
-        body: {
-          repoId: repoId,
-          projectId: projectId,
-          shareToken: shareToken,
-          branch: repoInfo.branch,
-          commitMessage: commitMessage,
-          filePaths: allFilePaths.size > 0 ? Array.from(allFilePaths) : undefined,
-          forcePush: false,
-        },
+      // Push to ALL repos concurrently
+      const pushPromises = allRepos.map(async (repo) => {
+        const { data, error } = await supabase.functions.invoke('sync-repo-push', {
+          body: {
+            repoId: repo.id,
+            projectId: projectId,
+            shareToken: shareToken,
+            branch: repo.branch,
+            commitMessage: commitMessage,
+            filePaths: allFilePaths.size > 0 ? Array.from(allFilePaths) : undefined,
+            forcePush: false,
+          },
+        });
+        return { repo, data, error };
       });
 
-      if (error) throw error;
+      const results = await Promise.allSettled(pushPromises);
 
-      toast({
-        title: "Success",
-        description: `Pushed ${allFilePaths.size} file(s) to ${repoInfo.organization}/${repoInfo.repo}`,
+      // Count successes and failures
+      let successCount = 0;
+      let failureCount = 0;
+      const failedRepos: string[] = [];
+
+      results.forEach((result) => {
+        if (result.status === 'fulfilled' && !result.value.error) {
+          successCount++;
+        } else {
+          failureCount++;
+          if (result.status === 'fulfilled') {
+            failedRepos.push(`${result.value.repo.organization}/${result.value.repo.repo}`);
+          }
+        }
       });
+
+      if (failureCount === 0) {
+        toast({
+          title: "Success",
+          description: allRepos.length === 1
+            ? `Pushed ${allFilePaths.size} file(s) to ${allRepos[0].organization}/${allRepos[0].repo}`
+            : `Pushed ${allFilePaths.size} file(s) to ${successCount} repositories`,
+        });
+      } else if (successCount > 0) {
+        toast({
+          title: "Partial Success",
+          description: `Pushed to ${successCount} repo(s), failed for: ${failedRepos.join(', ')}`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Push Failed",
+          description: `Failed to push to all ${failureCount} repositories`,
+          variant: "destructive",
+        });
+      }
 
       // Refresh to clear pending commits and show new sync state
       loadRepoAndStagedChanges(false);
@@ -477,7 +517,10 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
                       )}
                     </Button>
                     <p className="text-xs text-center text-muted-foreground">
-                      {repoInfo.organization}/{repoInfo.repo} ({repoInfo.branch})
+                      {allRepos.length === 1 
+                        ? `${repoInfo.organization}/${repoInfo.repo} (${repoInfo.branch})`
+                        : `Pushing to ${allRepos.length} repositories`
+                      }
                     </p>
                   </div>
                 </>

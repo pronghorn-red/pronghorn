@@ -20,6 +20,16 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Generate unique slugified repo name (same pattern as create-empty-repo)
+    const baseSlug = repoName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-{2,}/g, '-');
+    const uniqueSuffix = crypto.randomUUID().split('-')[0];
+    const finalRepoName = `${baseSlug}-${uniqueSuffix}`;
+
     // Create Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -59,7 +69,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         owner: organization,
-        name: repoName,
+        name: finalRepoName,
         description: `Repository for ${project.name} (from ${templateOrg}/${templateRepo})`,
         private: isPrivate ?? true,
       }),
@@ -95,7 +105,7 @@ Deno.serve(async (req) => {
       p_project_id: projectId,
       p_token: shareToken,
       p_organization: organization,
-      p_repo: repoName,
+      p_repo: finalRepoName,
       p_branch: 'main',
       p_is_default: true
     });
@@ -119,7 +129,7 @@ Deno.serve(async (req) => {
       // Non-fatal - repo is created and linked, just log the error
     }
 
-    console.log(`Created repository from template: ${organization}/${repoName} from ${templateOrg}/${templateRepo}`);
+    console.log(`Created repository from template: ${organization}/${finalRepoName} from ${templateOrg}/${templateRepo}`);
 
     return new Response(
       JSON.stringify({
