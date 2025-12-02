@@ -708,15 +708,37 @@ Start your response with { and end with }. Nothing else.`;
                 // Validate line numbers against current content
                 const baseLines = baseContent.split('\n');
                 const totalBaseLines = baseLines.length;
-                const startIdx = op.params.start_line - 1;
-                // Cap end line to actual file length (allows agent to be less precise)
-                const endIdx = Math.min(op.params.end_line - 1, totalBaseLines - 1);
                 
-                if (startIdx < 0 || startIdx >= totalBaseLines || startIdx > endIdx) {
+                // Cap start_line to allow appending at end of file
+                // If start_line is beyond file length, treat as append (start at last line + 1)
+                let startIdx = op.params.start_line - 1;
+                if (startIdx > totalBaseLines) {
+                  console.log(`[AGENT] edit_lines: start_line ${op.params.start_line} exceeds file length ${totalBaseLines}, capping to append position`);
+                  startIdx = totalBaseLines; // Will append after last line
+                }
+                
+                // Cap end_line to actual file length (allows agent to be less precise)
+                let endIdx = op.params.end_line - 1;
+                if (endIdx >= totalBaseLines) {
+                  console.log(`[AGENT] edit_lines: end_line ${op.params.end_line} exceeds file length ${totalBaseLines}, capping to ${totalBaseLines}`);
+                  endIdx = totalBaseLines - 1;
+                }
+                
+                // Only validate that start_line is not negative
+                if (startIdx < 0) {
                   throw new Error(
                     `Invalid start line: start_line=${op.params.start_line}. ` +
-                    `File has ${totalBaseLines} lines (valid range: 1-${totalBaseLines}).`
+                    `Line numbers must be positive (1 or greater).`
                   );
+                }
+                
+                // If startIdx > endIdx after capping, it's a pure append operation
+                // (agent wants to insert after the last line)
+                if (startIdx > endIdx) {
+                  console.log(`[AGENT] edit_lines: Pure append operation detected (start ${startIdx} > end ${endIdx}), appending to end of file`);
+                  // Append: splice at totalBaseLines with 0 deletions
+                  startIdx = totalBaseLines;
+                  endIdx = totalBaseLines - 1; // Will result in 0 deletions
                 }
                 
                 // Apply edit to the correct base content
@@ -726,7 +748,10 @@ Start your response with { and end with }. Nothing else.`;
                 if (newContentLines.length > 0 && newContentLines[newContentLines.length - 1] === '') {
                   newContentLines.pop();
                 }
-                baseLines.splice(startIdx, endIdx - startIdx + 1, ...newContentLines);
+                
+                // Calculate how many lines to remove (0 for pure append)
+                const linesToRemove = startIdx > endIdx ? 0 : endIdx - startIdx + 1;
+                baseLines.splice(startIdx, linesToRemove, ...newContentLines);
                 let finalContent = baseLines.join('\n');
                 let jsonParseWarning: string | undefined;
                 
