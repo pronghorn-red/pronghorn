@@ -43,12 +43,14 @@ interface UnifiedAgentInterfaceProps {
   attachedFiles: Array<{ id: string; path: string }>;
   onRemoveFile: (fileId: string) => void;
   onOpenSettings?: () => void;
+  files?: Array<{ id: string; path: string; isStaged?: boolean }>;
 }
 
 interface ChatHistorySettings {
   includeHistory: boolean;
   durationType: 'time' | 'messages';
   durationValue: number; // minutes if 'time', message count if 'messages'
+  verbosity: 'minimal' | 'standard' | 'detailed';
 }
 
 export function UnifiedAgentInterface({ 
@@ -57,7 +59,8 @@ export function UnifiedAgentInterface({
   shareToken,
   attachedFiles,
   onRemoveFile,
-  onOpenSettings
+  onOpenSettings,
+  files = []
 }: UnifiedAgentInterfaceProps) {
   const { messages: loadedMessages, loading: messagesLoading, hasMore: hasMoreMessages, loadMore: loadMoreMessages, refetch: refetchMessages } = useInfiniteAgentMessages(projectId, shareToken);
   const { operations, loading: operationsLoading, hasMore: hasMoreOperations, loadMore: loadMoreOperations, refetch: refetchOperations } = useInfiniteAgentOperations(projectId, shareToken);
@@ -78,7 +81,15 @@ export function UnifiedAgentInterface({
     includeHistory: false,
     durationType: 'time',
     durationValue: 20, // Default 20 minutes
+    verbosity: 'standard',
   });
+  
+  // Helper function to resolve file IDs to paths
+  const resolveFileId = (fileId: string | undefined): string => {
+    if (!fileId) return 'N/A';
+    const file = files.find(f => f.id === fileId);
+    return file?.path || fileId; // Return path if found, fallback to ID
+  };
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   const scrollViewportRef = useRef<HTMLDivElement>(null);
@@ -551,6 +562,8 @@ export function UnifiedAgentInterface({
 
       if (isAgent) {
         const parsed = parseAgentContent(item.content);
+        const { verbosity } = chatHistorySettings;
+        
         return (
           <div key={item.id} data-timeline-id={item.id} className="flex gap-3">
             <div className="flex-shrink-0">
@@ -583,12 +596,25 @@ export function UnifiedAgentInterface({
                 )}
               </div>
               <div className="p-3 rounded-lg bg-muted/30 border">
-                {parsed.reasoning && (
+                {/* DETAILED: Show raw JSON */}
+                {verbosity === 'detailed' && (
+                  <div className="mb-3">
+                    <p className="text-xs font-semibold mb-1 text-muted-foreground">Raw Response:</p>
+                    <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-48 whitespace-pre-wrap break-words">
+                      {item.content}
+                    </pre>
+                  </div>
+                )}
+                
+                {/* STANDARD & DETAILED: Show reasoning */}
+                {verbosity !== 'minimal' && parsed.reasoning && (
                   <div className="mb-3">
                     <p className="text-xs font-semibold mb-1 text-muted-foreground">Reasoning:</p>
                     <p className="text-sm whitespace-pre-wrap">{parsed.reasoning}</p>
                   </div>
                 )}
+                
+                {/* ALL MODES: Show operations */}
                 {parsed.operations.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold mb-2 text-muted-foreground">Operations:</p>
@@ -598,8 +624,16 @@ export function UnifiedAgentInterface({
                           <Badge variant="outline" className="text-xs">
                             {op.type}
                           </Badge>
-                          <span className="text-muted-foreground">
-                            {op.params?.path || op.params?.file_id || op.params?.keyword || 'N/A'}
+                          <span className="text-muted-foreground truncate max-w-[200px]" title={
+                            op.params?.path || 
+                            (verbosity === 'detailed' ? op.params?.file_id : resolveFileId(op.params?.file_id)) || 
+                            op.params?.keyword || 
+                            'N/A'
+                          }>
+                            {op.params?.path || 
+                             (verbosity === 'detailed' ? op.params?.file_id : resolveFileId(op.params?.file_id)) || 
+                             op.params?.keyword || 
+                             'N/A'}
                           </span>
                         </div>
                       ))}
@@ -909,6 +943,39 @@ export function UnifiedAgentInterface({
                 </div>
               </>
             )}
+          </div>
+          
+          {/* Agent Message Verbosity */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Agent Message Verbosity</Label>
+            <RadioGroup
+              value={chatHistorySettings.verbosity}
+              onValueChange={(value: 'minimal' | 'standard' | 'detailed') =>
+                setChatHistorySettings(prev => ({ ...prev, verbosity: value }))
+              }
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="minimal" id="verbosity-minimal" />
+                <Label htmlFor="verbosity-minimal" className="font-normal cursor-pointer">
+                  Minimal - Operations only (hide reasoning)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="standard" id="verbosity-standard" />
+                <Label htmlFor="verbosity-standard" className="font-normal cursor-pointer">
+                  Standard - Reasoning + Operations
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="detailed" id="verbosity-detailed" />
+                <Label htmlFor="verbosity-detailed" className="font-normal cursor-pointer">
+                  Detailed - Full JSON response (for debugging)
+                </Label>
+              </div>
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground">
+              Controls how much detail is shown in agent response messages
+            </p>
           </div>
 
           <div className="flex justify-end gap-2">

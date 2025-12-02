@@ -451,6 +451,7 @@ export default function Build() {
                                 shareToken={shareToken}
                                 attachedFiles={attachedFiles}
                                 onRemoveFile={handleRemoveAttachedFile}
+                                files={files}
                               />
                             </TabsContent>
 
@@ -598,6 +599,7 @@ export default function Build() {
                       shareToken={shareToken}
                       attachedFiles={attachedFiles}
                       onRemoveFile={handleRemoveAttachedFile}
+                      files={files}
                     />
                   </TabsContent>
 
