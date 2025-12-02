@@ -220,7 +220,14 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
             if (file.path) {
               if (file.operation === 'delete') {
                 deletePaths.add(file.path);
+              } else if (file.operation === 'rename') {
+                // For renames: add new path to push, add old path to delete
+                addEditPaths.add(file.path);
+                if (file.old_path) {
+                  deletePaths.add(file.old_path);
+                }
               } else {
+                // 'add' or 'edit'
                 addEditPaths.add(file.path);
               }
             }
