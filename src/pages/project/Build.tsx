@@ -17,7 +17,6 @@ import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff } from "lucide-react";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
-import { cn } from "@/lib/utils";
 
 export default function Build() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -277,7 +276,7 @@ export default function Build() {
     <div className="flex flex-col bg-background h-screen">
       <PrimaryNav />
 
-      <div className={cn("flex flex-1 min-h-0 relative", !isMobile && "overflow-hidden")}>
+      <div className="flex flex-1 min-h-0 relative overflow-hidden">
         <ProjectSidebar
           projectId={projectId}
           isOpen={isProjectSidebarOpen}
@@ -474,16 +473,16 @@ export default function Build() {
 
             {/* Mobile Layout */}
             {isMobile && (
-              <div className="flex-1 flex flex-col">
-                <Tabs defaultValue="files" className="flex-1 flex flex-col">
-                  <TabsList className="grid w-full grid-cols-4">
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <Tabs defaultValue="files" className="flex-1 flex flex-col min-h-0">
+                  <TabsList className="grid w-full grid-cols-4 shrink-0">
                     <TabsTrigger value="files">Files</TabsTrigger>
                     <TabsTrigger value="editor">Editor</TabsTrigger>
                     <TabsTrigger value="chat">Chat</TabsTrigger>
                     <TabsTrigger value="staging">Stage</TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="files" className="flex-1 data-[state=inactive]:hidden">
+                  <TabsContent value="files" className="flex-1 min-h-0 overflow-auto data-[state=inactive]:hidden">
                     <AgentFileTree
                       files={files}
                       stagedChanges={stagedChanges}
@@ -497,7 +496,7 @@ export default function Build() {
                     />
                   </TabsContent>
 
-                  <TabsContent value="editor" className="flex-1 data-[state=inactive]:hidden">
+                  <TabsContent value="editor" className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
                     {selectedFile ? (
                       <CodeEditor
                         fileId={selectedFile.id}
@@ -516,7 +515,7 @@ export default function Build() {
                     )}
                   </TabsContent>
 
-                  <TabsContent value="chat" className="flex-1 data-[state=inactive]:hidden">
+                  <TabsContent value="chat" className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
                     <UnifiedAgentInterface
                       projectId={projectId}
                       repoId={defaultRepo?.id || null}
@@ -526,7 +525,7 @@ export default function Build() {
                     />
                   </TabsContent>
 
-                  <TabsContent value="staging" className="flex-1 data-[state=inactive]:hidden">
+                  <TabsContent value="staging" className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
                     <StagingPanel
                       projectId={projectId}
                       onViewDiff={handleViewDiff}
