@@ -15,7 +15,7 @@ import { UnifiedAgentInterface } from "@/components/build/UnifiedAgentInterface"
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff, Upload, Trash2 } from "lucide-react";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
 
 const BINARY_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'pdf', 'zip', 'tar', 'gz', 'exe', 'dll', 'so', 'dylib', 'woff', 'woff2', 'ttf', 'eot', 'mp3', 'mp4', 'wav', 'ogg', 'webm', 'avi', 'mov'];
@@ -350,6 +350,49 @@ export default function Build() {
     loadFiles();
   };
 
+  const handleDeleteFile = async () => {
+    if (!selectedFile || !defaultRepo || !projectId) {
+      toast.error("No file selected");
+      return;
+    }
+
+    try {
+      // Get the current content for the old_content field
+      let oldContent: string | null = null;
+      
+      if (!selectedFile.isStaged) {
+        // Get content from committed files
+        const { data: fileData, error: readError } = await supabase.rpc("get_file_content_with_token", {
+          p_file_id: selectedFile.id,
+          p_token: shareToken || null,
+        });
+        
+        if (!readError && fileData && fileData.length > 0) {
+          oldContent = fileData[0].content;
+        }
+      }
+
+      // Stage the file for deletion
+      const { error } = await supabase.rpc("stage_file_change_with_token", {
+        p_repo_id: defaultRepo.id,
+        p_token: shareToken || null,
+        p_operation_type: "delete",
+        p_file_path: selectedFile.path,
+        p_old_content: oldContent,
+        p_new_content: null,
+      });
+
+      if (error) throw error;
+
+      toast.success(`Staged for deletion: ${selectedFile.path}`);
+      setSelectedFile(null);
+      loadFiles();
+    } catch (error: any) {
+      console.error("Error staging file for deletion:", error);
+      toast.error(error.message || "Failed to stage file for deletion");
+    }
+  };
+
   if (!projectId) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -429,6 +472,16 @@ export default function Build() {
                               title="Upload File"
                             >
                               <Upload className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={handleDeleteFile}
+                              disabled={!selectedFile}
+                              className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc] disabled:opacity-50"
+                              title="Delete File"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                             <input
                               ref={fileInputRef}
@@ -623,6 +676,16 @@ export default function Build() {
                               title="Upload File"
                             >
                               <Upload className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={handleDeleteFile}
+                              disabled={!selectedFile}
+                              className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc] disabled:opacity-50"
+                              title="Delete File"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                             <Button
                               variant="ghost"
