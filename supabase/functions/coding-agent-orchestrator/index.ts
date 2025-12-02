@@ -435,6 +435,31 @@ CRITICAL RULES:
 13. For JSON/structured files: Ensure your edits maintain valid structure (no duplicate keys, proper syntax)
 14. NEVER include <<N>> markers in your new_content - they are display-only for your reference
 
+EDIT_LINES OPERATION MODES - CRITICAL:
+
+1. REPLACE LINES (delete existing + insert new):
+   - Set start_line and end_line to the range you want to REPLACE
+   - Lines start_line through end_line (inclusive) will be DELETED
+   - new_content will be INSERTED in their place
+   - Example: start_line=10, end_line=15 replaces lines 10-15 with new_content
+
+2. INSERT ONLY (no deletion, preserves all existing content):
+   - Set end_line = start_line - 1 (end BEFORE start)
+   - NO lines will be deleted
+   - new_content will be INSERTED BEFORE the specified start_line
+   - Example: start_line=23, end_line=22 inserts new_content at line 23, shifting existing lines down
+   - USE THIS when adding new code without removing anything
+
+3. APPEND TO END OF FILE:
+   - Set start_line = total_lines + 1 (beyond file length)
+   - System will cap and append at end
+   - Example: 50-line file, start_line=51, end_line=50 appends after line 50
+
+COMMON MISTAKES TO AVOID:
+- DO NOT use a large end_line range if you only want to INSERT - this DELETES content
+- If adding new code WITHOUT removing existing code, ALWAYS use end_line = start_line - 1
+- When inserting at line 23, use start_line=23, end_line=22 (NOT end_line=23 which would delete line 23)
+
 ITERATION PHILOSOPHY - DRIVE DEEP, NOT SHALLOW:
 You have up to 30 iterations available. USE THEM. The typical task requires 20-30 iterations to complete properly.
 - 1-5 iterations: Initial exploration, understanding requirements, planning approach
@@ -806,16 +831,14 @@ Start your response with { and end with }. Nothing else.`;
                   );
                 }
                 
-                // CRITICAL: Check for "delete to EOF" intent BEFORE pure append detection
-                // When agent specifies start > end AND start is within file bounds,
-                // interpret as "delete from start_line to EOF (and optionally replace with new_content)"
-                // Example: start=67, end=66 on 66-line file → delete line 67 to EOF
+                // INSERT operation: when start > end (e.g., start=10, end=9), 
+                // this means "insert at position 10 with 0 deletions"
+                // The splice below handles this correctly: splice(startIdx, 0, ...newContentLines)
                 if (startIdx > endIdx && startIdx < totalBaseLines) {
                   console.log(
-                    `[AGENT] edit_lines: Delete-to-EOF detected (start ${startIdx + 1} > end ${endIdx + 1}), ` +
-                    `extending to delete lines ${startIdx + 1}-${totalBaseLines}`
+                    `[AGENT] edit_lines: INSERT operation (start ${startIdx + 1} > end ${endIdx + 1}), ` +
+                    `inserting at line ${startIdx + 1} with 0 deletions`
                   );
-                  endIdx = totalBaseLines - 1; // Extend to end of file for deletion
                 }
                 
                 // Now check for pure append (when start is BEYOND file length)
