@@ -93,8 +93,10 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
       // Store all repos for multi-push support
       setAllRepos(repos || []);
 
-      const defaultRepo = repos?.find((r) => r.is_default) || repos?.[0];
-      if (!defaultRepo) {
+      // Use Prime repo for all operations (staging, commits, push)
+      // Fall back to default repo if no prime exists
+      const primaryRepo = repos?.find((r) => r.is_prime) || repos?.find((r) => r.is_default) || repos?.[0];
+      if (!primaryRepo) {
         setStagedChanges([]);
         setRepoInfo(null);
         setPendingCommits([]);
@@ -104,12 +106,12 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
         return;
       }
 
-      setRepoId(defaultRepo.id);
-      setRepoInfo(defaultRepo);
+      setRepoId(primaryRepo.id);
+      setRepoInfo(primaryRepo);
 
       // Load staged changes
       const { data: staged, error: stagedError } = await supabase.rpc("get_staged_changes_with_token", {
-        p_repo_id: defaultRepo.id,
+        p_repo_id: primaryRepo.id,
         p_token: shareToken || null,
       });
 
@@ -119,9 +121,9 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
 
       // Load pending commits (commits not yet pushed to GitHub)
       const { data: commits, error: commitsError } = await supabase.rpc("get_commit_history_with_token", {
-        p_repo_id: defaultRepo.id,
+        p_repo_id: primaryRepo.id,
         p_token: shareToken || null,
-        p_branch: defaultRepo.branch,
+        p_branch: primaryRepo.branch,
         p_limit: 10,
       });
 

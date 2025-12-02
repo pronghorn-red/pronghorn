@@ -32,7 +32,8 @@ export default function Build() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { repos } = useRealtimeRepos(projectId || null);
-  const defaultRepo = repos.find((r) => r.is_default);
+  // Use Prime repo for file operations (source of truth), fallback to default
+  const defaultRepo = repos.find((r) => r.is_prime) || repos.find((r) => r.is_default);
 
   const [files, setFiles] = useState<Array<{ id: string; path: string; isStaged?: boolean }>>([]);
   const [selectedFile, setSelectedFile] = useState<{ 
