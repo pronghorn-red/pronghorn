@@ -277,17 +277,13 @@ export function UnifiedAgentInterface({
       // Retrieve chat history if enabled
       const chatHistory = await retrieveChatHistory();
 
-      // Construct task description with history embedded
-      const taskDescriptionWithHistory = chatHistory 
-        ? `${userMessageContent}${chatHistory}`
-        : userMessageContent;
-
       const { error } = await supabase.functions.invoke('coding-agent-orchestrator', {
         body: {
           projectId,
           repoId,
           shareToken: shareToken || null,
-          taskDescription: taskDescriptionWithHistory,
+          taskDescription: userMessageContent,
+          chatHistory: chatHistory || undefined,
           mode: 'task',
           autoCommit,
           attachedFiles: attachedFiles,
@@ -305,7 +301,7 @@ export function UnifiedAgentInterface({
 
       if (error) throw error;
 
-      toast.success('Agent task submitted' + (chatHistory ? ' with chat history context' : ''));
+      toast.success('Agent task submitted');
 
       // Refresh messages and operations
       refetchMessages();

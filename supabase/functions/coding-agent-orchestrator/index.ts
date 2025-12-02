@@ -15,6 +15,7 @@ interface TaskRequest {
   shareToken: string;
   mode: 'task' | 'iterative_loop' | 'continuous_improvement';
   autoCommit?: boolean;
+  chatHistory?: string;
 }
 
 function parseAgentResponseText(rawText: string): any {
@@ -104,6 +105,7 @@ serve(async (req) => {
       projectContext,
       mode,
       autoCommit = false,
+      chatHistory,
     } = requestData;
 
     console.log("Starting CodingAgent task:", { projectId, mode, taskDescription });
@@ -288,6 +290,12 @@ serve(async (req) => {
       contextSummary = parts.join("\n\n");
     }
 
+    // Build chat history section
+    let chatHistorySection = "";
+    if (chatHistory && chatHistory.trim()) {
+      chatHistorySection = `\n\n📜 RECENT CONVERSATION CONTEXT:\n${chatHistory}\n--- END CONVERSATION CONTEXT ---`;
+    }
+
 
     // Build system prompt
     const systemPrompt = `CRITICAL: You MUST respond with ONLY valid JSON. No prose, no markdown, no explanations outside the JSON structure.
@@ -302,7 +310,7 @@ Your task mode is: ${mode}
 Auto-commit enabled: ${autoCommit}
 
 Project Context:
-${contextSummary}${attachedFilesSection}
+${contextSummary}${attachedFilesSection}${chatHistorySection}
 
 CRITICAL INSTRUCTION FOR ATTACHED FILES:
 ${attachedFiles && attachedFiles.length > 0 
