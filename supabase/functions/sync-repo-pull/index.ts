@@ -162,10 +162,25 @@ Deno.serve(async (req) => {
 
     const treeData = await treeResponse.json();
 
-    // Filter for files only (not directories)
-    const files = treeData.tree.filter((item: any) => item.type === 'blob');
+    // Binary file extensions to skip (can't store in PostgreSQL text columns)
+    const binaryExtensions = [
+      '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.bmp', '.svg',
+      '.pdf', '.zip', '.tar', '.gz', '.rar', '.7z',
+      '.woff', '.woff2', '.ttf', '.eot', '.otf',
+      '.mp3', '.mp4', '.wav', '.avi', '.mov', '.webm',
+      '.exe', '.dll', '.so', '.dylib',
+      '.pyc', '.class', '.o', '.obj',
+      '.lock', '.lockb'
+    ];
 
-    console.log(`Found ${files.length} files to pull (including binary files)`);
+    // Filter for text files only (not directories, not binary)
+    const files = treeData.tree.filter((item: any) => {
+      if (item.type !== 'blob') return false;
+      const ext = item.path.toLowerCase().substring(item.path.lastIndexOf('.'));
+      return !binaryExtensions.includes(ext);
+    });
+
+    console.log(`Found ${files.length} text files to pull (binary files skipped)`);
 
     // Fetch content for each file
     const fileContents = await Promise.all(
