@@ -13,7 +13,8 @@ Deno.serve(async (req) => {
   try {
     const { projectId, organization, repo, branch, pat, shareToken } = await req.json();
 
-    if (!projectId || !organization || !repo || !branch || !shareToken) {
+    // Allow null tokens for authenticated users (shareToken !== undefined)
+    if (!projectId || !organization || !repo || !branch || shareToken === undefined) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
