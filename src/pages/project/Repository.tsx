@@ -56,6 +56,88 @@ export default function Repository() {
 
   const { repos, loading, refetch } = useRealtimeRepos(projectId);
 
+  // Function definitions BEFORE useEffects that use them
+  const buildFileTree = (files: any[]): FileNode[] => {
+    const root: FileNode[] = [];
+    const map: Record<string, FileNode> = {};
+
+    const sortedFiles = [...files].sort((a, b) => a.path.localeCompare(b.path));
+
+    sortedFiles.forEach((file) => {
+      const parts = file.path.split("/");
+      let currentLevel = root;
+      let currentPath = "";
+
+      parts.forEach((part, index) => {
+        currentPath += (currentPath ? "/" : "") + part;
+        
+        if (!map[currentPath]) {
+          const node: FileNode = {
+            name: part,
+            path: currentPath,
+            type: index === parts.length - 1 ? "file" : "folder",
+            children: index === parts.length - 1 ? undefined : [],
+          };
+          
+          map[currentPath] = node;
+          currentLevel.push(node);
+          
+          if (node.children) {
+            currentLevel = node.children;
+          }
+        } else {
+          if (map[currentPath].children) {
+            currentLevel = map[currentPath].children!;
+          }
+        }
+      });
+    });
+
+    return root;
+  };
+
+  const loadFileStructure = async () => {
+    if (!selectedRepoId) return;
+    
+    setLoadingFiles(true);
+    try {
+      const { data, error } = await supabase.rpc("get_file_structure_with_token", {
+        p_repo_id: selectedRepoId,
+        p_token: shareToken || null,
+      });
+
+      if (error) throw error;
+
+      const tree = buildFileTree((data as any[]) || []);
+      setFileStructure(tree);
+
+      // Load all file contents for content search
+      const files = (data as any[]) || [];
+      const filePaths = files.filter((f: any) => f.type === "file").map((f: any) => f.path);
+      
+      if (filePaths.length > 0) {
+        const { data: filesData, error: filesError } = await supabase.rpc("get_repo_files_with_token", {
+          p_repo_id: selectedRepoId,
+          p_token: shareToken || null,
+          p_file_paths: filePaths,
+        });
+
+        if (!filesError && filesData) {
+          setAllFilesWithContent(filesData);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading file structure:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load file structure",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
   // CRITICAL: All hooks must be called before any early returns
   useEffect(() => {
     if (repos.length > 0 && !selectedRepoId) {
@@ -112,87 +194,6 @@ export default function Repository() {
       </div>
     );
   }
-
-  const loadFileStructure = async () => {
-    if (!selectedRepoId) return;
-    
-    setLoadingFiles(true);
-    try {
-      const { data, error } = await supabase.rpc("get_file_structure_with_token", {
-        p_repo_id: selectedRepoId,
-        p_token: shareToken || null,
-      });
-
-      if (error) throw error;
-
-      const tree = buildFileTree((data as any[]) || []);
-      setFileStructure(tree);
-
-      // Load all file contents for content search
-      const files = (data as any[]) || [];
-      const filePaths = files.filter((f: any) => f.type === "file").map((f: any) => f.path);
-      
-      if (filePaths.length > 0) {
-        const { data: filesData, error: filesError } = await supabase.rpc("get_repo_files_with_token", {
-          p_repo_id: selectedRepoId,
-          p_token: shareToken || null,
-          p_file_paths: filePaths,
-        });
-
-        if (!filesError && filesData) {
-          setAllFilesWithContent(filesData);
-        }
-      }
-    } catch (error) {
-      console.error("Error loading file structure:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load file structure",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingFiles(false);
-    }
-  };
-
-  const buildFileTree = (files: any[]): FileNode[] => {
-    const root: FileNode[] = [];
-    const map: Record<string, FileNode> = {};
-
-    const sortedFiles = [...files].sort((a, b) => a.path.localeCompare(b.path));
-
-    sortedFiles.forEach((file) => {
-      const parts = file.path.split("/");
-      let currentLevel = root;
-      let currentPath = "";
-
-      parts.forEach((part, index) => {
-        currentPath += (currentPath ? "/" : "") + part;
-        
-        if (!map[currentPath]) {
-          const node: FileNode = {
-            name: part,
-            path: currentPath,
-            type: index === parts.length - 1 ? "file" : "folder",
-            children: index === parts.length - 1 ? undefined : [],
-          };
-          
-          map[currentPath] = node;
-          currentLevel.push(node);
-          
-          if (node.children) {
-            currentLevel = node.children;
-          }
-        } else {
-          if (map[currentPath].children) {
-            currentLevel = map[currentPath].children!;
-          }
-        }
-      });
-    });
-
-    return root;
-  };
 
   const handleFileSelect = async (path: string) => {
     setSelectedFilePath(path);
