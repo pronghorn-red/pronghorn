@@ -9,6 +9,7 @@ interface ProjectRepo {
   repo: string;
   branch: string;
   is_default: boolean;
+  is_prime: boolean;
   created_at: string;
   updated_at: string;
 }

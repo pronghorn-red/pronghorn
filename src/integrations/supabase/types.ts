@@ -698,6 +698,7 @@ export type Database = {
           created_at: string
           id: string
           is_default: boolean
+          is_prime: boolean | null
           organization: string
           project_id: string
           repo: string
@@ -709,6 +710,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_default?: boolean
+          is_prime?: boolean | null
           organization: string
           project_id: string
           repo: string
@@ -720,6 +722,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_default?: boolean
+          is_prime?: boolean | null
           organization?: string
           project_id?: string
           repo?: string
@@ -1760,33 +1763,64 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      create_project_repo_with_token: {
-        Args: {
-          p_branch?: string
-          p_is_default?: boolean
-          p_organization: string
-          p_project_id: string
-          p_repo: string
-          p_token: string
-        }
-        Returns: {
-          auto_commit: boolean | null
-          branch: string
-          created_at: string
-          id: string
-          is_default: boolean
-          organization: string
-          project_id: string
-          repo: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "project_repos"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      create_project_repo_with_token:
+        | {
+            Args: {
+              p_branch?: string
+              p_is_default?: boolean
+              p_organization: string
+              p_project_id: string
+              p_repo: string
+              p_token: string
+            }
+            Returns: {
+              auto_commit: boolean | null
+              branch: string
+              created_at: string
+              id: string
+              is_default: boolean
+              is_prime: boolean | null
+              organization: string
+              project_id: string
+              repo: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "project_repos"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_branch?: string
+              p_is_default?: boolean
+              p_is_prime?: boolean
+              p_organization: string
+              p_project_id: string
+              p_repo: string
+              p_token: string
+            }
+            Returns: {
+              auto_commit: boolean | null
+              branch: string
+              created_at: string
+              id: string
+              is_default: boolean
+              is_prime: boolean | null
+              organization: string
+              project_id: string
+              repo: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "project_repos"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       delete_artifact_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
@@ -2150,6 +2184,27 @@ export type Database = {
         Args: { p_repo_id: string; p_token: string }
         Returns: Json
       }
+      get_prime_repo_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          auto_commit: boolean | null
+          branch: string
+          created_at: string
+          id: string
+          is_default: boolean
+          is_prime: boolean | null
+          organization: string
+          project_id: string
+          repo: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_repos"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_project_files_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
@@ -2169,6 +2224,7 @@ export type Database = {
           created_at: string
           id: string
           is_default: boolean
+          is_prime: boolean | null
           organization: string
           project_id: string
           repo: string
@@ -2269,6 +2325,7 @@ export type Database = {
           created_at: string
           id: string
           is_default: boolean
+          is_prime: boolean | null
           organization: string
           project_id: string
           repo: string
@@ -2822,6 +2879,27 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "project_specifications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_repo_prime_with_token: {
+        Args: { p_repo_id: string; p_token: string }
+        Returns: {
+          auto_commit: boolean | null
+          branch: string
+          created_at: string
+          id: string
+          is_default: boolean
+          is_prime: boolean | null
+          organization: string
+          project_id: string
+          repo: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_repos"
           isOneToOne: true
           isSetofReturn: false
         }

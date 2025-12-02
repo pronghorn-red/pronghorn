@@ -205,6 +205,10 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
     try {
       setPushing(true);
 
+      // Find Prime repo (source of truth) and mirror repos
+      const primeRepo = allRepos.find(r => r.is_prime) || allRepos[0];
+      const mirrorRepos = allRepos.filter(r => r.id !== primeRepo.id);
+
       // Collect unique file paths from all pending commits
       const allFilePaths = new Set<string>();
       pendingCommits.forEach(commit => {
@@ -220,57 +224,74 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
       // Use the most recent commit message (first in the list)
       const commitMessage = pendingCommits[0]?.commit_message || "Push from Build staging";
 
-      // Push to ALL repos concurrently
-      const pushPromises = allRepos.map(async (repo) => {
-        const { data, error } = await supabase.functions.invoke('sync-repo-push', {
-          body: {
-            repoId: repo.id,
-            projectId: projectId,
-            shareToken: shareToken,
-            branch: repo.branch,
-            commitMessage: commitMessage,
-            filePaths: allFilePaths.size > 0 ? Array.from(allFilePaths) : undefined,
-            forcePush: false,
-          },
-        });
-        return { repo, data, error };
+      // Step 1: Push to Prime repo first
+      const { data: primeResult, error: primeError } = await supabase.functions.invoke('sync-repo-push', {
+        body: {
+          repoId: primeRepo.id,
+          projectId: projectId,
+          shareToken: shareToken,
+          branch: primeRepo.branch,
+          commitMessage: commitMessage,
+          filePaths: allFilePaths.size > 0 ? Array.from(allFilePaths) : undefined,
+          forcePush: false,
+        },
       });
 
-      const results = await Promise.allSettled(pushPromises);
+      if (primeError) {
+        toast({
+          title: "Push Failed",
+          description: `Failed to push to Prime repository: ${primeError.message}`,
+          variant: "destructive",
+        });
+        return;
+      }
 
-      // Count successes and failures
-      let successCount = 0;
+      let successCount = 1; // Prime succeeded
       let failureCount = 0;
       const failedRepos: string[] = [];
 
-      results.forEach((result) => {
-        if (result.status === 'fulfilled' && !result.value.error) {
-          successCount++;
-        } else {
-          failureCount++;
-          if (result.status === 'fulfilled') {
-            failedRepos.push(`${result.value.repo.organization}/${result.value.repo.repo}`);
+      // Step 2: Force push Prime's files to all mirror repos
+      if (mirrorRepos.length > 0) {
+        const mirrorPromises = mirrorRepos.map(async (repo) => {
+          const { data, error } = await supabase.functions.invoke('sync-repo-push', {
+            body: {
+              repoId: repo.id,
+              sourceRepoId: primeRepo.id, // Fetch files from Prime repo
+              projectId: projectId,
+              shareToken: shareToken,
+              branch: repo.branch,
+              commitMessage: `Mirror sync: ${commitMessage}`,
+              forcePush: true, // Force push to overwrite mirrors
+            },
+          });
+          return { repo, data, error };
+        });
+
+        const mirrorResults = await Promise.allSettled(mirrorPromises);
+
+        mirrorResults.forEach((result) => {
+          if (result.status === 'fulfilled' && !result.value.error) {
+            successCount++;
+          } else {
+            failureCount++;
+            if (result.status === 'fulfilled') {
+              failedRepos.push(`${result.value.repo.organization}/${result.value.repo.repo}`);
+            }
           }
-        }
-      });
+        });
+      }
 
       if (failureCount === 0) {
         toast({
           title: "Success",
           description: allRepos.length === 1
-            ? `Pushed ${allFilePaths.size} file(s) to ${allRepos[0].organization}/${allRepos[0].repo}`
-            : `Pushed ${allFilePaths.size} file(s) to ${successCount} repositories`,
-        });
-      } else if (successCount > 0) {
-        toast({
-          title: "Partial Success",
-          description: `Pushed to ${successCount} repo(s), failed for: ${failedRepos.join(', ')}`,
-          variant: "destructive",
+            ? `Pushed to ${primeRepo.organization}/${primeRepo.repo}`
+            : `Pushed to Prime + ${mirrorRepos.length} mirror(s)`,
         });
       } else {
         toast({
-          title: "Push Failed",
-          description: `Failed to push to all ${failureCount} repositories`,
+          title: "Partial Success",
+          description: `Pushed to Prime, failed mirrors: ${failedRepos.join(', ')}`,
           variant: "destructive",
         });
       }
@@ -517,10 +538,14 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
                       )}
                     </Button>
                     <p className="text-xs text-center text-muted-foreground">
-                      {allRepos.length === 1 
-                        ? `${repoInfo.organization}/${repoInfo.repo} (${repoInfo.branch})`
-                        : `Pushing to ${allRepos.length} repositories`
-                      }
+                      {(() => {
+                        const primeRepo = allRepos.find(r => r.is_prime) || allRepos[0];
+                        const mirrorCount = allRepos.length - 1;
+                        if (mirrorCount === 0) {
+                          return `${primeRepo?.organization}/${primeRepo?.repo} (Prime)`;
+                        }
+                        return `Prime: ${primeRepo?.organization}/${primeRepo?.repo} + ${mirrorCount} mirror(s)`;
+                      })()}
                     </p>
                   </div>
                 </>

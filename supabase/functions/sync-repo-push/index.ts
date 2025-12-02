@@ -13,6 +13,7 @@ interface PushRequest {
   commitMessage?: string;
   filePaths?: string[]; // Optional: push only specific files
   forcePush?: boolean; // Force push flag
+  sourceRepoId?: string; // Optional: fetch files from this repo instead of repoId (for Prime->Mirror sync)
 }
 
 interface RepoFile {
@@ -36,9 +37,12 @@ Deno.serve(async (req) => {
       }
     );
 
-    const { repoId, projectId, shareToken, branch, commitMessage, filePaths, forcePush = false }: PushRequest = await req.json();
+    const { repoId, projectId, shareToken, branch, commitMessage, filePaths, forcePush = false, sourceRepoId }: PushRequest = await req.json();
 
-    console.log('Push request:', { repoId, projectId, branch, filePaths: filePaths?.length || 'all', forcePush });
+    // Use sourceRepoId if provided (for Prime->Mirror sync), otherwise use repoId
+    const fileSourceRepoId = sourceRepoId || repoId;
+
+    console.log('Push request:', { repoId, projectId, branch, filePaths: filePaths?.length || 'all', forcePush, sourceRepoId: sourceRepoId || 'same as target' });
 
     // Validate project access
     const { error: accessError } = await supabaseClient.rpc('validate_project_access', {
@@ -105,8 +109,9 @@ Deno.serve(async (req) => {
     }
 
     // Get files to push using RPC with token validation
+    // Use fileSourceRepoId to fetch from Prime repo when doing Prime->Mirror sync
     const { data: filesToPush, error: filesError } = await supabaseClient.rpc('get_repo_files_with_token', {
-      p_repo_id: repoId,
+      p_repo_id: fileSourceRepoId,
       p_token: shareToken || null,
       p_file_paths: filePaths && filePaths.length > 0 ? filePaths : null,
     });

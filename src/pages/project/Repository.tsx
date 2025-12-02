@@ -14,7 +14,7 @@ import { IDEModal } from "@/components/repository/IDEModal";
 import { SyncDialog, SyncConfig } from "@/components/repository/SyncDialog";
 import { CommitLog } from "@/components/repository/CommitLog";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
-import { GitBranch, FileCode, Settings, Database, Maximize2, FilePlus, FolderPlus, Menu } from "lucide-react";
+import { GitBranch, Database, Menu, FilePlus, FolderPlus, Maximize2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
@@ -397,79 +397,126 @@ export default function Repository() {
 
   const handleSyncWithConfig = async (config: SyncConfig, isPush: boolean) => {
     try {
-      // Set repos to syncing status
-      const statusUpdates: { [key: string]: 'pushing' | 'pulling' } = {};
-      config.selectedRepos.forEach(repoId => {
-        statusUpdates[repoId] = isPush ? 'pushing' : 'pulling';
-      });
-      setSyncStatus(statusUpdates);
+      // Find Prime repo
+      const primeRepo = repos.find(r => r.is_prime);
+      
+      if (isPush) {
+        // Push: Prime first, then force-push to mirrors
+        if (!primeRepo) {
+          toast({
+            title: "No Prime repository",
+            description: "Please set a Prime repository first",
+            variant: "destructive",
+          });
+          return;
+        }
 
-      const syncPromises = config.selectedRepos.map(async (repoId) => {
-        const repo = repos.find(r => r.id === repoId);
-        if (!repo) return;
+        const mirrorRepos = repos.filter(r => !r.is_prime && config.selectedRepos.includes(r.id));
+        
+        // Set all repos to pushing status
+        const statusUpdates: { [key: string]: 'pushing' | 'pulling' } = {};
+        config.selectedRepos.forEach(repoId => {
+          statusUpdates[repoId] = 'pushing';
+        });
+        setSyncStatus(statusUpdates);
 
+        // Push to Prime first
         try {
-          if (isPush) {
-            const { data, error } = await supabase.functions.invoke('sync-repo-push', {
-              body: {
-                repoId: repoId,
-                projectId: projectId,
-                shareToken: shareToken,
-                branch: config.branches[repoId] || repo.branch,
-                commitMessage: config.commitMessage,
-                forcePush: config.forcePush || false,
-              },
-            });
+          const { data, error } = await supabase.functions.invoke('sync-repo-push', {
+            body: {
+              repoId: primeRepo.id,
+              projectId: projectId,
+              shareToken: shareToken,
+              branch: config.branches[primeRepo.id] || primeRepo.branch,
+              commitMessage: config.commitMessage,
+              forcePush: config.forcePush || false,
+            },
+          });
 
-            if (error) throw error;
-
-            setSyncStatus(prev => ({ ...prev, [repoId]: 'success' }));
-            setLastSyncTime(prev => ({ ...prev, [repoId]: new Date() }));
-            
-            return { repo: `${repo.organization}/${repo.repo}`, success: true, ...data };
-          } else {
-            const { data, error } = await supabase.functions.invoke('sync-repo-pull', {
-              body: {
-                repoId: repoId,
-                projectId: projectId,
-                shareToken: shareToken,
-                branch: config.branches[repoId] || repo.branch,
-              },
-            });
-
-            if (error) throw error;
-
-            setSyncStatus(prev => ({ ...prev, [repoId]: 'success' }));
-            setLastSyncTime(prev => ({ ...prev, [repoId]: new Date() }));
-            
-            return { repo: `${repo.organization}/${repo.repo}`, success: true, ...data };
-          }
+          if (error) throw error;
+          setSyncStatus(prev => ({ ...prev, [primeRepo.id]: 'success' }));
+          setLastSyncTime(prev => ({ ...prev, [primeRepo.id]: new Date() }));
         } catch (err) {
-          setSyncStatus(prev => ({ ...prev, [repoId]: 'error' }));
+          setSyncStatus(prev => ({ ...prev, [primeRepo.id]: 'error' }));
           throw err;
         }
-      });
 
-      const results = await Promise.allSettled(syncPromises);
-      
-      const successful = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
+        // Force push Prime's files to all selected mirrors
+        const mirrorPromises = mirrorRepos.map(async (repo) => {
+          try {
+            const { data, error } = await supabase.functions.invoke('sync-repo-push', {
+              body: {
+                repoId: repo.id,
+                sourceRepoId: primeRepo.id, // Fetch files from Prime
+                projectId: projectId,
+                shareToken: shareToken,
+                branch: config.branches[repo.id] || repo.branch,
+                commitMessage: `Mirror sync: ${config.commitMessage}`,
+                forcePush: true, // Always force push to mirrors
+              },
+            });
 
-      if (failed === 0) {
+            if (error) throw error;
+            setSyncStatus(prev => ({ ...prev, [repo.id]: 'success' }));
+            setLastSyncTime(prev => ({ ...prev, [repo.id]: new Date() }));
+            return { repo: `${repo.organization}/${repo.repo}`, success: true };
+          } catch (err) {
+            setSyncStatus(prev => ({ ...prev, [repo.id]: 'error' }));
+            throw err;
+          }
+        });
+
+        const results = await Promise.allSettled(mirrorPromises);
+        const successful = 1 + results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected').length;
+
         toast({
-          title: `${isPush ? "Push" : "Pull"} complete`,
-          description: `Successfully ${isPush ? "pushed to" : "pulled from"} ${successful} repository(ies)`,
+          title: failed === 0 ? "Push complete" : "Push completed with errors",
+          description: `Prime + ${successful - 1} mirror(s) synced${failed > 0 ? `, ${failed} failed` : ''}`,
+          variant: failed > 0 ? "destructive" : "default",
         });
       } else {
-        toast({
-          title: `${isPush ? "Push" : "Pull"} completed with errors`,
-          description: `${isPush ? "Pushed to" : "Pulled from"} ${successful} repository(ies), ${failed} failed`,
-          variant: "destructive",
-        });
-      }
+        // Pull: Only from Prime repository
+        if (!primeRepo) {
+          toast({
+            title: "No Prime repository",
+            description: "Please set a Prime repository first",
+            variant: "destructive",
+          });
+          return;
+        }
 
-      if (!isPush) {
-        loadFileStructure();
+        setSyncStatus({ [primeRepo.id]: 'pulling' });
+
+        try {
+          const { data, error } = await supabase.functions.invoke('sync-repo-pull', {
+            body: {
+              repoId: primeRepo.id,
+              projectId: projectId,
+              shareToken: shareToken,
+              branch: config.branches[primeRepo.id] || primeRepo.branch,
+            },
+          });
+
+          if (error) throw error;
+
+          setSyncStatus({ [primeRepo.id]: 'success' });
+          setLastSyncTime({ [primeRepo.id]: new Date() });
+          
+          toast({
+            title: "Pull complete",
+            description: `Pulled from Prime: ${primeRepo.organization}/${primeRepo.repo}`,
+          });
+
+          loadFileStructure();
+        } catch (err: any) {
+          setSyncStatus({ [primeRepo.id]: 'error' });
+          toast({
+            title: "Pull failed",
+            description: err.message || "Failed to pull from Prime repository",
+            variant: "destructive",
+          });
+        }
       }
 
       setTimeout(() => {
@@ -644,10 +691,12 @@ export default function Repository() {
   };
 
   const handlePull = () => {
-    if (repos.length === 0) {
+    // Pull only from Prime repository
+    const primeRepo = repos.find(r => r.is_prime);
+    if (!primeRepo) {
       toast({
-        title: "No repositories",
-        description: "Please add a repository first",
+        title: "No Prime repository",
+        description: "Please set a Prime repository first",
         variant: "destructive",
       });
       return;
@@ -704,17 +753,9 @@ export default function Repository() {
                   <GitBranch className="h-4 w-4" />
                   Repositories
                 </TabsTrigger>
-                <TabsTrigger value="files" className="flex items-center gap-2">
-                  <FileCode className="h-4 w-4" />
-                  Editor
-                </TabsTrigger>
                 <TabsTrigger value="sync" className="flex items-center gap-2">
                   <Database className="h-4 w-4" />
                   Sync
-                </TabsTrigger>
-                <TabsTrigger value="settings" className="flex items-center gap-2">
-                  <Settings className="h-4 w-4" />
-                  Settings
                 </TabsTrigger>
               </TabsList>
 
@@ -752,6 +793,7 @@ export default function Repository() {
                               repo={repo}
                               onDelete={handleDeleteRepo}
                               onManagePAT={handleManagePAT}
+                              onPrimeChange={refetch}
                             />
                             {status && (
                               <div className={`text-xs px-3 py-1 rounded ${
