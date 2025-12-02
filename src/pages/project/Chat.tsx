@@ -882,7 +882,7 @@ export default function Chat() {
                   )}
                 </div>
 
-                <ScrollArea className="flex-1 p-4" ref={scrollViewportRef}>
+                <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollViewportRef}>
                   <div className="space-y-6">
                     {messages.map((message, index) => {
                       const isLastUserMessage = message.role === "user" && 
