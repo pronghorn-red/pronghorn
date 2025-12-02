@@ -32,6 +32,22 @@ function parseAgentResponseText(rawText: string): any {
   try {
     return JSON.parse(text);
   } catch (primaryError) {
+    // NEW: Detect and fix "embedded JSON in reasoning" pattern
+    // Pattern: {"reasoning": "text...\",\"operations\":[...]}
+    const embeddedMatch = text.match(/"reasoning"\s*:\s*"([^"]*(?:\\.[^"]*)*)\\",\s*\\"operations\\"/);
+    if (embeddedMatch) {
+      console.log("Detected embedded JSON pattern, attempting fix...");
+      // Replace escaped quotes that should be actual JSON structure
+      const fixedText = text
+        .replace(/\\"/g, '"')
+        .replace(/"\s*}\s*$/, '"}'); // Fix trailing
+      try {
+        return JSON.parse(fixedText);
+      } catch (fixError) {
+        console.error("Embedded JSON fix failed:", fixError);
+      }
+    }
+
     // Fallback: grab from first '{' to last '}' and try again
     try {
       const firstBrace = text.indexOf("{");
@@ -274,7 +290,9 @@ serve(async (req) => {
 
 
     // Build system prompt
-    const systemPrompt = `You are CodingAgent, an autonomous coding agent with the following capabilities:
+    const systemPrompt = `CRITICAL: You MUST respond with ONLY valid JSON. No prose, no markdown, no explanations outside the JSON structure.
+
+You are CodingAgent, an autonomous coding agent with the following capabilities:
 
 ${JSON.stringify(manifest.file_operations, null, 2)}
 
@@ -423,7 +441,22 @@ CRITICAL: Before marking complete, you MUST execute this verification workflow:
 
 Then in the NEXT iteration after seeing the file list, compare it to the original task and decide if you're truly done.
 
-Think step-by-step and continue iterating aggressively until the task is EXHAUSTIVELY complete.`;
+Think step-by-step and continue iterating aggressively until the task is EXHAUSTIVELY complete.
+
+RESPONSE FORMAT ENFORCEMENT:
+Your entire response must be a single valid JSON object. Do not include ANY text before or after the JSON.
+
+CORRECT FORMAT:
+{"reasoning": "...", "operations": [...], "status": "..."}
+
+INCORRECT (DO NOT DO):
+Here is my response: {"reasoning": "..."}
+I will now... {"reasoning": "..."}
+\`\`\`json
+{"reasoning": "..."}
+\`\`\`
+
+Start your response with { and end with }. Nothing else.`;
 
 
     // Autonomous iteration loop
@@ -460,6 +493,7 @@ Think step-by-step and continue iterating aggressively until the task is EXHAUST
             generationConfig: {
               maxOutputTokens: maxTokens,
               temperature: 0.7,
+              responseMimeType: "application/json",
             },
           }),
         });
