@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import { DiffEditor } from "@monaco-editor/react";
 import ReactMarkdown from "react-markdown";
@@ -76,8 +76,20 @@ export function CodeEditor({
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
 
+  // Ref for debounced blur save timeout
+  const blurSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Dirty state tracking
   const isDirty = content !== originalContent;
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (blurSaveTimeoutRef.current) {
+        clearTimeout(blurSaveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Auto-save function
   const autoSaveFile = useCallback(async () => {
@@ -139,16 +151,35 @@ export function CodeEditor({
     }
   }, [filePath, repoId, shareToken, isDirty, content, originalContent, toast, onAutoSync]);
 
-  // onBlur handler - saves when focus leaves the editor area
+  // onBlur handler - debounced save when focus leaves the editor area
+  // Debounce prevents saves during Monaco's internal focus changes (undo/redo operations)
   const handleEditorBlur = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
     // Only save if focus is leaving the editor entirely (not just moving within it)
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       if (isDirty && filePath && !isImageFile(filePath)) {
-        console.log("BLUR - auto-saving:", filePath);
-        autoSaveFile();
+        // Clear any existing pending save
+        if (blurSaveTimeoutRef.current) {
+          clearTimeout(blurSaveTimeoutRef.current);
+        }
+        // Debounce: wait 200ms before saving to allow undo operations to settle
+        blurSaveTimeoutRef.current = setTimeout(() => {
+          console.log("BLUR - auto-saving after debounce:", filePath);
+          autoSaveFile();
+          blurSaveTimeoutRef.current = null;
+        }, 200);
       }
     }
   }, [isDirty, filePath, autoSaveFile]);
+
+  // onFocus handler - cancels any pending blur save when focus returns
+  // This prevents saves from firing during undo/redo operations that temporarily shift focus
+  const handleEditorFocus = useCallback(() => {
+    if (blurSaveTimeoutRef.current) {
+      console.log("Focus returned - canceling pending save");
+      clearTimeout(blurSaveTimeoutRef.current);
+      blurSaveTimeoutRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (initialContent !== undefined) {
@@ -480,7 +511,8 @@ export function CodeEditor({
       </div>
       <div 
         tabIndex={-1} 
-        onBlur={handleEditorBlur} 
+        onBlur={handleEditorBlur}
+        onFocus={handleEditorFocus}
         className="flex-1 overflow-hidden focus:outline-none"
       >
         {loading ? (
