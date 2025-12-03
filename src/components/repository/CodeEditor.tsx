@@ -84,8 +84,19 @@ export function CodeEditor({
     console.log("DIRTY STATE:", { isDirty, contentLen: content.length, originalLen: originalContent.length, filePath });
   }, [isDirty, content, originalContent, filePath]);
 
-  // Track previous file path to detect switches
-  const previousFilePathRef = useRef<string | null>(null);
+  // Track current file's content in a ref (updates on every keystroke)
+  // This allows us to capture the content before React batches state resets
+  const currentFileRef = useRef<{ filePath: string | null; content: string; originalContent: string }>({
+    filePath: null,
+    content: "",
+    originalContent: ""
+  });
+
+  // Update ref whenever content changes - this happens BEFORE filePath switch
+  useEffect(() => {
+    currentFileRef.current = { filePath, content, originalContent };
+    console.log("REF UPDATED:", { filePath, contentLen: content.length, originalLen: originalContent.length });
+  }, [filePath, content, originalContent]);
 
   // Auto-save function for when switching files
   const autoSaveFile = useCallback(async (prevFilePath: string, prevContent: string, prevOriginalContent: string) => {
@@ -150,22 +161,35 @@ export function CodeEditor({
     }
   }, [repoId, shareToken, toast, onAutoSync]);
 
-  // Effect to auto-save when file path changes - uses current state values
+  // Track previous file path separately for detecting switches
+  const previousFilePathRef = useRef<string | null>(null);
+
+  // Effect to auto-save when file path changes - reads from ref which has previous content
   useEffect(() => {
     const prevPath = previousFilePathRef.current;
+    const savedContent = currentFileRef.current;
     
-    // If switching from a different file, auto-save the previous file's content
-    // Note: content/originalContent still hold the PREVIOUS file's values at this point
+    console.log("FILE SWITCH CHECK:", { 
+      prevPath, 
+      newPath: filePath, 
+      refFilePath: savedContent.filePath,
+      refContentLen: savedContent.content.length,
+      refOriginalLen: savedContent.originalContent.length,
+      isDirty: savedContent.content !== savedContent.originalContent
+    });
+    
+    // If switching from a different file, auto-save using the ref's content
     if (prevPath && prevPath !== filePath && !isImageFile(prevPath)) {
-      console.log("File switch detected - saving:", prevPath, "isDirty:", content !== originalContent);
-      if (content !== originalContent) {
-        autoSaveFile(prevPath, content, originalContent);
+      // Use the ref content which has the previous file's data
+      if (savedContent.filePath === prevPath && savedContent.content !== savedContent.originalContent) {
+        console.log("AUTO-SAVING from ref:", prevPath);
+        autoSaveFile(prevPath, savedContent.content, savedContent.originalContent);
       }
     }
     
     // Update ref to track current file path for next switch
     previousFilePathRef.current = filePath;
-  }, [filePath]); // Only trigger on filePath change to capture state before it updates
+  }, [filePath, autoSaveFile]);
 
   useEffect(() => {
     if (initialContent !== undefined) {
