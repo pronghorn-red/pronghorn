@@ -13,7 +13,7 @@ interface TaskRequest {
   attachedFiles: Array<{ id: string; path: string }>;
   projectContext: any;
   shareToken: string;
-  mode: 'task' | 'iterative_loop' | 'continuous_improvement';
+  mode: "task" | "iterative_loop" | "continuous_improvement";
   autoCommit?: boolean;
   chatHistory?: string;
 }
@@ -46,8 +46,8 @@ function parseAgentResponseText(rawText: string): any {
   if (lastFenceMatch?.[1]) {
     const extracted = lastFenceMatch[1].trim();
     const cleaned = extracted
-      .replace(/^[\s\n]*here.?is.?the.?json.?[:\s]*/i, '')
-      .replace(/^[\s\n]*json[:\s]*/i, '')
+      .replace(/^[\s\n]*here.?is.?the.?json.?[:\s]*/i, "")
+      .replace(/^[\s\n]*json[:\s]*/i, "")
       .trim();
     result = tryParse(cleaned, "last code fence");
     if (result) return result;
@@ -68,15 +68,15 @@ function parseAgentResponseText(rawText: string): any {
   const lastBrace = originalText.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     const candidate = originalText.slice(firstBrace, lastBrace + 1);
-    
+
     // Try raw first (preserves formatting)
     result = tryParse(candidate, "brace extraction (raw)");
     if (result) return result;
 
     // Try with whitespace normalization
     const cleaned = candidate
-      .replace(/[\r\n]+/g, ' ')
-      .replace(/\s+/g, ' ')
+      .replace(/[\r\n]+/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
     result = tryParse(cleaned, "brace extraction (cleaned)");
     if (result) return result;
@@ -95,7 +95,7 @@ function parseAgentResponseText(rawText: string): any {
     reasoning: "Failed to parse agent response as JSON. Raw output preserved.",
     raw_output: originalText.slice(0, 2000),
     operations: [],
-    status: "parse_error"
+    status: "parse_error",
   };
 }
 
@@ -135,13 +135,10 @@ serve(async (req) => {
     console.log("Starting CodingAgent task:", { projectId, mode, taskDescription });
 
     // Get project settings for API key and model selection
-    const { data: project, error: projectError } = await supabase.rpc(
-      "get_project_with_token",
-      {
-        p_project_id: projectId,
-        p_token: shareToken,
-      }
-    );
+    const { data: project, error: projectError } = await supabase.rpc("get_project_with_token", {
+      p_project_id: projectId,
+      p_token: shareToken,
+    });
 
     if (projectError) throw projectError;
 
@@ -174,15 +171,12 @@ serve(async (req) => {
     }
 
     // Create agent session
-    const { data: session, error: sessionError } = await supabase.rpc(
-      "create_agent_session_with_token",
-      {
-        p_project_id: projectId,
-        p_mode: mode,
-        p_task_description: taskDescription,
-        p_token: shareToken,
-      }
-    );
+    const { data: session, error: sessionError } = await supabase.rpc("create_agent_session_with_token", {
+      p_project_id: projectId,
+      p_mode: mode,
+      p_task_description: taskDescription,
+      p_token: shareToken,
+    });
 
     if (sessionError) throw sessionError;
     if (!session) throw new Error("Failed to create session");
@@ -202,11 +196,22 @@ serve(async (req) => {
     // Load instruction manifest
     const manifest = {
       file_operations: {
-        list_files: { description: "List all files with metadata (id, path, updated_at). MUST be called FIRST to load file structure." },
-        wildcard_search: { description: "Multi-term search across all files. Returns ranked results by match count. Use for finding files by concept." },
+        list_files: {
+          description:
+            "List all files with metadata (id, path, updated_at). MUST be called FIRST to load file structure.",
+        },
+        wildcard_search: {
+          description:
+            "Multi-term search across all files. Returns ranked results by match count. Use for finding files by concept.",
+        },
         search: { description: "Search file paths and content by single keyword" },
-        read_file: { description: "Read complete content of a single file. Returns content WITH LINE NUMBERS prefixed as <<N>>." },
-        edit_lines: { description: "Edit specific line range in a file and stage the change. Use line numbers from <<N>> prefix in read_file output." },
+        read_file: {
+          description: "Read complete content of a single file. Returns content WITH LINE NUMBERS prefixed as <<N>>.",
+        },
+        edit_lines: {
+          description:
+            "Edit specific line range in a file and stage the change. Use line numbers from <<N>> prefix in read_file output.",
+        },
         create_file: { description: "Create new file and stage as add operation" },
         delete_file: { description: "Delete file and stage as delete operation" },
         move_file: { description: "Move or rename file to a new path (handles directory moves properly)" },
@@ -216,9 +221,7 @@ serve(async (req) => {
     // Describe attached files by id and path only (let the agent read them via tools)
     let attachedFilesSection = "";
     if (attachedFiles && attachedFiles.length > 0) {
-      const attachedList = attachedFiles
-        .map((f) => `- ${f.path} (file_id: ${f.id})`)
-        .join("\n");
+      const attachedList = attachedFiles.map((f) => `- ${f.path} (file_id: ${f.id})`).join("\n");
       attachedFilesSection = `\n\n🔗 USER HAS ATTACHED ${attachedFiles.length} FILE(S) - THESE FILES ARE YOUR PRIMARY FOCUS:\n${attachedList}\n\nCRITICAL: The file_id values are PROVIDED ABOVE. Use read_file directly with these IDs - DO NOT call list_files first. Only use list_files if NO files are attached and you need to search. For attached files, immediately use read_file with the provided file_id.`;
     }
 
@@ -226,17 +229,17 @@ serve(async (req) => {
     let contextSummary = "";
     if (projectContext) {
       const parts: string[] = [];
-      
+
       if (projectContext.projectMetadata) {
         const meta = projectContext.projectMetadata as any;
         parts.push(
           `Project: ${meta.name}\n` +
-          (meta.description ? `Description: ${meta.description}\n` : "") +
-          (meta.organization ? `Organization: ${meta.organization}\n` : "") +
-          (meta.scope ? `Scope: ${meta.scope}\n` : "")
+            (meta.description ? `Description: ${meta.description}\n` : "") +
+            (meta.organization ? `Organization: ${meta.organization}\n` : "") +
+            (meta.scope ? `Scope: ${meta.scope}\n` : ""),
         );
       }
-      
+
       if (projectContext.artifacts?.length > 0) {
         const artifacts = projectContext.artifacts as any[];
         const preview = artifacts
@@ -311,7 +314,7 @@ serve(async (req) => {
           .join("\n");
         parts.push(`Canvas Edges (${edges.length} total, showing up to 20):\n${preview}`);
       }
-      
+
       contextSummary = parts.join("\n\n");
     }
 
@@ -320,7 +323,6 @@ serve(async (req) => {
     if (chatHistory && chatHistory.trim()) {
       chatHistorySection = `\n\n📜 RECENT CONVERSATION CONTEXT:\n${chatHistory}\n--- END CONVERSATION CONTEXT ---`;
     }
-
 
     // Build system prompt
     const systemPrompt = `CRITICAL: You MUST respond with ONLY valid JSON. No prose, no markdown, no explanations outside the JSON structure.
@@ -349,9 +351,10 @@ ALWAYS call list_files or wildcard_search FIRST to get CURRENT, VALID file IDs f
 Even if chat history shows "file_id: abc123", that ID is INVALID - you MUST get fresh IDs.
 
 CRITICAL INSTRUCTION FOR ATTACHED FILES:
-${attachedFiles && attachedFiles.length > 0 
-  ? `The user has attached specific file(s) with their file_id values listed above. DO NOT call list_files first - use read_file directly with the provided file_id values to work with these files immediately.`
-  : `Your FIRST operation MUST be list_files or wildcard_search to get CURRENT file IDs.
+${
+  attachedFiles && attachedFiles.length > 0
+    ? `The user has attached specific file(s) with their file_id values listed above. DO NOT call list_files first - use read_file directly with the provided file_id values to work with these files immediately.`
+    : `Your FIRST operation MUST be list_files or wildcard_search to get CURRENT file IDs.
 File IDs from chat history are STALE and INVALID - never reuse them!
 {
   "type": "list_files",
@@ -473,11 +476,11 @@ COMMON MISTAKES TO AVOID:
 - When inserting at line 23, use start_line=23, end_line=22 (NOT end_line=23 which would delete line 23)
 
 ITERATION PHILOSOPHY - DRIVE DEEP, NOT SHALLOW:
-You have up to 30 iterations available. USE THEM. The typical task requires 20-30 iterations to complete properly.
+You have up to 50 iterations available. USE THEM. The typical task requires 20-50 iterations to complete properly.
 - 1-5 iterations: Initial exploration, understanding requirements, planning approach
 - 6-15 iterations: Core implementation work, making primary changes
-- 16-25 iterations: Refinement, edge cases, additional features, optimization
-- 26-30 iterations: Final validation, testing, documentation, verification
+- 16-45 iterations: Refinement, edge cases, additional features, optimization
+- 46-50 iterations: Final validation, testing, documentation, verification
 
 DO NOT BE SATISFIED WITH QUICK WINS. Push yourself to:
 - Implement the feature completely, not just the basics
@@ -550,7 +553,6 @@ I will now... {"reasoning": "..."}
 
 Start your response with { and end with }. Nothing else.`;
 
-
     // Autonomous iteration loop
     const MAX_ITERATIONS = 30;
     let iteration = 0;
@@ -562,25 +564,22 @@ Start your response with { and end with }. Nothing else.`;
 
     while (iteration < MAX_ITERATIONS) {
       // Check if abort was requested before starting this iteration
-      const { data: sessionCheck, error: sessionCheckError } = await supabase.rpc(
-        "get_agent_session_with_token",
-        {
-          p_session_id: sessionId,
-          p_token: shareToken,
-        }
-      );
-      
+      const { data: sessionCheck, error: sessionCheckError } = await supabase.rpc("get_agent_session_with_token", {
+        p_session_id: sessionId,
+        p_token: shareToken,
+      });
+
       if (sessionCheckError) {
         console.error("Error checking session status:", sessionCheckError);
       } else if (sessionCheck && sessionCheck.length > 0) {
         const session = sessionCheck[0];
-        if (session.abort_requested || session.status === 'aborted') {
+        if (session.abort_requested || session.status === "aborted") {
           console.log("Abort requested, stopping iteration loop");
           finalStatus = "aborted";
           break;
         }
       }
-      
+
       iteration++;
       console.log(`\n=== Iteration ${iteration} ===`);
 
@@ -658,14 +657,14 @@ Start your response with { and end with }. Nothing else.`;
       if (!llmResponse?.ok) {
         const errorText = await llmResponse?.text();
         console.error("LLM API error:", llmResponse?.status, errorText);
-        
+
         if (llmResponse?.status === 429) {
           throw new Error("Rate limit exceeded. Please try again later.");
         }
         if (llmResponse?.status === 402) {
           throw new Error("Payment required. Please add credits to your API account.");
         }
-        
+
         throw new Error(`LLM API error: ${errorText}`);
       }
 
@@ -715,7 +714,7 @@ Start your response with { and end with }. Nothing else.`;
       let filesChanged = false;
       for (const op of agentResponse.operations || []) {
         console.log("Executing operation:", op.type);
- 
+
         // Log operation start
         const { data: logEntry } = await supabase.rpc("log_agent_operation_with_token", {
           p_session_id: session.id,
@@ -725,10 +724,10 @@ Start your response with { and end with }. Nothing else.`;
           p_details: op.params,
           p_token: shareToken,
         });
- 
+
         try {
           let result;
-          
+
           switch (op.type) {
             case "list_files":
               result = await supabase.rpc("agent_list_files_by_path_with_token", {
@@ -737,7 +736,7 @@ Start your response with { and end with }. Nothing else.`;
                 p_path_prefix: op.params.path_prefix || null,
               });
               break;
-            
+
             case "search":
               result = await supabase.rpc("agent_search_files_with_token", {
                 p_project_id: projectId,
@@ -745,14 +744,14 @@ Start your response with { and end with }. Nothing else.`;
                 p_token: shareToken,
               });
               break;
-              
+
             case "wildcard_search":
               // Split query into search terms (filter out very short terms)
               const searchTerms = (op.params.query || "")
                 .toLowerCase()
                 .split(/\s+/)
                 .filter((term: string) => term.length > 2);
-              
+
               if (searchTerms.length === 0) {
                 result = { data: [], error: null };
               } else {
@@ -763,27 +762,25 @@ Start your response with { and end with }. Nothing else.`;
                 });
               }
               break;
-              
+
             case "read_file":
               result = await supabase.rpc("agent_read_file_with_token", {
                 p_file_id: op.params.file_id,
                 p_token: shareToken,
               });
-              
+
               // Add line numbers to content for LLM clarity
               if (result.data?.[0]?.content) {
-                const lines = result.data[0].content.split('\n');
-                const numberedContent = lines
-                  .map((line: string, idx: number) => `<<${idx + 1}>> ${line}`)
-                  .join('\n');
-                
+                const lines = result.data[0].content.split("\n");
+                const numberedContent = lines.map((line: string, idx: number) => `<<${idx + 1}>> ${line}`).join("\n");
+
                 result.data[0].numbered_content = numberedContent;
                 result.data[0].total_lines = lines.length;
                 // Replace content with numbered version for agent consumption
                 result.data[0].content = numberedContent;
               }
               break;
-              
+
             case "edit_lines":
               // Read file using agent function that checks both repo_files and repo_staging
               console.log(`[AGENT] edit_lines: Reading file ${op.params.file_id}`);
@@ -791,119 +788,129 @@ Start your response with { and end with }. Nothing else.`;
                 p_file_id: op.params.file_id,
                 p_token: shareToken,
               });
-              
+
               if (readError) {
                 console.error(`[AGENT] edit_lines: Read error:`, readError);
                 throw new Error(`Failed to read file ${op.params.file_id}: ${readError.message}`);
               }
-              
+
               if (!fileData || fileData.length === 0) {
                 console.error(`[AGENT] edit_lines: File not found: ${op.params.file_id}`);
-                throw new Error(`File not found: ${op.params.file_id}. Cannot edit. The file may not exist or may have been deleted.`);
+                throw new Error(
+                  `File not found: ${op.params.file_id}. Cannot edit. The file may not exist or may have been deleted.`,
+                );
               }
-              
-              console.log(`[AGENT] edit_lines: File found: ${fileData[0].path}, content length: ${fileData[0].content?.length || 0}`);
-              
+
+              console.log(
+                `[AGENT] edit_lines: File found: ${fileData[0].path}, content length: ${fileData[0].content?.length || 0}`,
+              );
+
               if (fileData?.[0]) {
                 // Check if file is already staged to accumulate edits correctly
                 const { data: stagedChanges } = await supabase.rpc("get_staged_changes_with_token", {
                   p_repo_id: repoId,
                   p_token: shareToken,
                 });
-                
+
                 const existingStaged = stagedChanges?.find((s: any) => s.file_path === fileData[0].path);
-                
+
                 // Use staged new_content as base if exists, otherwise use committed content
                 const baseContent = existingStaged ? existingStaged.new_content : fileData[0].content;
-                
+
                 // Validate line numbers against current content
-                const baseLines = baseContent.split('\n');
+                const baseLines = baseContent.split("\n");
                 const totalBaseLines = baseLines.length;
-                
+
                 // Cap start_line to allow appending at end of file
                 // If start_line is beyond file length, treat as append (start at last line + 1)
                 let startIdx = op.params.start_line - 1;
                 if (startIdx > totalBaseLines) {
-                  console.log(`[AGENT] edit_lines: start_line ${op.params.start_line} exceeds file length ${totalBaseLines}, capping to append position`);
+                  console.log(
+                    `[AGENT] edit_lines: start_line ${op.params.start_line} exceeds file length ${totalBaseLines}, capping to append position`,
+                  );
                   startIdx = totalBaseLines; // Will append after last line
                 }
-                
+
                 // Cap end_line to actual file length (allows agent to be less precise)
                 let endIdx = op.params.end_line - 1;
                 if (endIdx >= totalBaseLines) {
-                  console.log(`[AGENT] edit_lines: end_line ${op.params.end_line} exceeds file length ${totalBaseLines}, capping to ${totalBaseLines}`);
+                  console.log(
+                    `[AGENT] edit_lines: end_line ${op.params.end_line} exceeds file length ${totalBaseLines}, capping to ${totalBaseLines}`,
+                  );
                   endIdx = totalBaseLines - 1;
                 }
-                
+
                 // Only validate that start_line is not negative
                 if (startIdx < 0) {
                   throw new Error(
                     `Invalid start line: start_line=${op.params.start_line}. ` +
-                    `Line numbers must be positive (1 or greater).`
+                      `Line numbers must be positive (1 or greater).`,
                   );
                 }
-                
-                // INSERT operation: when start > end (e.g., start=10, end=9), 
+
+                // INSERT operation: when start > end (e.g., start=10, end=9),
                 // this means "insert at position 10 with 0 deletions"
                 // The splice below handles this correctly: splice(startIdx, 0, ...newContentLines)
                 if (startIdx > endIdx && startIdx < totalBaseLines) {
                   console.log(
                     `[AGENT] edit_lines: INSERT operation (start ${startIdx + 1} > end ${endIdx + 1}), ` +
-                    `inserting at line ${startIdx + 1} with 0 deletions`
+                      `inserting at line ${startIdx + 1} with 0 deletions`,
                   );
                 }
-                
+
                 // Now check for pure append (when start is BEYOND file length)
                 // This only triggers when startIdx >= totalBaseLines (truly appending after last line)
                 if (startIdx >= totalBaseLines) {
                   console.log(
-                    `[AGENT] edit_lines: Pure append operation detected (start ${startIdx + 1} beyond file length ${totalBaseLines}), appending to end of file`
+                    `[AGENT] edit_lines: Pure append operation detected (start ${startIdx + 1} beyond file length ${totalBaseLines}), appending to end of file`,
                   );
                   // Append: splice at totalBaseLines with 0 deletions
                   startIdx = totalBaseLines;
                   endIdx = totalBaseLines - 1; // Will result in 0 deletions
                 }
-                
+
                 // Apply edit to the correct base content
                 // Strip any accidental <<N>> markers from new_content (agent shouldn't include them, but safeguard)
-                let cleanedNewContent = op.params.new_content.replace(/^<<\d+>>\s*/gm, '');
-                
+                let cleanedNewContent = op.params.new_content.replace(/^<<\d+>>\s*/gm, "");
+
                 // Split new_content into lines (agent provides content with \n separators)
-                const newContentLines = cleanedNewContent.split('\n');
+                const newContentLines = cleanedNewContent.split("\n");
                 // Remove trailing empty line if new_content ended with \n
-                if (newContentLines.length > 0 && newContentLines[newContentLines.length - 1] === '') {
+                if (newContentLines.length > 0 && newContentLines[newContentLines.length - 1] === "") {
                   newContentLines.pop();
                 }
-                
+
                 // Calculate how many lines to remove (0 for pure append)
                 const linesToRemove = startIdx > endIdx ? 0 : endIdx - startIdx + 1;
                 baseLines.splice(startIdx, linesToRemove, ...newContentLines);
-                let finalContent = baseLines.join('\n');
+                let finalContent = baseLines.join("\n");
                 let jsonParseWarning: string | undefined;
-                
+
                 // For JSON files, validate and normalize the result to avoid structural issues like duplicate keys
-                const isJsonFile = fileData[0].path.endsWith('.json');
+                const isJsonFile = fileData[0].path.endsWith(".json");
                 if (isJsonFile) {
                   try {
                     const parsed = JSON.parse(finalContent);
                     // Re-stringify to canonical JSON (no duplicate keys, consistent formatting)
-                    finalContent = JSON.stringify(parsed, null, 2) + '\n';
+                    finalContent = JSON.stringify(parsed, null, 2) + "\n";
                   } catch (parseError: any) {
                     // Allow invalid JSON edits to be staged - agent may need multiple iterations to fix complex issues
                     // Log the error but don't fail the operation
                     console.warn(
                       `Warning: Edit resulted in invalid JSON for ${fileData[0].path}. ` +
-                      `Lines ${op.params.start_line}-${op.params.end_line}. ` +
-                      `Error: ${parseError?.message || String(parseError)}. ` +
-                      `Staging anyway to allow iterative fixes.`
+                        `Lines ${op.params.start_line}-${op.params.end_line}. ` +
+                        `Error: ${parseError?.message || String(parseError)}. ` +
+                        `Staging anyway to allow iterative fixes.`,
                     );
                     // Store warning to include in result after RPC call
                     jsonParseWarning = parseError?.message || String(parseError);
                   }
                 }
-                
+
                 // Stage the change (UPSERT will preserve original old_content baseline)
-                console.log(`[AGENT] edit_lines: Staging edit for ${fileData[0].path}, lines ${op.params.start_line}-${op.params.end_line}`);
+                console.log(
+                  `[AGENT] edit_lines: Staging edit for ${fileData[0].path}, lines ${op.params.start_line}-${op.params.end_line}`,
+                );
                 result = await supabase.rpc("stage_file_change_with_token", {
                   p_repo_id: repoId,
                   p_token: shareToken,
@@ -912,89 +919,92 @@ Start your response with { and end with }. Nothing else.`;
                   p_old_content: fileData[0].content,
                   p_new_content: finalContent,
                 });
-                
+
                 if (result.error) {
                   console.error(`[AGENT] edit_lines: Staging failed:`, result.error);
                   throw new Error(`Failed to stage edit: ${result.error.message}`);
                 }
-                
+
                 console.log(`[AGENT] edit_lines: Successfully staged edit for ${fileData[0].path}`, {
                   staging_id: result.data?.id,
-                  operation_type: 'edit',
+                  operation_type: "edit",
                   file_path: fileData[0].path,
                 });
-                
+
                 // CRITICAL: Re-read the file after edit to verify the change was applied correctly
                 // This helps the agent see the actual current state for subsequent operations
-                const { data: verifyData, error: verifyError } = await supabase.rpc(
-                  "agent_read_file_with_token",
-                  {
-                    p_file_id: op.params.file_id,
-                    p_token: shareToken,
-                  }
-                );
+                const { data: verifyData, error: verifyError } = await supabase.rpc("agent_read_file_with_token", {
+                  p_file_id: op.params.file_id,
+                  p_token: shareToken,
+                });
 
                 let verificationInfo = null;
                 if (verifyError) {
                   console.warn(`[AGENT] edit_lines: Could not verify edit:`, verifyError);
                 } else if (verifyData && verifyData.length > 0) {
                   const verifiedContent = verifyData[0].content;
-                  const verifiedLines = verifiedContent.split('\n');
-                  console.log(`[AGENT] edit_lines: Verified file now has ${verifiedLines.length} lines (was ${totalBaseLines} lines before edit)`);
-                  
+                  const verifiedLines = verifiedContent.split("\n");
+                  console.log(
+                    `[AGENT] edit_lines: Verified file now has ${verifiedLines.length} lines (was ${totalBaseLines} lines before edit)`,
+                  );
+
                   // Provide verification info to agent
                   verificationInfo = {
                     lines_before: totalBaseLines,
                     lines_after: verifiedLines.length,
-                    content_sample: verifiedLines.slice(Math.max(0, startIdx - 3), Math.min(verifiedLines.length, endIdx + 4)).join('\n'),
+                    content_sample: verifiedLines
+                      .slice(Math.max(0, startIdx - 3), Math.min(verifiedLines.length, endIdx + 4))
+                      .join("\n"),
                   };
                 }
-                
+
                 // Include the new content in result for agent to verify
-                const finalLines = finalContent.split('\n');
+                const finalLines = finalContent.split("\n");
                 result.data = {
                   ...(result.data || {}),
-                  new_content_preview: finalLines.slice(Math.max(0, startIdx - 2), Math.min(finalLines.length, endIdx + 3)).join('\n'),
+                  new_content_preview: finalLines
+                    .slice(Math.max(0, startIdx - 2), Math.min(finalLines.length, endIdx + 3))
+                    .join("\n"),
                   total_lines: finalLines.length,
                   verification: verificationInfo,
                 };
-                
+
                 // Add JSON parse warning if there was one
                 if (jsonParseWarning) {
                   result.data.json_parse_warning = jsonParseWarning;
                 }
               }
               break;
-              
+
             case "create_file":
               result = await supabase.rpc("stage_file_change_with_token", {
                 p_repo_id: repoId,
                 p_token: shareToken,
                 p_operation_type: "add",
                 p_file_path: op.params.path,
-                p_old_content: "",  // Empty string for new files, not NULL
+                p_old_content: "", // Empty string for new files, not NULL
                 p_new_content: op.params.content,
               });
               break;
-              
+
             case "delete_file":
               // Use agent_read_file_with_token which queries both repo_files AND repo_staging
               const { data: deleteFileData } = await supabase.rpc("agent_read_file_with_token", {
                 p_file_id: op.params.file_id,
                 p_token: shareToken,
               });
-              
+
               if (deleteFileData?.[0]) {
                 // Check if file was newly created (staged as "add")
                 const { data: stagedForDelete } = await supabase.rpc("get_staged_changes_with_token", {
                   p_repo_id: repoId,
                   p_token: shareToken,
                 });
-                
+
                 const newlyCreated = stagedForDelete?.find(
-                  (s: any) => s.file_path === deleteFileData[0].path && s.operation_type === 'add'
+                  (s: any) => s.file_path === deleteFileData[0].path && s.operation_type === "add",
                 );
-                
+
                 if (newlyCreated) {
                   // Just unstage the add operation instead of staging a delete
                   // FIX: Use correct parameters - repo_id and file_path, not staging_id
@@ -1019,25 +1029,25 @@ Start your response with { and end with }. Nothing else.`;
                 throw new Error(`File not found with ID: ${op.params.file_id}`);
               }
               break;
-              
+
             case "move_file":
               // First, get file info (works for both repo_files and repo_staging)
               const { data: moveFileData } = await supabase.rpc("agent_read_file_with_token", {
                 p_file_id: op.params.file_id,
                 p_token: shareToken,
               });
-              
+
               if (moveFileData?.[0]) {
                 // Check if file was newly created (staged as "add")
                 const { data: stagedForMove } = await supabase.rpc("get_staged_changes_with_token", {
                   p_repo_id: repoId,
                   p_token: shareToken,
                 });
-                
+
                 const newlyCreated = stagedForMove?.find(
-                  (s: any) => s.file_path === moveFileData[0].path && s.operation_type === 'add'
+                  (s: any) => s.file_path === moveFileData[0].path && s.operation_type === "add",
                 );
-                
+
                 if (newlyCreated) {
                   // For staged "add" files, just update the staging record's file_path
                   result = await supabase.rpc("update_staged_file_path_with_token", {
@@ -1060,36 +1070,36 @@ Start your response with { and end with }. Nothing else.`;
               }
               break;
           }
- 
+
           if (result?.error) throw result.error;
 
           // Mark that files have changed for broadcast purposes
           if (["edit_lines", "create_file", "delete_file", "move_file"].includes(op.type)) {
             filesChanged = true;
           }
- 
+
           // Update operation log to completed
           await supabase.rpc("update_agent_operation_status_with_token", {
             p_operation_id: logEntry.id,
             p_status: "completed",
             p_token: shareToken,
           });
- 
+
           operationResults.push({ type: op.type, success: true, data: result?.data });
         } catch (error) {
           console.error("Operation failed:", error);
-          
+
           // Properly serialize error for display
           let errorMessage: string;
           if (error instanceof Error) {
             errorMessage = error.message;
-          } else if (typeof error === 'object' && error !== null) {
+          } else if (typeof error === "object" && error !== null) {
             // PostgreSQL errors are objects with code, message, details, hint
             errorMessage = JSON.stringify(error, null, 2);
           } else {
             errorMessage = String(error);
           }
-          
+
           // Update operation log to failed
           await supabase.rpc("update_agent_operation_status_with_token", {
             p_operation_id: logEntry.id,
@@ -1097,11 +1107,11 @@ Start your response with { and end with }. Nothing else.`;
             p_error_message: errorMessage,
             p_token: shareToken,
           });
- 
-          operationResults.push({ 
-            type: op.type, 
-            success: false, 
-            error: errorMessage
+
+          operationResults.push({
+            type: op.type,
+            success: false,
+            error: errorMessage,
           });
         }
       }
@@ -1119,9 +1129,9 @@ Start your response with { and end with }. Nothing else.`;
           console.error("Failed to broadcast repo files refresh:", broadcastError);
         }
       }
- 
+
       allOperationResults.push(...operationResults);
- 
+
       // Add operation results to conversation history for next iteration
       const resultsMessage = `Operation results:\n${JSON.stringify(operationResults, null, 2)}`;
       conversationHistory.push({
@@ -1145,9 +1155,7 @@ Start your response with { and end with }. Nothing else.`;
     }
 
     // Update session status on completion with completed_at timestamp
-    const completedAt = (finalStatus === "completed" || finalStatus === "failed") 
-      ? new Date().toISOString() 
-      : null;
+    const completedAt = finalStatus === "completed" || finalStatus === "failed" ? new Date().toISOString() : null;
 
     await supabase.rpc("update_agent_session_status_with_token", {
       p_session_id: session.id,
@@ -1167,11 +1175,11 @@ Start your response with { and end with }. Nothing else.`;
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error) {
     console.error("Error in coding-agent-orchestrator:", error);
-    
+
     // Update session to failed status on error if session was created
     if (sessionId && shareToken && supabase) {
       try {
@@ -1185,13 +1193,10 @@ Start your response with { and end with }. Nothing else.`;
         console.error("Failed to update session status on error:", updateError);
       }
     }
-    
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
