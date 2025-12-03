@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { useParams } from "react-router-dom";
@@ -14,14 +14,16 @@ import { IDEModal } from "@/components/repository/IDEModal";
 import { SyncDialog, SyncConfig } from "@/components/repository/SyncDialog";
 import { CommitLog } from "@/components/repository/CommitLog";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
-import { GitBranch, Database, Menu, FilePlus, FolderPlus, Maximize2 } from "lucide-react";
+import { GitBranch, Database, Menu, FilePlus, FolderPlus, Maximize2, FileArchive, Upload, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { useShareToken } from "@/hooks/useShareToken";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import JSZip from "jszip";
 
 interface FileNode {
   name: string;
@@ -53,8 +55,19 @@ export default function Repository() {
   const [rootCreateType, setRootCreateType] = useState<"file" | "folder">("file");
   const [allFilesWithContent, setAllFilesWithContent] = useState<{ path: string; content: string }[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [zipUploadStatus, setZipUploadStatus] = useState<'idle' | 'extracting' | 'staging' | 'complete' | 'error'>('idle');
+  const [zipUploadProgress, setZipUploadProgress] = useState<{ current: number; total: number; currentFile: string }>({ current: 0, total: 0, currentFile: '' });
+  const zipInputRef = useRef<HTMLInputElement>(null);
 
   const { repos, loading, refetch } = useRealtimeRepos(projectId);
+
+  // Binary file detection helper
+  const BINARY_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'pdf', 'zip', 'tar', 'gz', 'exe', 'dll', 'so', 'dylib', 'woff', 'woff2', 'ttf', 'eot', 'mp3', 'mp4', 'wav', 'ogg', 'webm', 'avi', 'mov'];
+  
+  const isBinaryFile = (filename: string): boolean => {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    return BINARY_EXTENSIONS.includes(ext || '');
+  };
 
   // Function definitions BEFORE useEffects that use them
   const buildFileTree = (files: any[]): FileNode[] => {
@@ -719,6 +732,130 @@ export default function Repository() {
     await handleSyncWithConfig(config, true);
   };
 
+  const handleZipUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !projectId) return;
+
+    // Find Prime repo
+    const primeRepo = repos.find(r => r.is_prime) || repos.find(r => r.is_default);
+    if (!primeRepo) {
+      toast({
+        title: "No repository",
+        description: "Please add a repository first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setZipUploadStatus('extracting');
+    
+    try {
+      const zip = await JSZip.loadAsync(file);
+      
+      // Get all file entries (exclude directories and __MACOSX)
+      const fileEntries: { path: string; zipObject: JSZip.JSZipObject }[] = [];
+      
+      zip.forEach((relativePath, zipEntry) => {
+        // Skip directories, __MACOSX folder, and .DS_Store files
+        if (!zipEntry.dir && 
+            !relativePath.startsWith('__MACOSX/') && 
+            !relativePath.endsWith('.DS_Store')) {
+          fileEntries.push({ path: relativePath, zipObject: zipEntry });
+        }
+      });
+
+      if (fileEntries.length === 0) {
+        toast({
+          title: "Empty archive",
+          description: "No files found in the ZIP archive",
+          variant: "destructive",
+        });
+        setZipUploadStatus('idle');
+        return;
+      }
+
+      setZipUploadStatus('staging');
+      setZipUploadProgress({ current: 0, total: fileEntries.length, currentFile: '' });
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (let i = 0; i < fileEntries.length; i++) {
+        const { path, zipObject } = fileEntries[i];
+        
+        setZipUploadProgress({ 
+          current: i + 1, 
+          total: fileEntries.length, 
+          currentFile: path 
+        });
+
+        try {
+          const isBinary = isBinaryFile(path);
+          let content: string;
+
+          if (isBinary) {
+            // Read as base64 for binary files
+            const arrayBuffer = await zipObject.async('arraybuffer');
+            const bytes = new Uint8Array(arrayBuffer);
+            let binary = '';
+            for (let j = 0; j < bytes.byteLength; j++) {
+              binary += String.fromCharCode(bytes[j]);
+            }
+            content = btoa(binary);
+          } else {
+            // Read as text for text files
+            content = await zipObject.async('string');
+          }
+
+          // Stage the file
+          const { error } = await supabase.rpc("stage_file_change_with_token", {
+            p_repo_id: primeRepo.id,
+            p_token: shareToken || null,
+            p_operation_type: "add",
+            p_file_path: path,
+            p_old_content: null,
+            p_new_content: content,
+            p_is_binary: isBinary,
+          });
+
+          if (error) throw error;
+          successCount++;
+        } catch (error: any) {
+          console.error(`Error staging file ${path}:`, error);
+          errorCount++;
+        }
+      }
+
+      setZipUploadStatus('complete');
+      
+      toast({
+        title: "Upload complete",
+        description: `Staged ${successCount} files${errorCount > 0 ? `, ${errorCount} failed` : ''}. Ready to commit.`,
+      });
+
+      // Reload file structure
+      loadFileStructure();
+    } catch (error: any) {
+      console.error("Error processing ZIP:", error);
+      setZipUploadStatus('error');
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to process ZIP file",
+        variant: "destructive",
+      });
+    } finally {
+      // Reset input
+      if (zipInputRef.current) {
+        zipInputRef.current.value = '';
+      }
+      // Reset status after a delay
+      setTimeout(() => {
+        setZipUploadStatus('idle');
+        setZipUploadProgress({ current: 0, total: 0, currentFile: '' });
+      }, 3000);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
@@ -757,6 +894,10 @@ export default function Repository() {
                 <TabsTrigger value="sync" className="flex items-center gap-2">
                   <Database className="h-4 w-4" />
                   Sync
+                </TabsTrigger>
+                <TabsTrigger value="upload" className="flex items-center gap-2">
+                  <FileArchive className="h-4 w-4" />
+                  Upload
                 </TabsTrigger>
               </TabsList>
 
@@ -1012,6 +1153,107 @@ export default function Repository() {
                         <li>Sync operations may take a few moments for large repositories</li>
                       </ul>
                     </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="upload" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Upload Project from ZIP</CardTitle>
+                    <CardDescription>
+                      Import an existing project by uploading a ZIP archive. All files will be staged and ready to commit.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {repos.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <FileArchive className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>Please add a repository first before uploading files.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
+                          <input
+                            ref={zipInputRef}
+                            type="file"
+                            accept=".zip"
+                            onChange={handleZipUpload}
+                            className="hidden"
+                            id="zip-upload-input"
+                            disabled={zipUploadStatus !== 'idle'}
+                          />
+                          <label 
+                            htmlFor="zip-upload-input" 
+                            className={`cursor-pointer block ${zipUploadStatus !== 'idle' ? 'pointer-events-none' : ''}`}
+                          >
+                            {zipUploadStatus === 'idle' ? (
+                              <>
+                                <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                                <p className="text-lg font-medium mb-2">Drop a ZIP file here or click to browse</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Upload a .zip archive containing your project files
+                                </p>
+                              </>
+                            ) : zipUploadStatus === 'extracting' ? (
+                              <>
+                                <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
+                                <p className="text-lg font-medium">Extracting archive...</p>
+                              </>
+                            ) : zipUploadStatus === 'staging' ? (
+                              <>
+                                <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
+                                <p className="text-lg font-medium mb-2">
+                                  Staging files ({zipUploadProgress.current}/{zipUploadProgress.total})
+                                </p>
+                                <p className="text-sm text-muted-foreground truncate max-w-md mx-auto">
+                                  {zipUploadProgress.currentFile}
+                                </p>
+                                <Progress 
+                                  value={(zipUploadProgress.current / zipUploadProgress.total) * 100} 
+                                  className="mt-4 max-w-md mx-auto"
+                                />
+                              </>
+                            ) : zipUploadStatus === 'complete' ? (
+                              <>
+                                <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+                                <p className="text-lg font-medium text-green-600">Upload complete!</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Files have been staged. Go to the Build page to commit and push.
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+                                <p className="text-lg font-medium text-red-600">Upload failed</p>
+                                <p className="text-sm text-muted-foreground">
+                                  There was an error processing the ZIP file.
+                                </p>
+                              </>
+                            )}
+                          </label>
+                        </div>
+
+                        <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                          <h4 className="font-medium text-sm">How it works</h4>
+                          <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                            <li>Select a .zip file containing your project</li>
+                            <li>Files will be extracted and staged as new additions</li>
+                            <li>Folder structure from the ZIP will be preserved</li>
+                            <li>After upload, go to Build → Staging to review and commit</li>
+                            <li>Binary files (images, fonts, etc.) are automatically handled</li>
+                          </ul>
+                        </div>
+
+                        {repos.find(r => r.is_prime) && (
+                          <p className="text-xs text-muted-foreground">
+                            Files will be uploaded to: <span className="font-medium">
+                              {repos.find(r => r.is_prime)?.organization}/{repos.find(r => r.is_prime)?.repo}
+                            </span>
+                          </p>
+                        )}
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
