@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, forwardRef, useImperativeHandle } from "react";
 import Editor from "@monaco-editor/react";
 import { DiffEditor } from "@monaco-editor/react";
 import ReactMarkdown from "react-markdown";
@@ -34,6 +34,11 @@ function getImageMimeType(path: string): string {
   return mimeMap[ext || ''] || 'image/png';
 }
 
+export interface CodeEditorHandle {
+  save: () => Promise<boolean>;
+  isDirty: () => boolean;
+}
+
 interface CodeEditorProps {
   fileId: string | null;
   filePath: string | null;
@@ -47,9 +52,10 @@ interface CodeEditorProps {
   onClose: () => void;
   onSave?: () => void;
   onAutoSync?: () => void;
+  onDirtyChange?: (isDirty: boolean) => void;
 }
 
-export function CodeEditor({ 
+export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ 
   fileId, 
   filePath, 
   repoId, 
@@ -61,8 +67,9 @@ export function CodeEditor({
   onShowDiffChange,
   onClose, 
   onSave, 
-  onAutoSync 
-}: CodeEditorProps) {
+  onAutoSync,
+  onDirtyChange,
+}, ref) => {
   const [content, setContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [loading, setLoading] = useState(false);
@@ -75,6 +82,16 @@ export function CodeEditor({
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
+
+  // Track dirty state
+  const isDirty = useMemo(() => {
+    return content !== originalContent && !loading;
+  }, [content, originalContent, loading]);
+
+  // Report dirty state changes to parent
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   useEffect(() => {
     if (initialContent !== undefined) {
@@ -170,8 +187,8 @@ export function CodeEditor({
     }
   };
 
-  const handleSave = async () => {
-    if (!filePath || !repoId) return;
+  const handleSave = useCallback(async (): Promise<boolean> => {
+    if (!filePath || !repoId) return false;
 
     setSaving(true);
     try {
@@ -231,6 +248,9 @@ export function CodeEditor({
 
       if (error) throw error;
 
+      // Update originalContent to match saved content (no longer dirty)
+      setOriginalContent(content);
+
       toast({
         title: "Staged",
         description:
@@ -238,6 +258,7 @@ export function CodeEditor({
       });
       onSave?.();
       onAutoSync?.();  // Trigger sync to update other views
+      return true;
     } catch (error) {
       console.error("Error staging file:", error);
       toast({
@@ -245,10 +266,17 @@ export function CodeEditor({
         description: "Failed to stage file changes",
         variant: "destructive",
       });
+      return false;
     } finally {
       setSaving(false);
     }
-  };
+  }, [filePath, repoId, shareToken, content, originalContent, fileId, toast, onSave, onAutoSync]);
+
+  // Expose save method and isDirty getter via ref
+  useImperativeHandle(ref, () => ({
+    save: handleSave,
+    isDirty: () => isDirty,
+  }), [handleSave, isDirty]);
 
   const getLanguage = (path: string | null) => {
     if (!path) return "plaintext";
@@ -320,6 +348,19 @@ export function CodeEditor({
     <div className="flex flex-col h-full bg-[#1e1e1e]">
       <div className="flex items-center justify-between px-4 py-2 border-b border-[#3e3e42] bg-[#252526]">
         <div className="flex items-center gap-2 flex-1 min-w-0">
+          {/* Dirty indicator - yellow dot */}
+          {isDirty && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="h-2 w-2 rounded-full bg-yellow-500 shrink-0" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Unsaved changes</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           {isImage ? (
             <ImageIcon className="h-4 w-4 text-[#cccccc] shrink-0" />
           ) : (
@@ -380,7 +421,7 @@ export function CodeEditor({
               <Button
                 size="sm"
                 onClick={handleSave}
-                disabled={saving || loading}
+                disabled={saving || loading || !isDirty}
                 variant="secondary"
                 className="h-8 gap-2"
               >
@@ -498,10 +539,15 @@ export function CodeEditor({
               wordWrap: "on",
               tabSize: 2,
               insertSpaces: true,
+              detectIndentation: true,
+              formatOnPaste: true,
+              formatOnType: true,
             }}
           />
         )}
       </div>
     </div>
   );
-}
+});
+
+CodeEditor.displayName = "CodeEditor";

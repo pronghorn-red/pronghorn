@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
-import { useParams } from "react-router-dom";
+import { useParams, useBlocker } from "react-router-dom";
 import { useShareToken } from "@/hooks/useShareToken";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { AgentFileTree } from "@/components/build/AgentFileTree";
-import { CodeEditor } from "@/components/repository/CodeEditor";
+import { CodeEditor, CodeEditorHandle } from "@/components/repository/CodeEditor";
 import { StagingPanel } from "@/components/build/StagingPanel";
 import { CommitHistory } from "@/components/build/CommitHistory";
 import { UnifiedAgentInterface } from "@/components/build/UnifiedAgentInterface";
@@ -30,6 +30,7 @@ export default function Build() {
   const { token: shareToken, isTokenSet } = useShareToken(projectId || null);
   const isMobile = useIsMobile();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<CodeEditorHandle>(null);
 
   const { repos } = useRealtimeRepos(projectId || null);
   // Use Prime repo for file operations (source of truth), fallback to default
@@ -56,6 +57,11 @@ export default function Build() {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [itemToRename, setItemToRename] = useState<{ id: string; path: string; type: "file" | "folder" } | null>(null);
   const [autoCommit, setAutoCommit] = useState(false);
+  
+  // Dirty state tracking for autosave
+  const [isDirty, setIsDirty] = useState(false);
+  const [pendingFile, setPendingFile] = useState<{ id: string; path: string; isStaged?: boolean } | null>(null);
+  const isSavingRef = useRef(false);
 
   // Helper function to get unique file path with " (Copy)" suffix
   const getUniqueFilePath = (desiredPath: string, existingPaths: string[]): string => {
@@ -233,6 +239,71 @@ export default function Build() {
     }
   };
 
+  // Handle editor save completion - clear dirty state and complete pending file switch
+  const handleEditorSave = useCallback(() => {
+    setIsDirty(false);
+    loadFiles();
+    
+    // If there's a pending file switch, complete it now
+    if (pendingFile) {
+      setSelectedFile(pendingFile);
+      setPendingFile(null);
+    }
+    isSavingRef.current = false;
+  }, [pendingFile]);
+
+  // Beforeunload handler for tab/page close
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
+  // Block navigation if dirty - use react-router's useBlocker
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      isDirty && currentLocation.pathname !== nextLocation.pathname
+  );
+
+  // Handle blocked navigation
+  useEffect(() => {
+    if (blocker.state === "blocked") {
+      const confirmSave = window.confirm(
+        "You have unsaved changes. Save before leaving?"
+      );
+      if (confirmSave && editorRef.current) {
+        editorRef.current.save().then((success) => {
+          if (success) {
+            blocker.proceed();
+          } else {
+            // Save failed, ask if they want to discard
+            if (window.confirm("Save failed. Leave without saving?")) {
+              blocker.proceed();
+            } else {
+              blocker.reset();
+            }
+          }
+        });
+      } else if (!confirmSave) {
+        // User chose not to save, ask if they want to discard
+        if (window.confirm("Discard unsaved changes?")) {
+          blocker.proceed();
+        } else {
+          blocker.reset();
+        }
+      } else {
+        blocker.reset();
+      }
+    }
+  }, [blocker]);
+
   const handleSelectFile = async (fileId: string, path: string, isStaged?: boolean) => {
     // Track folder selection for context-aware file/folder creation
     const file = files.find(f => f.path === path);
@@ -243,6 +314,26 @@ export default function Build() {
     } else {
       // File in root directory
       setSelectedFolderPath('/');
+    }
+
+    const newFile = { id: fileId, path, isStaged };
+
+    // If currently editing a file and it's dirty, save first
+    if (selectedFile && isDirty && editorRef.current && !isSavingRef.current) {
+      isSavingRef.current = true;
+      try {
+        // Store the new file as pending
+        setPendingFile(newFile);
+        // Save the current file - handleEditorSave callback will complete the switch
+        await editorRef.current.save();
+      } catch (error) {
+        console.error("Autosave failed:", error);
+        toast.error("Failed to save changes. Please try again.");
+        setPendingFile(null);
+        isSavingRef.current = false;
+        return;
+      }
+      return; // Exit - the file switch will be completed in handleEditorSave
     }
 
     // For staged-only files (newly created by agent), we need to load content from staging
@@ -267,12 +358,24 @@ export default function Build() {
       }
     }
     
-    setSelectedFile({ id: fileId, path, isStaged });
+    setSelectedFile(newFile);
     // On mobile, switch to editor tab when a file is selected
     if (isMobile) {
       setMobileActiveTab("editor");
     }
   };
+
+  // Handle close with autosave
+  const handleCloseEditor = useCallback(async () => {
+    if (isDirty && editorRef.current) {
+      try {
+        await editorRef.current.save();
+      } catch (error) {
+        console.error("Autosave on close failed:", error);
+      }
+    }
+    setSelectedFile(null);
+  }, [isDirty]);
 
   const handleCreateFile = async (name: string) => {
     if (!defaultRepo || !projectId) return;
@@ -704,6 +807,7 @@ export default function Build() {
                     <div className="h-full">
                       {selectedFile ? (
                         <CodeEditor
+                          ref={editorRef}
                           key={`${selectedFile.path}-${editorRefreshKey}`}
                           fileId={selectedFile.id}
                           filePath={selectedFile.path}
@@ -711,8 +815,9 @@ export default function Build() {
                           isStaged={selectedFile.isStaged}
                           showDiff={showDiff}
                           onShowDiffChange={setShowDiff}
-                          onClose={() => setSelectedFile(null)}
-                          onSave={loadFiles}
+                          onClose={handleCloseEditor}
+                          onSave={handleEditorSave}
+                          onDirtyChange={setIsDirty}
                         />
                       ) : (
                         <div className="flex items-center justify-center h-full bg-[#1e1e1e] text-gray-400">
@@ -900,6 +1005,7 @@ export default function Build() {
                   <TabsContent value="editor" forceMount className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
                     {selectedFile ? (
                       <CodeEditor
+                        ref={editorRef}
                         key={`mobile-${selectedFile.path}-${editorRefreshKey}`}
                         fileId={selectedFile.id}
                         filePath={selectedFile.path}
@@ -907,8 +1013,9 @@ export default function Build() {
                         isStaged={selectedFile.isStaged}
                         showDiff={showDiff}
                         onShowDiffChange={setShowDiff}
-                        onClose={() => setSelectedFile(null)}
-                        onSave={loadFiles}
+                        onClose={handleCloseEditor}
+                        onSave={handleEditorSave}
+                        onDirtyChange={setIsDirty}
                       />
                     ) : (
                       <div className="flex items-center justify-center h-full text-muted-foreground">
