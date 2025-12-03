@@ -84,19 +84,8 @@ export function CodeEditor({
     console.log("DIRTY STATE:", { isDirty, contentLen: content.length, originalLen: originalContent.length, filePath });
   }, [isDirty, content, originalContent, filePath]);
 
-  // Track current file's content in a ref (updates on every keystroke)
-  // This allows us to capture the content before React batches state resets
-  const currentFileRef = useRef<{ filePath: string | null; content: string; originalContent: string }>({
-    filePath: null,
-    content: "",
-    originalContent: ""
-  });
-
-  // Update ref whenever content changes - this happens BEFORE filePath switch
-  useEffect(() => {
-    currentFileRef.current = { filePath, content, originalContent };
-    console.log("REF UPDATED:", { filePath, contentLen: content.length, originalLen: originalContent.length });
-  }, [filePath, content, originalContent]);
+  // Ref to store pending save data from cleanup
+  const pendingSaveRef = useRef<{ filePath: string; content: string; originalContent: string } | null>(null);
 
   // Auto-save function for when switching files
   const autoSaveFile = useCallback(async (prevFilePath: string, prevContent: string, prevOriginalContent: string) => {
@@ -161,34 +150,32 @@ export function CodeEditor({
     }
   }, [repoId, shareToken, toast, onAutoSync]);
 
-  // Track previous file path separately for detecting switches
-  const previousFilePathRef = useRef<string | null>(null);
-
-  // Effect to auto-save when file path changes - reads from ref which has previous content
+  // Effect with CLEANUP to capture dirty content BEFORE state resets
+  // Cleanup runs with OLD values (captured in closure) before new effect runs
   useEffect(() => {
-    const prevPath = previousFilePathRef.current;
-    const savedContent = currentFileRef.current;
+    console.log("EFFECT SETUP for:", filePath, "content:", content.length, "original:", originalContent.length);
     
-    console.log("FILE SWITCH CHECK:", { 
-      prevPath, 
-      newPath: filePath, 
-      refFilePath: savedContent.filePath,
-      refContentLen: savedContent.content.length,
-      refOriginalLen: savedContent.originalContent.length,
-      isDirty: savedContent.content !== savedContent.originalContent
-    });
-    
-    // If switching from a different file, auto-save using the ref's content
-    if (prevPath && prevPath !== filePath && !isImageFile(prevPath)) {
-      // Use the ref content which has the previous file's data
-      if (savedContent.filePath === prevPath && savedContent.content !== savedContent.originalContent) {
-        console.log("AUTO-SAVING from ref:", prevPath);
-        autoSaveFile(prevPath, savedContent.content, savedContent.originalContent);
+    // Cleanup function runs BEFORE next invocation with values from THIS render
+    return () => {
+      if (content !== originalContent && filePath && !isImageFile(filePath)) {
+        console.log("CLEANUP - storing pending save:", filePath, "dirty content length:", content.length);
+        pendingSaveRef.current = { filePath, content, originalContent };
+      } else {
+        console.log("CLEANUP - no dirty content for:", filePath);
       }
-    }
+    };
+  }, [content, originalContent, filePath]); // All deps so cleanup captures latest values
+
+  // Process pending save when filePath changes
+  useEffect(() => {
+    const pending = pendingSaveRef.current;
+    console.log("PENDING SAVE CHECK:", { pending: pending?.filePath, currentFile: filePath });
     
-    // Update ref to track current file path for next switch
-    previousFilePathRef.current = filePath;
+    if (pending && pending.filePath !== filePath) {
+      console.log("PROCESSING pending save for:", pending.filePath);
+      autoSaveFile(pending.filePath, pending.content, pending.originalContent);
+      pendingSaveRef.current = null;
+    }
   }, [filePath, autoSaveFile]);
 
   useEffect(() => {
