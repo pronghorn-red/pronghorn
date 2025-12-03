@@ -44,6 +44,8 @@ interface UnifiedAgentInterfaceProps {
   onRemoveFile: (fileId: string) => void;
   onOpenSettings?: () => void;
   files?: Array<{ id: string; path: string; isStaged?: boolean }>;
+  autoCommit: boolean;
+  onAutoCommitChange: (checked: boolean) => void;
 }
 
 interface ChatHistorySettings {
@@ -60,7 +62,9 @@ export function UnifiedAgentInterface({
   attachedFiles,
   onRemoveFile,
   onOpenSettings,
-  files = []
+  files = [],
+  autoCommit,
+  onAutoCommitChange
 }: UnifiedAgentInterfaceProps) {
   const { messages: loadedMessages, loading: messagesLoading, hasMore: hasMoreMessages, loadMore: loadMoreMessages, refetch: refetchMessages } = useInfiniteAgentMessages(projectId, shareToken);
   const { operations, loading: operationsLoading, hasMore: hasMoreOperations, loadMore: loadMoreOperations, refetch: refetchOperations } = useInfiniteAgentOperations(projectId, shareToken);
@@ -70,7 +74,6 @@ export function UnifiedAgentInterface({
   
   const [taskInput, setTaskInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [autoCommit, setAutoCommit] = useState(false);
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
   const [attachedContext, setAttachedContext] = useState<ProjectSelectionResult | null>(null);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
@@ -959,18 +962,6 @@ export function UnifiedAgentInterface({
             </button>
           </div>
         )}
-
-        {/* Auto-commit Toggle */}
-        <div className="flex items-center gap-2">
-          <Checkbox 
-            id="auto-commit" 
-            checked={autoCommit}
-            onCheckedChange={(checked) => setAutoCommit(checked as boolean)}
-          />
-          <Label htmlFor="auto-commit" className="text-sm">
-            Auto-commit and push changes
-          </Label>
-        </div>
 
         {/* Task Input */}
         <div className="flex gap-2">

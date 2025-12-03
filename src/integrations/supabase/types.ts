@@ -2824,6 +2824,10 @@ export type Database = {
         Args: { p_session_id: string; p_token: string }
         Returns: undefined
       }
+      reset_repo_files_with_token: {
+        Args: { p_repo_id: string; p_token: string }
+        Returns: boolean
+      }
       rollback_to_commit_with_token: {
         Args: { p_commit_id: string; p_repo_id: string; p_token: string }
         Returns: boolean

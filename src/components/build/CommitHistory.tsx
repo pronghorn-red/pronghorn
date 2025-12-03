@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { GitBranch, GitCommit, Loader2, RotateCcw, User, Calendar } from "lucide-react";
+import { GitBranch, GitCommit, Loader2, RotateCcw, Calendar } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface Commit {
@@ -31,7 +31,8 @@ export function CommitHistory({ projectId }: CommitHistoryProps) {
   const [commits, setCommits] = useState<Commit[]>([]);
   const [loading, setLoading] = useState(true);
   const [repoId, setRepoId] = useState<string | null>(null);
-  const [rollingBack, setRollingBack] = useState<string | null>(null);
+  const [repoInfo, setRepoInfo] = useState<any>(null);
+  const [restoring, setRestoring] = useState<string | null>(null);
 
   useEffect(() => {
     loadCommitHistory();
@@ -43,7 +44,7 @@ export function CommitHistory({ projectId }: CommitHistoryProps) {
     try {
       setLoading(true);
 
-      // Get default repo
+      // Get default repo (Prime or default)
       const { data: repos, error: repoError } = await supabase.rpc("get_project_repos_with_token", {
         p_project_id: projectId,
         p_token: shareToken || null,
@@ -51,7 +52,7 @@ export function CommitHistory({ projectId }: CommitHistoryProps) {
 
       if (repoError) throw repoError;
 
-      const defaultRepo = repos?.find((r) => r.is_default) || repos?.[0];
+      const defaultRepo = repos?.find((r: any) => r.is_prime) || repos?.find((r: any) => r.is_default) || repos?.[0];
       if (!defaultRepo) {
         setCommits([]);
         setLoading(false);
@@ -59,6 +60,7 @@ export function CommitHistory({ projectId }: CommitHistoryProps) {
       }
 
       setRepoId(defaultRepo.id);
+      setRepoInfo(defaultRepo);
 
       // Load commit history
       const { data, error } = await supabase.rpc("get_commit_history_with_token", {
@@ -82,39 +84,54 @@ export function CommitHistory({ projectId }: CommitHistoryProps) {
     }
   };
 
-  const handleRollback = async (commitId: string) => {
-    if (!repoId) return;
+  const handleRestore = async (commitId: string, commitSha: string) => {
+    if (!repoId || !projectId || !repoInfo) return;
 
     try {
-      setRollingBack(commitId);
+      setRestoring(commitId);
 
-      const { error } = await supabase.rpc("rollback_to_commit_with_token", {
+      // Step 1: Reset all repo files (clear staging and committed files)
+      const { error: resetError } = await supabase.rpc("reset_repo_files_with_token", {
         p_repo_id: repoId,
         p_token: shareToken || null,
-        p_commit_id: commitId,
       });
 
-      if (error) throw error;
+      if (resetError) throw resetError;
+
+      // Step 2: Pull fresh from GitHub at the target commit SHA
+      const { data, error: pullError } = await supabase.functions.invoke("sync-repo-pull", {
+        body: {
+          repoId: repoId,
+          projectId: projectId,
+          shareToken: shareToken,
+          commitSha: commitSha, // Pull at this specific commit
+        },
+      });
+
+      if (pullError) throw pullError;
 
       toast({
-        title: "Rollback Initiated",
-        description: "Use sync-repo-pull to complete the rollback from GitHub",
+        title: "Restore Complete",
+        description: `Restored ${data?.filesCount || 'all'} files from commit ${commitSha.substring(0, 7)}`,
       });
+
+      // Reload commit history
+      loadCommitHistory();
     } catch (error: any) {
-      console.error("Error rolling back:", error);
+      console.error("Error restoring to commit:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to rollback",
+        description: error.message || "Failed to restore to commit",
         variant: "destructive",
       });
     } finally {
-      setRollingBack(null);
+      setRestoring(null);
     }
   };
 
   if (loading) {
     return (
-      <Card>
+      <Card className="h-full flex flex-col overflow-hidden">
         <CardContent className="flex items-center justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </CardContent>
@@ -123,12 +140,12 @@ export function CommitHistory({ projectId }: CommitHistoryProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="h-full flex flex-col overflow-hidden">
+      <CardHeader className="shrink-0">
         <CardTitle>Commit History</CardTitle>
-        <CardDescription>View and rollback to previous commits</CardDescription>
+        <CardDescription>View and restore to previous commits</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 overflow-y-auto">
         {commits.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <GitCommit className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -136,7 +153,7 @@ export function CommitHistory({ projectId }: CommitHistoryProps) {
           </div>
         ) : (
           <div className="space-y-4">
-            {commits.map((commit, index) => (
+            {commits.map((commit) => (
               <div
                 key={commit.id}
                 className="flex gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
@@ -159,23 +176,21 @@ export function CommitHistory({ projectId }: CommitHistoryProps) {
                         </span>
                       </div>
                     </div>
-                    {index > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRollback(commit.id)}
-                        disabled={rollingBack === commit.id}
-                      >
-                        {rollingBack === commit.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <>
-                            <RotateCcw className="w-4 h-4 mr-2" />
-                            Rollback
-                          </>
-                        )}
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRestore(commit.id, commit.commit_sha)}
+                      disabled={restoring === commit.id}
+                    >
+                      {restoring === commit.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <RotateCcw className="w-4 h-4 mr-2" />
+                          Restore
+                        </>
+                      )}
+                    </Button>
                   </div>
 
                   <div className="flex items-center gap-2">

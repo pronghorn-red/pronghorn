@@ -55,6 +55,7 @@ export default function Build() {
   const [editorRefreshKey, setEditorRefreshKey] = useState(0);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [itemToRename, setItemToRename] = useState<{ id: string; path: string; type: "file" | "folder" } | null>(null);
+  const [autoCommit, setAutoCommit] = useState(false);
 
   // Helper function to get unique file path with " (Copy)" suffix
   const getUniqueFilePath = (desiredPath: string, existingPaths: string[]): string => {
@@ -753,6 +754,8 @@ export default function Build() {
                                 attachedFiles={attachedFiles}
                                 onRemoveFile={handleRemoveAttachedFile}
                                 files={files}
+                                autoCommit={autoCommit}
+                                onAutoCommitChange={setAutoCommit}
                               />
                             </TabsContent>
 
@@ -760,10 +763,12 @@ export default function Build() {
                               <StagingPanel
                                 projectId={projectId}
                                 onViewDiff={handleViewDiff}
+                                autoCommit={autoCommit}
+                                onAutoCommitChange={setAutoCommit}
                               />
                             </TabsContent>
 
-                            <TabsContent value="history" className="flex-1 overflow-hidden mt-0">
+                            <TabsContent value="history" className="flex-1 overflow-hidden mt-0 h-full">
                               <CommitHistory
                                 projectId={projectId}
                               />
@@ -919,6 +924,8 @@ export default function Build() {
                       attachedFiles={attachedFiles}
                       onRemoveFile={handleRemoveAttachedFile}
                       files={files}
+                      autoCommit={autoCommit}
+                      onAutoCommitChange={setAutoCommit}
                     />
                   </TabsContent>
 
@@ -926,6 +933,8 @@ export default function Build() {
                     <StagingPanel
                       projectId={projectId}
                       onViewDiff={handleViewDiff}
+                      autoCommit={autoCommit}
+                      onAutoCommitChange={setAutoCommit}
                     />
                   </TabsContent>
                 </Tabs>

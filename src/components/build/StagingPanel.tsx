@@ -25,9 +25,11 @@ interface StagedChange {
 interface StagingPanelProps {
   projectId: string;
   onViewDiff?: (change: any) => void;
+  autoCommit: boolean;
+  onAutoCommitChange: (checked: boolean) => void;
 }
 
-export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
+export function StagingPanel({ projectId, onViewDiff, autoCommit, onAutoCommitChange }: StagingPanelProps) {
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
   const { toast } = useToast();
@@ -648,6 +650,17 @@ export function StagingPanel({ projectId, onViewDiff }: StagingPanelProps) {
                     onChange={(e) => setCommitMessage(e.target.value)}
                     disabled={committing}
                   />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Checkbox 
+                    id="auto-commit-staging" 
+                    checked={autoCommit}
+                    onCheckedChange={(checked) => onAutoCommitChange(checked as boolean)}
+                  />
+                  <Label htmlFor="auto-commit-staging" className="text-sm">
+                    Auto-commit and push changes
+                  </Label>
                 </div>
 
                 <Button
