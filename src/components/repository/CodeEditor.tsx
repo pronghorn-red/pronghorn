@@ -1,11 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
 import Editor from "@monaco-editor/react";
 import { DiffEditor } from "@monaco-editor/react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams } from "react-router-dom";
-import { Save, X, FileText, ImageIcon } from "lucide-react";
+import { Save, X, FileText, ImageIcon, GitCompare, Eye } from "lucide-react";
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'avif', 'tiff', 'tif'];
 
@@ -63,6 +67,7 @@ export function CodeEditor({
   const [originalContent, setOriginalContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showMarkdown, setShowMarkdown] = useState(false);
   const showDiffMode = showDiff ?? false;
   const handleShowDiffToggle = (checked: boolean) => {
     onShowDiffChange?.(checked);
@@ -89,6 +94,11 @@ export function CodeEditor({
       setOriginalContent("");
     }
   }, [fileId, isStaged, filePath, initialContent, diffOldContent]);
+
+  // Reset markdown preview when file changes
+  useEffect(() => {
+    setShowMarkdown(false);
+  }, [filePath]);
 
   const loadFileContent = async () => {
     if (!filePath && !fileId) return;
@@ -318,16 +328,52 @@ export function CodeEditor({
           <h3 className="text-sm font-normal truncate text-[#cccccc]">{filePath}</h3>
         </div>
         <div className="flex items-center gap-3">
-          {isStaged && !isImage && (
-            <label className="flex items-center gap-2 text-xs text-[#cccccc] cursor-pointer hover:text-white">
-              <input
-                type="checkbox"
-                checked={showDiffMode}
-                onChange={(e) => handleShowDiffToggle(e.target.checked)}
-                className="w-4 h-4"
-              />
-              Show diff
-            </label>
+          {!isImage && (
+            <TooltipProvider>
+              <div className="flex items-center gap-1">
+                {/* Show Diff Toggle - only for staged files */}
+                {isStaged && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Toggle
+                        size="sm"
+                        pressed={showDiffMode}
+                        onPressedChange={(pressed) => {
+                          handleShowDiffToggle(pressed);
+                          if (pressed) setShowMarkdown(false);
+                        }}
+                        className="h-8 px-2 data-[state=on]:bg-blue-600 data-[state=on]:text-white"
+                      >
+                        <GitCompare className="h-4 w-4" />
+                      </Toggle>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Show diff view</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                
+                {/* Show Markdown Toggle - for all text files */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Toggle
+                      size="sm"
+                      pressed={showMarkdown}
+                      onPressedChange={(pressed) => {
+                        setShowMarkdown(pressed);
+                        if (pressed && showDiffMode) handleShowDiffToggle(false);
+                      }}
+                      className="h-8 px-2 data-[state=on]:bg-green-600 data-[state=on]:text-white"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Toggle>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Preview as Markdown</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
           )}
           <div className="flex gap-1">
             {!isImage && (
@@ -372,6 +418,29 @@ export function CodeEditor({
                 });
               }}
             />
+          </div>
+        ) : showMarkdown ? (
+          <div className="h-full overflow-auto p-6 bg-[#1e1e1e] text-[#cccccc]">
+            <div className="prose prose-invert prose-sm max-w-none 
+              prose-headings:text-[#e6e6e6] prose-headings:font-semibold
+              prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg
+              prose-p:text-[#cccccc] prose-p:leading-relaxed
+              prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
+              prose-strong:text-[#e6e6e6] prose-strong:font-semibold
+              prose-code:text-[#ce9178] prose-code:bg-[#2d2d2d] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
+              prose-pre:bg-[#2d2d2d] prose-pre:border prose-pre:border-[#3e3e42]
+              prose-blockquote:border-l-[#4ec9b0] prose-blockquote:text-[#9cdcfe]
+              prose-ul:text-[#cccccc] prose-ol:text-[#cccccc]
+              prose-li:marker:text-[#808080]
+              prose-hr:border-[#3e3e42]
+              prose-table:text-[#cccccc]
+              prose-th:bg-[#2d2d2d] prose-th:border prose-th:border-[#3e3e42] prose-th:px-3 prose-th:py-2
+              prose-td:border prose-td:border-[#3e3e42] prose-td:px-3 prose-td:py-2
+            ">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {content}
+              </ReactMarkdown>
+            </div>
           </div>
         ) : showDiffMode ? (
           <DiffEditor
