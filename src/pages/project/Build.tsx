@@ -104,63 +104,8 @@ export default function Build() {
     return newPath;
   };
 
-  // Load files from default repo
-  useEffect(() => {
-    if (defaultRepo && projectId && isTokenSet) {
-      loadFiles();
-    }
-  }, [defaultRepo, projectId, shareToken, isTokenSet, showDeletedFiles]);
-
-  // Real-time subscription for file and staging changes
-  useEffect(() => {
-    if (!projectId || !defaultRepo || !isTokenSet) return;
-
-    console.log("Setting up file tree real-time subscriptions for project:", projectId);
-
-    const channel = supabase
-       .channel(`repo-changes-${projectId}`)
-       .on(
-         "postgres_changes",
-         {
-           event: "*",
-           schema: "public",
-           table: "repo_files",
-           filter: `project_id=eq.${projectId}`,
-         },
-         (payload) => {
-           console.log("File change detected:", payload);
-           loadFiles();
-         }
-       )
-       .on(
-         "postgres_changes",
-         {
-           event: "*",
-           schema: "public",
-           table: "repo_staging",
-           filter: `repo_id=eq.${defaultRepo.id}`,
-         },
-         (payload) => {
-           console.log("Staging change detected:", payload);
-           loadFiles();
-         }
-       )
-       .on(
-         "broadcast",
-         { event: "repo_files_refresh" },
-         (payload) => {
-           console.log("Received repo files refresh broadcast:", payload);
-           loadFiles();
-         }
-       )
-       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [projectId, defaultRepo, isTokenSet]);
-
-  const loadFiles = async () => {
+  // Load files function - defined as useCallback before useEffects that use it
+  const loadFiles = useCallback(async () => {
     if (!defaultRepo || !projectId) return;
 
     try {
@@ -244,10 +189,66 @@ export default function Build() {
       console.error("Error loading files:", error);
       toast.error("Failed to load project files");
     }
-  };
+  }, [defaultRepo, projectId, shareToken, showDeletedFiles]);
 
   // Assign loadFiles to ref for callback use
   loadFilesRef.current = loadFiles;
+
+  // Load files from default repo
+  useEffect(() => {
+    if (defaultRepo && projectId && isTokenSet) {
+      loadFiles();
+    }
+  }, [defaultRepo, projectId, isTokenSet, loadFiles]);
+
+  // Real-time subscription for file and staging changes
+  useEffect(() => {
+    if (!projectId || !defaultRepo || !isTokenSet) return;
+
+    console.log("Setting up file tree real-time subscriptions for project:", projectId);
+
+    const channel = supabase
+       .channel(`repo-changes-${projectId}`)
+       .on(
+         "postgres_changes",
+         {
+           event: "*",
+           schema: "public",
+           table: "repo_files",
+           filter: `project_id=eq.${projectId}`,
+         },
+         (payload) => {
+           console.log("File change detected:", payload);
+           loadFiles();
+         }
+       )
+       .on(
+         "postgres_changes",
+         {
+           event: "*",
+           schema: "public",
+           table: "repo_staging",
+           filter: `repo_id=eq.${defaultRepo.id}`,
+         },
+         (payload) => {
+           console.log("Staging change detected:", payload);
+           loadFiles();
+         }
+       )
+       .on(
+         "broadcast",
+         { event: "repo_files_refresh" },
+         (payload) => {
+           console.log("Received repo files refresh broadcast:", payload);
+           loadFiles();
+         }
+       )
+       .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [projectId, defaultRepo, isTokenSet, loadFiles]);
 
   // Handle editor save - buffer handles save, we just need to reload files
   const handleEditorSave = useCallback(() => {
