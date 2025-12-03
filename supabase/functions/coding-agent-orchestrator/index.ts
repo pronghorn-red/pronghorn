@@ -161,6 +161,69 @@ function getGrokResponseSchema() {
   };
 }
 
+// Generate Claude/Anthropic strict tool use schema for coding agent responses
+function getClaudeResponseTool() {
+  return {
+    name: "respond_with_actions",
+    description: "Return your reasoning, file operations, and status as structured output. You MUST use this tool to respond.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {
+        reasoning: {
+          type: "string",
+          description: "Chain-of-thought reasoning about what to do next",
+        },
+        operations: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              type: {
+                type: "string",
+                enum: [
+                  "list_files",
+                  "wildcard_search",
+                  "search",
+                  "read_file",
+                  "edit_lines",
+                  "create_file",
+                  "delete_file",
+                  "move_file",
+                ],
+              },
+              params: {
+                type: "object",
+                description: "Operation-specific parameters",
+              },
+            },
+            required: ["type", "params"],
+            additionalProperties: false,
+          },
+        },
+        blackboard_entry: {
+          type: "object",
+          properties: {
+            entry_type: {
+              type: "string",
+              enum: ["planning", "progress", "decision", "reasoning", "next_steps", "reflection"],
+            },
+            content: { type: "string" },
+          },
+          required: ["entry_type", "content"],
+          additionalProperties: false,
+        },
+        status: {
+          type: "string",
+          enum: ["in_progress", "completed", "requires_commit"],
+        },
+      },
+      required: ["reasoning", "operations", "status"],
+      additionalProperties: false,
+    },
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -671,7 +734,9 @@ Start your response with { and end with }. Nothing else.`;
           }),
         });
       } else if (selectedModel.startsWith("claude")) {
-        // Anthropic API
+        // Anthropic API with strict tool use for structured output
+        console.log(`Using Claude model ${modelName} with strict tool use enforcement`);
+        
         const messages = conversationHistory.map((msg) => ({
           role: msg.role,
           content: msg.content,
@@ -683,12 +748,15 @@ Start your response with { and end with }. Nothing else.`;
             "Content-Type": "application/json",
             "x-api-key": apiKey,
             "anthropic-version": "2023-06-01",
+            "anthropic-beta": "structured-outputs-2025-11-13",
           },
           body: JSON.stringify({
             model: modelName,
             max_tokens: maxTokens,
             system: systemPrompt,
             messages,
+            tools: [getClaudeResponseTool()],
+            tool_choice: { type: "tool", name: "respond_with_actions" },
           }),
         });
       } else if (selectedModel.startsWith("grok")) {
@@ -742,8 +810,19 @@ Start your response with { and end with }. Nothing else.`;
         const text = llmData.candidates[0].content.parts[0].text as string;
         agentResponse = parseAgentResponseText(text);
       } else if (selectedModel.startsWith("claude")) {
-        const text = llmData.content[0].text as string;
-        agentResponse = parseAgentResponseText(text);
+        // With strict tool use, response comes in tool_use block's input field
+        const toolUseBlock = llmData.content.find((block: any) => block.type === "tool_use");
+        if (toolUseBlock && toolUseBlock.input) {
+          // Tool input is already structured JSON, use directly
+          agentResponse = toolUseBlock.input;
+          console.log("Claude strict tool use response parsed directly");
+        } else {
+          // Fallback: try text content with robust parser
+          const textBlock = llmData.content.find((block: any) => block.type === "text");
+          const text = textBlock?.text || JSON.stringify(llmData.content);
+          console.warn("No tool_use block found, falling back to text parsing");
+          agentResponse = parseAgentResponseText(text);
+        }
       } else if (selectedModel.startsWith("grok")) {
         const text = llmData.choices[0].message.content as string;
         agentResponse = parseAgentResponseText(text);
