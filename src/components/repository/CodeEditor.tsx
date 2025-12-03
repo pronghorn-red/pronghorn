@@ -78,6 +78,12 @@ export function CodeEditor({
 
   // Ref for debounced blur save timeout
   const blurSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Ref to always have latest content (for checking in timeout callbacks)
+  const contentRef = useRef(content);
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
 
   // Dirty state tracking
   const isDirty = content !== originalContent;
@@ -91,12 +97,12 @@ export function CodeEditor({
     };
   }, []);
 
-  // Auto-save function
-  const autoSaveFile = useCallback(async () => {
+  // Auto-save function that uses refs for latest values
+  const autoSaveFileWithContent = useCallback(async (contentToSave: string) => {
     if (!filePath || !repoId || isImageFile(filePath)) return;
-    if (!isDirty) return;
+    if (contentToSave === originalContent) return; // Not dirty
 
-    console.log("Auto-saving file on blur:", filePath);
+    console.log("Auto-saving file:", filePath);
     
     try {
       // Check if there's already a staged change for this file
@@ -138,7 +144,7 @@ export function CodeEditor({
         p_operation_type: operationType,
         p_file_path: filePath,
         p_old_content: oldContentToUse,
-        p_new_content: content,
+        p_new_content: contentToSave,
       });
 
       toast({
@@ -149,27 +155,38 @@ export function CodeEditor({
     } catch (error) {
       console.error("Error auto-saving file:", error);
     }
-  }, [filePath, repoId, shareToken, isDirty, content, originalContent, toast, onAutoSync]);
+  }, [filePath, repoId, shareToken, originalContent, toast, onAutoSync]);
 
   // onBlur handler - debounced save when focus leaves the editor area
-  // Debounce prevents saves during Monaco's internal focus changes (undo/redo operations)
+  // Only saves if content hasn't changed (e.g. from undo) between blur and timeout
   const handleEditorBlur = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
     // Only save if focus is leaving the editor entirely (not just moving within it)
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       if (isDirty && filePath && !isImageFile(filePath)) {
+        // Capture content at the moment of blur
+        const contentAtBlur = content;
+        
         // Clear any existing pending save
         if (blurSaveTimeoutRef.current) {
           clearTimeout(blurSaveTimeoutRef.current);
         }
-        // Debounce: wait 200ms before saving to allow undo operations to settle
+        
+        // Debounce: wait 300ms, then check if content is still the same
         blurSaveTimeoutRef.current = setTimeout(() => {
-          console.log("BLUR - auto-saving after debounce:", filePath);
-          autoSaveFile();
+          const currentContent = contentRef.current;
+          
+          // Only save if content hasn't changed since blur (no undo happened)
+          if (currentContent === contentAtBlur) {
+            console.log("BLUR - content stable, auto-saving:", filePath);
+            autoSaveFileWithContent(currentContent);
+          } else {
+            console.log("BLUR - content changed (undo?), skipping save. Was:", contentAtBlur.length, "Now:", currentContent.length);
+          }
           blurSaveTimeoutRef.current = null;
-        }, 200);
+        }, 300);
       }
     }
-  }, [isDirty, filePath, autoSaveFile]);
+  }, [isDirty, filePath, content, autoSaveFileWithContent]);
 
   // onFocus handler - cancels any pending blur save when focus returns
   // This prevents saves from firing during undo/redo operations that temporarily shift focus
