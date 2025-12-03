@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -7,7 +7,8 @@ export interface BufferedFile {
   path: string;
   isStaged?: boolean;
   content: string;
-  originalContent: string;
+  originalContent: string;    // Baseline from DB - NEVER changes after load (for diffs)
+  lastSavedContent: string;   // What was last saved to staging (for dirty detection)
   isDirty: boolean;
   isSaving: boolean;
 }
@@ -111,9 +112,9 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
     });
 
     try {
-      // SMART UNSTAGE: If content matches original, unstage instead of staging
+      // SMART UNSTAGE: If content matches original BASELINE, unstage instead of staging
       if (file.content === file.originalContent) {
-        console.log("Content reverted, unstaging file:", filePath);
+        console.log("Content reverted to baseline, unstaging file:", filePath);
         const { error } = await supabase.rpc("unstage_file_with_token", {
           p_repo_id: repoId,
           p_file_path: filePath,
@@ -122,16 +123,20 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
 
         if (error) throw error;
 
-        // Mark as clean and remove from buffer if not current
+        // Mark as clean and update lastSavedContent
         setBuffer(prev => {
           const newMap = new Map(prev);
           const f = newMap.get(filePath);
           if (f) {
             if (filePath === currentPath) {
-              // Keep in buffer but mark as clean
-              newMap.set(filePath, { ...f, isDirty: false, isSaving: false, isStaged: false });
+              newMap.set(filePath, {
+                ...f,
+                isDirty: false,
+                isSaving: false,
+                isStaged: false,
+                lastSavedContent: f.content,
+              });
             } else {
-              // Remove from buffer
               newMap.delete(filePath);
             }
           }
@@ -160,7 +165,7 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
       let oldContentToUse = file.originalContent;
 
       if (existing) {
-        // Preserve original baseline
+        // Preserve original baseline from existing staged record
         if (existing.old_content !== null && existing.old_content !== undefined) {
           oldContentToUse = existing.old_content;
         } else if (existing.operation_type === "add") {
@@ -192,22 +197,21 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
 
       if (error) throw error;
 
-      // Update buffer: mark as clean, update originalContent
+      // Update buffer: mark as clean, update lastSavedContent but PRESERVE originalContent
       setBuffer(prev => {
         const newMap = new Map(prev);
         const f = newMap.get(filePath);
         if (f) {
           if (filePath === currentPath) {
-            // Keep in buffer with updated original
             newMap.set(filePath, {
               ...f,
               isDirty: false,
               isSaving: false,
-              originalContent: f.content,
+              lastSavedContent: f.content,  // Update last saved
+              // originalContent stays unchanged - it's the baseline for diffs!
               isStaged: true,
             });
           } else {
-            // Remove from buffer since it's saved and not current
             newMap.delete(filePath);
           }
         }
@@ -242,7 +246,6 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
     // If current file is dirty, trigger async save (fire-and-forget)
     if (currentPath && buffer.get(currentPath)?.isDirty) {
       const pathToSave = currentPath;
-      // Don't await - let it save in background
       const savePromise = saveFileAsync(pathToSave);
       savePromisesRef.current.set(pathToSave, savePromise);
       savePromise.finally(() => {
@@ -268,7 +271,8 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
           path: filePath,
           isStaged,
           content: loadedContent.content,
-          originalContent: loadedContent.originalContent,
+          originalContent: loadedContent.originalContent,  // Baseline for diffs
+          lastSavedContent: loadedContent.content,         // Initial = content
           isDirty: false,
           isSaving: false,
         });
@@ -287,7 +291,8 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
       const newMap = new Map(prev);
       const file = newMap.get(currentPath);
       if (file) {
-        const isDirty = newContent !== file.originalContent;
+        // Dirty = content differs from last saved content (not original baseline)
+        const isDirty = newContent !== file.lastSavedContent;
         newMap.set(currentPath, { ...file, content: newContent, isDirty });
       }
       return newMap;
@@ -332,7 +337,6 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
       await saveFileAsync(currentPath);
     }
 
-    // Remove from buffer and clear current
     setBuffer(prev => {
       const newMap = new Map(prev);
       newMap.delete(currentPath);
@@ -341,7 +345,7 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
     setCurrentPath(null);
   }, [currentPath, buffer, saveFileAsync]);
 
-  // Clear the buffer for a specific file (e.g., after external changes)
+  // Clear the buffer for a specific file
   const clearFile = useCallback((filePath: string) => {
     setBuffer(prev => {
       const newMap = new Map(prev);
@@ -369,6 +373,7 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
           ...file,
           content: loadedContent.content,
           originalContent: loadedContent.originalContent,
+          lastSavedContent: loadedContent.content,
           isDirty: false,
           isSaving: false,
         });
