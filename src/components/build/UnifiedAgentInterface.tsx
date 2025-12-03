@@ -23,7 +23,8 @@ import {
   ChevronDown,
   Settings,
   Square,
-  BookOpen
+  BookOpen,
+  Download
 } from 'lucide-react';
 import { useInfiniteAgentMessages } from '@/hooks/useInfiniteAgentMessages';
 import { useInfiniteAgentOperations } from '@/hooks/useInfiniteAgentOperations';
@@ -94,6 +95,7 @@ export function UnifiedAgentInterface({
     return file?.path || fileId; // Return path if found, fallback to ID
   };
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDownloadingHistory, setIsDownloadingHistory] = useState(false);
   
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -440,6 +442,96 @@ export function UnifiedAgentInterface({
       setIsSubmitting(false);
       abortControllerRef.current = null;
       toast.info('Stopping agent...');
+    }
+  };
+
+  const handleDownloadChatHistory = async () => {
+    setIsDownloadingHistory(true);
+    try {
+      // Fetch ALL messages (using high limit)
+      const { data: messagesData, error: messagesError } = await supabase.rpc(
+        "get_agent_messages_by_project_with_token",
+        {
+          p_project_id: projectId,
+          p_token: shareToken || null,
+          p_limit: 100000,
+          p_offset: 0,
+        }
+      );
+      
+      if (messagesError) throw messagesError;
+
+      // Fetch ALL operations (using high limit)
+      const { data: operationsData, error: operationsError } = await supabase.rpc(
+        "get_agent_operations_by_project_with_token",
+        {
+          p_project_id: projectId,
+          p_token: shareToken || null,
+          p_limit: 100000,
+          p_offset: 0,
+        }
+      );
+      
+      if (operationsError) throw operationsError;
+
+      // Sort messages chronologically (oldest first for readability)
+      const sortedMessages = (messagesData || []).sort(
+        (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      
+      // Sort operations chronologically
+      const sortedOperations = (operationsData || []).sort(
+        (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+
+      // Build export object
+      const exportData = {
+        exportMetadata: {
+          exportedAt: new Date().toISOString(),
+          projectId: projectId,
+          totalMessages: sortedMessages.length,
+          totalOperations: sortedOperations.length,
+        },
+        messages: sortedMessages.map((msg: any) => ({
+          id: msg.id,
+          sessionId: msg.session_id,
+          role: msg.role,
+          content: msg.content,
+          metadata: msg.metadata,
+          createdAt: msg.created_at,
+        })),
+        operations: sortedOperations.map((op: any) => ({
+          id: op.id,
+          sessionId: op.session_id,
+          operationType: op.operation_type,
+          filePath: op.file_path,
+          status: op.status,
+          details: op.details,
+          errorMessage: op.error_message,
+          createdAt: op.created_at,
+          completedAt: op.completed_at,
+        })),
+      };
+
+      // Create and download JSON file
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `chat-history-${projectId}-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Downloaded ${sortedMessages.length} messages and ${sortedOperations.length} operations`);
+    } catch (error) {
+      console.error("Error downloading chat history:", error);
+      toast.error("Failed to download chat history");
+    } finally {
+      setIsDownloadingHistory(false);
     }
   };
 
@@ -1009,7 +1101,7 @@ export function UnifiedAgentInterface({
 
       {/* Chat History Settings Dialog */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chat History Settings</DialogTitle>
             <DialogDescription>
@@ -1119,7 +1211,34 @@ export function UnifiedAgentInterface({
             </p>
           </div>
 
-          <div className="flex justify-end gap-2">
+          {/* Download Chat History Section */}
+          <div className="space-y-3 pt-4 border-t">
+            <Label className="text-sm font-medium">Download Chat History</Label>
+            <p className="text-sm text-muted-foreground">
+              Export the complete chat history including all user messages, agent responses, 
+              and file operations in their original format for audit and review purposes.
+            </p>
+            <Button 
+              variant="outline" 
+              onClick={handleDownloadChatHistory}
+              disabled={isDownloadingHistory}
+              className="w-full"
+            >
+              {isDownloadingHistory ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Downloading...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download Complete History (JSON)
+                </>
+              )}
+            </Button>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
             <Button variant="outline" onClick={() => setIsSettingsOpen(false)}>
               Cancel
             </Button>
