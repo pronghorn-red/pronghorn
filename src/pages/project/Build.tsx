@@ -14,6 +14,7 @@ import { CommitHistory } from "@/components/build/CommitHistory";
 import { UnifiedAgentInterface } from "@/components/build/UnifiedAgentInterface";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
+import { useFileBuffer } from "@/hooks/useFileBuffer";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff, Upload, Trash2 } from "lucide-react";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
@@ -37,12 +38,6 @@ export default function Build() {
   const defaultRepo = repos.find((r) => r.is_prime) || repos.find((r) => r.is_default);
 
   const [files, setFiles] = useState<Array<{ id: string; path: string; isStaged?: boolean }>>([]);
-  const [selectedFile, setSelectedFile] = useState<{ 
-    id: string; 
-    path: string; 
-    isStaged?: boolean;
-    stagingId?: string;
-  } | null>(null);
   const [stagedChanges, setStagedChanges] = useState<any[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; path: string }>>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -53,15 +48,34 @@ export default function Build() {
   const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(null);
   const [showDeletedFiles, setShowDeletedFiles] = useState(true);
   const [mobileActiveTab, setMobileActiveTab] = useState("files");
-  const [editorRefreshKey, setEditorRefreshKey] = useState(0);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [itemToRename, setItemToRename] = useState<{ id: string; path: string; type: "file" | "folder" } | null>(null);
   const [autoCommit, setAutoCommit] = useState(false);
-  
-  // Dirty state tracking for autosave
-  const [isDirty, setIsDirty] = useState(false);
-  const [pendingFile, setPendingFile] = useState<{ id: string; path: string; isStaged?: boolean } | null>(null);
-  const isSavingRef = useRef(false);
+
+  // File buffer system for instant file switching and background saves
+  const {
+    currentFile,
+    currentPath,
+    hasDirtyFiles,
+    isSaving,
+    switchFile,
+    updateContent,
+    saveCurrentFile,
+    saveAllDirty,
+    closeFile,
+  } = useFileBuffer({
+    repoId: defaultRepo?.id,
+    shareToken: shareToken || null,
+    onFileSaved: () => {
+      // Will be called after file is saved - reload files list
+      if (defaultRepo && projectId) {
+        loadFilesRef.current?.();
+      }
+    },
+  });
+
+  // Ref to hold loadFiles function for callback
+  const loadFilesRef = useRef<(() => void) | null>(null);
 
   // Helper function to get unique file path with " (Copy)" suffix
   const getUniqueFilePath = (desiredPath: string, existingPaths: string[]): string => {
@@ -129,13 +143,6 @@ export default function Build() {
          (payload) => {
            console.log("Staging change detected:", payload);
            loadFiles();
-           
-           // If the changed file matches the currently open file, trigger editor reload
-           const changedPath = (payload.new as any)?.file_path || (payload.old as any)?.file_path;
-           if (changedPath && selectedFile?.path === changedPath) {
-             console.log("Refreshing editor for:", changedPath);
-             setEditorRefreshKey(prev => prev + 1);
-           }
          }
        )
        .on(
@@ -151,7 +158,7 @@ export default function Build() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [projectId, defaultRepo, isTokenSet, selectedFile?.path]);
+  }, [projectId, defaultRepo, isTokenSet]);
 
   const loadFiles = async () => {
     if (!defaultRepo || !projectId) return;
@@ -239,88 +246,50 @@ export default function Build() {
     }
   };
 
-  // Handle editor save completion - clear dirty state and complete pending file switch
-  const handleEditorSave = useCallback(() => {
-    setIsDirty(false);
-    loadFiles();
-    
-    // If there's a pending file switch, complete it now
-    if (pendingFile) {
-      setSelectedFile(pendingFile);
-      setPendingFile(null);
-    }
-    isSavingRef.current = false;
-  }, [pendingFile]);
+  // Assign loadFiles to ref for callback use
+  loadFilesRef.current = loadFiles;
 
-  // Beforeunload handler for tab/page close
+  // Handle editor save - buffer handles save, we just need to reload files
+  const handleEditorSave = useCallback(() => {
+    saveCurrentFile();
+  }, [saveCurrentFile]);
+
+  // Beforeunload handler for tab/page close - save dirty files
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
+      if (hasDirtyFiles) {
+        saveAllDirty();
         e.preventDefault();
-        e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
+        e.returnValue = "Saving changes...";
         return e.returnValue;
       }
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isDirty]);
+  }, [hasDirtyFiles, saveAllDirty]);
 
-  const handleSelectFile = async (fileId: string, path: string, isStaged?: boolean) => {
+  // Cleanup: save dirty files when navigating away
+  useEffect(() => {
+    return () => {
+      saveAllDirty();
+    };
+  }, [saveAllDirty]);
+
+  // Instant file switching - no blocking
+  const handleSelectFile = (fileId: string, path: string, isStaged?: boolean) => {
     // Track folder selection for context-aware file/folder creation
     const file = files.find(f => f.path === path);
     if (file && path.includes('/')) {
-      // Extract parent folder path
       const folderPath = path.substring(0, path.lastIndexOf('/'));
       setSelectedFolderPath(folderPath);
     } else {
-      // File in root directory
       setSelectedFolderPath('/');
     }
 
-    const newFile = { id: fileId, path, isStaged };
-
-    // If currently editing a file and it's dirty, save first
-    if (selectedFile && isDirty && editorRef.current && !isSavingRef.current) {
-      isSavingRef.current = true;
-      try {
-        // Store the new file as pending
-        setPendingFile(newFile);
-        // Save the current file - handleEditorSave callback will complete the switch
-        await editorRef.current.save();
-      } catch (error) {
-        console.error("Autosave failed:", error);
-        toast.error("Failed to save changes. Please try again.");
-        setPendingFile(null);
-        isSavingRef.current = false;
-        return;
-      }
-      return; // Exit - the file switch will be completed in handleEditorSave
-    }
-
-    // For staged-only files (newly created by agent), we need to load content from staging
-    if (isStaged) {
-      const stagedFile = stagedChanges.find(
-        (s) => s.file_path === path && (s.operation_type === "add" || s.operation_type === "edit")
-      );
-      
-      if (stagedFile) {
-        // Set selected file with staging info so CodeEditor knows to load from staging
-        setSelectedFile({ 
-          id: fileId, 
-          path, 
-          isStaged: true,
-          stagingId: stagedFile.id 
-        });
-        // On mobile, switch to editor tab when a file is selected
-        if (isMobile) {
-          setMobileActiveTab("editor");
-        }
-        return;
-      }
-    }
+    // Instant switch - buffer handles dirty file saving in background
+    switchFile(fileId, path, isStaged);
     
-    setSelectedFile(newFile);
     // On mobile, switch to editor tab when a file is selected
     if (isMobile) {
       setMobileActiveTab("editor");
@@ -329,15 +298,8 @@ export default function Build() {
 
   // Handle close with autosave
   const handleCloseEditor = useCallback(async () => {
-    if (isDirty && editorRef.current) {
-      try {
-        await editorRef.current.save();
-      } catch (error) {
-        console.error("Autosave on close failed:", error);
-      }
-    }
-    setSelectedFile(null);
-  }, [isDirty]);
+    await closeFile();
+  }, [closeFile]);
 
   const handleCreateFile = async (name: string) => {
     if (!defaultRepo || !projectId) return;
@@ -490,8 +452,8 @@ export default function Build() {
       if (error) throw error;
 
       toast.success(`Staged for deletion: ${path}`);
-      if (selectedFile?.path === path) {
-        setSelectedFile(null);
+      if (currentPath === path) {
+        closeFile();
       }
       loadFiles();
     } catch (error: any) {
@@ -503,7 +465,7 @@ export default function Build() {
   const handleViewDiff = (change: any) => {
     const fileInfo = files.find((f) => f.path === change.file_path);
     if (fileInfo) {
-      setSelectedFile({ ...fileInfo, isStaged: true });
+      switchFile(fileInfo.id, fileInfo.path, true);
     }
   };
 
@@ -582,7 +544,7 @@ export default function Build() {
   };
 
   const handleDeleteFile = async () => {
-    if (!selectedFile || !defaultRepo || !projectId) {
+    if (!currentFile || !defaultRepo || !projectId) {
       toast.error("No file selected");
       return;
     }
@@ -591,10 +553,10 @@ export default function Build() {
       // Get the current content for the old_content field
       let oldContent: string | null = null;
       
-      if (!selectedFile.isStaged) {
+      if (!currentFile.isStaged) {
         // Get content from committed files
         const { data: fileData, error: readError } = await supabase.rpc("get_file_content_with_token", {
-          p_file_id: selectedFile.id,
+          p_file_id: currentFile.id,
           p_token: shareToken || null,
         });
         
@@ -608,15 +570,15 @@ export default function Build() {
         p_repo_id: defaultRepo.id,
         p_token: shareToken || null,
         p_operation_type: "delete",
-        p_file_path: selectedFile.path,
+        p_file_path: currentFile.path,
         p_old_content: oldContent,
         p_new_content: null,
       });
 
       if (error) throw error;
 
-      toast.success(`Staged for deletion: ${selectedFile.path}`);
-      setSelectedFile(null);
+      toast.success(`Staged for deletion: ${currentFile.path}`);
+      closeFile();
       loadFiles();
     } catch (error: any) {
       console.error("Error staging file for deletion:", error);
@@ -708,7 +670,7 @@ export default function Build() {
                               variant="ghost"
                               size="icon"
                               onClick={handleDeleteFile}
-                              disabled={!selectedFile}
+                              disabled={!currentFile}
                               className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc] disabled:opacity-50"
                               title="Delete File"
                             >
@@ -751,7 +713,7 @@ export default function Build() {
                         <AgentFileTree
                           files={files}
                           stagedChanges={stagedChanges}
-                          selectedFileId={selectedFile?.id || null}
+                          selectedFileId={currentFile?.id || null}
                           onSelectFile={handleSelectFile}
                           onFolderSelect={setSelectedFolderPath}
                           onAttachToPrompt={handleAttachToPrompt}
@@ -767,19 +729,21 @@ export default function Build() {
                   {/* Center: Code Editor */}
                   <ResizablePanel defaultSize={isSidebarCollapsed ? 70 : 50} minSize={30}>
                     <div className="h-full">
-                      {selectedFile ? (
+                      {currentFile ? (
                         <CodeEditor
                           ref={editorRef}
-                          key={`${selectedFile.path}-${editorRefreshKey}`}
-                          fileId={selectedFile.id}
-                          filePath={selectedFile.path}
+                          key={currentFile.path}
+                          fileId={currentFile.id}
+                          filePath={currentFile.path}
                           repoId={defaultRepo?.id || ""}
-                          isStaged={selectedFile.isStaged}
+                          isStaged={currentFile.isStaged}
+                          bufferContent={currentFile.content}
+                          bufferOriginalContent={currentFile.originalContent}
+                          onContentChange={updateContent}
                           showDiff={showDiff}
                           onShowDiffChange={setShowDiff}
                           onClose={handleCloseEditor}
                           onSave={handleEditorSave}
-                          onDirtyChange={setIsDirty}
                         />
                       ) : (
                         <div className="flex items-center justify-center h-full bg-[#1e1e1e] text-gray-400">
@@ -917,7 +881,7 @@ export default function Build() {
                               variant="ghost"
                               size="icon"
                               onClick={handleDeleteFile}
-                              disabled={!selectedFile}
+                              disabled={!currentFile}
                               className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc] disabled:opacity-50"
                               title="Delete File"
                             >
@@ -953,7 +917,7 @@ export default function Build() {
                         <AgentFileTree
                           files={files}
                           stagedChanges={stagedChanges}
-                          selectedFileId={selectedFile?.id || null}
+                          selectedFileId={currentFile?.id || null}
                           onSelectFile={handleSelectFile}
                           onFolderSelect={setSelectedFolderPath}
                           onAttachToPrompt={handleAttachToPrompt}
@@ -965,19 +929,21 @@ export default function Build() {
                   </TabsContent>
 
                   <TabsContent value="editor" forceMount className="flex-1 min-h-0 overflow-hidden data-[state=inactive]:hidden">
-                    {selectedFile ? (
+                    {currentFile ? (
                       <CodeEditor
                         ref={editorRef}
-                        key={`mobile-${selectedFile.path}-${editorRefreshKey}`}
-                        fileId={selectedFile.id}
-                        filePath={selectedFile.path}
+                        key={`mobile-${currentFile.path}`}
+                        fileId={currentFile.id}
+                        filePath={currentFile.path}
                         repoId={defaultRepo?.id || ""}
-                        isStaged={selectedFile.isStaged}
+                        isStaged={currentFile.isStaged}
+                        bufferContent={currentFile.content}
+                        bufferOriginalContent={currentFile.originalContent}
+                        onContentChange={updateContent}
                         showDiff={showDiff}
                         onShowDiffChange={setShowDiff}
                         onClose={handleCloseEditor}
                         onSave={handleEditorSave}
-                        onDirtyChange={setIsDirty}
                       />
                     ) : (
                       <div className="flex items-center justify-center h-full text-muted-foreground">
