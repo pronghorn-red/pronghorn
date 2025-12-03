@@ -45,6 +45,11 @@ interface CodeEditorProps {
   repoId: string;
   isStaged?: boolean;
   isBinary?: boolean;
+  // Buffer-based props (new pattern)
+  bufferContent?: string;
+  bufferOriginalContent?: string;
+  onContentChange?: (content: string) => void;
+  // Legacy props for StagingPanel compatibility
   initialContent?: string;
   showDiff?: boolean;
   diffOldContent?: string;
@@ -61,6 +66,9 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
   repoId, 
   isStaged,
   isBinary, 
+  bufferContent,
+  bufferOriginalContent,
+  onContentChange,
   initialContent, 
   showDiff = false,
   diffOldContent,
@@ -70,8 +78,10 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
   onAutoSync,
   onDirtyChange,
 }, ref) => {
-  const [content, setContent] = useState("");
-  const [originalContent, setOriginalContent] = useState("");
+  // Use buffer content if provided, otherwise manage internally
+  const isBufferMode = bufferContent !== undefined;
+  const [internalContent, setInternalContent] = useState("");
+  const [internalOriginalContent, setInternalOriginalContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showMarkdown, setShowMarkdown] = useState(false);
@@ -82,6 +92,18 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
+
+  // Resolved content values
+  const content = isBufferMode ? bufferContent : internalContent;
+  const originalContent = isBufferMode ? (bufferOriginalContent ?? "") : internalOriginalContent;
+  
+  const setContent = (value: string) => {
+    if (isBufferMode) {
+      onContentChange?.(value);
+    } else {
+      setInternalContent(value);
+    }
+  };
 
   // Track dirty state
   const isDirty = useMemo(() => {
@@ -94,23 +116,29 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
   }, [isDirty, onDirtyChange]);
 
   useEffect(() => {
+    // Skip internal loading if in buffer mode
+    if (isBufferMode) {
+      setLoading(false);
+      return;
+    }
+    
     if (initialContent !== undefined) {
       // Use provided content directly when passed in (e.g. from StagingPanel)
-      setContent(initialContent);
+      setInternalContent(initialContent);
       // Use diffOldContent as the original baseline when provided, otherwise fall back to initialContent
       if (typeof diffOldContent === "string") {
-        setOriginalContent(diffOldContent);
+        setInternalOriginalContent(diffOldContent);
       } else {
-        setOriginalContent(initialContent);
+        setInternalOriginalContent(initialContent);
       }
       setLoading(false);
     } else if (fileId) {
       loadFileContent();
     } else {
-      setContent("");
-      setOriginalContent("");
+      setInternalContent("");
+      setInternalOriginalContent("");
     }
-  }, [fileId, isStaged, filePath, initialContent, diffOldContent]);
+  }, [fileId, isStaged, filePath, initialContent, diffOldContent, isBufferMode]);
 
   // Reset markdown preview when file changes
   useEffect(() => {
@@ -148,10 +176,10 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
           changesForFile[0]);
 
           const stagedContent = latestChange.new_content || "";
-          setContent(stagedContent);
+          setInternalContent(stagedContent);
           // Preserve the original baseline content for diffs/commits
           // For new files (operation_type='add'), old_content will be null/empty - keep it that way for proper diff
-          setOriginalContent(latestChange.old_content || "");
+          setInternalOriginalContent(latestChange.old_content || "");
           console.log("Loaded staged content for:", filePath, "operation:", latestChange.operation_type);
           return;
         } else {
@@ -171,8 +199,8 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
           throw error;
         }
         if (data && data.length > 0) {
-          setContent(data[0].content);
-          setOriginalContent(data[0].content);
+          setInternalContent(data[0].content);
+          setInternalOriginalContent(data[0].content);
         }
       }
     } catch (error) {
@@ -189,6 +217,12 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
 
   const handleSave = useCallback(async (): Promise<boolean> => {
     if (!filePath || !repoId) return false;
+
+    // In buffer mode, just call onSave and let the buffer handle it
+    if (isBufferMode) {
+      onSave?.();
+      return true;
+    }
 
     setSaving(true);
     try {
@@ -208,7 +242,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
       );
 
       // Preserve the original baseline content for this file
-      let oldContentToUse = originalContent;
+      let oldContentToUse = internalOriginalContent;
 
       if (existing) {
         // CRITICAL: Always preserve the original baseline from the first staged change
@@ -243,13 +277,13 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
         p_operation_type: operationType,
         p_file_path: filePath,
         p_old_content: oldContentToUse,
-        p_new_content: content,
+        p_new_content: internalContent,
       });
 
       if (error) throw error;
 
       // Update originalContent to match saved content (no longer dirty)
-      setOriginalContent(content);
+      setInternalOriginalContent(internalContent);
 
       toast({
         title: "Staged",
@@ -270,7 +304,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
     } finally {
       setSaving(false);
     }
-  }, [filePath, repoId, shareToken, content, originalContent, fileId, toast, onSave, onAutoSync]);
+  }, [filePath, repoId, shareToken, internalContent, internalOriginalContent, fileId, toast, onSave, onAutoSync, isBufferMode]);
 
   // Expose save method and isDirty getter via ref
   useImperativeHandle(ref, () => ({
