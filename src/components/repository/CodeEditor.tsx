@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Editor from "@monaco-editor/react";
 import { DiffEditor } from "@monaco-editor/react";
 import ReactMarkdown from "react-markdown";
@@ -76,7 +76,74 @@ export function CodeEditor({
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
 
+  // Track previous file for auto-save on switch
+  const previousFileRef = useRef<{ filePath: string | null; content: string; originalContent: string } | null>(null);
+
+  // Auto-save function for when switching files
+  const autoSaveFile = useCallback(async (prevFilePath: string, prevContent: string, prevOriginalContent: string) => {
+    if (!prevFilePath || !repoId || isImageFile(prevFilePath)) return;
+    if (prevContent === prevOriginalContent) return; // No changes to save
+
+    try {
+      // Check if there's already a staged change for this file
+      const { data: staged, error: stagedError } = await supabase.rpc(
+        "get_staged_changes_with_token",
+        {
+          p_repo_id: repoId,
+          p_token: shareToken || null,
+        },
+      );
+
+      if (stagedError) throw stagedError;
+
+      const existing = (staged || []).find(
+        (change: any) => change.file_path === prevFilePath,
+      );
+
+      let oldContentToUse = prevOriginalContent;
+
+      if (existing) {
+        if (existing.old_content !== null && existing.old_content !== undefined) {
+          oldContentToUse = existing.old_content;
+        } else if (existing.operation_type === 'add') {
+          oldContentToUse = "";
+        }
+
+        await supabase.rpc("unstage_file_with_token", {
+          p_repo_id: repoId,
+          p_file_path: prevFilePath,
+          p_token: shareToken || null,
+        });
+      }
+
+      const operationType = existing ? existing.operation_type : "edit";
+
+      await supabase.rpc("stage_file_change_with_token", {
+        p_repo_id: repoId,
+        p_token: shareToken || null,
+        p_operation_type: operationType,
+        p_file_path: prevFilePath,
+        p_old_content: oldContentToUse,
+        p_new_content: prevContent,
+      });
+
+      toast({
+        title: "Auto-saved",
+        description: `Changes to ${prevFilePath.split('/').pop()} staged automatically`,
+      });
+      onAutoSync?.();
+    } catch (error) {
+      console.error("Error auto-saving file:", error);
+    }
+  }, [repoId, shareToken, toast, onAutoSync]);
+
   useEffect(() => {
+    // Auto-save previous file if switching to a different file
+    const prev = previousFileRef.current;
+    if (prev && prev.filePath && prev.filePath !== filePath && prev.content !== prev.originalContent) {
+      autoSaveFile(prev.filePath, prev.content, prev.originalContent);
+    }
+
     if (initialContent !== undefined) {
       // Use provided content directly when passed in (e.g. from StagingPanel)
       setContent(initialContent);
@@ -87,13 +154,27 @@ export function CodeEditor({
         setOriginalContent(initialContent);
       }
       setLoading(false);
+      // Update ref with new file info
+      previousFileRef.current = { 
+        filePath, 
+        content: initialContent, 
+        originalContent: typeof diffOldContent === "string" ? diffOldContent : initialContent 
+      };
     } else if (fileId) {
       loadFileContent();
     } else {
       setContent("");
       setOriginalContent("");
+      previousFileRef.current = null;
     }
   }, [fileId, isStaged, filePath, initialContent, diffOldContent]);
+
+  // Update ref when content changes
+  useEffect(() => {
+    if (previousFileRef.current && previousFileRef.current.filePath === filePath) {
+      previousFileRef.current.content = content;
+    }
+  }, [content, filePath]);
 
   // Reset markdown preview when file changes
   useEffect(() => {
@@ -131,10 +212,13 @@ export function CodeEditor({
           changesForFile[0]);
 
           const stagedContent = latestChange.new_content || "";
+          const oldContent = latestChange.old_content || "";
           setContent(stagedContent);
           // Preserve the original baseline content for diffs/commits
           // For new files (operation_type='add'), old_content will be null/empty - keep it that way for proper diff
-          setOriginalContent(latestChange.old_content || "");
+          setOriginalContent(oldContent);
+          // Update ref with loaded content
+          previousFileRef.current = { filePath, content: stagedContent, originalContent: oldContent };
           console.log("Loaded staged content for:", filePath, "operation:", latestChange.operation_type);
           return;
         } else {
@@ -156,6 +240,8 @@ export function CodeEditor({
         if (data && data.length > 0) {
           setContent(data[0].content);
           setOriginalContent(data[0].content);
+          // Update ref with loaded content
+          previousFileRef.current = { filePath, content: data[0].content, originalContent: data[0].content };
         }
       }
     } catch (error) {
@@ -423,16 +509,17 @@ export function CodeEditor({
           <div className="h-full overflow-auto p-6 bg-[#1e1e1e] text-[#cccccc]">
             <div className="prose prose-invert prose-sm max-w-none 
               prose-headings:text-[#e6e6e6] prose-headings:font-semibold
+              prose-headings:mt-6 prose-headings:mb-4
               prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg
-              prose-p:text-[#cccccc] prose-p:leading-relaxed
+              prose-p:text-[#cccccc] prose-p:leading-relaxed prose-p:mb-4
               prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
               prose-strong:text-[#e6e6e6] prose-strong:font-semibold
               prose-code:text-[#ce9178] prose-code:bg-[#2d2d2d] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
-              prose-pre:bg-[#2d2d2d] prose-pre:border prose-pre:border-[#3e3e42]
-              prose-blockquote:border-l-[#4ec9b0] prose-blockquote:text-[#9cdcfe]
-              prose-ul:text-[#cccccc] prose-ol:text-[#cccccc]
-              prose-li:marker:text-[#808080]
-              prose-hr:border-[#3e3e42]
+              prose-pre:bg-[#2d2d2d] prose-pre:border prose-pre:border-[#3e3e42] prose-pre:my-4
+              prose-blockquote:border-l-[#4ec9b0] prose-blockquote:text-[#9cdcfe] prose-blockquote:my-4
+              prose-ul:text-[#cccccc] prose-ul:my-4 prose-ol:text-[#cccccc] prose-ol:my-4
+              prose-li:marker:text-[#808080] prose-li:mb-2
+              prose-hr:border-[#3e3e42] prose-hr:my-6
               prose-table:text-[#cccccc]
               prose-th:bg-[#2d2d2d] prose-th:border prose-th:border-[#3e3e42] prose-th:px-3 prose-th:py-2
               prose-td:border prose-td:border-[#3e3e42] prose-td:px-3 prose-td:py-2
