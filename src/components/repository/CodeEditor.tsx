@@ -76,14 +76,19 @@ export function CodeEditor({
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
 
-  // Track previous file for auto-save on switch
-  const previousFileRef = useRef<{ filePath: string | null; content: string; originalContent: string } | null>(null);
+  // Track previous file path to detect switches
+  const previousFilePathRef = useRef<string | null>(null);
 
   // Auto-save function for when switching files
   const autoSaveFile = useCallback(async (prevFilePath: string, prevContent: string, prevOriginalContent: string) => {
     if (!prevFilePath || !repoId || isImageFile(prevFilePath)) return;
-    if (prevContent === prevOriginalContent) return; // No changes to save
+    if (prevContent === prevOriginalContent) {
+      console.log("No changes to auto-save for:", prevFilePath);
+      return;
+    }
 
+    console.log("Auto-saving file:", prevFilePath, "content differs:", prevContent !== prevOriginalContent);
+    
     try {
       // Check if there's already a staged change for this file
       const { data: staged, error: stagedError } = await supabase.rpc(
@@ -137,16 +142,24 @@ export function CodeEditor({
     }
   }, [repoId, shareToken, toast, onAutoSync]);
 
+  // Effect to auto-save when file path changes - uses current state values
   useEffect(() => {
-    // Auto-save previous file if switching to a different file
-    const prev = previousFileRef.current;
-    console.log("File switch detected - prev:", prev?.filePath, "new:", filePath);
-    console.log("Prev content differs from original:", prev ? prev.content !== prev.originalContent : "no prev");
-    if (prev && prev.filePath && prev.filePath !== filePath && prev.content !== prev.originalContent) {
-      console.log("Auto-saving previous file:", prev.filePath);
-      autoSaveFile(prev.filePath, prev.content, prev.originalContent);
+    const prevPath = previousFilePathRef.current;
+    
+    // If switching from a different file, auto-save the previous file's content
+    // Note: content/originalContent still hold the PREVIOUS file's values at this point
+    if (prevPath && prevPath !== filePath && !isImageFile(prevPath)) {
+      console.log("File switch detected - saving:", prevPath, "isDirty:", content !== originalContent);
+      if (content !== originalContent) {
+        autoSaveFile(prevPath, content, originalContent);
+      }
     }
+    
+    // Update ref to track current file path for next switch
+    previousFilePathRef.current = filePath;
+  }, [filePath]); // Only trigger on filePath change to capture state before it updates
 
+  useEffect(() => {
     if (initialContent !== undefined) {
       // Use provided content directly when passed in (e.g. from StagingPanel)
       setContent(initialContent);
@@ -157,28 +170,13 @@ export function CodeEditor({
         setOriginalContent(initialContent);
       }
       setLoading(false);
-      // Update ref with new file info
-      previousFileRef.current = { 
-        filePath, 
-        content: initialContent, 
-        originalContent: typeof diffOldContent === "string" ? diffOldContent : initialContent 
-      };
     } else if (fileId) {
       loadFileContent();
     } else {
       setContent("");
       setOriginalContent("");
-      previousFileRef.current = null;
     }
   }, [fileId, isStaged, filePath, initialContent, diffOldContent]);
-
-  // Update ref when content changes
-  useEffect(() => {
-    if (previousFileRef.current && previousFileRef.current.filePath === filePath) {
-      previousFileRef.current.content = content;
-      console.log("Updated ref content for:", filePath, "content length:", content.length);
-    }
-  }, [content, filePath]);
 
   // Reset markdown preview when file changes
   useEffect(() => {
@@ -221,8 +219,6 @@ export function CodeEditor({
           // Preserve the original baseline content for diffs/commits
           // For new files (operation_type='add'), old_content will be null/empty - keep it that way for proper diff
           setOriginalContent(oldContent);
-          // Update ref with loaded content
-          previousFileRef.current = { filePath, content: stagedContent, originalContent: oldContent };
           console.log("Loaded staged content for:", filePath, "operation:", latestChange.operation_type);
           return;
         } else {
@@ -244,8 +240,6 @@ export function CodeEditor({
         if (data && data.length > 0) {
           setContent(data[0].content);
           setOriginalContent(data[0].content);
-          // Update ref with loaded content
-          previousFileRef.current = { filePath, content: data[0].content, originalContent: data[0].content };
         }
       }
     } catch (error) {
