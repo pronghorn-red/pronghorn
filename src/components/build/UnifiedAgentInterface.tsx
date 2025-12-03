@@ -386,11 +386,16 @@ export function UnifiedAgentInterface({
         throw error;
       }
 
-      toast.success('Agent task submitted');
+      toast.success('Agent task completed');
 
       // Refresh messages and operations
       refetchMessages();
       refetchOperations();
+
+      // Auto-commit and push if enabled
+      if (autoCommit) {
+        await performAutoCommitAndPush(userMessageContent);
+      }
     } catch (error: any) {
       console.error('Error submitting task:', error);
       if (error.message?.includes('cancelled')) {
@@ -432,6 +437,105 @@ export function UnifiedAgentInterface({
       setIsSubmitting(false);
       abortControllerRef.current = null;
       toast.info('Stopping agent...');
+    }
+  };
+
+  const performAutoCommitAndPush = async (taskDescription: string) => {
+    if (!repoId) return;
+
+    try {
+      // 1. Check if there are staged changes
+      const { data: stagedChanges, error: stagedError } = await supabase.rpc(
+        'get_staged_changes_with_token',
+        {
+          p_repo_id: repoId,
+          p_token: shareToken || null,
+        }
+      );
+
+      if (stagedError) throw stagedError;
+      if (!stagedChanges || stagedChanges.length === 0) {
+        console.log('Auto-commit: No staged changes to commit');
+        return;
+      }
+
+      // 2. Create commit message from task description
+      const truncatedTask = taskDescription.length > 50 
+        ? taskDescription.substring(0, 50) + '...' 
+        : taskDescription;
+      const commitMessage = `Auto-commit: ${truncatedTask}`;
+
+      toast.info('Auto-committing changes...');
+
+      // 3. Commit staged changes
+      const { error: commitError } = await supabase.rpc('commit_staged_with_token', {
+        p_repo_id: repoId,
+        p_token: shareToken || null,
+        p_commit_message: commitMessage,
+        p_branch: 'main',
+      });
+
+      if (commitError) throw commitError;
+      toast.success(`Committed ${stagedChanges.length} file(s)`);
+
+      // 4. Get all repos for push (Prime + mirrors)
+      const { data: repos, error: reposError } = await supabase.rpc(
+        'get_project_repos_with_token',
+        {
+          p_project_id: projectId,
+          p_token: shareToken || null,
+        }
+      );
+
+      if (reposError) throw reposError;
+      if (!repos || repos.length === 0) return;
+
+      toast.info('Pushing to GitHub...');
+
+      // 5. Find Prime repo and mirrors
+      const primeRepo = repos.find((r: any) => r.is_prime) || repos[0];
+      const mirrorRepos = repos.filter((r: any) => r.id !== primeRepo.id);
+
+      // 6. Push to Prime repo
+      const { error: pushError } = await supabase.functions.invoke('sync-repo-push', {
+        body: {
+          repoId: primeRepo.id,
+          projectId,
+          shareToken: shareToken || null,
+          branch: primeRepo.branch,
+          commitMessage,
+          forcePush: false,
+        },
+      });
+
+      if (pushError) {
+        toast.error(`Failed to push to Prime: ${pushError.message}`);
+        return;
+      }
+
+      // 7. Push to mirror repos (force push)
+      for (const mirror of mirrorRepos) {
+        await supabase.functions.invoke('sync-repo-push', {
+          body: {
+            repoId: mirror.id,
+            sourceRepoId: primeRepo.id,
+            projectId,
+            shareToken: shareToken || null,
+            branch: mirror.branch,
+            commitMessage: `Mirror sync: ${commitMessage}`,
+            forcePush: true,
+          },
+        });
+      }
+
+      const repoCount = mirrorRepos.length > 0 
+        ? `Prime + ${mirrorRepos.length} mirror(s)` 
+        : `${primeRepo.organization}/${primeRepo.repo}`;
+      toast.success(`Pushed to ${repoCount}`);
+
+    } catch (error: any) {
+      console.error('Auto-commit/push failed:', error);
+      toast.error(`Auto-commit failed: ${error.message}`);
     }
   };
 
