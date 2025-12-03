@@ -2909,68 +2909,37 @@ export type Database = {
         }
       }
       set_share_token: { Args: { token: string }; Returns: undefined }
-      stage_file_change_with_token:
-        | {
-            Args: {
-              p_file_path: string
-              p_new_content?: string
-              p_old_content?: string
-              p_old_path?: string
-              p_operation_type: string
-              p_repo_id: string
-              p_token: string
-            }
-            Returns: {
-              created_at: string | null
-              created_by: string | null
-              file_path: string
-              id: string
-              is_binary: boolean
-              new_content: string | null
-              old_content: string | null
-              old_path: string | null
-              operation_type: string
-              project_id: string
-              repo_id: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "repo_staging"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_file_path: string
-              p_is_binary?: boolean
-              p_new_content?: string
-              p_old_content?: string
-              p_old_path?: string
-              p_operation_type: string
-              p_repo_id: string
-              p_token: string
-            }
-            Returns: {
-              created_at: string | null
-              created_by: string | null
-              file_path: string
-              id: string
-              is_binary: boolean
-              new_content: string | null
-              old_content: string | null
-              old_path: string | null
-              operation_type: string
-              project_id: string
-              repo_id: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "repo_staging"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      stage_file_change_with_token: {
+        Args: {
+          p_file_path: string
+          p_is_binary?: boolean
+          p_new_content?: string
+          p_old_content?: string
+          p_old_path?: string
+          p_operation_type: string
+          p_repo_id: string
+          p_token: string
+        }
+        Returns: {
+          created_at: string | null
+          created_by: string | null
+          file_path: string
+          id: string
+          is_binary: boolean
+          new_content: string | null
+          old_content: string | null
+          old_path: string | null
+          operation_type: string
+          project_id: string
+          repo_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_staging"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       unstage_file_with_token: {
         Args: { p_file_path: string; p_repo_id: string; p_token: string }
         Returns: number
