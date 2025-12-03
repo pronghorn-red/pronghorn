@@ -54,7 +54,8 @@ export default function Dashboard() {
     },
     enabled: !!user,
     staleTime: 0,
-    gcTime: 0
+    gcTime: 0,
+    refetchOnMount: 'always',  // Force refetch every time dashboard is visited
   });
 
   // Map anonymous projects to the same format
