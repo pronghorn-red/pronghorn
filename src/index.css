@@ -54,18 +54,20 @@ All colors MUST be HSL.
     --status-audit: 38 92% 50%;
     --status-build: 145 65% 45%;
 
-    /* Landing page specific */
-    --landing-cream: 38 60% 97%;
-    --landing-accent: 350 80% 60%;
-    --landing-dark: 240 30% 15%;
-
     --sidebar-background: 0 0% 98%;
+
     --sidebar-foreground: 240 5.3% 26.1%;
+
     --sidebar-primary: 240 5.9% 10%;
+
     --sidebar-primary-foreground: 0 0% 98%;
+
     --sidebar-accent: 240 4.8% 95.9%;
+
     --sidebar-accent-foreground: 240 5.9% 10%;
+
     --sidebar-border: 220 13% 91%;
+
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 

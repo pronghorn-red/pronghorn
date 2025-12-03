@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Editor from "@monaco-editor/react";
 import { DiffEditor } from "@monaco-editor/react";
 import ReactMarkdown from "react-markdown";
@@ -76,128 +76,6 @@ export function CodeEditor({
   const [searchParams] = useSearchParams();
   const shareToken = searchParams.get("token");
 
-  // Ref for debounced blur save timeout
-  const blurSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Ref to always have latest content (for checking in timeout callbacks)
-  const contentRef = useRef(content);
-  useEffect(() => {
-    contentRef.current = content;
-  }, [content]);
-
-  // Dirty state tracking
-  const isDirty = content !== originalContent;
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (blurSaveTimeoutRef.current) {
-        clearTimeout(blurSaveTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // Auto-save function that uses refs for latest values
-  const autoSaveFileWithContent = useCallback(async (contentToSave: string) => {
-    if (!filePath || !repoId || isImageFile(filePath)) return;
-    if (contentToSave === originalContent) return; // Not dirty
-
-    console.log("Auto-saving file:", filePath);
-    
-    try {
-      // Check if there's already a staged change for this file
-      const { data: staged, error: stagedError } = await supabase.rpc(
-        "get_staged_changes_with_token",
-        {
-          p_repo_id: repoId,
-          p_token: shareToken || null,
-        },
-      );
-
-      if (stagedError) throw stagedError;
-
-      const existing = (staged || []).find(
-        (change: any) => change.file_path === filePath,
-      );
-
-      let oldContentToUse = originalContent;
-
-      if (existing) {
-        if (existing.old_content !== null && existing.old_content !== undefined) {
-          oldContentToUse = existing.old_content;
-        } else if (existing.operation_type === 'add') {
-          oldContentToUse = "";
-        }
-
-        await supabase.rpc("unstage_file_with_token", {
-          p_repo_id: repoId,
-          p_file_path: filePath,
-          p_token: shareToken || null,
-        });
-      }
-
-      const operationType = existing ? existing.operation_type : "edit";
-
-      await supabase.rpc("stage_file_change_with_token", {
-        p_repo_id: repoId,
-        p_token: shareToken || null,
-        p_operation_type: operationType,
-        p_file_path: filePath,
-        p_old_content: oldContentToUse,
-        p_new_content: contentToSave,
-      });
-
-      toast({
-        title: "Auto-saved",
-        description: `Changes to ${filePath.split('/').pop()} staged automatically`,
-      });
-      onAutoSync?.();
-    } catch (error) {
-      console.error("Error auto-saving file:", error);
-    }
-  }, [filePath, repoId, shareToken, originalContent, toast, onAutoSync]);
-
-  // onBlur handler - debounced save when focus leaves the editor area
-  // Only saves if content hasn't changed (e.g. from undo) between blur and timeout
-  const handleEditorBlur = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
-    // Only save if focus is leaving the editor entirely (not just moving within it)
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      if (isDirty && filePath && !isImageFile(filePath)) {
-        // Capture content at the moment of blur
-        const contentAtBlur = content;
-        
-        // Clear any existing pending save
-        if (blurSaveTimeoutRef.current) {
-          clearTimeout(blurSaveTimeoutRef.current);
-        }
-        
-        // Debounce: wait 300ms, then check if content is still the same
-        blurSaveTimeoutRef.current = setTimeout(() => {
-          const currentContent = contentRef.current;
-          
-          // Only save if content hasn't changed since blur (no undo happened)
-          if (currentContent === contentAtBlur) {
-            console.log("BLUR - content stable, auto-saving:", filePath);
-            autoSaveFileWithContent(currentContent);
-          } else {
-            console.log("BLUR - content changed (undo?), skipping save. Was:", contentAtBlur.length, "Now:", currentContent.length);
-          }
-          blurSaveTimeoutRef.current = null;
-        }, 300);
-      }
-    }
-  }, [isDirty, filePath, content, autoSaveFileWithContent]);
-
-  // onFocus handler - cancels any pending blur save when focus returns
-  // This prevents saves from firing during undo/redo operations that temporarily shift focus
-  const handleEditorFocus = useCallback(() => {
-    if (blurSaveTimeoutRef.current) {
-      console.log("Focus returned - canceling pending save");
-      clearTimeout(blurSaveTimeoutRef.current);
-      blurSaveTimeoutRef.current = null;
-    }
-  }, []);
-
   useEffect(() => {
     if (initialContent !== undefined) {
       // Use provided content directly when passed in (e.g. from StagingPanel)
@@ -253,11 +131,10 @@ export function CodeEditor({
           changesForFile[0]);
 
           const stagedContent = latestChange.new_content || "";
-          const oldContent = latestChange.old_content || "";
           setContent(stagedContent);
           // Preserve the original baseline content for diffs/commits
           // For new files (operation_type='add'), old_content will be null/empty - keep it that way for proper diff
-          setOriginalContent(oldContent);
+          setOriginalContent(latestChange.old_content || "");
           console.log("Loaded staged content for:", filePath, "operation:", latestChange.operation_type);
           return;
         } else {
@@ -449,10 +326,6 @@ export function CodeEditor({
             <FileText className="h-4 w-4 text-[#cccccc] shrink-0" />
           )}
           <h3 className="text-sm font-normal truncate text-[#cccccc]">{filePath}</h3>
-          {/* Dirty indicator - yellow dot when file has unsaved changes */}
-          {isDirty && !isImage && (
-            <span className="h-2 w-2 rounded-full bg-yellow-500 shrink-0" title="Unsaved changes" />
-          )}
         </div>
         <div className="flex items-center gap-3">
           {!isImage && (
@@ -508,11 +381,11 @@ export function CodeEditor({
                 size="sm"
                 onClick={handleSave}
                 disabled={saving || loading}
-                variant={isDirty ? "default" : "secondary"}
-                className={`h-8 gap-2 ${isDirty ? "bg-yellow-600 hover:bg-yellow-700 text-white" : ""}`}
+                variant="secondary"
+                className="h-8 gap-2"
               >
                 <Save className="h-4 w-4" />
-                {saving ? "Saving..." : isDirty ? "Save*" : "Save"}
+                {saving ? "Saving..." : "Save"}
               </Button>
             )}
             <Button
@@ -526,12 +399,7 @@ export function CodeEditor({
           </div>
         </div>
       </div>
-      <div 
-        tabIndex={-1} 
-        onBlur={handleEditorBlur}
-        onFocus={handleEditorFocus}
-        className="flex-1 overflow-hidden focus:outline-none"
-      >
+      <div className="flex-1 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-full text-[#cccccc]">
             Loading...
@@ -555,17 +423,16 @@ export function CodeEditor({
           <div className="h-full overflow-auto p-6 bg-[#1e1e1e] text-[#cccccc]">
             <div className="prose prose-invert prose-sm max-w-none 
               prose-headings:text-[#e6e6e6] prose-headings:font-semibold
-              prose-headings:mt-6 prose-headings:mb-4
               prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg
-              prose-p:text-[#cccccc] prose-p:leading-relaxed prose-p:mb-4
+              prose-p:text-[#cccccc] prose-p:leading-relaxed
               prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
               prose-strong:text-[#e6e6e6] prose-strong:font-semibold
               prose-code:text-[#ce9178] prose-code:bg-[#2d2d2d] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
-              prose-pre:bg-[#2d2d2d] prose-pre:border prose-pre:border-[#3e3e42] prose-pre:my-4
-              prose-blockquote:border-l-[#4ec9b0] prose-blockquote:text-[#9cdcfe] prose-blockquote:my-4
-              prose-ul:text-[#cccccc] prose-ul:my-4 prose-ol:text-[#cccccc] prose-ol:my-4
-              prose-li:marker:text-[#808080] prose-li:mb-2
-              prose-hr:border-[#3e3e42] prose-hr:my-6
+              prose-pre:bg-[#2d2d2d] prose-pre:border prose-pre:border-[#3e3e42]
+              prose-blockquote:border-l-[#4ec9b0] prose-blockquote:text-[#9cdcfe]
+              prose-ul:text-[#cccccc] prose-ol:text-[#cccccc]
+              prose-li:marker:text-[#808080]
+              prose-hr:border-[#3e3e42]
               prose-table:text-[#cccccc]
               prose-th:bg-[#2d2d2d] prose-th:border prose-th:border-[#3e3e42] prose-th:px-3 prose-th:py-2
               prose-td:border prose-td:border-[#3e3e42] prose-td:px-3 prose-td:py-2
