@@ -82,7 +82,7 @@ export function UnifiedAgentInterface({
   
   // Chat history settings state
   const [chatHistorySettings, setChatHistorySettings] = useState<ChatHistorySettings>({
-    includeHistory: false,
+    includeHistory: true,
     durationType: 'time',
     durationValue: 20, // Default 20 minutes
     verbosity: 'standard',
@@ -1101,7 +1101,7 @@ export function UnifiedAgentInterface({
 
       {/* Chat History Settings Dialog */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-[90vw] max-h-[90vh] w-[90vw] h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chat History Settings</DialogTitle>
             <DialogDescription>
