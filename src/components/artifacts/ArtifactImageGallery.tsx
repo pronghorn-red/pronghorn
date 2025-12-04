@@ -86,17 +86,28 @@ export function ArtifactImageGallery({ images, onImagesChange }: ArtifactImageGa
 
   return (
     <div className="flex flex-col h-full gap-4">
-      {/* Drop Zone */}
+      {/* Drop Zone - Matching Excel style */}
       <div
         className={cn(
-          "border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer",
-          isDragging ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+          "flex-1 border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center gap-4 transition-colors min-h-[200px] max-h-[250px]",
+          isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"
         )}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => document.getElementById('image-input')?.click()}
       >
+        <ImageIcon className="h-16 w-16 text-muted-foreground" />
+        <div className="text-center">
+          <p className="text-lg font-medium">Drop images here</p>
+          <p className="text-sm text-muted-foreground">or click to browse</p>
+        </div>
+        <Button variant="outline" onClick={() => document.getElementById('image-input')?.click()}>
+          <Upload className="h-4 w-4 mr-2" />
+          Select Images
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Supports JPG, PNG, GIF, WebP
+        </p>
         <input
           id="image-input"
           type="file"
@@ -105,13 +116,6 @@ export function ArtifactImageGallery({ images, onImagesChange }: ArtifactImageGa
           className="hidden"
           onChange={handleFileSelect}
         />
-        <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">
-          Drop images here or click to browse
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Supports JPG, PNG, GIF, WebP
-        </p>
       </div>
 
       {/* Actions */}

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { 
   Image, FileSpreadsheet, FileText, PenLine, FileIcon, 
-  Presentation, Loader2 
+  Presentation, Loader2, Upload 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ArtifactImageGallery, ImageFile } from "./ArtifactImageGallery";
@@ -22,11 +22,12 @@ import { ArtifactExcelViewer } from "./ArtifactExcelViewer";
 import { ArtifactDocxPlaceholder } from "./ArtifactDocxPlaceholder";
 import { ArtifactPdfPlaceholder } from "./ArtifactPdfPlaceholder";
 import { ArtifactPptxPlaceholder } from "./ArtifactPptxPlaceholder";
-import { ExcelData, formatExcelDataAsJson } from "@/utils/parseExcel";
+import { ArtifactUniversalUpload } from "./ArtifactUniversalUpload";
+import { ExcelData, formatExcelDataAsJson, parseExcelFile } from "@/utils/parseExcel";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type TabType = "images" | "excel" | "text" | "manual" | "docx" | "pdf" | "pptx";
+type TabType = "manual" | "upload" | "images" | "excel" | "text" | "docx" | "pdf" | "pptx";
 
 interface AddArtifactModalProps {
   open: boolean;
@@ -43,8 +44,9 @@ export function AddArtifactModal({
   shareToken,
   onArtifactsCreated,
 }: AddArtifactModalProps) {
-  const [activeTab, setActiveTab] = useState<TabType>("images");
+  const [activeTab, setActiveTab] = useState<TabType>("manual");
   const [isCreating, setIsCreating] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Image state
   const [images, setImages] = useState<ImageFile[]>([]);
@@ -60,6 +62,20 @@ export function AddArtifactModal({
   // Manual entry state
   const [manualContent, setManualContent] = useState("");
 
+  // Phase 2 file states
+  const [docxFiles, setDocxFiles] = useState<File[]>([]);
+  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+  const [pptxFiles, setPptxFiles] = useState<File[]>([]);
+
+  // Auto-focus textarea when modal opens with manual tab active
+  useEffect(() => {
+    if (open && activeTab === "manual") {
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 100);
+    }
+  }, [open, activeTab]);
+
   const selectedImagesCount = images.filter(i => i.selected).length;
   const selectedTextFilesCount = textFiles.filter(f => f.selected).length;
   const excelRowsCount = Array.from(excelSelectedRows.values()).reduce((sum, set) => sum + set.size, 0);
@@ -73,20 +89,68 @@ export function AddArtifactModal({
       count += excelMergeAsOne ? 1 : excelRowsCount;
     }
     if (manualContent.trim()) count += 1;
+    // Phase 2 files not yet processable
     return count;
   };
 
   const totalCount = getTotalCount();
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode; count?: number; disabled?: boolean }[] = [
+    { id: "manual", label: "Manual Entry", icon: <PenLine className="h-4 w-4" />, count: manualContent.trim() ? 1 : 0 },
+    { id: "upload", label: "Upload", icon: <Upload className="h-4 w-4" /> },
     { id: "images", label: "Images", icon: <Image className="h-4 w-4" />, count: selectedImagesCount },
     { id: "excel", label: "Excel", icon: <FileSpreadsheet className="h-4 w-4" />, count: excelRowsCount > 0 ? (excelMergeAsOne ? 1 : excelRowsCount) : 0 },
     { id: "text", label: "Text Files", icon: <FileText className="h-4 w-4" />, count: selectedTextFilesCount },
-    { id: "manual", label: "Manual Entry", icon: <PenLine className="h-4 w-4" />, count: manualContent.trim() ? 1 : 0 },
-    { id: "docx", label: "Word", icon: <FileText className="h-4 w-4" />, disabled: true },
-    { id: "pdf", label: "PDF", icon: <FileIcon className="h-4 w-4" />, disabled: true },
-    { id: "pptx", label: "PowerPoint", icon: <Presentation className="h-4 w-4" />, disabled: true },
+    { id: "docx", label: "Word", icon: <FileText className="h-4 w-4" />, count: docxFiles.length },
+    { id: "pdf", label: "PDF", icon: <FileIcon className="h-4 w-4" />, count: pdfFiles.length },
+    { id: "pptx", label: "PowerPoint", icon: <Presentation className="h-4 w-4" />, count: pptxFiles.length },
   ];
+
+  // Handlers for universal upload
+  const handleUniversalImagesAdded = (files: File[]) => {
+    const newImages: ImageFile[] = files.map(file => ({
+      id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      file,
+      preview: URL.createObjectURL(file),
+      selected: true,
+    }));
+    setImages(prev => [...prev, ...newImages]);
+  };
+
+  const handleUniversalExcelAdded = async (file: File) => {
+    try {
+      const data = await parseExcelFile(file);
+      setExcelData(data);
+    } catch (error) {
+      console.error("Error parsing Excel file:", error);
+      toast.error("Failed to parse Excel file");
+    }
+  };
+
+  const handleUniversalTextFilesAdded = async (files: File[]) => {
+    const newTextFiles: TextFile[] = await Promise.all(
+      files.map(async file => ({
+        id: `txt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        file,
+        content: await file.text(),
+        selected: true,
+        expanded: false,
+      }))
+    );
+    setTextFiles(prev => [...prev, ...newTextFiles]);
+  };
+
+  const handleUniversalDocxAdded = (files: File[]) => {
+    setDocxFiles(prev => [...prev, ...files]);
+  };
+
+  const handleUniversalPdfAdded = (files: File[]) => {
+    setPdfFiles(prev => [...prev, ...files]);
+  };
+
+  const handleUniversalPptxAdded = (files: File[]) => {
+    setPptxFiles(prev => [...prev, ...files]);
+  };
 
   const handleCreateArtifacts = async () => {
     if (totalCount === 0) return;
@@ -240,7 +304,10 @@ export function AddArtifactModal({
     setExcelMergeAsOne(true);
     setTextFiles([]);
     setManualContent("");
-    setActiveTab("images");
+    setDocxFiles([]);
+    setPdfFiles([]);
+    setPptxFiles([]);
+    setActiveTab("manual");
   };
 
   const handleClose = () => {
@@ -263,7 +330,7 @@ export function AddArtifactModal({
           <div className="w-48 border-r bg-muted/30 flex flex-col">
             <ScrollArea className="flex-1">
               <div className="p-2 space-y-1">
-                {tabs.slice(0, 4).map(tab => (
+                {tabs.slice(0, 5).map(tab => (
                   <Button
                     key={tab.id}
                     variant={activeTab === tab.id ? "secondary" : "ghost"}
@@ -287,21 +354,26 @@ export function AddArtifactModal({
                 <Separator className="my-2" />
                 
                 <div className="px-2 py-1 text-xs text-muted-foreground font-medium">
-                  Phase 2
+                  Coming Soon
                 </div>
 
-                {tabs.slice(4).map(tab => (
+                {tabs.slice(5).map(tab => (
                   <Button
                     key={tab.id}
                     variant={activeTab === tab.id ? "secondary" : "ghost"}
                     className={cn(
-                      "w-full justify-start gap-2 opacity-60",
+                      "w-full justify-start gap-2",
                       activeTab === tab.id && "bg-secondary"
                     )}
                     onClick={() => setActiveTab(tab.id)}
                   >
                     {tab.icon}
                     <span className="flex-1 text-left">{tab.label}</span>
+                    {(tab.count ?? 0) > 0 && (
+                      <Badge variant="secondary" className="h-5 px-1.5">
+                        {tab.count}
+                      </Badge>
+                    )}
                   </Button>
                 ))}
               </div>
@@ -311,6 +383,38 @@ export function AddArtifactModal({
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 p-4 overflow-hidden flex flex-col">
+              {activeTab === "manual" && (
+                <div className="h-full flex flex-col gap-4">
+                  <p className="text-sm text-muted-foreground">
+                    Enter or paste content manually to create an artifact.
+                  </p>
+                  <Textarea
+                    ref={textareaRef}
+                    value={manualContent}
+                    onChange={(e) => setManualContent(e.target.value)}
+                    placeholder="Enter artifact content..."
+                    className="flex-1 min-h-[300px] font-mono text-sm"
+                  />
+                </div>
+              )}
+              {activeTab === "upload" && (
+                <ArtifactUniversalUpload
+                  onImagesAdded={handleUniversalImagesAdded}
+                  onExcelAdded={handleUniversalExcelAdded}
+                  onTextFilesAdded={handleUniversalTextFilesAdded}
+                  onDocxFilesAdded={handleUniversalDocxAdded}
+                  onPdfFilesAdded={handleUniversalPdfAdded}
+                  onPptxFilesAdded={handleUniversalPptxAdded}
+                  counts={{
+                    images: images.length,
+                    excel: excelData ? 1 : 0,
+                    textFiles: textFiles.length,
+                    docx: docxFiles.length,
+                    pdf: pdfFiles.length,
+                    pptx: pptxFiles.length,
+                  }}
+                />
+              )}
               {activeTab === "images" && (
                 <ArtifactImageGallery
                   images={images}
@@ -333,22 +437,24 @@ export function AddArtifactModal({
                   onFilesChange={setTextFiles}
                 />
               )}
-              {activeTab === "manual" && (
-                <div className="h-full flex flex-col gap-4">
-                  <p className="text-sm text-muted-foreground">
-                    Enter or paste content manually to create an artifact.
-                  </p>
-                  <Textarea
-                    value={manualContent}
-                    onChange={(e) => setManualContent(e.target.value)}
-                    placeholder="Enter artifact content..."
-                    className="flex-1 min-h-[300px] font-mono text-sm"
-                  />
-                </div>
+              {activeTab === "docx" && (
+                <ArtifactDocxPlaceholder
+                  files={docxFiles}
+                  onFilesChange={setDocxFiles}
+                />
               )}
-              {activeTab === "docx" && <ArtifactDocxPlaceholder />}
-              {activeTab === "pdf" && <ArtifactPdfPlaceholder />}
-              {activeTab === "pptx" && <ArtifactPptxPlaceholder />}
+              {activeTab === "pdf" && (
+                <ArtifactPdfPlaceholder
+                  files={pdfFiles}
+                  onFilesChange={setPdfFiles}
+                />
+              )}
+              {activeTab === "pptx" && (
+                <ArtifactPptxPlaceholder
+                  files={pptxFiles}
+                  onFilesChange={setPptxFiles}
+                />
+              )}
             </div>
 
             {/* Footer */}
@@ -371,9 +477,6 @@ export function AddArtifactModal({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" onClick={handleClose}>
-                    Cancel
-                  </Button>
                   <Button 
                     onClick={handleCreateArtifacts}
                     disabled={totalCount === 0 || isCreating}
@@ -386,6 +489,9 @@ export function AddArtifactModal({
                     ) : (
                       `Create ${totalCount} Artifact${totalCount !== 1 ? 's' : ''}`
                     )}
+                  </Button>
+                  <Button variant="outline" onClick={handleClose}>
+                    Cancel
                   </Button>
                 </div>
               </div>

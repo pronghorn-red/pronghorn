@@ -118,17 +118,28 @@ export function ArtifactTextFileList({ files, onFilesChange }: ArtifactTextFileL
 
   return (
     <div className="flex flex-col h-full gap-4">
-      {/* Drop Zone */}
+      {/* Drop Zone - Matching Excel style */}
       <div
         className={cn(
-          "border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer",
-          isDragging ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
+          "flex-1 border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center gap-4 transition-colors min-h-[200px] max-h-[250px]",
+          isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"
         )}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => document.getElementById('text-file-input')?.click()}
       >
+        <FileText className="h-16 w-16 text-muted-foreground" />
+        <div className="text-center">
+          <p className="text-lg font-medium">Drop text files here</p>
+          <p className="text-sm text-muted-foreground">or click to browse</p>
+        </div>
+        <Button variant="outline" onClick={() => document.getElementById('text-file-input')?.click()}>
+          <Upload className="h-4 w-4 mr-2" />
+          Select Files
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Supports TXT, MD, JSON, JS, TS, PY, and more
+        </p>
         <input
           id="text-file-input"
           type="file"
@@ -137,13 +148,6 @@ export function ArtifactTextFileList({ files, onFilesChange }: ArtifactTextFileL
           className="hidden"
           onChange={handleFileSelect}
         />
-        <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">
-          Drop text files here or click to browse
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Supports TXT, MD, JSON, JS, TS, PY, and more
-        </p>
       </div>
 
       {/* Actions */}
