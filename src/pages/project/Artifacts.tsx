@@ -21,8 +21,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import { AddArtifactModal } from "@/components/artifacts/AddArtifactModal";
 import {
   Accordion,
   AccordionContent,
@@ -58,7 +58,6 @@ export default function Artifacts() {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingArtifact, setEditingArtifact] = useState<any>(null);
   const [editingTitle, setEditingTitle] = useState("");
-  const [newContent, setNewContent] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
@@ -92,11 +91,8 @@ export default function Artifacts() {
       return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
     });
 
-  const handleAddArtifact = async () => {
-    if (!newContent.trim()) return;
-    await addArtifact(newContent, "manual");
-    setNewContent("");
-    setIsAddDialogOpen(false);
+  const handleArtifactsCreated = () => {
+    // Artifacts will be refreshed via realtime subscription
   };
 
   const handleUpdateArtifact = async () => {
@@ -304,35 +300,17 @@ ${artifact.content}`;
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Artifact
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle>Add New Artifact</DialogTitle>
-                        <DialogDescription>
-                          Create a reusable knowledge block for your project
-                        </DialogDescription>
-                      </DialogHeader>
-                      <Textarea
-                        value={newContent}
-                        onChange={(e) => setNewContent(e.target.value)}
-                        placeholder="Paste or type your artifact content here..."
-                        rows={12}
-                        className="resize-none"
-                      />
-                      <div className="flex gap-2 justify-end">
-                        <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                          Cancel
-                        </Button>
-                        <Button onClick={handleAddArtifact}>Create Artifact</Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                  <Button onClick={() => setIsAddDialogOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Artifact
+                  </Button>
+                  <AddArtifactModal
+                    open={isAddDialogOpen}
+                    onOpenChange={setIsAddDialogOpen}
+                    projectId={projectId!}
+                    shareToken={shareToken}
+                    onArtifactsCreated={handleArtifactsCreated}
+                  />
                 </div>
               </div>
 

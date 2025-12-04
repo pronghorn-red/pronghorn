@@ -49,6 +49,7 @@
     "diff": "^8.0.2",
     "docx": "^9.5.1",
     "embla-carousel-react": "^8.6.0",
+    "exceljs": "^4.4.0",
     "html-to-image": "^1.11.13",
     "input-otp": "^1.4.2",
     "jszip": "^3.10.1",
