@@ -308,37 +308,101 @@ export function ArtifactExcelViewer({
       const pastedData = e.clipboardData?.getData("text");
       if (!pastedData || !excelData) return;
       
-      const rows = pastedData.split("\n").map(row => row.split("\t"));
+      // Split into rows and cells, filter out completely empty trailing rows
+      const rows = pastedData.split("\n")
+        .map(row => row.split("\t"))
+        .filter((row, idx, arr) => {
+          // Keep rows that have content, or are not trailing empty rows
+          if (row.some(cell => cell.trim() !== "")) return true;
+          // Check if there are non-empty rows after this one
+          return arr.slice(idx + 1).some(r => r.some(c => c.trim() !== ""));
+        });
       
-      const newSheets = excelData.sheets.map(sheet => {
-        if (sheet.name === activeSheet) {
-          const newRows = [...sheet.rows];
+      if (rows.length === 0) return;
+      
+      const sheet = getCurrentSheet();
+      if (!sheet) return;
+      
+      const colCount = sheet.headers.length || (sheet.rows[0]?.length || rows[0].length);
+      
+      // Calculate how many new rows we need
+      const targetEndRow = selectionStart.row + rows.length - 1;
+      const rowsToAdd = Math.max(0, targetEndRow - sheet.rows.length + 1);
+      
+      const newSheets = excelData.sheets.map(s => {
+        if (s.name === activeSheet) {
+          let newRows = [...s.rows];
+          
+          // Add new rows if needed
+          for (let i = 0; i < rowsToAdd; i++) {
+            newRows.push(Array(colCount).fill(""));
+          }
+          
+          // Paste data - only overwrite cells that have actual paste content
           rows.forEach((pastedRow, rOffset) => {
             const targetRow = selectionStart.row + rOffset;
             if (targetRow < newRows.length) {
               const newRow = [...newRows[targetRow]];
               pastedRow.forEach((cellValue, cOffset) => {
                 const targetCol = selectionStart.col + cOffset;
-                if (targetCol < newRow.length) {
-                  newRow[targetCol] = cellValue;
+                // Expand row if needed
+                while (targetCol >= newRow.length) {
+                  newRow.push("");
                 }
+                // Only write if we have actual paste data (not trailing empty cells)
+                newRow[targetCol] = cellValue;
               });
               newRows[targetRow] = newRow;
             }
           });
-          return { ...sheet, rows: newRows };
+          
+          return { ...s, rows: newRows };
         }
-        return sheet;
+        return s;
       });
       
       onExcelDataChange({ ...excelData, sheets: newSheets });
     }
   }, [editingCell, selectionStart, excelData, activeSheet, onExcelDataChange]);
 
+  const handleCopy = useCallback((e: ClipboardEvent) => {
+    // Only handle if we have a cell selection and not editing
+    if (!editingCell && selectionStart && selectionEnd && excelData) {
+      const sheet = getCurrentSheet();
+      if (!sheet) return;
+      
+      e.preventDefault();
+      
+      // Get selection bounds
+      const minRow = Math.min(selectionStart.row, selectionEnd.row);
+      const maxRow = Math.max(selectionStart.row, selectionEnd.row);
+      const minCol = Math.min(selectionStart.col, selectionEnd.col);
+      const maxCol = Math.max(selectionStart.col, selectionEnd.col);
+      
+      // Build tab-separated data from selected cells
+      const copyData: string[] = [];
+      for (let r = minRow; r <= maxRow; r++) {
+        const rowData: string[] = [];
+        for (let c = minCol; c <= maxCol; c++) {
+          const cellValue = sheet.rows[r]?.[c] ?? "";
+          rowData.push(cellValue);
+        }
+        copyData.push(rowData.join("\t"));
+      }
+      
+      // Write to clipboard
+      e.clipboardData?.setData("text/plain", copyData.join("\n"));
+    }
+  }, [editingCell, selectionStart, selectionEnd, excelData, activeSheet]);
+
   useEffect(() => {
+    document.addEventListener("copy", handleCopy);
     document.addEventListener("paste", handlePaste);
-    return () => document.removeEventListener("paste", handlePaste);
-  }, [handlePaste]);
+    return () => {
+      document.removeEventListener("copy", handleCopy);
+      document.removeEventListener("paste", handlePaste);
+    };
+  }, [handleCopy, handlePaste]);
 
   const handleMouseDown = (row: number, col: number) => {
     if (editingCell) return;
