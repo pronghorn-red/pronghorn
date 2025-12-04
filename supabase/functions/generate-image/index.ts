@@ -57,6 +57,10 @@ serve(async (req) => {
       ? selectedContent.techStacks.map((t: any) => `- ${t.name}: ${t.description || ''}`).join('\n')
       : '';
 
+    const filesList = selectedContent.files && selectedContent.files.length > 0
+      ? selectedContent.files.map((f: any) => `- ${f.path}`).join('\n')
+      : '';
+
     // Use style prompt from JSON or fallback to basic instruction
     const styleInstructions = stylePrompt || `Apply ${style} style to the visual.`;
     
@@ -87,6 +91,10 @@ ${nodesList}`;
 
       if (techStacksList) {
         prompt += `\n\n**Tech Stacks:**\n${techStacksList}`;
+      }
+
+      if (filesList) {
+        prompt += `\n\n**Repository Files:**\n${filesList}`;
       }
 
       prompt += `
@@ -129,6 +137,10 @@ ${nodesList}`;
 
       if (techStacksList) {
         prompt += `\n\n**Tech Stacks:**\n${techStacksList}`;
+      }
+
+      if (filesList) {
+        prompt += `\n\n**Repository Files:**\n${filesList}`;
       }
 
       prompt += `
@@ -174,6 +186,10 @@ ${nodesList}`;
         prompt += `\n\n**Tech Stacks:**\n${techStacksList}`;
       }
 
+      if (filesList) {
+        prompt += `\n\n**Repository Files:**\n${filesList}`;
+      }
+
       prompt += `
 
 Design a mobile app mockup that:
@@ -215,6 +231,10 @@ ${nodesList}`;
 
       if (techStacksList) {
         prompt += `\n\n**Tech Stacks:**\n${techStacksList}`;
+      }
+
+      if (filesList) {
+        prompt += `\n\n**Repository Files:**\n${filesList}`;
       }
 
       prompt += `

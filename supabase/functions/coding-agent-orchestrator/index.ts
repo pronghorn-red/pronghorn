@@ -440,6 +440,15 @@ serve(async (req) => {
         parts.push(`Canvas Edges (${edges.length} total, showing up to 20):\n${preview}`);
       }
 
+      if (projectContext.files?.length > 0) {
+        const files = projectContext.files as any[];
+        const preview = files
+          .slice(0, 10)
+          .map((f) => `- ${f.path}: ${f.content?.slice(0, 100) || ''}...`)
+          .join("\n");
+        parts.push(`Repository Files (${files.length} total, showing up to 10):\n${preview}`);
+      }
+
       contextSummary = parts.join("\n\n");
     }
 

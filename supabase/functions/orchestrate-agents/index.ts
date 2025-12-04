@@ -669,6 +669,15 @@ async function executeAgent(
       });
       contextPrompt += '\n';
     }
+
+    if (context.attachedContext.files?.length > 0) {
+      contextPrompt += `=== REPOSITORY FILES (${context.attachedContext.files.length}) ===\n`;
+      context.attachedContext.files.forEach((file: any) => {
+        contextPrompt += `--- File: ${file.path} ---\n`;
+        contextPrompt += `${file.content?.substring(0, 500)}${file.content?.length > 500 ? '...[truncated]' : ''}\n\n`;
+      });
+      contextPrompt += '\n';
+    }
   }
 
   // Explain allowed node types and ID usage
