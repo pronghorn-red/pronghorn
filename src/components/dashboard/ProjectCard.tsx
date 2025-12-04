@@ -6,7 +6,7 @@ import { formatDistanceToNow } from "date-fns";
 import { EditProjectDialog } from "./EditProjectDialog";
 import { DeleteProjectDialog } from "./DeleteProjectDialog";
 import { useAdmin } from "@/contexts/AdminContext";
-
+import { useAuth } from "@/contexts/AuthContext";
 interface ProjectCardProps {
   projectId: string;
   projectName: string;
@@ -57,6 +57,7 @@ export function ProjectCard({
 }: ProjectCardProps) {
   const statusInfo = statusConfig[status];
   const { isAdmin } = useAdmin();
+  const { user } = useAuth();
 
   return (
     <Card
@@ -74,7 +75,7 @@ export function ProjectCard({
             onUpdate={onUpdate}
           />
         )}
-        {isAdmin && !isAnonymous && (
+        {!isAnonymous && (isAdmin || user) && (
           <DeleteProjectDialog
             projectId={projectId}
             projectName={projectName}
