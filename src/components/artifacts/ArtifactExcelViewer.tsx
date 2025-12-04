@@ -636,7 +636,7 @@ export function ArtifactExcelViewer({
         >
           <table
             className="w-max min-w-full border-collapse select-none"
-            style={{ fontSize: `${zoomLevel * 0.13}rem` }}
+            style={{ fontSize: `${0.75 * (zoomLevel / 100)}rem` }}
           >
             <thead className="sticky top-0 z-10">
               <tr className="bg-muted">
