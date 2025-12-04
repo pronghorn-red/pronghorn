@@ -52,6 +52,7 @@ export function AddArtifactModal({
   // Excel state
   const [excelData, setExcelData] = useState<ExcelData | null>(null);
   const [excelSelectedRows, setExcelSelectedRows] = useState<Map<string, Set<number>>>(new Map());
+  const [excelMergeAsOne, setExcelMergeAsOne] = useState(true);
 
   // Text files state
   const [textFiles, setTextFiles] = useState<TextFile[]>([]);
@@ -67,7 +68,10 @@ export function AddArtifactModal({
     let count = 0;
     count += selectedImagesCount;
     count += selectedTextFilesCount;
-    if (excelRowsCount > 0) count += 1; // Excel becomes one artifact
+    // Excel count depends on merge setting
+    if (excelRowsCount > 0) {
+      count += excelMergeAsOne ? 1 : excelRowsCount;
+    }
     if (manualContent.trim()) count += 1;
     return count;
   };
@@ -76,7 +80,7 @@ export function AddArtifactModal({
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode; count?: number; disabled?: boolean }[] = [
     { id: "images", label: "Images", icon: <Image className="h-4 w-4" />, count: selectedImagesCount },
-    { id: "excel", label: "Excel", icon: <FileSpreadsheet className="h-4 w-4" />, count: excelRowsCount > 0 ? 1 : 0 },
+    { id: "excel", label: "Excel", icon: <FileSpreadsheet className="h-4 w-4" />, count: excelRowsCount > 0 ? (excelMergeAsOne ? 1 : excelRowsCount) : 0 },
     { id: "text", label: "Text Files", icon: <FileText className="h-4 w-4" />, count: selectedTextFilesCount },
     { id: "manual", label: "Manual Entry", icon: <PenLine className="h-4 w-4" />, count: manualContent.trim() ? 1 : 0 },
     { id: "docx", label: "Word", icon: <FileText className="h-4 w-4" />, disabled: true },
@@ -125,21 +129,58 @@ export function AddArtifactModal({
         }
       }
 
-      // Create Excel artifact
+      // Create Excel artifact(s)
       if (excelRowsCount > 0 && excelData) {
-        try {
-          const content = formatExcelDataAsJson(excelData.sheets, excelSelectedRows);
-          const { error } = await supabase.rpc("insert_artifact_with_token", {
-            p_project_id: projectId,
-            p_token: shareToken || null,
-            p_content: content,
-            p_source_type: "excel",
-          });
-          if (error) throw error;
-          successCount++;
-        } catch (err) {
-          console.error("Failed to create Excel artifact:", err);
-          errorCount++;
+        if (excelMergeAsOne) {
+          // Single merged artifact
+          try {
+            const content = formatExcelDataAsJson(excelData.sheets, excelSelectedRows);
+            const { error } = await supabase.rpc("insert_artifact_with_token", {
+              p_project_id: projectId,
+              p_token: shareToken || null,
+              p_content: content,
+              p_source_type: "excel",
+            });
+            if (error) throw error;
+            successCount++;
+          } catch (err) {
+            console.error("Failed to create Excel artifact:", err);
+            errorCount++;
+          }
+        } else {
+          // Separate artifacts per row
+          for (const [sheetName, rowIndices] of excelSelectedRows.entries()) {
+            const sheet = excelData.sheets.find(s => s.name === sheetName);
+            if (!sheet) continue;
+            
+            for (const rowIndex of rowIndices) {
+              try {
+                const row = sheet.rows[rowIndex];
+                const rowData: Record<string, string> = {};
+                sheet.headers.forEach((header, idx) => {
+                  rowData[header || `Column ${idx + 1}`] = row[idx] || "";
+                });
+                
+                const content = JSON.stringify({
+                  sheet: sheetName,
+                  row: rowIndex + 1,
+                  data: rowData
+                }, null, 2);
+                
+                const { error } = await supabase.rpc("insert_artifact_with_token", {
+                  p_project_id: projectId,
+                  p_token: shareToken || null,
+                  p_content: content,
+                  p_source_type: "excel-row",
+                });
+                if (error) throw error;
+                successCount++;
+              } catch (err) {
+                console.error("Failed to create Excel row artifact:", err);
+                errorCount++;
+              }
+            }
+          }
         }
       }
 
@@ -196,6 +237,7 @@ export function AddArtifactModal({
     setImages([]);
     setExcelData(null);
     setExcelSelectedRows(new Map());
+    setExcelMergeAsOne(true);
     setTextFiles([]);
     setManualContent("");
     setActiveTab("images");
@@ -268,7 +310,7 @@ export function AddArtifactModal({
 
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 p-4 overflow-hidden">
+            <div className="flex-1 p-4 overflow-hidden flex flex-col">
               {activeTab === "images" && (
                 <ArtifactImageGallery
                   images={images}
@@ -281,6 +323,8 @@ export function AddArtifactModal({
                   onExcelDataChange={setExcelData}
                   selectedRows={excelSelectedRows}
                   onSelectedRowsChange={setExcelSelectedRows}
+                  mergeAsOne={excelMergeAsOne}
+                  onMergeAsOneChange={setExcelMergeAsOne}
                 />
               )}
               {activeTab === "text" && (
@@ -318,7 +362,7 @@ export function AddArtifactModal({
                       Ready to create: {" "}
                       {selectedImagesCount > 0 && `${selectedImagesCount} image${selectedImagesCount !== 1 ? 's' : ''}`}
                       {selectedImagesCount > 0 && (excelRowsCount > 0 || selectedTextFilesCount > 0 || manualContent.trim()) && ", "}
-                      {excelRowsCount > 0 && `1 excel (${excelRowsCount} rows)`}
+                      {excelRowsCount > 0 && (excelMergeAsOne ? `1 excel (${excelRowsCount} rows)` : `${excelRowsCount} excel rows`)}
                       {excelRowsCount > 0 && (selectedTextFilesCount > 0 || manualContent.trim()) && ", "}
                       {selectedTextFilesCount > 0 && `${selectedTextFilesCount} text file${selectedTextFilesCount !== 1 ? 's' : ''}`}
                       {selectedTextFilesCount > 0 && manualContent.trim() && ", "}
