@@ -29,9 +29,20 @@ export function AIDecomposeDialog({ projectId, shareToken, open, onClose, onRefr
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
   const [selectedContext, setSelectedContext] = useState<ProjectSelectionResult | null>(null);
 
+  const hasSelectedContext = selectedContext && (
+    selectedContext.projectMetadata ||
+    selectedContext.artifacts?.length ||
+    selectedContext.requirements?.length ||
+    selectedContext.standards?.length ||
+    selectedContext.techStacks?.length ||
+    selectedContext.canvasNodes?.length ||
+    selectedContext.chatSessions?.length ||
+    selectedContext.files?.length
+  );
+
   const handleDecompose = async () => {
-    if (!text.trim()) {
-      toast.error("Please enter some text to decompose");
+    if (!text.trim() && !hasSelectedContext) {
+      toast.error("Please enter some text or select project context to decompose");
       return;
     }
 
@@ -213,7 +224,7 @@ export function AIDecomposeDialog({ projectId, shareToken, open, onClose, onRefr
             <Button variant="outline" onClick={onClose} disabled={isProcessing}>
               Cancel
             </Button>
-            <Button onClick={handleDecompose} disabled={isProcessing || !text.trim()}>
+            <Button onClick={handleDecompose} disabled={isProcessing || (!text.trim() && !hasSelectedContext)}>
               {isProcessing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
