@@ -13,8 +13,8 @@ serve(async (req) => {
 
   try {
     const { 
-      systemPrompt, 
-      userPrompt, 
+      systemPrompt = '', 
+      userPrompt = '', 
       messages = [],
       tools = [], 
       model = "grok-4-fast-non-reasoning",
