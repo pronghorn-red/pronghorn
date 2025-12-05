@@ -454,7 +454,7 @@ export function EnhancedCreateProjectDialog() {
         open={showWarning}
         onClose={() => {
           setShowWarning(false);
-          navigate({ pathname: `/project/${createdProject.id}/requirements`, search: `token=${createdProject.shareToken}` });
+          navigate({ pathname: `/project/${createdProject.id}/requirements`, search: `?token=${createdProject.shareToken}` });
         }}
         projectId={createdProject.id}
         shareToken={createdProject.shareToken}

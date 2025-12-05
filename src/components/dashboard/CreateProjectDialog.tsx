@@ -99,7 +99,7 @@ export function CreateProjectDialog() {
             name: name.trim(),
             createdAt: new Date().toISOString()
           });
-          navigate({ pathname: `/project/${project.id}/canvas`, search: `token=${shareToken}` });
+          navigate({ pathname: `/project/${project.id}/canvas`, search: `?token=${shareToken}` });
           
           // Show warning modal about saving the URL
           toast.warning(

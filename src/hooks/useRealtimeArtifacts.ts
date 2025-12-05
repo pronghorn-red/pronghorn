@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -26,7 +26,8 @@ export const useRealtimeArtifacts = (
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const pendingDeletionsRef = useRef<Set<string>>(new Set());
 
-  const loadArtifacts = async () => {
+  // Wrap loadArtifacts in useCallback with shareToken in dependencies
+  const loadArtifacts = useCallback(async () => {
     if (!projectId || !enabled) return;
 
     try {
@@ -48,7 +49,7 @@ export const useRealtimeArtifacts = (
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [projectId, shareToken, enabled]);
 
   useEffect(() => {
     loadArtifacts();
@@ -109,7 +110,7 @@ export const useRealtimeArtifacts = (
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [projectId, enabled]);
+  }, [projectId, enabled, shareToken, loadArtifacts]);
 
   const addArtifact = async (content: string, sourceType?: string, sourceId?: string, imageUrl?: string) => {
     if (!projectId) return;

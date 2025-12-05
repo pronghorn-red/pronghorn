@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface Layer {
@@ -16,7 +16,8 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
   const [isLoading, setIsLoading] = useState(true);
   const channelRef = useRef<any>(null);
 
-  const loadLayers = async () => {
+  // Wrap loadLayers in useCallback with token in dependencies
+  const loadLayers = useCallback(async () => {
     if (!projectId) return;
 
     const { data, error } = await supabase.rpc("get_canvas_layers_with_token", {
@@ -30,14 +31,14 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
       setLayers(data || []);
     }
     setIsLoading(false);
-  };
+  }, [projectId, token]);
 
   // Fetch initial layers
   useEffect(() => {
     loadLayers();
-  }, [projectId, token]);
+  }, [loadLayers]);
 
-  // Subscribe to real-time updates
+  // Subscribe to real-time updates - include token in dependencies
   useEffect(() => {
     if (!projectId) return;
 
@@ -104,7 +105,7 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [projectId]);
+  }, [projectId, token, loadLayers]);
 
   const saveLayer = async (layer: Partial<Layer> & { id: string }) => {
     // Optimistic update: Update UI immediately

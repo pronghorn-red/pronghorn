@@ -13,6 +13,49 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
   const draggedNodeRef = useRef<string | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const syncChannelRef = useRef<any>(null);
+
+  // Wrap loadCanvasData in useCallback with shareToken in dependencies
+  const loadCanvasData = useCallback(async () => {
+    try {
+      const [nodesResult, edgesResult] = await Promise.all([
+        supabase.rpc("get_canvas_nodes_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken || null,
+        }),
+        supabase.rpc("get_canvas_edges_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken || null,
+        }),
+      ]);
+
+      if (nodesResult.error) throw nodesResult.error;
+      if (edgesResult.error) throw edgesResult.error;
+
+      const loadedNodes: Node[] = (nodesResult.data || []).map((node: any) => ({
+        id: node.id,
+        type: "custom",
+        position: node.position as { x: number; y: number },
+        data: {
+          ...(node.data || {}),
+          type: (node.data as any)?.type || node.type,
+        },
+      }));
+
+      const loadedEdges: Edge[] = (edgesResult.data || []).map((edge: any) => ({
+        id: edge.id,
+        source: edge.source_id,
+        target: edge.target_id,
+        label: edge.label,
+        type: edge.edge_type || 'default',
+        style: edge.style || {},
+      }));
+
+      setNodes(loadedNodes);
+      setEdges(loadedEdges);
+    } catch (error) {
+      console.error("Error loading canvas data:", error);
+    }
+  }, [projectId, shareToken, setNodes, setEdges]);
   
   useEffect(() => {
     if (!projectId || !isTokenSet) {
@@ -170,49 +213,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
       }
       syncChannelRef.current = null;
     };
-  }, [projectId, isTokenSet]);
-
-  const loadCanvasData = async () => {
-    try {
-      const [nodesResult, edgesResult] = await Promise.all([
-        supabase.rpc("get_canvas_nodes_with_token", {
-          p_project_id: projectId,
-          p_token: shareToken || null,
-        }),
-        supabase.rpc("get_canvas_edges_with_token", {
-          p_project_id: projectId,
-          p_token: shareToken || null,
-        }),
-      ]);
-
-      if (nodesResult.error) throw nodesResult.error;
-      if (edgesResult.error) throw edgesResult.error;
-
-      const loadedNodes: Node[] = (nodesResult.data || []).map((node: any) => ({
-        id: node.id,
-        type: "custom",
-        position: node.position as { x: number; y: number },
-        data: {
-          ...(node.data || {}),
-          type: (node.data as any)?.type || node.type,
-        },
-      }));
-
-      const loadedEdges: Edge[] = (edgesResult.data || []).map((edge: any) => ({
-        id: edge.id,
-        source: edge.source_id,
-        target: edge.target_id,
-        label: edge.label,
-        type: edge.edge_type || 'default',
-        style: edge.style || {},
-      }));
-
-      setNodes(loadedNodes);
-      setEdges(loadedEdges);
-    } catch (error) {
-      console.error("Error loading canvas data:", error);
-    }
-  };
+  }, [projectId, isTokenSet, shareToken, loadCanvasData, setNodes, setEdges]);
 
   const saveNode = useCallback(async (node: Node, immediate = false, isDragOperation = false) => {
     try {
@@ -264,7 +265,7 @@ export function useRealtimeCanvas(projectId: string, initialNodes: Node[], initi
       console.error("Error saving node:", error);
       draggedNodeRef.current = null;
     }
-  }, [projectId]);
+  }, [projectId, shareToken]);
 
   const saveEdge = async (edge: Edge) => {
     try {
