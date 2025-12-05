@@ -236,7 +236,7 @@ export function EnhancedCreateProjectDialog() {
       } else {
         // Navigate to the new project (authenticated users don't need token in URL)
         console.log("[EnhancedCreateProjectDialog] Navigating authenticated user to project");
-        navigate(`/project/${project.id}/requirements`);
+        navigate({ pathname: `/project/${project.id}/requirements` });
       }
     } catch (error) {
       console.error("[EnhancedCreateProjectDialog] Fatal error:", error);
@@ -454,7 +454,7 @@ export function EnhancedCreateProjectDialog() {
         open={showWarning}
         onClose={() => {
           setShowWarning(false);
-          navigate(`/project/${createdProject.id}/requirements?token=${createdProject.shareToken}`);
+          navigate({ pathname: `/project/${createdProject.id}/requirements`, search: `token=${createdProject.shareToken}` });
         }}
         projectId={createdProject.id}
         shareToken={createdProject.shareToken}

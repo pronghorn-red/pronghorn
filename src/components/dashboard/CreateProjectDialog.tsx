@@ -88,7 +88,7 @@ export function CreateProjectDialog() {
       // Handle navigation based on authentication state
       if (user) {
         // Authenticated user: navigate without token (uses auth.uid() for RLS)
-        navigate(`/project/${project.id}/canvas`);
+        navigate({ pathname: `/project/${project.id}/canvas` });
       } else {
         // Anonymous user: store token and navigate with token in URL
         const shareToken = project.share_token;
@@ -99,7 +99,7 @@ export function CreateProjectDialog() {
             name: name.trim(),
             createdAt: new Date().toISOString()
           });
-          navigate(`/project/${project.id}/canvas?token=${shareToken}`);
+          navigate({ pathname: `/project/${project.id}/canvas`, search: `token=${shareToken}` });
           
           // Show warning modal about saving the URL
           toast.warning(

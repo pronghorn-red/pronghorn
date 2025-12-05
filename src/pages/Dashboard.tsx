@@ -172,7 +172,7 @@ export default function Dashboard() {
                   toast.error('This project is missing a share token. Please create a new project.');
                   return;
                 }
-                navigate(`/project/${id}/canvas?token=${p.shareToken}`);
+                navigate({ pathname: `/project/${id}/canvas`, search: `token=${p.shareToken}` });
               }} onUpdate={refetch} isAnonymous={true} shareToken={p.shareToken} onSaveToAccount={user ? handleSaveProject : undefined} />
                     </div>)}
                 </div>
@@ -186,7 +186,7 @@ export default function Dashboard() {
                 id,
                 token
               });
-              navigate(`/project/${id}/canvas${token ? `?token=${token}` : ''}`);
+              navigate({ pathname: `/project/${id}/canvas`, search: token ? `token=${token}` : undefined });
             }} onUpdate={refetch} />)}
                 </div>
               </div>}
