@@ -442,18 +442,12 @@ serve(async (req) => {
 
       if (projectContext.files?.length > 0) {
         const files = projectContext.files as any[];
-        // Show FULL content for first 5 files, then paths only for the rest
-        const fullContentFiles = files.slice(0, 5).map((f: any) => 
+        // Include FULL content for ALL attached files - user explicitly selected these
+        const allFilesContent = files.map((f: any) => 
           `### FILE: ${f.path}\n\`\`\`\n${f.content || ''}\n\`\`\``
         ).join("\n\n");
         
-        const remainingPaths = files.slice(5).map((f: any) => `- ${f.path}`).join("\n");
-        
-        let section = `Repository Files (${files.length} attached by user):\n\n${fullContentFiles}`;
-        if (remainingPaths) {
-          section += `\n\nAdditional files (paths only, use read_file to access):\n${remainingPaths}`;
-        }
-        parts.push(section);
+        parts.push(`Repository Files (${files.length} attached by user - FULL CONTENT):\n\n${allFilesContent}`);
       }
 
       contextSummary = parts.join("\n\n");
