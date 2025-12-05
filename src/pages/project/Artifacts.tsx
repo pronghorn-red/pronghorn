@@ -52,7 +52,7 @@ export default function Artifacts() {
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
   const { user } = useAuth();
   const hasAccessToken = !!shareToken || !!user;
-  const { artifacts, isLoading, addArtifact, updateArtifact, deleteArtifact } = useRealtimeArtifacts(
+  const { artifacts, isLoading, addArtifact, updateArtifact, deleteArtifact, refresh } = useRealtimeArtifacts(
     projectId,
     shareToken,
     hasAccessToken && isTokenSet
@@ -95,7 +95,7 @@ export default function Artifacts() {
     });
 
   const handleArtifactsCreated = () => {
-    // Artifacts will be refreshed via realtime subscription
+    refresh();
   };
 
   const handleUpdateArtifact = async () => {
