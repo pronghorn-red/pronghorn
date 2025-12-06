@@ -46,7 +46,8 @@ serve(async (req) => {
     console.log('[create-project] User:', userId || 'anonymous');
 
     // Step 1: Create project using RPC (Exception: no token required for initial creation)
-    const { data: project, error: projectError } = await supabase.rpc('insert_project_with_token', {
+    // The RPC returns TABLE(id uuid, share_token uuid), so we get an array
+    const { data: projectResult, error: projectError } = await supabase.rpc('insert_project_with_token', {
       p_name: projectData.name,
       p_org_id: projectData.org_id,
       p_description: projectData.description || null,
@@ -59,6 +60,14 @@ serve(async (req) => {
     if (projectError) {
       console.error('[create-project] Project creation error:', projectError);
       throw projectError;
+    }
+
+    // RPC returns array - get first row
+    const project = Array.isArray(projectResult) ? projectResult[0] : projectResult;
+    
+    if (!project || !project.id || !project.share_token) {
+      console.error('[create-project] Invalid project result:', projectResult);
+      throw new Error('Failed to create project - invalid response from database');
     }
 
     console.log('[create-project] Project created:', { 
