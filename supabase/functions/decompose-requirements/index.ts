@@ -73,7 +73,7 @@ function parseRequirementsResponse(rawText: string): any {
   return { epics: [], parse_error: true };
 }
 
-// Grok JSON schema for requirements decomposition
+// Grok JSON schema for requirements decomposition with maxLength constraints
 function getGrokRequirementsSchema() {
   return {
     type: "json_schema",
@@ -85,32 +85,34 @@ function getGrokRequirementsSchema() {
         properties: {
           epics: {
             type: "array",
+            minItems: 3,
+            maxItems: 5,
             items: {
               type: "object",
               properties: {
-                title: { type: "string" },
-                description: { type: "string" },
+                title: { type: "string", maxLength: 60 },
+                description: { type: "string", maxLength: 200 },
                 features: {
                   type: "array",
                   items: {
                     type: "object",
                     properties: {
-                      title: { type: "string" },
-                      description: { type: "string" },
+                      title: { type: "string", maxLength: 60 },
+                      description: { type: "string", maxLength: 150 },
                       stories: {
                         type: "array",
                         items: {
                           type: "object",
                           properties: {
-                            title: { type: "string" },
-                            description: { type: "string" },
+                            title: { type: "string", maxLength: 100 },
+                            description: { type: "string", maxLength: 80 },
                             acceptanceCriteria: {
                               type: "array",
                               items: {
                                 type: "object",
                                 properties: {
-                                  title: { type: "string" },
-                                  description: { type: "string" }
+                                  title: { type: "string", maxLength: 100 },
+                                  description: { type: "string", maxLength: 80 }
                                 },
                                 required: ["title"],
                                 additionalProperties: false
@@ -139,42 +141,46 @@ function getGrokRequirementsSchema() {
   };
 }
 
-// Claude tool schema for requirements decomposition
+// Claude tool schema for requirements decomposition with length hints
 function getClaudeRequirementsTool() {
   return {
     name: "return_requirements",
-    description: "Return the decomposed requirements structure. You MUST use this tool.",
+    description: "Return 3-5 decomposed epics. CRITICAL: Each title max 10 words, descriptions max 40 words. Be CONCISE.",
     input_schema: {
       type: "object",
       properties: {
         epics: {
           type: "array",
+          description: "Array of 3-5 epics covering different functional domains. NOT 1, NOT 2, exactly 3-5.",
           items: {
             type: "object",
             properties: {
-              title: { type: "string" },
-              description: { type: "string" },
+              title: { type: "string", description: "Epic title, 3-8 words max" },
+              description: { type: "string", description: "1-2 sentences, max 40 words" },
               features: {
                 type: "array",
+                description: "2-4 features per epic",
                 items: {
                   type: "object",
                   properties: {
-                    title: { type: "string" },
-                    description: { type: "string" },
+                    title: { type: "string", description: "Feature title, 3-8 words max" },
+                    description: { type: "string", description: "1 sentence, max 25 words" },
                     stories: {
                       type: "array",
+                      description: "1-3 user stories per feature",
                       items: {
                         type: "object",
                         properties: {
-                          title: { type: "string" },
-                          description: { type: "string" },
+                          title: { type: "string", description: "As a [role], I want [action] - max 20 words" },
+                          description: { type: "string", description: "LEAVE EMPTY or max 15 words" },
                           acceptanceCriteria: {
                             type: "array",
+                            description: "1-3 acceptance criteria per story",
                             items: {
                               type: "object",
                               properties: {
-                                title: { type: "string" },
-                                description: { type: "string" }
+                                title: { type: "string", description: "Given/When/Then format, max 20 words" },
+                                description: { type: "string", description: "LEAVE EMPTY" }
                               },
                               required: ["title"]
                             }
@@ -197,7 +203,7 @@ function getClaudeRequirementsTool() {
   };
 }
 
-// Gemini response schema for strict JSON
+// Gemini response schema for strict JSON with constraints
 function getGeminiRequirementsSchema() {
   return {
     type: "object",
@@ -543,12 +549,33 @@ serve(async (req) => {
       userMessage += `PROJECT CONTEXT:\n${contextString}\n\n`;
     }
     
+    // Add mandatory constraints BEFORE the input
+    userMessage += `=== MANDATORY OUTPUT CONSTRAINTS (FAILURE = REJECTION) ===
+1. Generate EXACTLY 3-5 separate Epics (NOT 1, NOT 2, NOT 6+)
+2. Each Epic covers a DIFFERENT functional domain
+3. All titles: MAX 10 words
+4. All descriptions: MAX 40 words, 1-2 sentences ONLY
+5. User Story/AC descriptions: EMPTY or max 15 words
+DO NOT WRITE PARAGRAPHS. BE TERSE.
+============================================================
+
+`;
+    
     // Add the main instruction
     if (text) {
-      userMessage += `DECOMPOSE THE FOLLOWING TEXT INTO COMPREHENSIVE REQUIREMENTS:\n\n${text}`;
+      userMessage += `DECOMPOSE THIS TEXT:\n\n${text}`;
     } else {
-      userMessage += `Based on the attached project context above, generate comprehensive requirements covering all major functional areas. Create 4-8 Epics with Features, Stories, and Acceptance Criteria.`;
+      userMessage += `Based on the attached project context above, generate requirements covering all major functional areas. Create 3-5 Epics with Features, Stories, and Acceptance Criteria.`;
     }
+    
+    // Add constraint reminder at END (where LLMs pay most attention)
+    userMessage += `
+
+=== FINAL REMINDER ===
+You MUST create 3-5 SEPARATE Epics covering different domains.
+Each description: 1-2 sentences MAX. NO paragraphs.
+User story descriptions: LEAVE EMPTY or max 15 words.
+======================`;
 
     // Determine API key and endpoint based on model
     let apiKey: string | undefined;
@@ -569,7 +596,7 @@ serve(async (req) => {
             contents: [{ role: "user", parts: [{ text: userMessage }] }],
             generationConfig: {
               maxOutputTokens: maxTokens,
-              temperature: 0.7,
+              temperature: 0.4,
               responseMimeType: "application/json",
               responseSchema: getGeminiRequirementsSchema(),
             },
@@ -615,7 +642,7 @@ serve(async (req) => {
             { role: "user", content: userMessage },
           ],
           max_tokens: maxTokens,
-          temperature: 0.7,
+          temperature: 0.4,
           response_format: getGrokRequirementsSchema(),
         }),
       });
@@ -691,8 +718,8 @@ serve(async (req) => {
     console.log(`Successfully parsed ${requirements.epics.length} epics`);
 
     // Validate minimum epic count
-    if (requirements.epics.length < 2) {
-      console.warn(`Only ${requirements.epics.length} epics generated, expected 4-8`);
+    if (requirements.epics.length < 3) {
+      console.warn(`Only ${requirements.epics.length} epics generated, expected 3-5`);
     }
 
     // Insert requirements into database using token-based RPC
