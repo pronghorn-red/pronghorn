@@ -2725,7 +2725,10 @@ export type Database = {
           p_scope?: string
           p_status?: Database["public"]["Enums"]["project_status"]
         }
-        Returns: Json
+        Returns: {
+          id: string
+          share_token: string
+        }[]
       }
       insert_repo_pat_with_token: {
         Args: { p_pat: string; p_repo_id: string }

@@ -21,14 +21,51 @@ serve(async (req) => {
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error("Supabase configuration missing");
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // ========== ADMIN ACCESS VALIDATION ==========
+    // Use anon key with auth header - RLS will enforce admin-only writes
+    const authHeader = req.headers.get('Authorization');
+    
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: authHeader ? { Authorization: authHeader } : {} },
+    });
+
+    // Verify user is authenticated and is admin
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      console.error('[ai-create-standards] Authentication required:', authError);
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Check if user is admin via user_roles table
+    const { data: userRole, error: roleError } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .single();
+
+    if (roleError || !userRole) {
+      console.error('[ai-create-standards] Admin access required:', roleError);
+      return new Response(JSON.stringify({ error: 'Admin access required' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('[ai-create-standards] Admin access validated for user:', user.id);
+    // ========== END VALIDATION ==========
 
     // Get existing standards in this category to avoid duplicates
     const { data: existingStandards } = await supabase
@@ -181,7 +218,7 @@ Return ONLY a valid JSON array with this structure (no markdown, no code blocks,
       throw new Error(`Failed to parse AI response: ${errorMessage}`);
     }
 
-    // Insert standards into database
+    // Insert standards into database (RLS will enforce admin-only)
     let createdCount = 0;
 
     const insertStandard = async (standard: any, parentId: string | null = null) => {
@@ -194,7 +231,8 @@ Return ONLY a valid JSON array with this structure (no markdown, no code blocks,
           description: standard.description || null,
           content: standard.content || null,
           parent_id: parentId,
-          order_index: createdCount
+          order_index: createdCount,
+          created_by: user.id
         })
         .select()
         .single();

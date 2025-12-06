@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, LogOut, Plus } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdmin } from "@/contexts/AdminContext";
 import { toast } from "sonner";
 
 export default function TechStacks() {
-  const { isAdmin, requestAdminAccess, logout } = useAdmin();
+  const { isAdmin, loading: adminLoading } = useAdmin();
   const [searchQuery, setSearchQuery] = useState("");
   const [techStacks, setTechStacks] = useState<any[]>([]);
   const [newTechStackName, setNewTechStackName] = useState("");
@@ -33,11 +33,8 @@ export default function TechStacks() {
 
   const handleAddTechStack = async () => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
     
     if (!newTechStackName.trim()) return;
@@ -52,7 +49,11 @@ export default function TechStacks() {
     });
     
     if (error) {
-      toast.error("Failed to create tech stack");
+      if (error.code === '42501') {
+        toast.error("Admin access required");
+      } else {
+        toast.error("Failed to create tech stack");
+      }
     } else {
       toast.success("Tech stack created");
       setNewTechStackName("");
@@ -62,11 +63,8 @@ export default function TechStacks() {
 
   const handleDeleteTechStack = async (techStackId: string) => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
 
     if (!confirm("Delete this tech stack?")) return;
@@ -74,7 +72,11 @@ export default function TechStacks() {
     const { error } = await supabase.from("tech_stacks").delete().eq("id", techStackId);
 
     if (error) {
-      toast.error("Failed to delete tech stack");
+      if (error.code === '42501') {
+        toast.error("Admin access required");
+      } else {
+        toast.error("Failed to delete tech stack");
+      }
     } else {
       toast.success("Tech stack deleted");
       loadTechStacks();
@@ -83,11 +85,8 @@ export default function TechStacks() {
 
   const handleUpdateTechStack = async (techStackId: string, name: string, description: string) => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
 
     const { error } = await supabase
@@ -96,7 +95,11 @@ export default function TechStacks() {
       .eq("id", techStackId);
 
     if (error) {
-      toast.error("Failed to update tech stack");
+      if (error.code === '42501') {
+        toast.error("Admin access required");
+      } else {
+        toast.error("Failed to update tech stack");
+      }
     } else {
       toast.success("Tech stack updated");
       loadTechStacks();
@@ -118,15 +121,7 @@ export default function TechStacks() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-2 md:gap-4">
               <h1 className="text-2xl md:text-3xl font-bold">Tech Stacks</h1>
-              {isAdmin && <Badge variant="secondary">Admin Mode</Badge>}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {isAdmin && (
-                <Button onClick={logout} variant="outline" size="sm">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Exit Admin Mode
-                </Button>
-              )}
+              {isAdmin && <Badge variant="secondary">Admin</Badge>}
             </div>
           </div>
 
@@ -143,7 +138,7 @@ export default function TechStacks() {
             </div>
           </div>
 
-          {/* Add New Tech Stack (inline) */}
+          {/* Add New Tech Stack (inline) - only show for admins */}
           {isAdmin && (
             <Card>
               <CardContent className="pt-4 md:pt-6 p-4 md:p-6">

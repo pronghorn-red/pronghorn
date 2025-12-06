@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,8 +22,39 @@ serve(async (req) => {
       maxOutputTokens = 16384,
       thinkingEnabled = false,
       thinkingBudget = 0,
-      attachedContext = null
+      attachedContext = null,
+      projectId = null,
+      shareToken = null
     } = await req.json();
+
+    // ========== PROJECT ACCESS VALIDATION ==========
+    // Validate project access if projectId is provided (when context is attached)
+    if (projectId) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const authHeader = req.headers.get('Authorization');
+      
+      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: authHeader ? { Authorization: authHeader } : {} },
+      });
+
+      const { data: project, error: accessError } = await supabase.rpc('get_project_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
+
+      if (accessError || !project) {
+        console.error('[chat-stream-xai] Access denied:', accessError);
+        return new Response(JSON.stringify({ error: 'Access denied' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      console.log('[chat-stream-xai] Access validated for project:', projectId);
+    }
+    // ========== END VALIDATION ==========
 
     const XAI_API_KEY = Deno.env.get('XAI_API_KEY');
     if (!XAI_API_KEY) {
@@ -150,16 +182,13 @@ serve(async (req) => {
     console.log(`Final prompt length: ${finalPrompt.length}`);
 
     // Build messages array with system prompt prepended to first user message
-    // This ensures xAI/Grok properly respects the system instructions
     let messagesPayload: any[] = [];
     
     if (Array.isArray(messages) && messages.length > 0) {
-      // Convert message history, prepending system prompt to first user message
       const convertedMessages = messages.map((m: any, index: number) => {
         const role = m.role === 'assistant' ? 'assistant' : 'user';
         let content = m.content;
         
-        // Prepend system prompt to the first user message
         if (index === 0 && role === 'user' && enrichedSystemPrompt) {
           content = `${enrichedSystemPrompt}\n\n${content}`;
         }
@@ -169,7 +198,6 @@ serve(async (req) => {
       
       messagesPayload = convertedMessages;
     } else {
-      // Single turn: combine system prompt with user prompt
       messagesPayload = [
         { 
           role: 'user', 
@@ -220,7 +248,6 @@ serve(async (req) => {
             const { done, value } = await reader.read();
             
             if (done) {
-              // Send done event
               const doneData = JSON.stringify({ type: 'done' });
               controller.enqueue(new TextEncoder().encode(`data: ${doneData}\n\n`));
               controller.close();
@@ -242,7 +269,6 @@ serve(async (req) => {
                   const content = parsed.choices?.[0]?.delta?.content;
                   
                   if (content) {
-                    // Send delta event
                     const deltaData = JSON.stringify({ type: 'delta', text: content });
                     controller.enqueue(new TextEncoder().encode(`data: ${deltaData}\n\n`));
                   }

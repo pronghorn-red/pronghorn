@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,8 +19,39 @@ serve(async (req) => {
       existingNodes, 
       existingEdges, 
       drawEdges = true,
-      attachedContext
+      attachedContext,
+      projectId,
+      shareToken
     } = body;
+
+    // ========== PROJECT ACCESS VALIDATION ==========
+    // Validate project access if projectId is provided
+    if (projectId) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const authHeader = req.headers.get('Authorization');
+      
+      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: authHeader ? { Authorization: authHeader } : {} },
+      });
+
+      const { data: project, error: accessError } = await supabase.rpc('get_project_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
+
+      if (accessError || !project) {
+        console.error('[ai-architect] Access denied:', accessError);
+        return new Response(JSON.stringify({ error: 'Access denied' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      console.log('[ai-architect] Access validated for project:', projectId);
+    }
+    // ========== END VALIDATION ==========
     
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     

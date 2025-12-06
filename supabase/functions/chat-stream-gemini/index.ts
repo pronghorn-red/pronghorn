@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,8 +21,39 @@ serve(async (req) => {
       maxOutputTokens = 32768, 
       thinkingEnabled = false, 
       thinkingBudget = 0,
-      attachedContext = null
+      attachedContext = null,
+      projectId = null,
+      shareToken = null
     } = await req.json();
+
+    // ========== PROJECT ACCESS VALIDATION ==========
+    // Validate project access if projectId is provided (when context is attached)
+    if (projectId) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const authHeader = req.headers.get('Authorization');
+      
+      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: authHeader ? { Authorization: authHeader } : {} },
+      });
+
+      const { data: project, error: accessError } = await supabase.rpc('get_project_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
+
+      if (accessError || !project) {
+        console.error('[chat-stream-gemini] Access denied:', accessError);
+        return new Response(JSON.stringify({ error: 'Access denied' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      console.log('[chat-stream-gemini] Access validated for project:', projectId);
+    }
+    // ========== END VALIDATION ==========
     
     // Build enriched system prompt with attached context
     let enrichedSystemPrompt = systemPrompt;
@@ -191,9 +223,6 @@ serve(async (req) => {
     };
 
     // Add thinking config for supported models
-    // 2.5 Pro: Cannot disable thinking, range 128-32768
-    // 2.5 Flash: Can disable with 0, range 0-24576
-    // 2.5 Flash Lite: Can disable with 0, range 512-24576
     if (selectedModel !== "gemini-2.5-pro") {
       generationConfig.thinkingConfig = {
         thinkingBudget: thinkingEnabled ? thinkingBudget : 0
@@ -210,7 +239,6 @@ serve(async (req) => {
         parts: [{ text: m.content }],
       }));
 
-      // Optionally prepend system prompt as its own turn
       if (enrichedSystemPrompt) {
         contentsPayload.push({
           role: "user",
@@ -220,7 +248,6 @@ serve(async (req) => {
 
       contentsPayload = [...contentsPayload, ...historyContents];
     } else {
-      // Fallback to single-turn behaviour
       contentsPayload = [
         {
           role: "user",
@@ -241,22 +268,10 @@ serve(async (req) => {
         body: JSON.stringify({
           contents: contentsPayload,
           safetySettings: [
-            {
-              category: "HARM_CATEGORY_HARASSMENT",
-              threshold: "BLOCK_NONE"
-            },
-            {
-              category: "HARM_CATEGORY_HATE_SPEECH",
-              threshold: "BLOCK_NONE"
-            },
-            {
-              category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-              threshold: "BLOCK_NONE"
-            },
-            {
-              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-              threshold: "BLOCK_NONE"
-            }
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
           ],
           generationConfig
         }),
@@ -267,22 +282,17 @@ serve(async (req) => {
       const errorText = await response.text();
       console.error("Gemini API error:", response.status, errorText);
       
-      // Try to parse error details
       let errorDetails = errorText;
       try {
         const errorJson = JSON.parse(errorText);
         errorDetails = JSON.stringify(errorJson, null, 2);
-      } catch (e) {
-        // Keep original text if not JSON
-      }
+      } catch (e) {}
       
       throw new Error(`Gemini API error (${response.status}): ${errorDetails}`);
     }
 
-    // Stream the response directly to the client
     console.log("Starting to stream response to client");
     
-    // Create a transform stream to process and forward Gemini's SSE stream
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
     
@@ -299,7 +309,6 @@ serve(async (req) => {
         let lastTextLength = 0;
         
         try {
-          // First, send tool outputs if any
           if (toolOutputs.length > 0) {
             const toolEvent = `data: ${JSON.stringify({ type: 'tools', toolOutputs })}\n\n`;
             controller.enqueue(encoder.encode(toolEvent));
@@ -315,7 +324,6 @@ serve(async (req) => {
             chunkCount++;
             textBuffer += decoder.decode(value, { stream: true });
             
-            // Process complete lines only
             let newlineIndex: number;
             while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
               let line = textBuffer.slice(0, newlineIndex);
@@ -332,20 +340,17 @@ serve(async (req) => {
                 const parsed = JSON.parse(jsonStr);
                 const candidate = parsed.candidates?.[0];
                 
-                // Extract text content
                 const text = candidate?.content?.parts?.[0]?.text;
                 const finishReason = candidate?.finishReason;
                 
                 if (text) {
                   lastTextLength += text.length;
-                  // Send text delta to client
                   const deltaEvent = `data: ${JSON.stringify({ type: 'delta', text })}\n\n`;
                   controller.enqueue(encoder.encode(deltaEvent));
                 }
 
                 if (finishReason) {
                   console.log(`Stream finishing with reason: ${finishReason}, Total text sent: ${lastTextLength} chars`);
-                  // Send finish event to client
                   const doneEvent = `data: ${JSON.stringify({ 
                     type: 'done', 
                     finishReason,
@@ -385,7 +390,6 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in run-agent function:', error);
     
-    // Return detailed error information
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     const errorStack = error instanceof Error ? error.stack : undefined;
     

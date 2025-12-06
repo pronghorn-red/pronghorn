@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,10 +21,41 @@ serve(async (req) => {
       maxOutputTokens,
       thinkingEnabled = false,
       thinkingBudget = 0,
-      attachedContext = null
+      attachedContext = null,
+      projectId = null,
+      shareToken = null
     } = await req.json();
     
     console.log("Received request:", { model, maxOutputTokens, toolsCount: tools.length });
+
+    // ========== PROJECT ACCESS VALIDATION ==========
+    // Validate project access if projectId is provided (when context is attached)
+    if (projectId) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const authHeader = req.headers.get('Authorization');
+      
+      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: authHeader ? { Authorization: authHeader } : {} },
+      });
+
+      const { data: project, error: accessError } = await supabase.rpc('get_project_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null
+      });
+
+      if (accessError || !project) {
+        console.error('[chat-stream-anthropic] Access denied:', accessError);
+        return new Response(JSON.stringify({ error: 'Access denied' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      console.log('[chat-stream-anthropic] Access validated for project:', projectId);
+    }
+    // ========== END VALIDATION ==========
 
     const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!anthropicApiKey) {
@@ -224,7 +256,6 @@ serve(async (req) => {
             chunkCount++;
             textBuffer += decoder.decode(value, { stream: true });
             
-            // Process complete lines only
             let newlineIndex: number;
             while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
               let line = textBuffer.slice(0, newlineIndex);
@@ -243,12 +274,10 @@ serve(async (req) => {
                 if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
                   const text = parsed.delta.text;
                   lastTextLength += text.length;
-                  // Send text delta to client
                   const deltaEvent = `data: ${JSON.stringify({ type: 'delta', text })}\n\n`;
                   controller.enqueue(encoder.encode(deltaEvent));
                 } else if (parsed.type === "message_stop") {
                   console.log(`Stream finishing with reason: STOP, Total text sent: ${lastTextLength} chars`);
-                  // Send finish event to client
                   const doneEvent = `data: ${JSON.stringify({ type: 'done', finishReason: 'STOP' })}\n\n`;
                   controller.enqueue(encoder.encode(doneEvent));
                 } else if (parsed.type === "error") {

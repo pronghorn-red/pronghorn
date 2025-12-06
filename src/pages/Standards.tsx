@@ -7,13 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, LogOut, Plus } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdmin } from "@/contexts/AdminContext";
 import { toast } from "sonner";
 
 export default function Standards() {
-  const { isAdmin, requestAdminAccess, logout } = useAdmin();
+  const { isAdmin, loading: adminLoading } = useAdmin();
   const [searchQuery, setSearchQuery] = useState("");
   const [categories, setCategories] = useState<any[]>([]);
   const [standardsByCategory, setStandardsByCategory] = useState<Record<string, Standard[]>>({});
@@ -69,11 +69,8 @@ export default function Standards() {
 
   const handleAddCategory = async () => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
     
     if (!newCategoryName.trim()) return;
@@ -88,7 +85,11 @@ export default function Standards() {
     });
     
     if (error) {
-      toast.error("Failed to create category");
+      if (error.code === '42501') {
+        toast.error("Admin access required");
+      } else {
+        toast.error("Failed to create category");
+      }
     } else {
       toast.success("Category created");
       setNewCategoryName("");
@@ -98,11 +99,8 @@ export default function Standards() {
 
   const handleDeleteCategory = async (categoryId: string) => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
 
     if (!confirm("Delete this category and all its standards?")) return;
@@ -110,7 +108,11 @@ export default function Standards() {
     const { error } = await supabase.from("standard_categories").delete().eq("id", categoryId);
 
     if (error) {
-      toast.error("Failed to delete category");
+      if (error.code === '42501') {
+        toast.error("Admin access required");
+      } else {
+        toast.error("Failed to delete category");
+      }
     } else {
       toast.success("Category deleted");
       loadCategories();
@@ -120,11 +122,8 @@ export default function Standards() {
 
   const handleUpdateCategory = async (categoryId: string, name: string, description: string) => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
 
     const { error } = await supabase
@@ -133,7 +132,11 @@ export default function Standards() {
       .eq("id", categoryId);
 
     if (error) {
-      toast.error("Failed to update category");
+      if (error.code === '42501') {
+        toast.error("Admin access required");
+      } else {
+        toast.error("Failed to update category");
+      }
     } else {
       toast.success("Category updated");
       loadCategories();
@@ -143,12 +146,10 @@ export default function Standards() {
   const filteredCategories = categories.filter((cat) => {
     const searchLower = searchQuery.toLowerCase();
     
-    // Check if category name matches
     if (cat.name.toLowerCase().includes(searchLower)) {
       return true;
     }
     
-    // Check if any standards in this category match (including nested standards)
     const categoryStandards = standardsByCategory[cat.id] || [];
     const hasMatchingStandard = (standards: Standard[]): boolean => {
       return standards.some(s => 
@@ -172,15 +173,7 @@ export default function Standards() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-2 md:gap-4">
               <h1 className="text-2xl md:text-3xl font-bold">Standards Library</h1>
-              {isAdmin && <Badge variant="secondary">Admin Mode</Badge>}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {isAdmin && (
-                <Button onClick={logout} variant="outline" size="sm">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Exit Admin Mode
-                </Button>
-              )}
+              {isAdmin && <Badge variant="secondary">Admin</Badge>}
             </div>
           </div>
 
@@ -197,7 +190,7 @@ export default function Standards() {
             </div>
           </div>
 
-          {/* Add New Category (inline) */}
+          {/* Add New Category (inline) - only show for admins */}
           {isAdmin && (
             <Card>
               <CardContent className="pt-4 md:pt-6 p-4 md:p-6">
