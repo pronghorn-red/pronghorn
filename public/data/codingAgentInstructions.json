@@ -97,7 +97,7 @@
     },
     
     "edit_lines": {
-      "rpc_function": "agent_edit_file_lines_with_token",
+      "rpc_function": "edit_lines_with_token",
       "description": "Edit specific line range in a file and stage the change",
       "parameters": {
         "p_file_id": "UUID of the file to edit",
@@ -116,10 +116,12 @@
     },
     
     "replace_file": {
-      "rpc_function": "agent_replace_file_with_token",
+      "rpc_function": "stage_file_change_with_token",
       "description": "Replace entire file content and stage the change",
       "parameters": {
-        "p_file_id": "UUID of the file to replace",
+        "p_repo_id": "UUID of the repository",
+        "p_operation_type": "'edit'",
+        "p_file_path": "Path of the file to replace",
         "p_new_content": "Complete new file content",
         "p_token": "Share token for authorization"
       },
@@ -224,20 +226,22 @@
     },
     
     "batch_stage": {
-      "rpc_function": "agent_batch_stage_with_token",
-      "description": "Stage multiple file operations at once",
-      "parameters": {
+      "description": "Stage multiple file operations by calling stage_file_change_with_token multiple times",
+      "approach": "Use sequential calls to stage_file_change_with_token for each file operation",
+      "parameters_per_call": {
         "p_repo_id": "UUID of the repository",
-        "p_operations": "Array of operation objects with type, file_path, content, etc.",
+        "p_operation_type": "'add', 'edit', 'delete', or 'rename'",
+        "p_file_path": "Path of the file",
+        "p_new_content": "New content (for add/edit)",
+        "p_old_content": "Old content (for edit/delete)",
         "p_token": "Share token for authorization"
       },
-      "returns": "Array of staged operation records",
       "use_cases": [
         "Multi-file refactoring",
         "Feature implementation across files",
         "Batch file cleanup"
       ],
-      "workflow": "Creates multiple entries in repo_staging table"
+      "workflow": "Creates multiple entries in repo_staging table via repeated calls"
     }
   },
   
@@ -636,7 +640,7 @@
       "description": "Compare file against requirements",
       "steps": [
         "Read file content",
-        "Fetch relevant requirements via agent_search_requirements_with_token",
+        "Fetch relevant requirements via search_requirements_with_token",
         "Compare implementation to specifications",
         "Identify gaps or violations",
         "Log audit findings to blackboard",
