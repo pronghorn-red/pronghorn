@@ -129,6 +129,9 @@ function getGrokResponseSchema() {
                     "create_file",
                     "delete_file",
                     "move_file",
+                    "get_staged_changes",
+                    "unstage_file",
+                    "discard_all_staged",
                   ],
                 },
                 params: {
@@ -155,7 +158,7 @@ function getGrokResponseSchema() {
             enum: ["in_progress", "completed", "requires_commit"],
           },
         },
-        required: ["reasoning", "operations", "status"],
+        required: ["reasoning", "operations", "status", "blackboard_entry"],
       },
     },
   };
@@ -190,6 +193,9 @@ function getClaudeResponseTool() {
                   "create_file",
                   "delete_file",
                   "move_file",
+                  "get_staged_changes",
+                  "unstage_file",
+                  "discard_all_staged",
                 ],
               },
               params: {
@@ -218,7 +224,7 @@ function getClaudeResponseTool() {
           enum: ["in_progress", "completed", "requires_commit"],
         },
       },
-      required: ["reasoning", "operations", "status"],
+      required: ["reasoning", "operations", "status", "blackboard_entry"],
       additionalProperties: false,
     },
   };
@@ -340,6 +346,9 @@ serve(async (req) => {
         create_file: { description: "Create new file and stage as add operation" },
         delete_file: { description: "Delete file and stage as delete operation" },
         move_file: { description: "Move or rename file to a new path (handles directory moves properly)" },
+        get_staged_changes: { description: "View all currently staged changes. Essential for avoiding duplicate edits and understanding current state before making changes." },
+        unstage_file: { description: "Discard a specific staged change by file_path. Use when user requests reverting a file or when a change needs to be redone." },
+        discard_all_staged: { description: "Discard ALL staged changes. Use with EXTREME CAUTION - only when user explicitly requests full reset." },
       },
     } as const;
 
@@ -470,6 +479,18 @@ You can execute these file operations by responding with structured JSON contain
 
 Your task mode is: ${mode}
 Auto-commit enabled: ${autoCommit}
+
+=== CRITICAL RULES (MUST FOLLOW) ===
+1. NEVER use replace_file unless the file is <150 lines OR it's a config file (package.json, tsconfig.json, etc.)
+2. ALWAYS prefer edit_lines over full file replacement - it preserves git blame and produces cleaner diffs
+3. ALWAYS call list_files or wildcard_search FIRST if no files are attached to get current file IDs
+4. NEVER assume file paths exist - always verify with list_files or search first
+5. ALWAYS include a blackboard_entry in EVERY response (it is required)
+6. If task involves multiple files, list them explicitly in your planning blackboard entry
+7. Before setting status='completed', call get_staged_changes to verify what you've modified
+8. After each edit_lines operation, verify the result using the verification object in the response
+9. Use get_staged_changes to see what you've already staged before making duplicate edits
+10. Only use discard_all_staged when user EXPLICITLY requests a full reset - this is destructive
 
 Project Context:
 ${contextSummary}${attachedFilesSection}${chatHistorySection}
@@ -1217,12 +1238,39 @@ Start your response with { and end with }. Nothing else.`;
                 throw new Error(`File not found with ID: ${op.params.file_id}`);
               }
               break;
+
+            case "get_staged_changes":
+              result = await supabase.rpc("get_staged_changes_with_token", {
+                p_repo_id: repoId,
+                p_token: shareToken,
+              });
+              console.log(`[AGENT] Retrieved ${result.data?.length || 0} staged changes`);
+              break;
+
+            case "unstage_file":
+              result = await supabase.rpc("unstage_file_with_token", {
+                p_repo_id: repoId,
+                p_file_path: op.params.file_path,
+                p_token: shareToken,
+              });
+              filesChanged = true;
+              console.log(`[AGENT] Unstaged file: ${op.params.file_path}`);
+              break;
+
+            case "discard_all_staged":
+              result = await supabase.rpc("discard_staged_with_token", {
+                p_repo_id: repoId,
+                p_token: shareToken,
+              });
+              filesChanged = true;
+              console.log(`[AGENT] Discarded all staged changes, count: ${result.data || 0}`);
+              break;
           }
 
           if (result?.error) throw result.error;
 
           // Mark that files have changed for broadcast purposes
-          if (["edit_lines", "create_file", "delete_file", "move_file"].includes(op.type)) {
+          if (["edit_lines", "create_file", "delete_file", "move_file", "unstage_file", "discard_all_staged"].includes(op.type)) {
             filesChanged = true;
           }
 

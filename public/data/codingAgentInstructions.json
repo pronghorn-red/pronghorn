@@ -242,6 +242,58 @@
         "Batch file cleanup"
       ],
       "workflow": "Creates multiple entries in repo_staging table via repeated calls"
+    },
+    
+    "get_staged_changes": {
+      "rpc_function": "get_staged_changes_with_token",
+      "description": "View all currently staged changes in this session. Essential for avoiding duplicate edits and understanding current state.",
+      "parameters": {
+        "p_repo_id": "UUID of the repository",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Array of staged changes with id, file_path, operation_type, old_path, old_content, new_content",
+      "use_cases": [
+        "Check what files have already been modified in this session",
+        "Avoid duplicate edits to the same file",
+        "Verify staged changes before signaling completion",
+        "Understand current state when resuming work"
+      ],
+      "important": "Call this before setting status='completed' to verify all expected changes are staged"
+    },
+    
+    "unstage_file": {
+      "rpc_function": "unstage_file_with_token",
+      "description": "Discard a specific staged change. Use when user requests reverting a file or when a staged change needs to be redone.",
+      "parameters": {
+        "p_repo_id": "UUID of the repository",
+        "p_file_path": "Path of file to unstage",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Boolean indicating success",
+      "use_cases": [
+        "Undo a staged change that was incorrect",
+        "Revert a file when user requests it",
+        "Remove a file from staging to redo the edit",
+        "Selectively discard specific changes while keeping others"
+      ],
+      "workflow": "Removes the specified file from repo_staging table"
+    },
+    
+    "discard_all_staged": {
+      "rpc_function": "discard_staged_with_token",
+      "description": "Discard ALL staged changes. USE WITH EXTREME CAUTION - only when user explicitly requests full reset.",
+      "parameters": {
+        "p_repo_id": "UUID of the repository",
+        "p_token": "Share token for authorization"
+      },
+      "returns": "Count of discarded changes",
+      "use_cases": [
+        "User explicitly says 'discard all changes' or 'start over'",
+        "Complete reset after catastrophic failure",
+        "Clean slate before starting new approach"
+      ],
+      "warning": "DESTRUCTIVE OPERATION - removes ALL staged changes. Never use without explicit user request.",
+      "workflow": "Deletes all entries from repo_staging table for this repository"
     }
   },
   
@@ -691,6 +743,19 @@
   },
   
   "guidelines": {
+    "critical_rules": [
+      "NEVER use replace_file unless the file is <150 lines OR it's a config file (package.json, tsconfig.json, etc.)",
+      "ALWAYS prefer edit_lines over full file replacement - it preserves git blame and produces cleaner diffs",
+      "ALWAYS call list_files or wildcard_search at the start of every task if no files are attached",
+      "NEVER assume file paths exist - always verify with list_files or search first",
+      "ALWAYS include a blackboard planning entry BEFORE making any file changes",
+      "If task involves multiple files, list them explicitly in your planning blackboard entry",
+      "Before setting status='completed', call get_staged_changes to verify what you've modified",
+      "After each edit_lines operation, verify the result using the verification object in the response",
+      "Use get_staged_changes to see what you've already staged before making duplicate edits",
+      "Only use discard_all_staged when user EXPLICITLY requests a full reset - this is destructive"
+    ],
+    
     "code_quality": [
       "Follow existing code style and patterns",
       "Use TypeScript types properly",
