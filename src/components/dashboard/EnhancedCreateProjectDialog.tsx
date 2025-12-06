@@ -281,16 +281,18 @@ export function EnhancedCreateProjectDialog() {
         </DialogHeader>
         
         <Tabs defaultValue="basic" className="w-full flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="basic">Basic</TabsTrigger>
-            <TabsTrigger value="metadata">Details</TabsTrigger>
-            <TabsTrigger value="standards">Standards</TabsTrigger>
-            <TabsTrigger value="techstacks">Tech Stacks</TabsTrigger>
-            <TabsTrigger value="ai">
-              <Sparkles className="h-3 w-3 mr-1" />
-              AI
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-1 px-1">
+            <TabsList className="inline-flex w-auto min-w-full md:grid md:grid-cols-5 md:w-full">
+              <TabsTrigger value="basic" className="shrink-0">Basic</TabsTrigger>
+              <TabsTrigger value="metadata" className="shrink-0">Details</TabsTrigger>
+              <TabsTrigger value="standards" className="shrink-0">Standards</TabsTrigger>
+              <TabsTrigger value="techstacks" className="shrink-0 whitespace-nowrap">Tech Stacks</TabsTrigger>
+              <TabsTrigger value="ai" className="shrink-0">
+                <Sparkles className="h-3 w-3 mr-1" />
+                AI
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <ScrollArea className="flex-1 pr-4">
             <TabsContent value="basic" className="space-y-4 mt-4">
