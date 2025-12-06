@@ -373,6 +373,8 @@ EXAMPLE (follow this concise style):
 }`;
 
 serve(async (req) => {
+  console.log("[decompose-requirements] Version: 2025-12-06-v3 - strict constraints enabled");
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -680,6 +682,10 @@ User story descriptions: LEAVE EMPTY or max 15 words.
       if (!text) {
         console.error("No text in Gemini response:", JSON.stringify(llmData));
         throw new Error("No response content from Gemini");
+      }
+      console.log("LLM response length:", text.length);
+      if (text.length > 50000) {
+        console.warn("WARNING: Response exceeds 50KB - likely too verbose, may timeout");
       }
       requirements = parseRequirementsResponse(text);
     } else if (selectedModel.startsWith("claude")) {

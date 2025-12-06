@@ -133,6 +133,8 @@ function getClaudeExpandTool() {
 }
 
 serve(async (req) => {
+  console.log("[expand-requirement] Version: 2025-12-06-v1");
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
