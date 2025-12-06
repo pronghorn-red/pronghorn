@@ -41,14 +41,34 @@ Deno.serve(async (req) => {
       },
     });
 
-    // Validate project access
+    // Validate project access AND check role - must be editor or owner
+    const { data: role, error: roleError } = await supabase.rpc('authorize_project_access', {
+      p_project_id: projectId,
+      p_token: shareToken
+    });
+
+    if (roleError || !role) {
+      console.error('[create-empty-repo] Access denied:', roleError);
+      throw new Error('Access denied');
+    }
+
+    // Check for editor role (owner has higher privileges than editor)
+    if (role !== 'owner' && role !== 'editor') {
+      console.error('[create-empty-repo] Insufficient permissions:', role);
+      return new Response(
+        JSON.stringify({ error: 'Insufficient permissions: editor role required to create repositories' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Fetch project data for repo description
     const { data: project, error: projectError } = await supabase.rpc('get_project_with_token', {
       p_project_id: projectId,
       p_token: shareToken
     });
 
     if (projectError || !project) {
-      throw new Error('Invalid project access');
+      throw new Error('Failed to fetch project data');
     }
 
     // Get GitHub PAT

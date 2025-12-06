@@ -35,14 +35,24 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Validate project access
-    const { data: project, error: projectError } = await supabase.rpc('get_project_with_token', {
+    // Validate project access AND check role - must be editor or owner
+    const { data: role, error: roleError } = await supabase.rpc('authorize_project_access', {
       p_project_id: projectId,
       p_token: shareToken
     });
 
-    if (projectError || !project) {
-      throw new Error('Invalid project access');
+    if (roleError || !role) {
+      console.error('[link-existing-repo] Access denied:', roleError);
+      throw new Error('Access denied');
+    }
+
+    // Check for editor role (owner has higher privileges than editor)
+    if (role !== 'owner' && role !== 'editor') {
+      console.error('[link-existing-repo] Insufficient permissions:', role);
+      return new Response(
+        JSON.stringify({ error: 'Insufficient permissions: editor role required to link repositories' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Verify repository exists and is accessible
