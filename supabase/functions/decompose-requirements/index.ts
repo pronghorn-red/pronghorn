@@ -197,34 +197,172 @@ function getClaudeRequirementsTool() {
   };
 }
 
-const systemPrompt = `You are an expert requirements analyst. Your task is to take unstructured text and decompose it into a hierarchical structure of requirements following this pattern:
+// Gemini response schema for strict JSON
+function getGeminiRequirementsSchema() {
+  return {
+    type: "object",
+    properties: {
+      epics: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            description: { type: "string" },
+            features: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  title: { type: "string" },
+                  description: { type: "string" },
+                  stories: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        title: { type: "string" },
+                        description: { type: "string" },
+                        acceptanceCriteria: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              title: { type: "string" },
+                              description: { type: "string" }
+                            },
+                            required: ["title"]
+                          }
+                        }
+                      },
+                      required: ["title"]
+                    }
+                  }
+                },
+                required: ["title"]
+              }
+            }
+          },
+          required: ["title"]
+        }
+      }
+    },
+    required: ["epics"]
+  };
+}
 
-Epic → Feature → User Story → Acceptance Criteria
+// Format existing requirements for context
+function formatExistingRequirements(requirements: any[]): string {
+  if (!requirements || requirements.length === 0) {
+    return "No existing requirements.";
+  }
 
-Rules:
-1. Create logical Epics that group related functionality
-2. Break Epics into Features (specific capabilities)
-3. Break Features into User Stories (user-facing functionality)
-4. Break Stories into Acceptance Criteria (testable conditions)
-5. Use clear, concise titles
-6. Each level should have 2-5 children (avoid single children)
-7. If project context is provided, align requirements with existing standards, tech stack, and architecture
-8. Return ONLY valid JSON, no markdown or additional text
+  // Group by type
+  const epics = requirements.filter(r => r.type === 'EPIC');
+  const features = requirements.filter(r => r.type === 'FEATURE');
+  const stories = requirements.filter(r => r.type === 'STORY');
+  const acs = requirements.filter(r => r.type === 'ACCEPTANCE_CRITERIA');
 
-CRITICAL: Your response MUST be ONLY valid JSON in this exact format (no prose, no markdown):
+  let context = `EXISTING REQUIREMENTS (${requirements.length} total):\n\n`;
+  
+  if (epics.length > 0) {
+    context += `EPICS (${epics.length}):\n`;
+    epics.forEach(e => {
+      context += `  - ${e.code || ''}: ${e.title}\n`;
+      if (e.content) context += `    ${e.content.substring(0, 150)}...\n`;
+    });
+    context += '\n';
+  }
+
+  if (features.length > 0) {
+    context += `FEATURES (${features.length}):\n`;
+    features.slice(0, 15).forEach(f => {
+      context += `  - ${f.code || ''}: ${f.title}\n`;
+    });
+    if (features.length > 15) context += `  ... and ${features.length - 15} more\n`;
+    context += '\n';
+  }
+
+  if (stories.length > 0) {
+    context += `STORIES (${stories.length}):\n`;
+    stories.slice(0, 10).forEach(s => {
+      context += `  - ${s.code || ''}: ${s.title}\n`;
+    });
+    if (stories.length > 10) context += `  ... and ${stories.length - 10} more\n`;
+    context += '\n';
+  }
+
+  if (acs.length > 0) {
+    context += `ACCEPTANCE CRITERIA (${acs.length}):\n`;
+    acs.slice(0, 5).forEach(a => {
+      context += `  - ${a.code || ''}: ${a.title}\n`;
+    });
+    if (acs.length > 5) context += `  ... and ${acs.length - 5} more\n`;
+  }
+
+  return context;
+}
+
+const systemPrompt = `You are an expert requirements analyst specializing in comprehensive requirements decomposition. Your task is to analyze unstructured text and decompose it into a complete, hierarchical structure of requirements.
+
+HIERARCHY PATTERN: Epic → Feature → User Story → Acceptance Criteria
+
+=== EPIC GENERATION GUIDELINES (CRITICAL) ===
+You MUST generate 4-8 comprehensive Epics that cover ALL major functional areas of the described system. Each Epic should represent a distinct domain:
+
+1. **Core Functionality Epic** - The primary user-facing features
+2. **User Management Epic** - Authentication, authorization, profiles, roles
+3. **Data Management Epic** - CRUD operations, data storage, import/export
+4. **Integration Epic** - APIs, third-party services, webhooks
+5. **Administration Epic** - Admin dashboards, configuration, settings
+6. **Reporting & Analytics Epic** - Reports, dashboards, metrics
+7. **Security & Compliance Epic** - Security controls, audit logs, compliance
+8. **User Experience Epic** - UI/UX, notifications, accessibility
+
+Not all projects need all 8, but NEVER generate fewer than 4 Epics. Analyze the input thoroughly.
+
+=== FEATURE GENERATION ===
+For each Epic, generate 3-6 Features representing specific capabilities:
+- Each Feature should be a distinct, implementable capability
+- Features should cover both happy paths and edge cases
+- Consider non-functional requirements (performance, security, scalability)
+
+=== USER STORY GENERATION ===
+For each Feature, generate 2-4 User Stories using the format:
+"As a [role], I want to [action] so that [benefit]"
+- Identify different user roles (admin, user, guest, etc.)
+- Cover different scenarios and use cases
+
+=== ACCEPTANCE CRITERIA GENERATION ===
+For each Story, generate 2-5 Acceptance Criteria using the format:
+"Given [context], when [action], then [outcome]"
+- Cover success scenarios
+- Cover error handling
+- Cover edge cases
+
+=== DEDUPLICATION RULES ===
+If EXISTING REQUIREMENTS are provided:
+- DO NOT duplicate existing Epics, Features, or Stories with same/similar titles
+- DO NOT create requirements that semantically overlap with existing ones
+- ONLY add new, unique requirements that add distinct value
+- Focus on gaps and missing areas not covered by existing requirements
+
+=== RESPONSE FORMAT ===
+You MUST respond ONLY with valid JSON using the return_requirements tool. No prose, no markdown, no explanations.
+
 {
   "epics": [
     {
-      "title": "Epic title",
-      "description": "Epic description",
+      "title": "Epic title - clear and descriptive",
+      "description": "Detailed description of what this epic covers",
       "features": [
         {
           "title": "Feature title",
-          "description": "Feature description",
+          "description": "Detailed feature description",
           "stories": [
             {
               "title": "As a [role], I want to [action] so that [benefit]",
-              "description": "Story details",
+              "description": "Additional story details",
               "acceptanceCriteria": [
                 {
                   "title": "Given [context], when [action], then [outcome]",
@@ -317,6 +455,20 @@ serve(async (req) => {
     const maxTokens = project?.max_tokens || 32768;
     console.log("Using model:", selectedModel, "maxTokens:", maxTokens);
 
+    // Fetch ALL existing project requirements for deduplication
+    const { data: existingRequirements, error: existingError } = await supabase.rpc('get_requirements_with_token', {
+      p_project_id: projectId,
+      p_token: shareToken || null
+    });
+
+    if (existingError) {
+      console.error("Error fetching existing requirements:", existingError);
+      // Continue anyway - we'll generate without deduplication context
+    }
+
+    const existingRequirementsContext = formatExistingRequirements(existingRequirements || []);
+    console.log("Existing requirements count:", existingRequirements?.length || 0);
+
     console.log("Decomposing requirements for project:", projectId);
     console.log("Input text length:", text?.length || 0);
 
@@ -332,15 +484,6 @@ serve(async (req) => {
         contextString += `- Status: ${pm.status || 'N/A'}\n`;
         contextString += `- Priority: ${pm.priority || 'N/A'}\n`;
         contextString += `- Scope: ${pm.scope || 'N/A'}\n\n`;
-      }
-      
-      if (attachedContext.requirements?.length > 0) {
-        contextString += `EXISTING REQUIREMENTS (${attachedContext.requirements.length}):\n`;
-        attachedContext.requirements.forEach((r: any) => {
-          contextString += `- [${r.type || 'REQ'}] ${r.code || ''} ${r.title}\n`;
-          if (r.content) contextString += `  ${r.content.substring(0, 200)}${r.content.length > 200 ? '...' : ''}\n`;
-        });
-        contextString += '\n';
       }
       
       if (attachedContext.standards?.length > 0) {
@@ -397,10 +540,26 @@ serve(async (req) => {
 
     console.log("Context string length:", contextString.length);
 
-    // Build user message with optional context
-    const userMessage = contextString 
-      ? `Use this project context to inform your decomposition and ensure requirements align with existing project elements:\n\n${contextString}\n\nNow decompose the following text into structured requirements:\n\n${text || 'Based on the attached context, generate appropriate requirements.'}`
-      : `Decompose the following text into structured requirements:\n\n${text}`;
+    // Build user message with existing requirements context for deduplication
+    let userMessage = '';
+    
+    // Add existing requirements context first (for deduplication)
+    if (existingRequirements && existingRequirements.length > 0) {
+      userMessage += `${existingRequirementsContext}\n\n`;
+      userMessage += `IMPORTANT: Review the existing requirements above. DO NOT duplicate them. Only generate NEW requirements that add unique value.\n\n`;
+    }
+    
+    // Add project context
+    if (contextString) {
+      userMessage += `PROJECT CONTEXT:\n${contextString}\n\n`;
+    }
+    
+    // Add the main instruction
+    if (text) {
+      userMessage += `DECOMPOSE THE FOLLOWING TEXT INTO COMPREHENSIVE REQUIREMENTS:\n\n${text}`;
+    } else {
+      userMessage += `Based on the attached project context above, generate comprehensive requirements covering all major functional areas. Create 4-8 Epics with Features, Stories, and Acceptance Criteria.`;
+    }
 
     // Determine API key and endpoint based on model
     let apiKey: string | undefined;
@@ -410,7 +569,7 @@ serve(async (req) => {
       apiKey = Deno.env.get("GEMINI_API_KEY");
       if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
 
-      console.log("Calling Gemini API...");
+      console.log("Calling Gemini API with schema enforcement...");
       llmResponse = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
         {
@@ -423,6 +582,7 @@ serve(async (req) => {
               maxOutputTokens: maxTokens,
               temperature: 0.7,
               responseMimeType: "application/json",
+              responseSchema: getGeminiRequirementsSchema(),
             },
           }),
         }
@@ -540,6 +700,11 @@ serve(async (req) => {
     }
 
     console.log(`Successfully parsed ${requirements.epics.length} epics`);
+
+    // Validate minimum epic count
+    if (requirements.epics.length < 2) {
+      console.warn(`Only ${requirements.epics.length} epics generated, expected 4-8`);
+    }
 
     // Insert requirements into database using token-based RPC
     console.log("Inserting requirements into database...");
