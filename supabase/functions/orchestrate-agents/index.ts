@@ -156,9 +156,11 @@ serve(async (req) => {
       thinkingBudget = -1,
     } = await req.json();
 
-    if (!projectId || !shareToken) {
-      throw new Error('projectId and shareToken are required');
+    if (!projectId) {
+      throw new Error('projectId is required');
     }
+    
+    // shareToken can be null for authenticated users (auth.uid() validates access)
 
     if (!agentFlow?.nodes || agentFlow.nodes.length === 0) {
       throw new Error('Agent flow must have at least one agent');
