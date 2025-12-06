@@ -25,7 +25,7 @@ interface AICreateStandardsDialogProps {
 }
 
 export function AICreateStandardsDialog({ categories, onSuccess }: AICreateStandardsDialogProps) {
-  const { isAdmin, requestAdminAccess } = useAdmin();
+  const { isAdmin } = useAdmin();
   const [open, setOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -45,11 +45,8 @@ export function AICreateStandardsDialog({ categories, onSuccess }: AICreateStand
 
   const handleGenerate = async () => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required to create standards");
-        return;
-      }
+      toast.error("Admin access required to create standards");
+      return;
     }
 
     if (categoryMode === "existing" && !selectedCategory) {
@@ -137,7 +134,7 @@ export function AICreateStandardsDialog({ categories, onSuccess }: AICreateStand
       const { data, error } = await supabase.functions.invoke("ai-create-standards", {
         body: {
           input: combinedInput,
-          categoryId: categoryId  // Use the local categoryId variable, not selectedCategory
+          categoryId: categoryId
         }
       });
 
@@ -158,6 +155,11 @@ export function AICreateStandardsDialog({ categories, onSuccess }: AICreateStand
       setIsGenerating(false);
     }
   };
+
+  // Only show the button if user is admin
+  if (!isAdmin) {
+    return null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

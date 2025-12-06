@@ -25,15 +25,12 @@ interface StandardsTreeManagerProps {
 }
 
 export function StandardsTreeManager({ standards, categoryId, onRefresh }: StandardsTreeManagerProps) {
-  const { isAdmin, requestAdminAccess } = useAdmin();
+  const { isAdmin } = useAdmin();
 
   const handleAdd = async (parentId: string | null, title: string) => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
 
     const { error } = await supabase.from("standards").insert({
@@ -53,11 +50,8 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
 
   const handleDelete = async (id: string) => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
 
     if (!confirm("Delete this standard?")) return;
@@ -74,11 +68,8 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
 
   const handleAIExpand = async (parentId: string, parentTitle: string) => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
 
     toast.promise(
@@ -102,11 +93,8 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
 
   const handleAttachFile = async (standardId: string) => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
 
     const input = document.createElement("input");
@@ -161,6 +149,7 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
         <StandardNode
           key={standard.id}
           standard={standard}
+          isAdmin={isAdmin}
           onAdd={handleAdd}
           onDelete={handleDelete}
           onAIExpand={handleAIExpand}
@@ -168,7 +157,7 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
           onRefresh={onRefresh}
         />
       ))}
-      <AddStandardInline onAdd={(title) => handleAdd(null, title)} />
+      {isAdmin && <AddStandardInline onAdd={(title) => handleAdd(null, title)} />}
     </div>
   );
 }
@@ -220,6 +209,7 @@ function AddStandardInline({ onAdd, onCancel }: { onAdd: (title: string) => void
 
 function StandardNode({
   standard,
+  isAdmin,
   onAdd,
   onDelete,
   onAIExpand,
@@ -227,6 +217,7 @@ function StandardNode({
   onRefresh,
 }: {
   standard: Standard;
+  isAdmin: boolean;
   onAdd: (parentId: string | null, title: string) => void;
   onDelete: (id: string) => void;
   onAIExpand: (parentId: string, parentTitle: string) => void;
@@ -302,23 +293,25 @@ function StandardNode({
                   )}
                 </div>
 
-                <div className="flex gap-1 flex-shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => setIsAddingChild(true)} title="Add sub-standard">
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit">
-                    <Edit className="h-3 w-3" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onAttachFile(standard.id)} title="Attach file">
-                    <Paperclip className="h-3 w-3" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onAIExpand(standard.id, standard.title)} title="AI expand">
-                    <Sparkles className="h-3 w-3" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onDelete(standard.id)} title="Delete">
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
+                {isAdmin && (
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => setIsAddingChild(true)} title="Add sub-standard">
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit">
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onAttachFile(standard.id)} title="Attach file">
+                      <Paperclip className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onAIExpand(standard.id, standard.title)} title="AI expand">
+                      <Sparkles className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onDelete(standard.id)} title="Delete">
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Attachments */}
@@ -347,9 +340,9 @@ function StandardNode({
       {(isExpanded || isAddingChild) && (
         <div className="ml-6 mt-2 space-y-2 border-l-2 border-border pl-4">
           {standard.children && standard.children.length > 0 && standard.children.map((child) => (
-            <StandardNode key={child.id} standard={child} onAdd={onAdd} onDelete={onDelete} onAIExpand={onAIExpand} onAttachFile={onAttachFile} onRefresh={onRefresh} />
+            <StandardNode key={child.id} standard={child} isAdmin={isAdmin} onAdd={onAdd} onDelete={onDelete} onAIExpand={onAIExpand} onAttachFile={onAttachFile} onRefresh={onRefresh} />
           ))}
-          {isAddingChild && (
+          {isAddingChild && isAdmin && (
             <AddStandardInline 
               onAdd={(title) => {
                 onAdd(standard.id, title);

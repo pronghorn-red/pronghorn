@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ChevronRight, ChevronDown, Plus, Edit, Trash2, Link as LinkIcon } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,7 +37,7 @@ const ITEM_TYPES = [
 ];
 
 export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeManagerProps) {
-  const { isAdmin, requestAdminAccess } = useAdmin();
+  const { isAdmin } = useAdmin();
   const [items, setItems] = useState<TechStackItem[]>([]);
 
   useEffect(() => {
@@ -81,11 +81,8 @@ export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeMa
 
   const handleAdd = async (parentId: string | null, type: string, name: string) => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -110,11 +107,8 @@ export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeMa
 
   const handleDelete = async (id: string) => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
 
     if (!confirm("Delete this item and all its children?")) return;
@@ -133,11 +127,8 @@ export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeMa
 
   const handleUpdate = async (id: string, updates: Partial<TechStackItem>) => {
     if (!isAdmin) {
-      const granted = await requestAdminAccess();
-      if (!granted) {
-        toast.error("Admin access required");
-        return;
-      }
+      toast.error("Admin access required");
+      return;
     }
 
     const { error } = await supabase
@@ -160,12 +151,13 @@ export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeMa
         <TechStackItemNode
           key={item.id}
           item={item}
+          isAdmin={isAdmin}
           onAdd={handleAdd}
           onDelete={handleDelete}
           onUpdate={handleUpdate}
         />
       ))}
-      <AddItemInline onAdd={(type, name) => handleAdd(null, type, name)} />
+      {isAdmin && <AddItemInline onAdd={(type, name) => handleAdd(null, type, name)} />}
     </div>
   );
 }
@@ -233,11 +225,13 @@ function AddItemInline({ onAdd, onCancel }: { onAdd: (type: string, name: string
 
 function TechStackItemNode({
   item,
+  isAdmin,
   onAdd,
   onDelete,
   onUpdate,
 }: {
   item: TechStackItem;
+  isAdmin: boolean;
   onAdd: (parentId: string | null, type: string, name: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, updates: Partial<TechStackItem>) => void;
@@ -303,17 +297,19 @@ function TechStackItemNode({
                   )}
                 </div>
 
-                <div className="flex gap-0.5 md:gap-1 flex-shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => setIsAddingChild(true)} title="Add sub-item" className="h-7 w-7 md:h-8 md:w-8 p-0">
-                    <Plus className="h-2.5 w-2.5 md:h-3 md:w-3" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit" className="h-7 w-7 md:h-8 md:w-8 p-0">
-                    <Edit className="h-2.5 w-2.5 md:h-3 md:w-3" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} title="Delete" className="h-7 w-7 md:h-8 md:w-8 p-0">
-                    <Trash2 className="h-2.5 w-2.5 md:h-3 md:w-3" />
-                  </Button>
-                </div>
+                {isAdmin && (
+                  <div className="flex gap-0.5 md:gap-1 flex-shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => setIsAddingChild(true)} title="Add sub-item" className="h-7 w-7 md:h-8 md:w-8 p-0">
+                      <Plus className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit" className="h-7 w-7 md:h-8 md:w-8 p-0">
+                      <Edit className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} title="Delete" className="h-7 w-7 md:h-8 md:w-8 p-0">
+                      <Trash2 className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                    </Button>
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -324,9 +320,9 @@ function TechStackItemNode({
       {(isExpanded || isAddingChild) && (
         <div className="ml-3 md:ml-6 mt-2 space-y-2 border-l-2 border-border pl-2 md:pl-4">
           {item.children && item.children.length > 0 && item.children.map((child) => (
-            <TechStackItemNode key={child.id} item={child} onAdd={onAdd} onDelete={onDelete} onUpdate={onUpdate} />
+            <TechStackItemNode key={child.id} item={child} isAdmin={isAdmin} onAdd={onAdd} onDelete={onDelete} onUpdate={onUpdate} />
           ))}
-          {isAddingChild && (
+          {isAddingChild && isAdmin && (
             <AddItemInline 
               onAdd={(type, name) => {
                 onAdd(item.id, type, name);

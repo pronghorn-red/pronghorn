@@ -1,73 +1,62 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AdminContextType {
   isAdmin: boolean;
-  adminToken: string | null;
-  requestAdminAccess: (key?: string) => Promise<boolean>;
-  logout: () => void;
+  loading: boolean;
+  refreshAdminStatus: () => Promise<void>;
 }
 
 const AdminContext = createContext<AdminContextType | undefined>(undefined);
 
-// Encrypt/decrypt admin token in localStorage (basic obfuscation)
-const STORAGE_KEY = "_embly_admin_token";
-
-function encodeToken(token: string): string {
-  return btoa(token);
-}
-
-function decodeToken(encoded: string): string | null {
-  try {
-    return atob(encoded);
-  } catch {
-    return null;
-  }
-}
-
 export function AdminProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminToken, setAdminToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
-  // Load token on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const decoded = decodeToken(stored);
-      if (decoded) {
-        setAdminToken(decoded);
-        setIsAdmin(true);
+  const checkAdminStatus = async () => {
+    if (!user) {
+      setIsAdmin(false);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Query user_roles table for admin role
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+      } else {
+        setIsAdmin(!!data);
       }
+    } catch (err) {
+      console.error('Error checking admin status:', err);
+      setIsAdmin(false);
+    } finally {
+      setLoading(false);
     }
-  }, []);
-
-  const requestAdminAccess = async (key?: string): Promise<boolean> => {
-    const adminKey = key || prompt("Enter admin key:");
-    if (!adminKey) return false;
-
-    // CRITICAL: Validate server-side before granting admin access
-    const { validateAdminToken } = await import("@/lib/adminAuth");
-    const isValid = await validateAdminToken(adminKey);
-    
-    if (!isValid) {
-      return false;
-    }
-
-    // Only store and set admin status after successful validation
-    const encoded = encodeToken(adminKey);
-    localStorage.setItem(STORAGE_KEY, encoded);
-    setAdminToken(adminKey);
-    setIsAdmin(true);
-    return true;
   };
 
-  const logout = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setAdminToken(null);
-    setIsAdmin(false);
+  // Check admin status when user changes
+  useEffect(() => {
+    checkAdminStatus();
+  }, [user]);
+
+  const refreshAdminStatus = async () => {
+    setLoading(true);
+    await checkAdminStatus();
   };
 
   return (
-    <AdminContext.Provider value={{ isAdmin, adminToken, requestAdminAccess, logout }}>
+    <AdminContext.Provider value={{ isAdmin, loading, refreshAdminStatus }}>
       {children}
     </AdminContext.Provider>
   );
