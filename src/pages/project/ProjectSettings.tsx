@@ -18,6 +18,7 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { useAuth } from "@/contexts/AuthContext";
 import { DeleteProjectDialog } from "@/components/dashboard/DeleteProjectDialog";
 import { TokenManagement } from "@/components/project/TokenManagement";
+import { AccessLevelBanner } from "@/components/project/AccessLevelBanner";
 
 import { Switch } from "@/components/ui/switch";
 
@@ -142,8 +143,12 @@ export default function ProjectSettings() {
               onMenuClick={() => setIsSidebarOpen(true)}
             />
             <div className="space-y-6">
-                {/* Access Tokens Management - visible to owners */}
-                <TokenManagement projectId={projectId!} shareToken={shareToken} />
+                {/* Show TokenManagement for owners, AccessLevelBanner for token users */}
+                {user && project?.created_by === user.id ? (
+                  <TokenManagement projectId={projectId!} shareToken={shareToken} />
+                ) : (
+                  <AccessLevelBanner projectId={projectId!} shareToken={shareToken} />
+                )}
 
                 {/* Project Details */}
                 <Card>

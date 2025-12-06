@@ -688,27 +688,42 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          bio: string | null
+          bio_image_url: string | null
           created_at: string
           display_name: string | null
+          email: string | null
           id: string
+          language_preference: string | null
+          last_login: string | null
           org_id: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           avatar_url?: string | null
+          bio?: string | null
+          bio_image_url?: string | null
           created_at?: string
           display_name?: string | null
+          email?: string | null
           id?: string
+          language_preference?: string | null
+          last_login?: string | null
           org_id?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           avatar_url?: string | null
+          bio?: string | null
+          bio_image_url?: string | null
           created_at?: string
           display_name?: string | null
+          email?: string | null
           id?: string
+          language_preference?: string | null
+          last_login?: string | null
           org_id?: string | null
           updated_at?: string
           user_id?: string
@@ -2585,6 +2600,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_user_project_role_with_token: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2794,6 +2813,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      is_admin: { Args: never; Returns: boolean }
       is_project_owner: { Args: { p_project_id: string }; Returns: boolean }
       is_valid_token_for_project: {
         Args: { p_project_id: string }
