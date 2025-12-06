@@ -845,6 +845,50 @@ export type Database = {
           },
         ]
       }
+      project_tokens: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          label: string | null
+          last_used_at: string | null
+          project_id: string
+          role: Database["public"]["Enums"]["project_token_role"]
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          project_id: string
+          role?: Database["public"]["Enums"]["project_token_role"]
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          project_id?: string
+          role?: Database["public"]["Enums"]["project_token_role"]
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_tokens_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           budget: number | null
@@ -1682,6 +1726,10 @@ export type Database = {
           path: string
         }[]
       }
+      authorize_project_access: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: Database["public"]["Enums"]["project_token_role"]
+      }
       commit_staged_with_token: {
         Args: {
           p_branch?: string
@@ -2186,6 +2234,12 @@ export type Database = {
           repo_id: string
           updated_at: string
         }[]
+      }
+      get_project_id_from_file: { Args: { p_file_id: string }; Returns: string }
+      get_project_id_from_repo: { Args: { p_repo_id: string }; Returns: string }
+      get_project_id_from_session: {
+        Args: { p_session_id: string }
+        Returns: string
       }
       get_project_repos_with_token: {
         Args: { p_project_id: string; p_token: string }
@@ -2815,6 +2869,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      require_role: {
+        Args: {
+          p_min_role: Database["public"]["Enums"]["project_token_role"]
+          p_project_id: string
+          p_token: string
+        }
+        Returns: Database["public"]["Enums"]["project_token_role"]
+      }
       reset_repo_files_with_token: {
         Args: { p_repo_id: string; p_token: string }
         Returns: boolean
@@ -3341,6 +3403,7 @@ export type Database = {
         | "PAGE"
         | "PROJECT"
       project_status: "DESIGN" | "AUDIT" | "BUILD"
+      project_token_role: "owner" | "editor" | "viewer"
       requirement_type: "EPIC" | "FEATURE" | "STORY" | "ACCEPTANCE_CRITERIA"
     }
     CompositeTypes: {
@@ -3487,6 +3550,7 @@ export const Constants = {
         "PROJECT",
       ],
       project_status: ["DESIGN", "AUDIT", "BUILD"],
+      project_token_role: ["owner", "editor", "viewer"],
       requirement_type: ["EPIC", "FEATURE", "STORY", "ACCEPTANCE_CRITERIA"],
     },
   },
