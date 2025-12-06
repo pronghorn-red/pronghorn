@@ -18,12 +18,14 @@ import { toast } from "sonner";
 interface DeleteProjectDialogProps {
   projectId: string;
   projectName: string;
+  shareToken?: string | null;
   onDelete?: () => void;
 }
 
 export function DeleteProjectDialog({
   projectId,
   projectName,
+  shareToken,
   onDelete
 }: DeleteProjectDialogProps) {
   const [open, setOpen] = useState(false);
@@ -33,11 +35,11 @@ export function DeleteProjectDialog({
     setIsDeleting(true);
 
     try {
-      // CRITICAL: Use token-based RPC for project deletion
-      // For authenticated users deleting their own projects, token can be null
+      // Use token-based RPC for project deletion
+      // Pass shareToken for anonymous users with owner tokens
       const { error } = await supabase.rpc('delete_project_with_token', {
         p_project_id: projectId,
-        p_token: null // Authenticated user doesn't need token for own projects
+        p_token: shareToken || null
       });
 
       if (error) throw error;
