@@ -343,19 +343,22 @@ export default function Build() {
       }
 
       if (createType === "folder") {
-        // Create .gitkeep file in folder
-        await supabase.rpc("create_file_with_token", {
+        // Stage .gitkeep file in folder as add operation
+        await supabase.rpc("stage_file_change_with_token", {
           p_repo_id: defaultRepo.id,
-          p_path: `${fullPath}/.gitkeep`,
-          p_content: "",
           p_token: shareToken || null,
+          p_file_path: `${fullPath}/.gitkeep`,
+          p_operation_type: "add",
+          p_new_content: "",
         });
       } else {
-        await supabase.rpc("create_file_with_token", {
+        // Stage new file as add operation
+        await supabase.rpc("stage_file_change_with_token", {
           p_repo_id: defaultRepo.id,
-          p_path: fullPath,
-          p_content: "",
           p_token: shareToken || null,
+          p_file_path: fullPath,
+          p_operation_type: "add",
+          p_new_content: "",
         });
       }
 
