@@ -26,6 +26,7 @@ interface TechStackTreeSelectorProps {
   selectedItems: Set<string>;
   onSelectionChange: (selectedIds: Set<string>) => void;
   allowedItemIds?: Set<string> | string[];
+  preloadedItems?: boolean; // Skip internal loading when true - data already has items populated
 }
 
 export function TechStackTreeSelector({
@@ -33,15 +34,22 @@ export function TechStackTreeSelector({
   selectedItems,
   onSelectionChange,
   allowedItemIds,
+  preloadedItems = false,
 }: TechStackTreeSelectorProps) {
   const [expandedTechStacks, setExpandedTechStacks] = useState<Set<string>>(new Set());
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [techStacksWithItems, setTechStacksWithItems] = useState<TechStack[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!preloadedItems);
 
   useEffect(() => {
-    loadTechStackItems();
-  }, [initialTechStacks.map(ts => ts.id).join(',')]);
+    if (preloadedItems) {
+      // Use techStacks directly - they already have items populated
+      setTechStacksWithItems(initialTechStacks);
+      setLoading(false);
+    } else {
+      loadTechStackItems();
+    }
+  }, [initialTechStacks.map(ts => ts.id).join(','), preloadedItems]);
 
   const loadTechStackItems = async () => {
     setLoading(true);

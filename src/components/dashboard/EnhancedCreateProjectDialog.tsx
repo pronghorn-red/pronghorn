@@ -101,16 +101,32 @@ export function EnhancedCreateProjectDialog() {
     enabled: open
   });
 
-  // Load real tech stacks from database
+  // Load all tech stacks with hierarchy in a single query (same pattern as standards)
   const { data: techStacks = [] } = useQuery({
-    queryKey: ['tech-stacks-wizard'],
+    queryKey: ['tech-stacks-wizard-complete'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tech_stacks')
-        .select('id, name, description')
-        .order('name');
+        .select('*')
+        .order('order_index');
       if (error) throw error;
-      return data;
+      
+      // Build hierarchy - top-level stacks have parent_id = null
+      const parentStacks = (data || []).filter(ts => !ts.parent_id);
+      
+      const buildItemsHierarchy = (parentId: string, allItems: any[]): any[] => {
+        const children = allItems.filter(item => item.parent_id === parentId);
+        return children.map(child => ({
+          ...child,
+          children: buildItemsHierarchy(child.id, allItems)
+        }));
+      };
+      
+      // Return parent stacks with their nested items
+      return parentStacks.map(parent => ({
+        ...parent,
+        items: buildItemsHierarchy(parent.id, data || [])
+      }));
     },
     enabled: open
   });
@@ -236,7 +252,7 @@ export function EnhancedCreateProjectDialog() {
       } else {
         // Navigate to the new project - always include token in URL for consistency
         console.log("[EnhancedCreateProjectDialog] Navigating authenticated user to project with token:", project.shareToken);
-        navigate({ pathname: `/project/${project.id}/requirements/t/${project.shareToken}` });
+        navigate({ pathname: `/project/${project.id}/settings/t/${project.shareToken}` });
       }
     } catch (error) {
       console.error("[EnhancedCreateProjectDialog] Fatal error:", error);
@@ -400,9 +416,10 @@ export function EnhancedCreateProjectDialog() {
                 <h3 className="font-semibold mb-3">Select Tech Stacks</h3>
                 <ScrollArea className="h-[400px] border rounded-lg p-4">
                   <TechStackTreeSelector
-                    techStacks={techStacks.map(ts => ({ ...ts, items: [] }))}
+                    techStacks={techStacks}
                     selectedItems={selectedTechStacks}
                     onSelectionChange={setSelectedTechStacks}
+                    preloadedItems={true}
                   />
                 </ScrollArea>
               </div>
@@ -454,7 +471,7 @@ export function EnhancedCreateProjectDialog() {
         open={showWarning}
         onClose={() => {
           setShowWarning(false);
-          navigate({ pathname: `/project/${createdProject.id}/requirements/t/${createdProject.shareToken}` });
+          navigate({ pathname: `/project/${createdProject.id}/settings/t/${createdProject.shareToken}` });
         }}
         projectId={createdProject.id}
         shareToken={createdProject.shareToken}
