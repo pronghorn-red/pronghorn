@@ -1840,6 +1840,32 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_project_token_with_token: {
+        Args: {
+          p_expires_at?: string
+          p_label?: string
+          p_project_id: string
+          p_role: Database["public"]["Enums"]["project_token_role"]
+          p_token: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          label: string | null
+          last_used_at: string | null
+          project_id: string
+          role: Database["public"]["Enums"]["project_token_role"]
+          token: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_tokens"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       delete_artifact_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
@@ -1874,6 +1900,10 @@ export type Database = {
       }
       delete_project_tech_stack_with_token: {
         Args: { p_id: string; p_token: string }
+        Returns: undefined
+      }
+      delete_project_token_with_token: {
+        Args: { p_token: string; p_token_id: string }
         Returns: undefined
       }
       delete_project_with_token: {
@@ -2305,6 +2335,26 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "project_tech_stacks"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_project_tokens_with_token: {
+        Args: { p_project_id: string; p_token: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          label: string | null
+          last_used_at: string | null
+          project_id: string
+          role: Database["public"]["Enums"]["project_token_role"]
+          token: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_tokens"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -3168,6 +3218,31 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_project_token_with_token: {
+        Args: {
+          p_expires_at?: string
+          p_label?: string
+          p_token: string
+          p_token_id: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          label: string | null
+          last_used_at: string | null
+          project_id: string
+          role: Database["public"]["Enums"]["project_token_role"]
+          token: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_tokens"
           isOneToOne: true
           isSetofReturn: false
         }

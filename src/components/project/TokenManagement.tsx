@@ -49,7 +49,7 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
       if (error) throw error;
       return data as ProjectToken[];
     },
-    enabled: !!projectId && !!shareToken,
+    enabled: !!projectId,
   });
 
   const createTokenMutation = useMutation({
@@ -136,8 +136,8 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
     }
   };
 
-  if (error) {
-    // If error is access denied, user doesn't have owner role - don't show the section
+  // If error contains "Access denied" or similar, user isn't owner - hide component
+  if (error && (error.message?.includes("Access denied") || error.message?.includes("owner"))) {
     return null;
   }
 
