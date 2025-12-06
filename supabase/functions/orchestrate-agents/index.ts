@@ -39,6 +39,101 @@ interface ChangeLogEntry {
   reasoning: string;
 }
 
+// Flow order hierarchy for edge direction validation
+// Lower rank = LEFT side of canvas, Higher rank = RIGHT side
+const FLOW_ORDER: Record<string, number> = {
+  'PROJECT': 1,
+  'REQUIREMENT': 1,
+  'STANDARD': 1,
+  'TECH_STACK': 1,
+  'PAGE': 2,
+  'COMPONENT': 3,
+  'API': 4,
+  'WEBHOOK': 5,
+  'FIREWALL': 5,
+  'SECURITY': 5,
+  'SERVICE': 5,
+  'DATABASE': 6,
+};
+
+function getFlowRank(nodeType: string): number {
+  const type = (nodeType || '').toUpperCase();
+  return FLOW_ORDER[type] || 3; // Default to middle rank
+}
+
+// Robust JSON parsing with multiple fallback methods
+function parseAIResponse(content: string): any {
+  // Method 1: Try extracting from markdown code blocks
+  const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+  if (jsonMatch) {
+    try {
+      return JSON.parse(jsonMatch[1]);
+    } catch (e) {
+      console.log('Failed to parse from markdown block, trying other methods...');
+    }
+  }
+
+  // Method 2: Try direct JSON parse
+  try {
+    return JSON.parse(content);
+  } catch (e) {
+    console.log('Direct parse failed, trying to extract JSON...');
+  }
+
+  // Method 3: Find last complete JSON block
+  const allMatches = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/g);
+  if (allMatches && allMatches.length > 0) {
+    for (let i = allMatches.length - 1; i >= 0; i--) {
+      const match = allMatches[i].match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+      if (match) {
+        try {
+          return JSON.parse(match[1]);
+        } catch (e) {
+          continue;
+        }
+      }
+    }
+  }
+
+  // Method 4: Extract JSON by finding balanced braces
+  let braceCount = 0;
+  let startIndex = -1;
+  for (let i = 0; i < content.length; i++) {
+    if (content[i] === '{') {
+      if (braceCount === 0) startIndex = i;
+      braceCount++;
+    } else if (content[i] === '}') {
+      braceCount--;
+      if (braceCount === 0 && startIndex !== -1) {
+        try {
+          const extracted = content.substring(startIndex, i + 1);
+          return JSON.parse(extracted);
+        } catch (e) {
+          startIndex = -1;
+        }
+      }
+    }
+  }
+
+  // Method 5: Look for specific JSON patterns
+  const patterns = [
+    /\{[^{}]*"reasoning"[^{}]*\}/s,
+    /\{[^{}]*"nodesToAdd"[^{}]*\}/s,
+  ];
+  for (const pattern of patterns) {
+    const match = content.match(pattern);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch (e) {
+        continue;
+      }
+    }
+  }
+
+  throw new Error('Failed to parse AI response with all methods');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -361,7 +456,7 @@ serve(async (req) => {
                   throw agentError; // Stop iteration on payment errors
                 }
                 
-                // FIX #6: Error recovery with retry logic
+                // Error recovery with retry logic
                 let retrySuccess = false;
                 for (let retryAttempt = 1; retryAttempt <= 2; retryAttempt++) {
                   try {
@@ -446,8 +541,6 @@ serve(async (req) => {
             }
 
             send({ type: 'iteration_complete', iteration });
-
-            // FIX #5: Removed manual broadcast - rely on RLS-enforced postgres_changes events
           }
 
           send({
@@ -582,7 +675,7 @@ async function executeAgent(
     contextPrompt += `\n=== END BLACKBOARD ===\n\n`;
   }
 
-  // FIX: Include ALL ProjectSelector context
+  // Include ALL ProjectSelector context
   if (context.attachedContext) {
     // Project Metadata
     if (context.attachedContext.projectMetadata) {
@@ -689,7 +782,9 @@ async function executeAgent(
   contextPrompt += `Current Nodes in Delta:\n`;
   contextPrompt += `This list represents what the user originally selected plus all nodes added/edited by previous agents in this iteration.\n`;
   context.currentNodes.forEach((node: any) => {
-    contextPrompt += `- ${node.id}: ${node.data?.label || 'Unnamed'} (Type: ${node.type || node.data?.type})\n`;
+    const nodeType = node.type || node.data?.type || 'UNKNOWN';
+    const flowRank = getFlowRank(nodeType);
+    contextPrompt += `- ${node.id}: ${node.data?.label || 'Unnamed'} (Type: ${nodeType}, FlowRank: ${flowRank})\n`;
   });
   contextPrompt += `\n`;
 
@@ -739,7 +834,7 @@ async function executeAgent(
             parts: [{ text: `${systemPrompt}\n\n${contextPrompt}` }]
           }],
           generationConfig: {
-            temperature: 0.7,
+            temperature: 0.4, // Lower temperature for more deterministic output
             maxOutputTokens: maxTokens,
             ...(selectedModel !== 'gemini-2.5-pro' && {
               thinkingConfig: { thinkingBudget: thinkingEnabled ? thinkingBudget : 0 }
@@ -789,7 +884,7 @@ async function executeAgent(
 
   const aiData = await response.json();
   
-  // Robust JSON extraction - handles different API response formats
+  // Use robust JSON parsing
   let aiResponse;
   try {
     let content: string;
@@ -803,19 +898,10 @@ async function executeAgent(
     }
     console.log('Raw AI response:', content);
     
-    // Try to extract JSON from markdown code blocks
-    const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-    if (jsonMatch) {
-      aiResponse = JSON.parse(jsonMatch[1]);
-      console.log('Extracted JSON from markdown:', aiResponse);
-    } else {
-      // Try direct JSON parse
-      aiResponse = JSON.parse(content);
-      console.log('Parsed JSON directly:', aiResponse);
-    }
+    aiResponse = parseAIResponse(content);
+    console.log('Parsed AI response:', aiResponse);
   } catch (parseError) {
     console.error('Failed to parse AI response:', parseError);
-    console.error('Raw content:', aiData.choices[0].message.content);
     throw new Error(`Failed to parse AI response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
   }
 
@@ -825,8 +911,14 @@ async function executeAgent(
 
   // Track any newly created node IDs so edges can safely target them if needed
   const newNodeIds: string[] = [];
+  
+  // Build a map of node IDs to their types for flow validation
+  const nodeTypeMap = new Map<string, string>();
+  context.currentNodes.forEach((n: any) => {
+    nodeTypeMap.set(n.id, n.type || n.data?.type || 'COMPONENT');
+  });
 
-  // FIX #3: Validate capabilities before applying changes
+  // Validate capabilities before applying changes
   const canAddNodes = capabilities.length === 0 || capabilities.includes('add_nodes');
   const canEditNodes = capabilities.length === 0 || capabilities.includes('edit_nodes');
   const canDeleteNodes = capabilities.length === 0 || capabilities.includes('delete_nodes');
@@ -852,12 +944,25 @@ async function executeAgent(
           nodeType = 'API';
         }
 
+        // Assign X position based on flow rank for visual left-to-right layout
+        const flowRank = getFlowRank(nodeType);
+        const baseX = {
+          1: 100,   // PROJECT, REQUIREMENT, STANDARD, TECH_STACK
+          2: 300,   // PAGE
+          3: 500,   // COMPONENT
+          4: 700,   // API
+          5: 900,   // SERVICE, WEBHOOK, FIREWALL, SECURITY
+          6: 1100,  // DATABASE
+        };
+        const xPos = (baseX[flowRank as keyof typeof baseX] || 600) + Math.random() * 100;
+        const yPos = Math.random() * 600;
+
         const { data, error } = await supabase.rpc('upsert_canvas_node_with_token', {
           p_id: newNodeId,
           p_project_id: context.projectId,
           p_token: context.shareToken,
           p_type: nodeType,
-          p_position: { x: Math.random() * 500, y: Math.random() * 500 },
+          p_position: { x: xPos, y: yPos },
           p_data: { label: nodeData.label, description: nodeData.description, type: nodeType },
         });
         
@@ -867,6 +972,7 @@ async function executeAgent(
         }
         console.log('Node added successfully:', data);
         newNodeIds.push(newNodeId);
+        nodeTypeMap.set(newNodeId, nodeType); // Track for edge validation
         nodesAdded++;
       } catch (err) {
         console.error('Error adding node:', err);
@@ -954,16 +1060,34 @@ async function executeAgent(
           continue;
         }
 
+        // AUTO-REVERSE: Check if edge flows backward and reverse it
+        const sourceType = nodeTypeMap.get(edgeData.source) || 'COMPONENT';
+        const targetType = nodeTypeMap.get(edgeData.target) || 'COMPONENT';
+        const sourceRank = getFlowRank(sourceType);
+        const targetRank = getFlowRank(targetType);
+        
+        let finalSource = edgeData.source;
+        let finalTarget = edgeData.target;
+        let finalLabel = edgeData.label || '';
+        
+        if (sourceRank > targetRank) {
+          // Edge is backward - auto-reverse it
+          console.warn(`Auto-reversing backward edge: ${sourceType}(${sourceRank}) -> ${targetType}(${targetRank})`);
+          finalSource = edgeData.target;
+          finalTarget = edgeData.source;
+          finalLabel = finalLabel || 'depends on';
+        }
+
         const newEdgeId = crypto.randomUUID();
-        console.log(`Creating edge ${newEdgeId}:`, edgeData);
+        console.log(`Creating edge ${newEdgeId}:`, { source: finalSource, target: finalTarget, label: finalLabel });
         
         const { data, error } = await supabase.rpc('upsert_canvas_edge_with_token', {
           p_id: newEdgeId,
           p_project_id: context.projectId,
           p_token: context.shareToken,
-          p_source_id: edgeData.source,
-          p_target_id: edgeData.target,
-          p_label: edgeData.label || '',
+          p_source_id: finalSource,
+          p_target_id: finalTarget,
+          p_label: finalLabel,
           p_edge_type: 'default',
           p_style: {
             stroke: 'hsl(var(--primary))',
@@ -1066,6 +1190,50 @@ async function executeOrchestrator(
   const thinkingEnabled = context.thinkingEnabled || false;
   const thinkingBudget = context.thinkingBudget || -1;
   
+  // Calculate topology score - count backward edges
+  let backwardEdgeCount = 0;
+  const backwardEdgeDetails: string[] = [];
+  
+  // Build node type map for current nodes
+  const nodeTypeMap = new Map<string, { type: string; label: string }>();
+  context.currentNodes.forEach((n: any) => {
+    nodeTypeMap.set(n.id, {
+      type: n.type || n.data?.type || 'COMPONENT',
+      label: n.data?.label || 'Unnamed'
+    });
+  });
+  
+  // Check each edge for backward flow
+  context.currentEdges.forEach((edge: any) => {
+    const sourceId = edge.source_id || edge.source;
+    const targetId = edge.target_id || edge.target;
+    const sourceInfo = nodeTypeMap.get(sourceId);
+    const targetInfo = nodeTypeMap.get(targetId);
+    
+    if (sourceInfo && targetInfo) {
+      const sourceRank = getFlowRank(sourceInfo.type);
+      const targetRank = getFlowRank(targetInfo.type);
+      
+      if (sourceRank > targetRank) {
+        backwardEdgeCount++;
+        backwardEdgeDetails.push(`${sourceInfo.label}(${sourceInfo.type}) → ${targetInfo.label}(${targetInfo.type})`);
+      }
+    }
+  });
+  
+  // Build topology warning if backward edges exist
+  let topologyWarning = '';
+  if (backwardEdgeCount > 0) {
+    topologyWarning = `\n\n⚠️ CRITICAL TOPOLOGY ISSUE: ${backwardEdgeCount} backward edge(s) detected that violate left-to-right flow:\n`;
+    backwardEdgeDetails.slice(0, 5).forEach(detail => {
+      topologyWarning += `  - ${detail}\n`;
+    });
+    if (backwardEdgeDetails.length > 5) {
+      topologyWarning += `  ... and ${backwardEdgeDetails.length - 5} more\n`;
+    }
+    topologyWarning += `\nAll agents MUST fix these - edges should flow: PAGE → COMPONENT → API → SERVICE → DATABASE\n`;
+  }
+  
   const orchestratorPrompt = `You are the Orchestrator supervising all agents working on this architecture.
 
 **Agent That Just Completed**: ${context.agentLabel}
@@ -1080,6 +1248,8 @@ ${context.reasoning}
 **Current Architecture State**:
 - Total Nodes: ${context.currentNodes.length}
 - Total Edges: ${context.currentEdges.length}
+- Topology Score: ${backwardEdgeCount === 0 ? '✓ All edges flow correctly' : `⚠️ ${backwardEdgeCount} backward edges detected`}
+${topologyWarning}
 
 **Shared Blackboard Memory** (Previous guidance from earlier in this iteration):
 ${context.blackboard.length > 0 ? context.blackboard.join('\n') : 'No previous guidance yet this iteration.'}
@@ -1092,6 +1262,7 @@ ${context.attachedContext?.standards?.length > 0 ? `\n**Standards to Meet**: ${c
 - Missing critical elements
 - Potential conflicts or issues
 - Next priorities
+${backwardEdgeCount > 0 ? '- CRITICAL: Flag the backward edges and instruct agents to fix them' : ''}
 
 Keep it concise and actionable. This will be added to the Blackboard that all subsequent agents can reference.`;
 
@@ -1111,7 +1282,7 @@ Keep it concise and actionable. This will be added to the Blackboard that all su
             parts: [{ text: orchestratorPrompt }]
           }],
           generationConfig: {
-            temperature: 0.7,
+            temperature: 0.4,
             maxOutputTokens: maxTokens,
             ...(selectedModel !== 'gemini-2.5-pro' && {
               thinkingConfig: { thinkingBudget: thinkingEnabled ? thinkingBudget : 0 }
@@ -1162,6 +1333,11 @@ Keep it concise and actionable. This will be added to the Blackboard that all su
     guidance = aiData.content?.[0]?.text || '';
   } else {
     guidance = aiData.choices?.[0]?.message?.content || '';
+  }
+  
+  // Append topology score to guidance
+  if (backwardEdgeCount > 0) {
+    guidance = `[TOPOLOGY: ${backwardEdgeCount} backward edges] ${guidance.trim()}`;
   }
   
   return guidance.trim();
