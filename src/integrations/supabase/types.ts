@@ -2715,31 +2715,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      insert_project_with_token:
-        | {
-            Args: {
-              p_budget?: number
-              p_description?: string
-              p_name: string
-              p_org_id: string
-              p_organization?: string
-              p_scope?: string
-              p_status?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_budget?: number
-              p_description?: string
-              p_name: string
-              p_org_id: string
-              p_organization?: string
-              p_scope?: string
-              p_status?: Database["public"]["Enums"]["project_status"]
-            }
-            Returns: Json
-          }
+      insert_project_with_token: {
+        Args: {
+          p_budget?: number
+          p_description?: string
+          p_name: string
+          p_org_id: string
+          p_organization?: string
+          p_scope?: string
+          p_status?: Database["public"]["Enums"]["project_status"]
+        }
+        Returns: Json
+      }
       insert_repo_pat_with_token: {
         Args: { p_pat: string; p_repo_id: string }
         Returns: {
