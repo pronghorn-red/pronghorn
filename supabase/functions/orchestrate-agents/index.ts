@@ -156,11 +156,10 @@ serve(async (req) => {
       thinkingBudget = -1,
     } = await req.json();
 
-    if (!projectId) {
-      throw new Error('projectId is required');
+    // shareToken must be explicitly passed (can be null for authenticated users)
+    if (!projectId || shareToken === undefined) {
+      throw new Error('projectId and shareToken are required');
     }
-    
-    // shareToken can be null for authenticated users (auth.uid() validates access)
 
     if (!agentFlow?.nodes || agentFlow.nodes.length === 0) {
       throw new Error('Agent flow must have at least one agent');
@@ -188,7 +187,33 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const authHeader = req.headers.get('Authorization');
+
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      global: {
+        headers: authHeader ? { Authorization: authHeader } : {},
+      },
+    });
+
+    // Validate project access AND check role BEFORE streaming
+    const { data: role, error: roleError } = await supabase.rpc('authorize_project_access', {
+      p_project_id: projectId,
+      p_token: shareToken,
+    });
+
+    if (roleError || !role) {
+      console.error('[orchestrate-agents] Access denied:', roleError);
+      throw new Error('Access denied');
+    }
+
+    // orchestrate-agents modifies canvas - requires editor role
+    if (role !== 'owner' && role !== 'editor') {
+      console.error('[orchestrate-agents] Insufficient permissions:', role);
+      return new Response(
+        JSON.stringify({ error: 'Insufficient permissions: editor role required to run agents' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
@@ -198,13 +223,6 @@ serve(async (req) => {
         };
 
         try {
-          // Validate project access
-          const { data: project, error: projectError } = await supabase.rpc('get_project_with_token', {
-            p_project_id: projectId,
-            p_token: shareToken,
-          });
-
-          if (projectError) throw projectError;
 
           // Get execution order from agent flow edges
           let executionOrder = buildExecutionOrder(agentFlow.nodes, agentFlow.edges);
