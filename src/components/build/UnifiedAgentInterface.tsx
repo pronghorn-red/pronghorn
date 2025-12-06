@@ -285,7 +285,7 @@ export function UnifiedAgentInterface({
       }
 
       const { data: historyMessages, error } = await supabase.rpc(
-        'get_agent_messages_for_chat_history_with_token',
+        'get_agent_messages_with_token',
         rpcParams
       );
 
@@ -451,7 +451,7 @@ export function UnifiedAgentInterface({
     try {
       // Fetch ALL messages (using high limit)
       const { data: messagesData, error: messagesError } = await supabase.rpc(
-        "get_agent_messages_by_project_with_token",
+        "get_agent_messages_with_token",
         {
           p_project_id: projectId,
           p_token: shareToken || null,

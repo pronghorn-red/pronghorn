@@ -61,7 +61,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
     setOffset(0);
     
     try {
-      const { data, error } = await supabase.rpc("get_agent_messages_by_project_with_token", {
+      const { data, error } = await supabase.rpc("get_agent_messages_with_token", {
         p_project_id: projectId,
         p_token: shareToken || null,
         p_limit: LIMIT,
@@ -70,7 +70,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
 
       if (error) throw error;
       
-      setMessages(data || []);
+      setMessages((data as AgentMessage[]) || []);
       setHasMore((data || []).length === LIMIT);
       setOffset(LIMIT);
     } catch (error) {
@@ -88,7 +88,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
     setLoading(true);
     
     try {
-      const { data, error } = await supabase.rpc("get_agent_messages_by_project_with_token", {
+      const { data, error } = await supabase.rpc("get_agent_messages_with_token", {
         p_project_id: projectId,
         p_token: shareToken || null,
         p_limit: LIMIT,
@@ -97,7 +97,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
 
       if (error) throw error;
       
-      const newMessages = data || [];
+      const newMessages = (data as AgentMessage[]) || [];
       setMessages((prev) => [...prev, ...newMessages]);
       setHasMore(newMessages.length === LIMIT);
       setOffset((prev) => prev + LIMIT);
