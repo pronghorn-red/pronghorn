@@ -58,6 +58,22 @@ export default function ProjectSettings() {
     enabled: !!projectId && isTokenSet,
   });
 
+  // Get user's role via authorize_project_access
+  const { data: userRole } = useQuery({
+    queryKey: ["project-role", projectId, shareToken],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("authorize_project_access", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+      });
+      if (error) return null;
+      return data as string | null;
+    },
+    enabled: !!projectId && isTokenSet,
+  });
+
+  const isOwner = userRole === "owner";
+
   useEffect(() => {
     if (project) {
       setProjectName(project.name || "");
@@ -143,8 +159,8 @@ export default function ProjectSettings() {
               onMenuClick={() => setIsSidebarOpen(true)}
             />
             <div className="space-y-6">
-                {/* Show TokenManagement for owners, AccessLevelBanner for token users */}
-                {user && project?.created_by === user.id ? (
+              {/* Show TokenManagement for owners, AccessLevelBanner for non-owners */}
+                {isOwner ? (
                   <TokenManagement projectId={projectId!} shareToken={shareToken} />
                 ) : (
                   <AccessLevelBanner projectId={projectId!} shareToken={shareToken} />
@@ -386,8 +402,8 @@ export default function ProjectSettings() {
                   </CardContent>
                 </Card>
 
-                {/* Danger Zone - Project Deletion */}
-                {user && project?.created_by === user.id && (
+                {/* Danger Zone - Project Deletion (owner role required) */}
+                {isOwner && (
                   <Card className="border-destructive">
                     <CardHeader>
                       <CardTitle className="text-destructive">Danger Zone</CardTitle>
@@ -404,6 +420,7 @@ export default function ProjectSettings() {
                           <DeleteProjectDialog
                             projectId={projectId!}
                             projectName={project?.name || "this project"}
+                            shareToken={shareToken}
                             onDelete={() => {
                               toast.success("Project deleted successfully");
                               navigate("/dashboard");
