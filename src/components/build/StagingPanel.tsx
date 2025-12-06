@@ -119,16 +119,18 @@ export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, on
 
       setStagedChanges((staged || []) as StagedChange[]);
 
-      // Load pending commits (commits not yet pushed to GitHub)
+      // Load pending commits (commits not yet pushed to GitHub - pushed_at IS NULL)
       const { data: commits, error: commitsError } = await supabase.rpc("get_commit_history_with_token", {
         p_repo_id: primaryRepo.id,
         p_token: shareToken || null,
         p_branch: primaryRepo.branch,
-        p_limit: 10,
+        p_limit: 50,
       });
 
       if (!commitsError && commits) {
-        setPendingCommits(commits);
+        // Filter to only show unpushed commits (pushed_at is null)
+        const unpushedCommits = commits.filter((c: any) => c.pushed_at === null);
+        setPendingCommits(unpushedCommits);
       }
     } catch (error: any) {
       console.error("Error loading staged changes:", error);

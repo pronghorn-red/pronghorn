@@ -16,6 +16,8 @@ interface Commit {
   files_metadata?: any;
   committed_at: string;
   committed_by?: string;
+  pushed_at?: string | null;
+  github_sha?: string | null;
 }
 
 interface CommitHistoryProps {
@@ -195,8 +197,17 @@ export function CommitHistory({ projectId, shareToken }: CommitHistoryProps) {
                     <Badge variant="secondary" className="text-xs">
                       {commit.files_changed} file{commit.files_changed !== 1 ? "s" : ""}
                     </Badge>
+                    {commit.pushed_at ? (
+                      <Badge variant="outline" className="text-xs text-green-600 border-green-600">
+                        Pushed
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-600">
+                        Local
+                      </Badge>
+                    )}
                     <code className="text-xs text-muted-foreground font-mono">
-                      {commit.commit_sha.substring(0, 7)}
+                      {(commit.github_sha || commit.commit_sha).substring(0, 7)}
                     </code>
                   </div>
                 </div>

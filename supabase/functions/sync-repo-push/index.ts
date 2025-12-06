@@ -424,16 +424,30 @@ Deno.serve(async (req) => {
 
     console.log(`Successfully pushed to ${repo.organization}/${repo.repo} (branch: ${branch}): ${newCommitData.sha}`);
 
-    // Log commit to database
+    // Log commit to database - conditional logic to avoid duplicates
+    // First try to mark existing pending commits as pushed (Build page workflow)
+    // If none found, create a new commit record (Repository page workflow)
     try {
-      await supabaseClient.rpc('log_repo_commit_with_token', {
+      const { data: updatedCount, error: updateError } = await supabaseClient.rpc('mark_commits_pushed_with_token', {
         p_repo_id: repoId,
         p_token: shareToken,
+        p_github_sha: newCommitData.sha,
         p_branch: branch,
-        p_commit_sha: newCommitData.sha,
-        p_commit_message: commitMessage || `Update ${totalChanges} file(s) via Pronghorn`,
-        p_files_changed: totalChanges,
       });
+
+      // If no pending commits were updated (Repository page scenario), create new record
+      if (!updateError && (updatedCount === 0 || updatedCount === null)) {
+        await supabaseClient.rpc('log_repo_commit_with_token', {
+          p_repo_id: repoId,
+          p_token: shareToken,
+          p_branch: branch,
+          p_commit_sha: newCommitData.sha,
+          p_commit_message: commitMessage || `Update ${totalChanges} file(s) via Pronghorn`,
+          p_files_changed: totalChanges,
+        });
+      } else {
+        console.log(`Marked ${updatedCount} pending commit(s) as pushed with SHA: ${newCommitData.sha}`);
+      }
     } catch (logError) {
       console.error('Failed to log commit:', logError);
       // Don't fail the entire operation if logging fails

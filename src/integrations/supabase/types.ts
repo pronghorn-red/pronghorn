@@ -1026,9 +1026,11 @@ export type Database = {
           created_at: string
           files_changed: number
           files_metadata: Json | null
+          github_sha: string | null
           id: string
           parent_commit_id: string | null
           project_id: string
+          pushed_at: string | null
           repo_id: string
         }
         Insert: {
@@ -1040,9 +1042,11 @@ export type Database = {
           created_at?: string
           files_changed?: number
           files_metadata?: Json | null
+          github_sha?: string | null
           id?: string
           parent_commit_id?: string | null
           project_id: string
+          pushed_at?: string | null
           repo_id: string
         }
         Update: {
@@ -1054,9 +1058,11 @@ export type Database = {
           created_at?: string
           files_changed?: number
           files_metadata?: Json | null
+          github_sha?: string | null
           id?: string
           parent_commit_id?: string | null
           project_id?: string
+          pushed_at?: string | null
           repo_id?: string
         }
         Relationships: [
@@ -1667,9 +1673,11 @@ export type Database = {
           created_at: string
           files_changed: number
           files_metadata: Json | null
+          github_sha: string | null
           id: string
           parent_commit_id: string | null
           project_id: string
+          pushed_at: string | null
           repo_id: string
         }
         SetofOptions: {
@@ -2107,9 +2115,11 @@ export type Database = {
           created_at: string
           files_changed: number
           files_metadata: Json | null
+          github_sha: string | null
           id: string
           parent_commit_id: string | null
           project_id: string
+          pushed_at: string | null
           repo_id: string
         }[]
         SetofOptions: {
@@ -2379,9 +2389,11 @@ export type Database = {
           created_at: string
           files_changed: number
           files_metadata: Json | null
+          github_sha: string | null
           id: string
           parent_commit_id: string | null
           project_id: string
+          pushed_at: string | null
           repo_id: string
         }[]
         SetofOptions: {
@@ -2783,9 +2795,11 @@ export type Database = {
           created_at: string
           files_changed: number
           files_metadata: Json | null
+          github_sha: string | null
           id: string
           parent_commit_id: string | null
           project_id: string
+          pushed_at: string | null
           repo_id: string
         }
         SetofOptions: {
@@ -2794,6 +2808,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      mark_commits_pushed_with_token: {
+        Args: {
+          p_branch?: string
+          p_github_sha: string
+          p_repo_id: string
+          p_token: string
+        }
+        Returns: number
       }
       move_file_with_token: {
         Args: { p_file_id: string; p_new_path: string; p_token: string }
