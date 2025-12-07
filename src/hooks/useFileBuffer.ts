@@ -361,13 +361,17 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
   }, [currentPath]);
 
   // Reload current file from database (discard local changes)
-  const reloadCurrentFile = useCallback(async () => {
+  // forceCheckStaging: when true, always check repo_staging first (for external changes)
+  const reloadCurrentFile = useCallback(async (forceCheckStaging?: boolean) => {
     if (!currentPath || !repoId) return;
 
     const file = buffer.get(currentPath);
     if (!file) return;
 
-    const loadedContent = await loadFileContent(file.id, file.path, file.isStaged);
+    // Use forceCheckStaging if provided, otherwise use cached isStaged value
+    const shouldCheckStaging = forceCheckStaging ?? file.isStaged;
+    
+    const loadedContent = await loadFileContent(file.id, file.path, shouldCheckStaging);
     
     if (loadedContent) {
       setBuffer(prev => {
@@ -379,6 +383,7 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
           lastSavedContent: loadedContent.content,
           isDirty: false,
           isSaving: false,
+          isStaged: shouldCheckStaging, // Update staged status
         });
         return newMap;
       });
