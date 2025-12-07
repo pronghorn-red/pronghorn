@@ -144,6 +144,18 @@ export function UnifiedAgentInterface({
     setMessages(loadedMessages);
   }, [loadedMessages]);
 
+  // Scroll to bottom when messages first load
+  const hasInitiallyScrolled = useRef(false);
+  useEffect(() => {
+    if (!messagesLoading && loadedMessages.length > 0 && !hasInitiallyScrolled.current) {
+      hasInitiallyScrolled.current = true;
+      // Use a longer timeout to ensure DOM is fully rendered
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+      }, 150);
+    }
+  }, [messagesLoading, loadedMessages.length]);
+
   // Combine messages and operations into a unified timeline
   const timeline = [...messages, ...operations].sort((a, b) => 
     new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
