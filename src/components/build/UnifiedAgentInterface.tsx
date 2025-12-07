@@ -1069,9 +1069,10 @@ export function UnifiedAgentInterface({
           </div>
         )}
 
-        {/* Task Input */}
-        <div className="flex gap-2">
-          <div className="flex flex-col gap-1">
+        {/* Task Input - Responsive Layout */}
+        <div className="flex flex-wrap gap-2 items-end">
+          {/* Left buttons */}
+          <div className="flex gap-1 shrink-0">
             <Button
               variant="outline"
               size="icon"
@@ -1093,6 +1094,8 @@ export function UnifiedAgentInterface({
               <BookOpen className="h-4 w-4" />
             </Button>
           </div>
+          
+          {/* Textarea - grows to fill, wraps when narrow */}
           <Textarea
             placeholder="Describe the task for the agent..."
             value={taskInput}
@@ -1104,9 +1107,11 @@ export function UnifiedAgentInterface({
               }
             }}
             disabled={isSubmitting}
-            className="min-h-[60px]"
+            className="flex-1 min-w-[150px] min-h-[60px] basis-full sm:basis-auto order-last sm:order-none"
           />
-          <div className="flex flex-col gap-1">
+          
+          {/* Right buttons */}
+          <div className="flex gap-1 shrink-0">
             <Button
               onClick={isSubmitting ? handleStop : handleSubmit}
               disabled={!isSubmitting && (!taskInput.trim() || !repoId)}
