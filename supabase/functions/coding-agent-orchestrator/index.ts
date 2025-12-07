@@ -16,6 +16,8 @@ interface TaskRequest {
   mode: "task" | "iterative_loop" | "continuous_improvement";
   autoCommit?: boolean;
   chatHistory?: string;
+  exposeProject?: boolean;
+  maxIterations?: number;
 }
 
 function parseAgentResponseText(rawText: string): any {
@@ -121,28 +123,31 @@ function getGrokResponseSchema() {
                 type: {
                   type: "string",
                   enum: [
-                    "list_files",
-                    "wildcard_search",
-                    "search",
-                    "read_file",
-                    "edit_lines",
-                    "create_file",
-                    "delete_file",
-                    "move_file",
-                    "get_staged_changes",
-                    "unstage_file",
-                    "discard_all_staged",
-                  ],
-                },
-                params: {
-                  type: "object",
-                  description: "Operation-specific parameters",
-                },
+                  "list_files",
+                  "wildcard_search",
+                  "search",
+                  "read_file",
+                  "edit_lines",
+                  "create_file",
+                  "delete_file",
+                  "move_file",
+                  "get_staged_changes",
+                  "unstage_file",
+                  "discard_all_staged",
+                  "project_inventory",
+                  "project_category",
+                  "project_elements",
+                ],
               },
-              required: ["type", "params"],
+              params: {
+                type: "object",
+                description: "Operation-specific parameters",
+              },
             },
+            required: ["type", "params"],
           },
-          blackboard_entry: {
+        },
+        blackboard_entry: {
             type: "object",
             properties: {
               entry_type: {
@@ -185,29 +190,32 @@ function getClaudeResponseTool() {
               type: {
                 type: "string",
                 enum: [
-                  "list_files",
-                  "wildcard_search",
-                  "search",
-                  "read_file",
-                  "edit_lines",
-                  "create_file",
-                  "delete_file",
-                  "move_file",
-                  "get_staged_changes",
-                  "unstage_file",
-                  "discard_all_staged",
-                ],
-              },
-              params: {
-                type: "object",
-                description: "Operation-specific parameters",
-              },
+                "list_files",
+                "wildcard_search",
+                "search",
+                "read_file",
+                "edit_lines",
+                "create_file",
+                "delete_file",
+                "move_file",
+                "get_staged_changes",
+                "unstage_file",
+                "discard_all_staged",
+                "project_inventory",
+                "project_category",
+                "project_elements",
+              ],
             },
-            required: ["type", "params"],
-            additionalProperties: false,
+            params: {
+              type: "object",
+              description: "Operation-specific parameters",
+            },
           },
+          required: ["type", "params"],
+          additionalProperties: false,
         },
-        blackboard_entry: {
+      },
+      blackboard_entry: {
           type: "object",
           properties: {
             entry_type: {
@@ -261,6 +269,8 @@ serve(async (req) => {
       mode,
       autoCommit = false,
       chatHistory,
+      exposeProject = false,
+      maxIterations: requestedMaxIterations = 30,
     } = requestData;
 
     console.log("Starting CodingAgent task:", { projectId, mode, taskDescription });
@@ -707,10 +717,51 @@ I will now... {"reasoning": "..."}
 {"reasoning": "..."}
 \`\`\`
 
-Start your response with { and end with }. Nothing else.`;
+Start your response with { and end with }. Nothing else.${exposeProject ? `
 
-    // Autonomous iteration loop
-    const MAX_ITERATIONS = 30;
+=== PROJECT EXPLORATION TOOLS (ENABLED) ===
+
+You have READ-ONLY access to explore the entire project via these additional tools:
+
+project_inventory:
+  - Returns counts and brief previews for ALL project elements in one call
+  - Use this FIRST to understand project scope before diving into specifics
+  - Returns: { category: { count, items: [{id, title, snippet}] } } for all categories
+  - params: {} (no parameters required)
+
+project_category:
+  - Load ALL items from a specific category with full details
+  - Categories: requirements, chat_sessions, chat_messages, standards, tech_stacks, 
+    artifacts, project_metadata, canvas_nodes, canvas_edges, canvas_layers,
+    repositories, repo_files, repo_staging, repo_commits, agent_sessions, agent_messages
+  - params: { "category": "category_name" }
+  - Use when you need to review an entire category in depth
+
+project_elements:
+  - Load SPECIFIC elements by their IDs with full details
+  - Pass array of {category, id} pairs to fetch multiple elements at once
+  - params: { "elements": [{"category": "requirements", "id": "uuid"}, ...] }
+  - Use when you know exactly which items you need
+
+PROJECT EXPLORATION WORKFLOW:
+1. Start with project_inventory to see counts and previews of all categories
+2. Use project_category to load full details of categories you need
+3. Use project_elements to fetch specific items by ID
+
+EXAMPLE USE CASES:
+- "Do these pages cover all requirements?" → Use project_inventory, then project_category("requirements"), 
+  then project_category("canvas_nodes") to compare
+- "Create controllers for all APIs on canvas" → Use project_category("canvas_nodes"), filter for API type,
+  then create files accordingly
+- "Review the recent chat sessions" → Use project_category("chat_sessions") to see all sessions
+
+These tools are READ-ONLY. You cannot modify project elements through these tools.
+Use them to understand context and inform your file operations.` : ''}`;
+
+    // Autonomous iteration loop - use requested max or default to 30, cap at 500
+    const MAX_ITERATIONS = Math.min(Math.max(requestedMaxIterations, 1), 500);
+    console.log(`Max iterations set to: ${MAX_ITERATIONS} (requested: ${requestedMaxIterations})`);
+    
     let iteration = 0;
     let conversationHistory: Array<{ role: string; content: string }> = [];
     let finalStatus = "running";
@@ -1264,6 +1315,41 @@ Start your response with { and end with }. Nothing else.`;
               });
               filesChanged = true;
               console.log(`[AGENT] Discarded all staged changes, count: ${result.data || 0}`);
+              break;
+
+            case "project_inventory":
+              if (!exposeProject) {
+                throw new Error("project_inventory is not enabled. Enable 'Expose Project to Agent' in Agent Configuration.");
+              }
+              result = await supabase.rpc("get_project_inventory_with_token", {
+                p_project_id: projectId,
+                p_token: shareToken,
+              });
+              console.log(`[AGENT] Retrieved project inventory`);
+              break;
+
+            case "project_category":
+              if (!exposeProject) {
+                throw new Error("project_category is not enabled. Enable 'Expose Project to Agent' in Agent Configuration.");
+              }
+              result = await supabase.rpc("get_project_category_with_token", {
+                p_project_id: projectId,
+                p_category: op.params.category,
+                p_token: shareToken,
+              });
+              console.log(`[AGENT] Retrieved project category: ${op.params.category}`);
+              break;
+
+            case "project_elements":
+              if (!exposeProject) {
+                throw new Error("project_elements is not enabled. Enable 'Expose Project to Agent' in Agent Configuration.");
+              }
+              result = await supabase.rpc("get_project_elements_with_token", {
+                p_project_id: projectId,
+                p_elements: op.params.elements,
+                p_token: shareToken,
+              });
+              console.log(`[AGENT] Retrieved ${op.params.elements?.length || 0} project elements`);
               break;
           }
 
