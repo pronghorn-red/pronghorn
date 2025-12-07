@@ -250,7 +250,7 @@ export default function Build() {
               if (!hasDirtyFilesRef.current) {
                 // User has no unsaved changes - safe to reload
                 console.log("Reloading current file due to external change:", changedPath);
-                reloadCurrentFileRef.current?.();
+                reloadCurrentFileRef.current?.(true); // Force check staging since this is a staging change
               } else {
                 // User has unsaved changes - notify them
                 toast.info("File updated externally - save your changes to see updates");
