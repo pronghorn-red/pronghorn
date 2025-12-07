@@ -10,6 +10,7 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { useRealtimeCanvas } from "@/hooks/useRealtimeCanvas";
 import { useRealtimeLayers } from "@/hooks/useRealtimeLayers";
 import { useNodeTypes } from "@/hooks/useNodeTypes";
+import { connectionLogic, getXPosition } from "@/lib/connectionLogic";
 import ReactFlow, {
   Background,
   Controls,
@@ -858,20 +859,13 @@ function CanvasFlow() {
 
   const handleAutoOrder = useCallback(() => {
     // Configuration
-    const HORIZONTAL_SPACING = 375; // Space between type columns (50% farther)
-    const VERTICAL_SPACING = 84;    // Space between nodes vertically (33% less)
-    const START_X = 50;             // Left margin
+    const VERTICAL_SPACING = 84;    // Space between nodes vertically
     const START_Y = 50;             // Top margin
     
-    // Type order (left to right) - use dynamic order from connectionLogic
-    const typeOrder: string[] = [
-      "PROJECT", "REQUIREMENT", "STANDARD", "TECH_STACK", 
-      "PAGE", "WEB_COMPONENT", "COMPONENT", "HOOK_COMPOSABLE",
-      "API_SERVICE", "API_ROUTER", "API_MIDDLEWARE", "API_CONTROLLER", "API_UTIL",
-      "API", "WEBHOOK", "FIREWALL", "SECURITY", 
-      "EXTERNAL_SERVICE", "SERVICE", "DATABASE", "SCHEMA", "TABLE",
-      "AGENT", "OTHER"
-    ];
+    // Build typeOrder dynamically from connectionLogic flow hierarchy
+    const typeOrder: string[] = connectionLogic.flowHierarchy.levels
+      .sort((a, b) => a.level - b.level)
+      .flatMap(level => level.types);
     
     // Determine which nodes to order
     const nodesToOrder = selectedNodesList.length > 1 
@@ -888,29 +882,55 @@ function CanvasFlow() {
       const type = node.data?.type as string;
       if (type && nodesByType.has(type)) {
         nodesByType.get(type)!.push(node);
+      } else if (type) {
+        // Handle types not in typeOrder - add to "OTHER" or create new group
+        if (!nodesByType.has(type)) {
+          nodesByType.set(type, []);
+        }
+        nodesByType.get(type)!.push(node);
       }
     });
     
-    // Calculate positions
+    // Calculate positions using X positions from connectionLogic
     const updates: Node[] = [];
-    let currentX = START_X;
+    
+    // Process each type and position nodes using getXPosition
+    const processedTypes = new Set<string>();
     
     typeOrder.forEach(type => {
+      if (processedTypes.has(type)) return;
+      processedTypes.add(type);
+      
       const nodesOfType = nodesByType.get(type) || [];
       if (nodesOfType.length === 0) return;
+      
+      // Get X position from connectionLogic
+      const xPos = getXPosition(type);
       
       // Position nodes of this type vertically
       let currentY = START_Y;
       nodesOfType.forEach(node => {
         updates.push({
           ...node,
-          position: { x: currentX, y: currentY }
+          position: { x: xPos, y: currentY }
         });
         currentY += VERTICAL_SPACING;
       });
+    });
+    
+    // Handle any remaining types not in typeOrder
+    nodesByType.forEach((nodesOfType, type) => {
+      if (processedTypes.has(type) || nodesOfType.length === 0) return;
       
-      // Move to next column
-      currentX += HORIZONTAL_SPACING;
+      const xPos = getXPosition(type); // Will return default 700 for unknown types
+      let currentY = START_Y;
+      nodesOfType.forEach(node => {
+        updates.push({
+          ...node,
+          position: { x: xPos, y: currentY }
+        });
+        currentY += VERTICAL_SPACING;
+      });
     });
     
     // Apply updates
