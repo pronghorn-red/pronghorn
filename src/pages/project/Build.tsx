@@ -752,7 +752,7 @@ export default function Build() {
                         <AgentFileTree
                           files={files}
                           stagedChanges={stagedChanges}
-                          selectedFileId={currentFile?.id || null}
+                          selectedFilePath={currentPath}
                           onSelectFile={handleSelectFile}
                           onFolderSelect={setSelectedFolderPath}
                           onAttachToPrompt={handleAttachToPrompt}
@@ -958,7 +958,7 @@ export default function Build() {
                         <AgentFileTree
                           files={files}
                           stagedChanges={stagedChanges}
-                          selectedFileId={currentFile?.id || null}
+                          selectedFilePath={currentPath}
                           onSelectFile={handleSelectFile}
                           onFolderSelect={setSelectedFolderPath}
                           onAttachToPrompt={handleAttachToPrompt}

@@ -26,7 +26,7 @@ interface AgentFileTreeProps {
     operation_type: string;
     old_path?: string;
   }>;
-  selectedFileId: string | null;
+  selectedFilePath: string | null;
   onSelectFile: (fileId: string, path: string, isStaged?: boolean) => void;
   onFolderSelect: (folderPath: string) => void;
   onAttachToPrompt: (fileId: string, path: string) => void;
@@ -37,7 +37,7 @@ interface AgentFileTreeProps {
 export function AgentFileTree({
   files,
   stagedChanges = [],
-  selectedFileId,
+  selectedFilePath,
   onSelectFile,
   onFolderSelect,
   onAttachToPrompt,
@@ -157,7 +157,7 @@ export function AgentFileTree({
 
   const renderNode = (node: FileNode, level: number = 0) => {
     const isExpanded = expandedFolders.has(node.path);
-    const isSelected = selectedFileId === node.id;
+    const isSelected = selectedFilePath === node.path;
 
     if (node.type === "folder") {
       const folderBgColor = getFolderColor(node);
