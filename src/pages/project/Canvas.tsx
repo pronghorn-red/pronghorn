@@ -874,57 +874,37 @@ function CanvasFlow() {
     
     if (nodesToOrder.length === 0) return;
     
-    // Group nodes by type
-    const nodesByType = new Map<string, Node[]>();
-    typeOrder.forEach(type => nodesByType.set(type, []));
+    // Step 1: Group nodes by their X position (column)
+    const nodesByColumn = new Map<number, Node[]>();
     
     nodesToOrder.forEach(node => {
       const type = node.data?.type as string;
-      if (type && nodesByType.has(type)) {
-        nodesByType.get(type)!.push(node);
-      } else if (type) {
-        // Handle types not in typeOrder - add to "OTHER" or create new group
-        if (!nodesByType.has(type)) {
-          nodesByType.set(type, []);
-        }
-        nodesByType.get(type)!.push(node);
+      const xPos = type ? getXPosition(type) : 700; // Default x if no type
+      
+      if (!nodesByColumn.has(xPos)) {
+        nodesByColumn.set(xPos, []);
       }
+      nodesByColumn.get(xPos)!.push(node);
     });
     
-    // Calculate positions using X positions from connectionLogic
-    const updates: Node[] = [];
-    
-    // Process each type and position nodes using getXPosition
-    const processedTypes = new Set<string>();
-    
-    typeOrder.forEach(type => {
-      if (processedTypes.has(type)) return;
-      processedTypes.add(type);
-      
-      const nodesOfType = nodesByType.get(type) || [];
-      if (nodesOfType.length === 0) return;
-      
-      // Get X position from connectionLogic
-      const xPos = getXPosition(type);
-      
-      // Position nodes of this type vertically
-      let currentY = START_Y;
-      nodesOfType.forEach(node => {
-        updates.push({
-          ...node,
-          position: { x: xPos, y: currentY }
-        });
-        currentY += VERTICAL_SPACING;
+    // Step 2: Sort nodes within each column by type order (so like types stay together)
+    nodesByColumn.forEach((nodesInColumn) => {
+      nodesInColumn.sort((a, b) => {
+        const typeA = a.data?.type as string || 'OTHER';
+        const typeB = b.data?.type as string || 'OTHER';
+        const indexA = typeOrder.indexOf(typeA);
+        const indexB = typeOrder.indexOf(typeB);
+        // Types not in typeOrder go to end
+        return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
       });
     });
     
-    // Handle any remaining types not in typeOrder
-    nodesByType.forEach((nodesOfType, type) => {
-      if (processedTypes.has(type) || nodesOfType.length === 0) return;
-      
-      const xPos = getXPosition(type); // Will return default 700 for unknown types
+    // Step 3: Position all nodes in each column, stacking vertically
+    const updates: Node[] = [];
+    
+    nodesByColumn.forEach((nodesInColumn, xPos) => {
       let currentY = START_Y;
-      nodesOfType.forEach(node => {
+      nodesInColumn.forEach(node => {
         updates.push({
           ...node,
           position: { x: xPos, y: currentY }
