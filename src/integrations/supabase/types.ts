@@ -2130,7 +2130,7 @@ export type Database = {
         }
       }
       get_file_content_with_token: {
-        Args: { p_file_id: string; p_token: string }
+        Args: { p_file_id: string; p_token?: string }
         Returns: {
           content: string
           id: string
