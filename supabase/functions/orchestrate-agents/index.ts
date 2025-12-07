@@ -39,38 +39,62 @@ interface ChangeLogEntry {
   reasoning: string;
 }
 
-// Flow order hierarchy for edge direction validation
-// Lower rank = LEFT side of canvas, Higher rank = RIGHT side
-const FLOW_ORDER: Record<string, number> = {
-  'PROJECT': 1,
-  'REQUIREMENT': 1,
-  'STANDARD': 1,
-  'TECH_STACK': 1,
-  'SECURITY': 1,
-  'PAGE': 2,
-  'WEB_COMPONENT': 3,
-  'COMPONENT': 3,
-  'HOOK_COMPOSABLE': 4,
-  'API_SERVICE': 5,
-  'AGENT': 5,
-  'OTHER': 5,
-  'API_ROUTER': 6,
-  'API_MIDDLEWARE': 6,
-  'API': 6,
-  'API_CONTROLLER': 7,
-  'API_UTIL': 7,
-  'WEBHOOK': 7,
-  'EXTERNAL_SERVICE': 8,
-  'SERVICE': 8,
-  'FIREWALL': 8,
-  'DATABASE': 9,
-  'SCHEMA': 10,
-  'TABLE': 11,
-};
+interface CanvasNodeType {
+  id: string;
+  system_name: string;
+  display_label: string;
+  description: string;
+  category: string;
+  icon: string;
+  color_class: string;
+  order_score: number;
+  is_active: boolean;
+  is_legacy: boolean;
+}
 
-function getFlowRank(nodeType: string): number {
-  const type = (nodeType || '').toUpperCase();
-  return FLOW_ORDER[type] || 3; // Default to middle rank
+// Dynamic helper functions for node types
+function buildFlowOrder(nodeTypes: CanvasNodeType[]): Record<string, number> {
+  const result: Record<string, number> = {};
+  nodeTypes.forEach(nt => {
+    // Convert order_score (100-1100) to flow rank (1-11)
+    result[nt.system_name] = Math.floor(nt.order_score / 100);
+  });
+  return result;
+}
+
+function buildXPositions(nodeTypes: CanvasNodeType[]): Record<string, number> {
+  const result: Record<string, number> = {};
+  nodeTypes.forEach(nt => {
+    // Map order_score to X position with spacing
+    result[nt.system_name] = nt.order_score + Math.floor(nt.order_score * 0.5);
+  });
+  return result;
+}
+
+function buildAllowedTypes(nodeTypes: CanvasNodeType[]): string[] {
+  return nodeTypes
+    .filter(nt => nt.is_active)
+    .map(nt => nt.system_name);
+}
+
+function buildNodeTypeDescriptions(nodeTypes: CanvasNodeType[]): string {
+  return nodeTypes
+    .filter(nt => !nt.is_legacy && nt.is_active)
+    .map(nt => `- ${nt.system_name}: ${nt.description || nt.display_label}`)
+    .join('\n');
+}
+
+function buildFlowHierarchy(nodeTypes: CanvasNodeType[]): string {
+  const groups = new Map<number, string[]>();
+  nodeTypes.filter(nt => nt.is_active && !nt.is_legacy).forEach(nt => {
+    const rank = Math.floor(nt.order_score / 100);
+    if (!groups.has(rank)) groups.set(rank, []);
+    groups.get(rank)!.push(nt.system_name);
+  });
+  return Array.from(groups.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([rank, types]) => `Level ${rank}: ${types.join(', ')}`)
+    .join('\n');
 }
 
 // Robust JSON parsing with multiple fallback methods
@@ -227,6 +251,30 @@ serve(async (req) => {
       );
     }
 
+    // Fetch node types from database for dynamic configuration
+    const { data: nodeTypesData, error: nodeTypesError } = await supabase.rpc('get_canvas_node_types', {
+      p_include_legacy: true // Include legacy for validation/mapping
+    });
+
+    if (nodeTypesError) {
+      console.error('[orchestrate-agents] Failed to fetch node types:', nodeTypesError);
+      throw new Error('Failed to fetch node types configuration');
+    }
+
+    const nodeTypes: CanvasNodeType[] = nodeTypesData || [];
+    console.log(`[orchestrate-agents] Loaded ${nodeTypes.length} node types from database`);
+
+    // Build dynamic lookups from database
+    const FLOW_ORDER = buildFlowOrder(nodeTypes);
+    const X_POSITIONS = buildXPositions(nodeTypes);
+    const allowedNodeTypes = buildAllowedTypes(nodeTypes);
+
+    // Create getFlowRank function with dynamic FLOW_ORDER
+    const getFlowRank = (nodeType: string): number => {
+      const type = (nodeType || '').toUpperCase();
+      return FLOW_ORDER[type] || 5; // Default to middle rank
+    };
+
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -309,6 +357,12 @@ serve(async (req) => {
                     thinkingEnabled,
                     thinkingBudget,
                     drawEdges,
+                    // Pass dynamic node type configuration
+                    nodeTypes,
+                    FLOW_ORDER,
+                    X_POSITIONS,
+                    allowedNodeTypes,
+                    getFlowRank,
                   },
                   supabase,
                   apiKey,
@@ -453,6 +507,9 @@ serve(async (req) => {
                         maxTokens,
                         thinkingEnabled,
                         thinkingBudget,
+                        nodeTypes,
+                        FLOW_ORDER,
+                        getFlowRank,
                       },
                       apiKey,
                       apiProvider
@@ -517,6 +574,11 @@ serve(async (req) => {
                         thinkingEnabled,
                         thinkingBudget,
                         drawEdges,
+                        nodeTypes,
+                        FLOW_ORDER,
+                        X_POSITIONS,
+                        allowedNodeTypes,
+                        getFlowRank,
                       },
                       supabase,
                       apiKey,
@@ -677,14 +739,12 @@ async function executeAgent(
   const thinkingBudget = context.thinkingBudget || -1;
   const drawEdges = context.drawEdges !== undefined ? context.drawEdges : true;
   
-  // Allowed node types in main canvas enum
-  const allowedNodeTypes = [
-    'PROJECT', 'PAGE', 'WEB_COMPONENT', 'COMPONENT', 'HOOK_COMPOSABLE',
-    'API_SERVICE', 'API_ROUTER', 'API_MIDDLEWARE', 'API_CONTROLLER', 'API_UTIL',
-    'API', 'DATABASE', 'SCHEMA', 'TABLE',
-    'EXTERNAL_SERVICE', 'SERVICE', 'WEBHOOK', 'FIREWALL', 'SECURITY',
-    'REQUIREMENT', 'STANDARD', 'TECH_STACK', 'AGENT', 'OTHER',
-  ];
+  // Use dynamic node types from context
+  const nodeTypes: CanvasNodeType[] = context.nodeTypes || [];
+  const FLOW_ORDER: Record<string, number> = context.FLOW_ORDER || {};
+  const X_POSITIONS: Record<string, number> = context.X_POSITIONS || {};
+  const allowedNodeTypes: string[] = context.allowedNodeTypes || [];
+  const getFlowRank = context.getFlowRank || ((t: string) => FLOW_ORDER[t.toUpperCase()] || 5);
   
   // Build context prompt
   let contextPrompt = `Current Canvas Delta (Cumulative Changes):\n`;
@@ -798,9 +858,14 @@ async function executeAgent(
     }
   }
 
+  // Build dynamic node type descriptions
+  const nodeTypeDescriptions = buildNodeTypeDescriptions(nodeTypes);
+  const flowHierarchy = buildFlowHierarchy(nodeTypes);
+
   // Explain allowed node types and ID usage
   contextPrompt += `=== NODE TYPE & ID RULES ===\n`;
-  contextPrompt += `- Node types must be one of: ${allowedNodeTypes.join(', ')}\n`;
+  contextPrompt += `Allowed node types:\n${nodeTypeDescriptions}\n\n`;
+  contextPrompt += `Flow hierarchy (edges must flow left to right):\n${flowHierarchy}\n\n`;
   contextPrompt += `- For edgesToAdd, source and target MUST be node IDs from the list below (not labels).\n`;
   contextPrompt += `- If you create new nodes, you may optionally include an "id" field using a UUID string; otherwise only connect edges between existing node IDs.\n\n`;
 
@@ -831,7 +896,7 @@ async function executeAgent(
   contextPrompt += `\nYour Task: Analyze the above and determine what changes are needed. Return a JSON object with:\n`;
   contextPrompt += `{\n`;
   contextPrompt += `  "reasoning": "Your analysis and reasoning",\n`;
-  contextPrompt += `  "nodesToAdd": [{ "type": "COMPONENT", "label": "Name", "description": "..." }],\n`;
+  contextPrompt += `  "nodesToAdd": [{ "type": "WEB_COMPONENT", "label": "Name", "description": "..." }],\n`;
   contextPrompt += `  "nodesToEdit": [{ "id": "node-uuid", "updates": { "label": "New name" } }],\n`;
   contextPrompt += `  "nodesToDelete": ["node-uuid-1", "node-uuid-2"],\n`;
   contextPrompt += `  "edgesToAdd": [{ "source": "node-uuid-1", "target": "node-uuid-2", "label": "Connection" }],\n`;
@@ -940,7 +1005,7 @@ async function executeAgent(
   // Build a map of node IDs to their types for flow validation
   const nodeTypeMap = new Map<string, string>();
   context.currentNodes.forEach((n: any) => {
-    nodeTypeMap.set(n.id, n.type || n.data?.type || 'COMPONENT');
+    nodeTypeMap.set(n.id, n.type || n.data?.type || 'WEB_COMPONENT');
   });
 
   // Validate capabilities before applying changes
@@ -960,26 +1025,17 @@ async function executeAgent(
 
         // Map arbitrary LLM node types into allowed enum values
         const rawType = typeof nodeData.type === 'string' ? nodeData.type.toUpperCase() : '';
-        let nodeType: string = 'COMPONENT';
+        let nodeType: string = 'WEB_COMPONENT';
         if (allowedNodeTypes.includes(rawType)) {
           nodeType = rawType;
         } else if (rawType.includes('DATA')) {
           nodeType = 'DATABASE';
         } else if (rawType.includes('PROTOCOL') || rawType.includes('API')) {
-          nodeType = 'API';
+          nodeType = 'API_SERVICE';
         }
 
-        // Assign X position based on flow rank for visual left-to-right layout
-        const flowRank = getFlowRank(nodeType);
-        const baseX = {
-          1: 100,   // PROJECT, REQUIREMENT, STANDARD, TECH_STACK
-          2: 300,   // PAGE
-          3: 500,   // COMPONENT
-          4: 700,   // API
-          5: 900,   // SERVICE, WEBHOOK, FIREWALL, SECURITY
-          6: 1100,  // DATABASE
-        };
-        const xPos = (baseX[flowRank as keyof typeof baseX] || 600) + Math.random() * 100;
+        // Use dynamic X position based on flow rank
+        const xPos = (X_POSITIONS[nodeType] || 700) + Math.random() * 100;
         const yPos = Math.random() * 600;
 
         const { data, error } = await supabase.rpc('upsert_canvas_node_with_token', {
@@ -1086,8 +1142,8 @@ async function executeAgent(
         }
 
         // AUTO-REVERSE: Check if edge flows backward and reverse it
-        const sourceType = nodeTypeMap.get(edgeData.source) || 'COMPONENT';
-        const targetType = nodeTypeMap.get(edgeData.target) || 'COMPONENT';
+        const sourceType = nodeTypeMap.get(edgeData.source) || 'WEB_COMPONENT';
+        const targetType = nodeTypeMap.get(edgeData.target) || 'WEB_COMPONENT';
         const sourceRank = getFlowRank(sourceType);
         const targetRank = getFlowRank(targetType);
         
@@ -1206,6 +1262,9 @@ async function executeOrchestrator(
     maxTokens?: number;
     thinkingEnabled?: boolean;
     thinkingBudget?: number;
+    nodeTypes?: CanvasNodeType[];
+    FLOW_ORDER?: Record<string, number>;
+    getFlowRank?: (nodeType: string) => number;
   },
   apiKey: string,
   apiProvider: 'gemini' | 'anthropic' | 'xai'
@@ -1214,6 +1273,11 @@ async function executeOrchestrator(
   const maxTokens = context.maxTokens || 8192;
   const thinkingEnabled = context.thinkingEnabled || false;
   const thinkingBudget = context.thinkingBudget || -1;
+  const FLOW_ORDER = context.FLOW_ORDER || {};
+  const getFlowRank = context.getFlowRank || ((t: string) => FLOW_ORDER[t.toUpperCase()] || 5);
+  
+  // Build dynamic flow hierarchy description
+  const flowHierarchy = context.nodeTypes ? buildFlowHierarchy(context.nodeTypes) : '';
   
   // Calculate topology score - count backward edges
   let backwardEdgeCount = 0;
@@ -1223,7 +1287,7 @@ async function executeOrchestrator(
   const nodeTypeMap = new Map<string, { type: string; label: string }>();
   context.currentNodes.forEach((n: any) => {
     nodeTypeMap.set(n.id, {
-      type: n.type || n.data?.type || 'COMPONENT',
+      type: n.type || n.data?.type || 'WEB_COMPONENT',
       label: n.data?.label || 'Unnamed'
     });
   });
@@ -1256,7 +1320,8 @@ async function executeOrchestrator(
     if (backwardEdgeDetails.length > 5) {
       topologyWarning += `  ... and ${backwardEdgeDetails.length - 5} more\n`;
     }
-    topologyWarning += `\nAll agents MUST fix these - edges should flow: PAGE → COMPONENT → API → SERVICE → DATABASE\n`;
+    topologyWarning += `\nFlow hierarchy:\n${flowHierarchy}\n`;
+    topologyWarning += `\nAll agents MUST fix these - edges should flow left to right through the hierarchy.\n`;
   }
   
   const orchestratorPrompt = `You are the Orchestrator supervising all agents working on this architecture.

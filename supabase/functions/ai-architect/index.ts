@@ -7,20 +7,88 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// X positions for node types based on flow hierarchy
-const X_POSITIONS: Record<string, number> = {
-  PROJECT: 100, REQUIREMENT: 100, STANDARD: 100, TECH_STACK: 100, SECURITY: 100,
-  PAGE: 250,
-  WEB_COMPONENT: 400, COMPONENT: 400,
-  HOOK_COMPOSABLE: 550,
-  API_SERVICE: 700, AGENT: 700, OTHER: 700, API: 700,
-  API_ROUTER: 850, API_MIDDLEWARE: 850,
-  API_CONTROLLER: 1000, API_UTIL: 1000, WEBHOOK: 1000,
-  EXTERNAL_SERVICE: 1150, SERVICE: 1150, FIREWALL: 1150,
-  DATABASE: 1300,
-  SCHEMA: 1450,
-  TABLE: 1600,
-};
+interface CanvasNodeType {
+  id: string;
+  system_name: string;
+  display_label: string;
+  description: string;
+  category: string;
+  icon: string;
+  color_class: string;
+  order_score: number;
+  is_active: boolean;
+  is_legacy: boolean;
+}
+
+// Dynamic helper functions
+function buildXPositions(nodeTypes: CanvasNodeType[]): Record<string, number> {
+  const result: Record<string, number> = {};
+  nodeTypes.forEach(nt => {
+    result[nt.system_name] = nt.order_score + Math.floor(nt.order_score * 0.5);
+  });
+  return result;
+}
+
+function buildNodeTypePrompt(nodeTypes: CanvasNodeType[]): string {
+  const activeTypes = nodeTypes.filter(nt => nt.is_active && !nt.is_legacy);
+  const legacyTypes = nodeTypes.filter(nt => nt.is_legacy);
+  
+  let prompt = 'NODE TYPES (use exact values):\n';
+  activeTypes.forEach(nt => {
+    prompt += `- ${nt.system_name}: ${nt.description || nt.display_label}\n`;
+  });
+  
+  if (legacyTypes.length > 0) {
+    prompt += `\nLEGACY TYPES (avoid using for new nodes): ${legacyTypes.map(lt => lt.system_name).join(', ')}\n`;
+  }
+  
+  return prompt;
+}
+
+function buildPositioningPrompt(nodeTypes: CanvasNodeType[]): string {
+  const groups = new Map<number, { types: string[], xPos: number }>();
+  
+  nodeTypes.filter(nt => nt.is_active).forEach(nt => {
+    const rank = Math.floor(nt.order_score / 100);
+    const xPos = nt.order_score + Math.floor(nt.order_score * 0.5);
+    if (!groups.has(rank)) groups.set(rank, { types: [], xPos });
+    groups.get(rank)!.types.push(nt.system_name);
+    groups.get(rank)!.xPos = xPos; // Use last one in group
+  });
+  
+  let prompt = 'POSITIONING RULES:\n';
+  prompt += '- X-axis positions by node type:\n';
+  
+  Array.from(groups.entries())
+    .sort((a, b) => a[0] - b[0])
+    .forEach(([rank, data]) => {
+      prompt += `  * ${data.types.join(', ')}: x=${data.xPos}\n`;
+    });
+  
+  prompt += '- Y-axis (vertical): Layer by function, most public at top (y=50), most private at bottom (y=600+)\n';
+  prompt += '- Spacing: 150px vertically between nodes of the same type\n';
+  
+  return prompt;
+}
+
+function buildFlowHierarchyPrompt(nodeTypes: CanvasNodeType[]): string {
+  const groups = new Map<number, string[]>();
+  nodeTypes.filter(nt => nt.is_active && !nt.is_legacy).forEach(nt => {
+    const rank = Math.floor(nt.order_score / 100);
+    if (!groups.has(rank)) groups.set(rank, []);
+    groups.get(rank)!.push(nt.system_name);
+  });
+  
+  let prompt = 'FLOW HIERARCHY (all edges must flow left to right):\n';
+  Array.from(groups.entries())
+    .sort((a, b) => a[0] - b[0])
+    .forEach(([rank, types]) => {
+      const xPos = rank * 100 + Math.floor(rank * 50);
+      prompt += `Level ${rank} (x=${xPos}): ${types.join(', ')}\n`;
+    });
+  
+  return prompt;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -39,18 +107,17 @@ serve(async (req) => {
       shareToken
     } = body;
 
-    // ========== PROJECT ACCESS VALIDATION ==========
-    // Validate project access if projectId is provided
-    if (projectId) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-      const authHeader = req.headers.get('Authorization');
-      
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-        global: { headers: authHeader ? { Authorization: authHeader } : {} },
-      });
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const authHeader = req.headers.get('Authorization');
+    
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: authHeader ? { Authorization: authHeader } : {} },
+    });
 
+    // ========== PROJECT ACCESS VALIDATION ==========
+    if (projectId) {
       const { data: project, error: accessError } = await supabase.rpc('get_project_with_token', {
         p_project_id: projectId,
         p_token: shareToken || null
@@ -67,6 +134,22 @@ serve(async (req) => {
       console.log('[ai-architect] Access validated for project:', projectId);
     }
     // ========== END VALIDATION ==========
+
+    // Fetch node types from database for dynamic configuration
+    const { data: nodeTypesData, error: nodeTypesError } = await supabase.rpc('get_canvas_node_types', {
+      p_include_legacy: true
+    });
+
+    if (nodeTypesError) {
+      console.error('[ai-architect] Failed to fetch node types:', nodeTypesError);
+      throw new Error('Failed to fetch node types configuration');
+    }
+
+    const nodeTypes: CanvasNodeType[] = nodeTypesData || [];
+    console.log(`[ai-architect] Loaded ${nodeTypes.length} node types from database`);
+
+    // Build dynamic X_POSITIONS from database
+    const X_POSITIONS = buildXPositions(nodeTypes);
     
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
@@ -76,64 +159,21 @@ serve(async (req) => {
 
     console.log('Generating architecture for:', description);
 
+    // Build dynamic prompts from database
+    const positioningPrompt = buildPositioningPrompt(nodeTypes);
+    const nodeTypePrompt = buildNodeTypePrompt(nodeTypes);
+    const flowHierarchyPrompt = buildFlowHierarchyPrompt(nodeTypes);
+
     const systemPrompt = `You are an expert software architect. Generate a comprehensive application architecture based on the user's description.
 
-POSITIONING RULES:
-- X-axis positions by node type (use these exact values):
-  * PROJECT, REQUIREMENT, STANDARD, TECH_STACK, SECURITY: x=100
-  * PAGE: x=250
-  * WEB_COMPONENT: x=400
-  * HOOK_COMPOSABLE: x=550
-  * API_SERVICE, AGENT, OTHER: x=700
-  * API_ROUTER, API_MIDDLEWARE: x=850
-  * API_CONTROLLER, API_UTIL, WEBHOOK: x=1000
-  * EXTERNAL_SERVICE, FIREWALL: x=1150
-  * DATABASE: x=1300
-  * SCHEMA: x=1450
-  * TABLE: x=1600
-- Y-axis (vertical): Layer by function, most public at top (y=50), most private at bottom (y=600+)
-- Spacing: 150px vertically between nodes of the same type
+${positioningPrompt}
 
-NODE TYPES (use exact values):
-- PROJECT: Root application node
-- PAGE: User-facing pages/routes
-- WEB_COMPONENT: Frontend UI components (React/Vue components)
-- HOOK_COMPOSABLE: Frontend hooks or composables for API interaction
-- API_SERVICE: API service entry point (label starts with /api/v1/)
-- API_ROUTER: API routing layer
-- API_MIDDLEWARE: Middleware handlers (auth, logging, etc.)
-- API_CONTROLLER: Business logic controllers
-- API_UTIL: Utility functions
-- DATABASE: Database container
-- SCHEMA: Database schema
-- TABLE: Database tables
-- EXTERNAL_SERVICE: Third-party services (LLM, payment, etc.)
-- WEBHOOK: Webhook handlers
-- FIREWALL: Security/firewall rules
-- SECURITY: Security controls
-- REQUIREMENT: Requirements
-- STANDARD: Standards
-- TECH_STACK: Tech stack
-- AGENT: AI Agent components
-- OTHER: Miscellaneous components
+${nodeTypePrompt}
 
-LEGACY TYPES (avoid using for new nodes): COMPONENT, API, SERVICE
-
-FLOW HIERARCHY (all edges must flow left to right):
-Level 1 (x=100): PROJECT, REQUIREMENT, STANDARD, TECH_STACK, SECURITY
-Level 2 (x=250): PAGE
-Level 3 (x=400): WEB_COMPONENT
-Level 4 (x=550): HOOK_COMPOSABLE
-Level 5 (x=700): API_SERVICE, AGENT, OTHER
-Level 6 (x=850): API_ROUTER, API_MIDDLEWARE
-Level 7 (x=1000): API_CONTROLLER, API_UTIL, WEBHOOK
-Level 8 (x=1150): EXTERNAL_SERVICE, FIREWALL
-Level 9 (x=1300): DATABASE
-Level 10 (x=1450): SCHEMA
-Level 11 (x=1600): TABLE
+${flowHierarchyPrompt}
 
 ${drawEdges ? `EDGES: Define connections between nodes. All edges must flow LEFT to RIGHT (lower level to higher level).
-Valid connections:
+Valid connection patterns:
 - PROJECT → PAGE, TECH_STACK, REQUIREMENT, STANDARD
 - PAGE → WEB_COMPONENT
 - WEB_COMPONENT → HOOK_COMPOSABLE
@@ -149,7 +189,7 @@ Return ONLY valid JSON with this structure:
   "nodes": [
     {
       "label": "Node Name",
-      "type": "PAGE|WEB_COMPONENT|HOOK_COMPOSABLE|API_SERVICE|API_ROUTER|API_MIDDLEWARE|API_CONTROLLER|API_UTIL|DATABASE|SCHEMA|TABLE|EXTERNAL_SERVICE|WEBHOOK|FIREWALL|SECURITY|PROJECT|REQUIREMENT|STANDARD|TECH_STACK|AGENT|OTHER",
+      "type": "${nodeTypes.filter(nt => nt.is_active && !nt.is_legacy).map(nt => nt.system_name).join('|')}",
       "subtitle": "Brief subtitle",
       "description": "Detailed description",
       "x": 100,
@@ -272,7 +312,7 @@ Use clear, descriptive names. Be specific about what each component does.`;
       architecture = JSON.parse(content);
     }
 
-    // Post-process nodes to ensure correct X positions
+    // Post-process nodes to ensure correct X positions using dynamic lookup
     if (architecture.nodes) {
       architecture.nodes = architecture.nodes.map((node: any) => ({
         ...node,

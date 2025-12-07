@@ -7,6 +7,73 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface CanvasNodeType {
+  id: string;
+  system_name: string;
+  display_label: string;
+  description: string;
+  category: string;
+  icon: string;
+  color_class: string;
+  order_score: number;
+  is_active: boolean;
+  is_legacy: boolean;
+}
+
+// Dynamic helper functions
+function buildNodeTypeReference(nodeTypes: CanvasNodeType[]): string {
+  const activeTypes = nodeTypes.filter(nt => nt.is_active && !nt.is_legacy);
+  const legacyTypes = nodeTypes.filter(nt => nt.is_legacy);
+  
+  let prompt = 'NODE TYPE REFERENCE:\n';
+  activeTypes.forEach(nt => {
+    prompt += `- ${nt.system_name}: ${nt.description || nt.display_label}\n`;
+  });
+  
+  if (legacyTypes.length > 0) {
+    prompt += `- Legacy types (may appear): ${legacyTypes.map(lt => lt.system_name).join(', ')}\n`;
+  }
+  
+  return prompt;
+}
+
+function buildFlowHierarchy(nodeTypes: CanvasNodeType[]): string {
+  const groups = new Map<number, string[]>();
+  nodeTypes.filter(nt => nt.is_active && !nt.is_legacy).forEach(nt => {
+    const rank = Math.floor(nt.order_score / 100);
+    if (!groups.has(rank)) groups.set(rank, []);
+    groups.get(rank)!.push(nt.system_name);
+  });
+  
+  let prompt = 'FLOW HIERARCHY (all edges should flow left to right):\n';
+  Array.from(groups.entries())
+    .sort((a, b) => a[0] - b[0])
+    .forEach(([rank, types]) => {
+      prompt += `Level ${rank}: ${types.join(', ')}\n`;
+    });
+  
+  return prompt;
+}
+
+function buildLegacyReplacements(nodeTypes: CanvasNodeType[]): string {
+  const legacyTypes = nodeTypes.filter(nt => nt.is_legacy);
+  if (legacyTypes.length === 0) return '';
+  
+  // Map legacy types to their modern replacements based on category/order
+  const replacements: Record<string, string> = {
+    'COMPONENT': 'WEB_COMPONENT',
+    'API': 'API_SERVICE or API_ROUTER or API_CONTROLLER',
+    'SERVICE': 'EXTERNAL_SERVICE',
+  };
+  
+  let prompt = '- Legacy Types: Suggest replacing ';
+  const suggestions = legacyTypes
+    .filter(lt => replacements[lt.system_name])
+    .map(lt => `${lt.system_name} with ${replacements[lt.system_name]}`);
+  
+  return suggestions.length > 0 ? prompt + suggestions.join(', ') : '';
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -21,18 +88,17 @@ serve(async (req) => {
       shareToken
     } = await req.json();
 
-    // ========== PROJECT ACCESS VALIDATION ==========
-    // Validate project access if projectId is provided
-    if (projectId) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-      const authHeader = req.headers.get('Authorization');
-      
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-        global: { headers: authHeader ? { Authorization: authHeader } : {} },
-      });
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const authHeader = req.headers.get('Authorization');
+    
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: authHeader ? { Authorization: authHeader } : {} },
+    });
 
+    // ========== PROJECT ACCESS VALIDATION ==========
+    if (projectId) {
       const { data: project, error: accessError } = await supabase.rpc('get_project_with_token', {
         p_project_id: projectId,
         p_token: shareToken || null
@@ -50,6 +116,19 @@ serve(async (req) => {
     }
     // ========== END VALIDATION ==========
 
+    // Fetch node types from database for dynamic configuration
+    const { data: nodeTypesData, error: nodeTypesError } = await supabase.rpc('get_canvas_node_types', {
+      p_include_legacy: true
+    });
+
+    if (nodeTypesError) {
+      console.error('[ai-architect-critic] Failed to fetch node types:', nodeTypesError);
+      throw new Error('Failed to fetch node types configuration');
+    }
+
+    const nodeTypes: CanvasNodeType[] = nodeTypesData || [];
+    console.log(`[ai-architect-critic] Loaded ${nodeTypes.length} node types from database`);
+
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     if (!LOVABLE_API_KEY) {
@@ -58,41 +137,16 @@ serve(async (req) => {
 
     console.log('Analyzing architecture:', { nodeCount: nodes?.length, edgeCount: edges?.length });
 
+    // Build dynamic prompts from database
+    const nodeTypeReference = buildNodeTypeReference(nodeTypes);
+    const flowHierarchy = buildFlowHierarchy(nodeTypes);
+    const legacyReplacements = buildLegacyReplacements(nodeTypes);
+
     const systemPrompt = `You are an expert software architect and systems analyst. Analyze the provided application architecture and provide detailed, constructive feedback.
 
-NODE TYPE REFERENCE:
-- PROJECT: Root application node
-- PAGE: User-facing pages/routes
-- WEB_COMPONENT: Frontend UI components (replaces legacy COMPONENT)
-- HOOK_COMPOSABLE: Frontend hooks for API interaction
-- API_SERVICE: API service entry point
-- API_ROUTER: API routing layer
-- API_MIDDLEWARE: Middleware handlers (auth, logging, etc.)
-- API_CONTROLLER: Business logic controllers
-- API_UTIL: Utility functions
-- DATABASE: Database container
-- SCHEMA: Database schema
-- TABLE: Database tables
-- EXTERNAL_SERVICE: Third-party services (replaces legacy SERVICE)
-- WEBHOOK: Webhook handlers
-- FIREWALL: Security/firewall rules
-- SECURITY: Security controls
-- AGENT: AI Agent components
-- OTHER: Miscellaneous components
-- Legacy types (may appear): COMPONENT, API, SERVICE
+${nodeTypeReference}
 
-FLOW HIERARCHY (all edges should flow left to right):
-Level 1: PROJECT, REQUIREMENT, STANDARD, TECH_STACK, SECURITY
-Level 2: PAGE
-Level 3: WEB_COMPONENT
-Level 4: HOOK_COMPOSABLE
-Level 5: API_SERVICE, AGENT, OTHER
-Level 6: API_ROUTER, API_MIDDLEWARE
-Level 7: API_CONTROLLER, API_UTIL, WEBHOOK
-Level 8: EXTERNAL_SERVICE, FIREWALL
-Level 9: DATABASE
-Level 10: SCHEMA
-Level 11: TABLE
+${flowHierarchy}
 
 Focus your analysis on:
 1. **Architectural Patterns**: Identify the overall pattern (microservices, monolithic, layered, etc.) and assess its appropriateness
@@ -102,7 +156,7 @@ Focus your analysis on:
 5. **Security**: Identify missing SECURITY, FIREWALL, or API_MIDDLEWARE nodes for auth/authz
 6. **Database Design**: Check if DATABASE → SCHEMA → TABLE hierarchy is properly structured
 7. **Missing Components**: Identify critical components that might be missing (auth middleware, logging, monitoring)
-8. **Legacy Types**: Suggest replacing COMPONENT with WEB_COMPONENT, API with API_SERVICE/API_ROUTER/API_CONTROLLER, SERVICE with EXTERNAL_SERVICE
+${legacyReplacements ? `8. ${legacyReplacements}` : ''}
 9. **Edge Direction**: Flag any edges that flow right-to-left (violating the hierarchy)
 
 Provide specific, actionable recommendations for improvement. Be constructive and prioritize the most impactful changes.`;
