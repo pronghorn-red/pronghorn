@@ -7,6 +7,21 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// X positions for node types based on flow hierarchy
+const X_POSITIONS: Record<string, number> = {
+  PROJECT: 100, REQUIREMENT: 100, STANDARD: 100, TECH_STACK: 100, SECURITY: 100,
+  PAGE: 250,
+  WEB_COMPONENT: 400, COMPONENT: 400,
+  HOOK_COMPOSABLE: 550,
+  API_SERVICE: 700, AGENT: 700, OTHER: 700, API: 700,
+  API_ROUTER: 850, API_MIDDLEWARE: 850,
+  API_CONTROLLER: 1000, API_UTIL: 1000, WEBHOOK: 1000,
+  EXTERNAL_SERVICE: 1150, SERVICE: 1150, FIREWALL: 1150,
+  DATABASE: 1300,
+  SCHEMA: 1450,
+  TABLE: 1600,
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -64,46 +79,77 @@ serve(async (req) => {
     const systemPrompt = `You are an expert software architect. Generate a comprehensive application architecture based on the user's description.
 
 POSITIONING RULES:
-- X-axis (horizontal): Frontend components (0-300), API Endpoints (400-700), Databases/External Services (800-1100)
-- Y-axis (vertical): Layer by type, most public at top (y=50), most private at bottom (y=600+)
-- Spacing: 200px between nodes horizontally, 150px vertically
+- X-axis positions by node type (use these exact values):
+  * PROJECT, REQUIREMENT, STANDARD, TECH_STACK, SECURITY: x=100
+  * PAGE: x=250
+  * WEB_COMPONENT: x=400
+  * HOOK_COMPOSABLE: x=550
+  * API_SERVICE, AGENT, OTHER: x=700
+  * API_ROUTER, API_MIDDLEWARE: x=850
+  * API_CONTROLLER, API_UTIL, WEBHOOK: x=1000
+  * EXTERNAL_SERVICE, FIREWALL: x=1150
+  * DATABASE: x=1300
+  * SCHEMA: x=1450
+  * TABLE: x=1600
+- Y-axis (vertical): Layer by function, most public at top (y=50), most private at bottom (y=600+)
+- Spacing: 150px vertically between nodes of the same type
 
 NODE TYPES (use exact values):
 - PROJECT: Root application node
 - PAGE: User-facing pages/routes
-- COMPONENT: UI components
-- API: API endpoints
-- DATABASE: Database tables/collections
-- SERVICE: External services (auth, payment, etc.)
+- WEB_COMPONENT: Frontend UI components (React/Vue components)
+- HOOK_COMPOSABLE: Frontend hooks or composables for API interaction
+- API_SERVICE: API service entry point (label starts with /api/v1/)
+- API_ROUTER: API routing layer
+- API_MIDDLEWARE: Middleware handlers (auth, logging, etc.)
+- API_CONTROLLER: Business logic controllers
+- API_UTIL: Utility functions
+- DATABASE: Database container
+- SCHEMA: Database schema
+- TABLE: Database tables
+- EXTERNAL_SERVICE: Third-party services (LLM, payment, etc.)
 - WEBHOOK: Webhook handlers
 - FIREWALL: Security/firewall rules
 - SECURITY: Security controls
 - REQUIREMENT: Requirements
 - STANDARD: Standards
 - TECH_STACK: Tech stack
+- AGENT: AI Agent components
+- OTHER: Miscellaneous components
 
-VERTICAL LAYERING BY TYPE (top to bottom):
-1. PROJECT (y=50)
-2. PAGE (y=100-250, most public pages at top)
-3. COMPONENT (y=300-450)
-4. API (y=100-400)
-5. DATABASE (y=150-350)
-6. SERVICE (y=400-500)
-7. WEBHOOK (y=450-550)
-8. FIREWALL (y=50-150)
-9. SECURITY (y=200-300)
+LEGACY TYPES (avoid using for new nodes): COMPONENT, API, SERVICE
 
-${drawEdges ? `EDGES: Define connections between nodes. Include:
-- source: source node label
-- target: target node label
-- relationship: brief description of connection` : 'DO NOT return any edges in your response. The user has disabled edge generation.'}
+FLOW HIERARCHY (all edges must flow left to right):
+Level 1 (x=100): PROJECT, REQUIREMENT, STANDARD, TECH_STACK, SECURITY
+Level 2 (x=250): PAGE
+Level 3 (x=400): WEB_COMPONENT
+Level 4 (x=550): HOOK_COMPOSABLE
+Level 5 (x=700): API_SERVICE, AGENT, OTHER
+Level 6 (x=850): API_ROUTER, API_MIDDLEWARE
+Level 7 (x=1000): API_CONTROLLER, API_UTIL, WEBHOOK
+Level 8 (x=1150): EXTERNAL_SERVICE, FIREWALL
+Level 9 (x=1300): DATABASE
+Level 10 (x=1450): SCHEMA
+Level 11 (x=1600): TABLE
+
+${drawEdges ? `EDGES: Define connections between nodes. All edges must flow LEFT to RIGHT (lower level to higher level).
+Valid connections:
+- PROJECT → PAGE, TECH_STACK, REQUIREMENT, STANDARD
+- PAGE → WEB_COMPONENT
+- WEB_COMPONENT → HOOK_COMPOSABLE
+- HOOK_COMPOSABLE → API_SERVICE
+- API_SERVICE → API_ROUTER
+- API_ROUTER → API_MIDDLEWARE, API_CONTROLLER
+- API_CONTROLLER → EXTERNAL_SERVICE, DATABASE
+- DATABASE → SCHEMA
+- SCHEMA → TABLE` : 'DO NOT return any edges in your response. The user has disabled edge generation.'}
 
 Return ONLY valid JSON with this structure:
 {
   "nodes": [
     {
       "label": "Node Name",
-      "type": "PAGE|COMPONENT|API|DATABASE|SERVICE|WEBHOOK|FIREWALL|SECURITY|PROJECT",
+      "type": "PAGE|WEB_COMPONENT|HOOK_COMPOSABLE|API_SERVICE|API_ROUTER|API_MIDDLEWARE|API_CONTROLLER|API_UTIL|DATABASE|SCHEMA|TABLE|EXTERNAL_SERVICE|WEBHOOK|FIREWALL|SECURITY|PROJECT|REQUIREMENT|STANDARD|TECH_STACK|AGENT|OTHER",
       "subtitle": "Brief subtitle",
       "description": "Detailed description",
       "x": 100,
@@ -224,6 +270,14 @@ Use clear, descriptive names. Be specific about what each component does.`;
     } else {
       // Try to parse directly
       architecture = JSON.parse(content);
+    }
+
+    // Post-process nodes to ensure correct X positions
+    if (architecture.nodes) {
+      architecture.nodes = architecture.nodes.map((node: any) => ({
+        ...node,
+        x: X_POSITIONS[node.type] ?? node.x ?? 700,
+      }));
     }
 
     console.log('Parsed architecture:', architecture);

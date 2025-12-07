@@ -60,16 +60,50 @@ serve(async (req) => {
 
     const systemPrompt = `You are an expert software architect and systems analyst. Analyze the provided application architecture and provide detailed, constructive feedback.
 
+NODE TYPE REFERENCE:
+- PROJECT: Root application node
+- PAGE: User-facing pages/routes
+- WEB_COMPONENT: Frontend UI components (replaces legacy COMPONENT)
+- HOOK_COMPOSABLE: Frontend hooks for API interaction
+- API_SERVICE: API service entry point
+- API_ROUTER: API routing layer
+- API_MIDDLEWARE: Middleware handlers (auth, logging, etc.)
+- API_CONTROLLER: Business logic controllers
+- API_UTIL: Utility functions
+- DATABASE: Database container
+- SCHEMA: Database schema
+- TABLE: Database tables
+- EXTERNAL_SERVICE: Third-party services (replaces legacy SERVICE)
+- WEBHOOK: Webhook handlers
+- FIREWALL: Security/firewall rules
+- SECURITY: Security controls
+- AGENT: AI Agent components
+- OTHER: Miscellaneous components
+- Legacy types (may appear): COMPONENT, API, SERVICE
+
+FLOW HIERARCHY (all edges should flow left to right):
+Level 1: PROJECT, REQUIREMENT, STANDARD, TECH_STACK, SECURITY
+Level 2: PAGE
+Level 3: WEB_COMPONENT
+Level 4: HOOK_COMPOSABLE
+Level 5: API_SERVICE, AGENT, OTHER
+Level 6: API_ROUTER, API_MIDDLEWARE
+Level 7: API_CONTROLLER, API_UTIL, WEBHOOK
+Level 8: EXTERNAL_SERVICE, FIREWALL
+Level 9: DATABASE
+Level 10: SCHEMA
+Level 11: TABLE
+
 Focus your analysis on:
 1. **Architectural Patterns**: Identify the overall pattern (microservices, monolithic, layered, etc.) and assess its appropriateness
-2. **Component Organization**: Evaluate how components, APIs, and services are structured and connected
-3. **Separation of Concerns**: Check if responsibilities are properly divided between components
-4. **Data Flow**: Analyze how data moves through the system and identify potential bottlenecks
-5. **Security**: Identify potential security concerns or missing security layers
-6. **Scalability**: Assess how well the architecture would scale
-7. **Missing Components**: Identify critical components that might be missing (auth, logging, monitoring, etc.)
-8. **Redundancy**: Spot any duplicate or redundant components
-9. **Best Practices**: Compare against industry best practices for the technology stack
+2. **Component Organization**: Evaluate how WEB_COMPONENTs, HOOK_COMPOSABLEs, API layers, and services are structured
+3. **Separation of Concerns**: Check if responsibilities are properly divided between frontend and backend layers
+4. **Data Flow**: Analyze how data moves through HOOK_COMPOSABLE → API_SERVICE → API_ROUTER → API_CONTROLLER → DATABASE
+5. **Security**: Identify missing SECURITY, FIREWALL, or API_MIDDLEWARE nodes for auth/authz
+6. **Database Design**: Check if DATABASE → SCHEMA → TABLE hierarchy is properly structured
+7. **Missing Components**: Identify critical components that might be missing (auth middleware, logging, monitoring)
+8. **Legacy Types**: Suggest replacing COMPONENT with WEB_COMPONENT, API with API_SERVICE/API_ROUTER/API_CONTROLLER, SERVICE with EXTERNAL_SERVICE
+9. **Edge Direction**: Flag any edges that flow right-to-left (violating the hierarchy)
 
 Provide specific, actionable recommendations for improvement. Be constructive and prioritize the most impactful changes.`;
 
