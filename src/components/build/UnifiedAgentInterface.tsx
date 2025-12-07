@@ -24,8 +24,10 @@ import {
   Settings,
   Square,
   BookOpen,
-  Download
+  Download,
+  Wrench
 } from 'lucide-react';
+import { AgentConfigurationModal, AgentConfiguration } from './AgentConfigurationModal';
 import { useInfiniteAgentMessages } from '@/hooks/useInfiniteAgentMessages';
 import { useInfiniteAgentOperations } from '@/hooks/useInfiniteAgentOperations';
 import { ProjectSelector, ProjectSelectionResult } from '@/components/project/ProjectSelector';
@@ -96,6 +98,11 @@ export function UnifiedAgentInterface({
   };
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDownloadingHistory, setIsDownloadingHistory] = useState(false);
+  const [isAgentConfigOpen, setIsAgentConfigOpen] = useState(false);
+  const [agentConfig, setAgentConfig] = useState<AgentConfiguration>({
+    exposeProject: false,
+    maxIterations: 30,
+  });
   
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -370,6 +377,8 @@ export function UnifiedAgentInterface({
           mode: 'task',
           autoCommit,
           attachedFiles: attachedFiles,
+          exposeProject: agentConfig.exposeProject,
+          maxIterations: agentConfig.maxIterations,
           projectContext: attachedContext ? {
             projectMetadata: attachedContext.projectMetadata || null,
             artifacts: attachedContext.artifacts.length > 0 ? attachedContext.artifacts : undefined,
@@ -1044,12 +1053,14 @@ export function UnifiedAgentInterface({
 
         {/* Task Input */}
         <div className="flex gap-2">
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1">
             <Button
               variant="outline"
               size="icon"
               onClick={() => setIsProjectSelectorOpen(true)}
               disabled={isSubmitting}
+              title="Attach Context"
+              className="h-8 w-8"
             >
               <Paperclip className="h-4 w-4" />
             </Button>
@@ -1059,7 +1070,7 @@ export function UnifiedAgentInterface({
               onClick={() => setIsSettingsOpen(true)}
               disabled={isSubmitting}
               title="Chat History Settings"
-              className={chatHistorySettings.includeHistory ? "border-primary text-primary" : ""}
+              className={`h-8 w-8 ${chatHistorySettings.includeHistory ? "border-primary text-primary" : ""}`}
             >
               <BookOpen className="h-4 w-4" />
             </Button>
@@ -1077,18 +1088,31 @@ export function UnifiedAgentInterface({
             disabled={isSubmitting}
             className="min-h-[60px]"
           />
-          <Button
-            onClick={isSubmitting ? handleStop : handleSubmit}
-            disabled={!isSubmitting && (!taskInput.trim() || !repoId)}
-            size="icon"
-            variant={isSubmitting ? "destructive" : "default"}
-          >
-            {isSubmitting ? (
-              <Square className="h-4 w-4" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
+          <div className="flex flex-col gap-1">
+            <Button
+              onClick={isSubmitting ? handleStop : handleSubmit}
+              disabled={!isSubmitting && (!taskInput.trim() || !repoId)}
+              size="icon"
+              variant={isSubmitting ? "destructive" : "default"}
+              className="h-8 w-8"
+            >
+              {isSubmitting ? (
+                <Square className="h-4 w-4" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setIsAgentConfigOpen(true)}
+              disabled={isSubmitting}
+              title="Agent Configuration"
+              className={`h-8 w-8 ${agentConfig.exposeProject ? "border-primary text-primary" : ""}`}
+            >
+              <Wrench className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -1099,6 +1123,14 @@ export function UnifiedAgentInterface({
         onConfirm={handleContextAttachment}
         projectId={projectId}
         shareToken={shareToken}
+      />
+
+      {/* Agent Configuration Modal */}
+      <AgentConfigurationModal
+        open={isAgentConfigOpen}
+        onOpenChange={setIsAgentConfigOpen}
+        config={agentConfig}
+        onConfigChange={setAgentConfig}
       />
 
       {/* Chat History Settings Dialog */}

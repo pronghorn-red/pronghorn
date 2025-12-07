@@ -2188,6 +2188,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_project_category_with_token: {
+        Args: { p_category: string; p_project_id: string; p_token?: string }
+        Returns: Json
+      }
+      get_project_elements_with_token: {
+        Args: { p_elements: Json; p_project_id: string; p_token?: string }
+        Returns: Json
+      }
       get_project_files_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
@@ -2204,6 +2212,10 @@ export type Database = {
       get_project_id_from_session: {
         Args: { p_session_id: string }
         Returns: string
+      }
+      get_project_inventory_with_token: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: Json
       }
       get_project_metadata_with_token: {
         Args: { p_project_id: string; p_token?: string }
