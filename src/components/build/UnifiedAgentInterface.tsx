@@ -975,11 +975,16 @@ export function UnifiedAgentInterface({
 
   const totalAttachments = 
     attachedFiles.length +
+    (attachedContext?.projectMetadata ? 1 : 0) +
     (attachedContext?.artifacts?.length || 0) +
+    (attachedContext?.chatSessions?.length || 0) +
     (attachedContext?.requirements?.length || 0) +
     (attachedContext?.standards?.length || 0) +
     (attachedContext?.techStacks?.length || 0) +
-    (attachedContext?.canvasNodes?.length || 0);
+    (attachedContext?.canvasNodes?.length || 0) +
+    (attachedContext?.canvasEdges?.length || 0) +
+    (attachedContext?.canvasLayers?.length || 0) +
+    (attachedContext?.files?.length || 0);
 
   return (
     <div className="flex flex-col h-full min-h-0">
