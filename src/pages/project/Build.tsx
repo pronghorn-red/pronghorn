@@ -798,7 +798,7 @@ export default function Build() {
 
                       {/* Right: Collapsible Sidebar with Tabs */}
                       <ResizablePanel defaultSize={30} minSize={25}>
-                          <div className="h-full flex flex-col">
+                          <div className="h-full flex flex-col min-w-0 overflow-hidden">
                             <div className="flex items-center justify-between p-2 border-b">
                               <span className="text-sm font-semibold">Workspace</span>
                               <Button
@@ -810,8 +810,8 @@ export default function Build() {
                                 <ChevronRight className="h-4 w-4" />
                               </Button>
                             </div>
-                          <Tabs defaultValue="chat" className="flex-1 flex flex-col min-h-0">
-                            <TabsList className="grid w-full grid-cols-3">
+                          <Tabs defaultValue="chat" className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+                            <TabsList className="grid w-full grid-cols-3 shrink-0">
                               <TabsTrigger value="chat">Chat</TabsTrigger>
                               <TabsTrigger value="staging">Staging</TabsTrigger>
                               <TabsTrigger value="history">History</TabsTrigger>

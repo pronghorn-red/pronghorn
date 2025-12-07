@@ -479,8 +479,8 @@ export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, on
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <Card className="flex-1 flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden min-w-0">
+      <Card className="flex-1 flex flex-col overflow-hidden min-w-0">
         <CardHeader className="shrink-0">
           <CardTitle>Staged Changes</CardTitle>
           <CardDescription>
