@@ -798,8 +798,8 @@ export default function Build() {
 
                       {/* Right: Collapsible Sidebar with Tabs */}
                       <ResizablePanel defaultSize={30} minSize={25}>
-                          <div className="h-full flex flex-col min-w-0 overflow-hidden">
-                            <div className="flex items-center justify-between p-2 border-b">
+                          <div className="h-full w-full flex flex-col min-w-0 overflow-hidden">
+                            <div className="flex items-center justify-between p-2 border-b shrink-0">
                               <span className="text-sm font-semibold">Workspace</span>
                               <Button
                                 variant="ghost"
@@ -810,9 +810,9 @@ export default function Build() {
                                 <ChevronRight className="h-4 w-4" />
                               </Button>
                             </div>
-                          <Tabs defaultValue="chat" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                          <Tabs defaultValue="chat" className="flex-1 flex flex-col min-h-0 min-w-0 w-full overflow-hidden">
                             {/* Fixed tabs header - cannot shrink */}
-                            <div className="shrink-0 p-1">
+                            <div className="shrink-0 p-1 w-full">
                               <TabsList className="grid w-full grid-cols-3">
                                 <TabsTrigger value="chat">Chat</TabsTrigger>
                                 <TabsTrigger value="staging">Staging</TabsTrigger>
@@ -821,8 +821,8 @@ export default function Build() {
                             </div>
 
                             {/* Scrollable content area - constrained to remaining space */}
-                            <div className="flex-1 min-h-0 overflow-hidden">
-                              <TabsContent value="chat" className="h-full overflow-hidden mt-0">
+                            <div className="flex-1 min-h-0 min-w-0 w-full overflow-hidden">
+                              <TabsContent value="chat" className="h-full w-full overflow-hidden mt-0">
                                 <UnifiedAgentInterface
                                   projectId={projectId}
                                   repoId={defaultRepo?.id || null}
@@ -835,7 +835,7 @@ export default function Build() {
                                 />
                               </TabsContent>
 
-                              <TabsContent value="staging" className="h-full overflow-hidden mt-0">
+                              <TabsContent value="staging" className="h-full w-full overflow-hidden mt-0">
                                 <StagingPanel
                                   projectId={projectId}
                                   shareToken={shareToken}
@@ -845,7 +845,7 @@ export default function Build() {
                                 />
                               </TabsContent>
 
-                              <TabsContent value="history" className="h-full overflow-hidden mt-0">
+                              <TabsContent value="history" className="h-full w-full overflow-hidden mt-0">
                                 <CommitHistory
                                   projectId={projectId}
                                   shareToken={shareToken}
