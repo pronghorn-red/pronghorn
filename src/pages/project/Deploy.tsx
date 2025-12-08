@@ -209,20 +209,16 @@ const Deploy = () => {
         </Tabs>
       </div>
 
-      <CreateDeploymentDialog
-        open={isCreateOpen}
-        onOpenChange={setIsCreateOpen}
-        projectId={projectId || ""}
-        shareToken={shareToken}
-        defaultPlatform={activeTab === "local" ? "local" : "pronghorn_cloud"}
-        onCreated={fetchDeployments}
-      />
-    </div>
-  </div>
-  );
-};
-
-export default Deploy;
+        <CreateDeploymentDialog
+          open={isCreateOpen}
+          onOpenChange={setIsCreateOpen}
+          projectId={projectId || ""}
+          shareToken={shareToken}
+          defaultPlatform={activeTab === "local" ? "local" : "pronghorn_cloud"}
+          onCreated={fetchDeployments}
+        />
+        </div>
+      </div>
     </div>
   );
 };
