@@ -939,7 +939,45 @@ Use them to understand context and inform your file operations.` : ''}`;
       // Execute operations
       const operationResults = [];
       let filesChanged = false;
-      for (const op of agentResponse.operations || []) {
+
+      // Sort edit_lines operations by start_line DESCENDING (back-to-front) to prevent line number corruption
+      // When multiple edits target the same file, editing from the end first preserves earlier line numbers
+      const operations = [...(agentResponse.operations || [])];
+      const editsByFile = new Map<string, any[]>();
+      const nonEditOps: any[] = [];
+
+      for (const op of operations) {
+        if (op.type === 'edit_lines') {
+          const fileId = op.params.file_id;
+          if (!editsByFile.has(fileId)) editsByFile.set(fileId, []);
+          editsByFile.get(fileId)!.push(op);
+        } else {
+          nonEditOps.push(op);
+        }
+      }
+
+      // Build final operations list: non-edits first, then edits sorted back-to-front per file
+      const sortedOperations: any[] = [...nonEditOps];
+      for (const [fileId, edits] of editsByFile) {
+        // Sort by start_line DESCENDING (highest first = back-to-front)
+        edits.sort((a, b) => b.params.start_line - a.params.start_line);
+
+        // Detect and skip overlapping edits (after sorting, check if current end_line >= next start_line)
+        let lastStartLine = Infinity;
+        for (const edit of edits) {
+          if (edit.params.end_line >= lastStartLine) {
+            console.warn(`[AGENT] Skipping overlapping edit for file ${fileId}: ` +
+              `lines ${edit.params.start_line}-${edit.params.end_line} overlaps with edit starting at line ${lastStartLine}`);
+            continue; // Skip overlapping edit
+          }
+          lastStartLine = edit.params.start_line;
+          sortedOperations.push(edit);
+        }
+      }
+
+      console.log(`[AGENT] Executing ${sortedOperations.length} operations (${editsByFile.size} files with edits, sorted back-to-front)`);
+
+      for (const op of sortedOperations) {
         console.log("Executing operation:", op.type);
 
         // Log operation start
@@ -1023,16 +1061,9 @@ Use them to understand context and inform your file operations.` : ''}`;
               );
 
               if (fileData?.[0]) {
-                // Check if file is already staged to accumulate edits correctly
-                const { data: stagedChanges } = await supabase.rpc("get_staged_changes_with_token", {
-                  p_repo_id: repoId,
-                  p_token: shareToken,
-                });
-
-                const existingStaged = stagedChanges?.find((s: any) => s.file_path === fileData[0].path);
-
-                // Use staged new_content as base if exists, otherwise use committed content
-                const baseContent = existingStaged ? existingStaged.new_content : fileData[0].content;
+                // get_file_content_with_token already returns staged content via COALESCE overlay
+                // No need to separately fetch staged changes - the RPC handles this
+                const baseContent = fileData[0].content;
 
                 // Validate line numbers against current content
                 const baseLines = baseContent.split("\n");
