@@ -297,9 +297,9 @@ export default function ProjectSettings() {
                           <SelectItem value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Fast)</SelectItem>
                           <SelectItem value="claude-sonnet-4-5">Claude Sonnet 4.5</SelectItem>
                           <SelectItem value="claude-haiku-4-5">Claude Haiku 4.5</SelectItem>
-                          <SelectItem value="claude-opus-4-1">Claude Opus 4.1</SelectItem>
-                          <SelectItem value="grok-4-fast-reasoning">Grok 4 Fast Reasoning</SelectItem>
-                          <SelectItem value="grok-4-fast-non-reasoning">Grok 4 Fast Non-Reasoning</SelectItem>
+                          <SelectItem value="claude-opus-4-5">Claude Opus 4.5</SelectItem>
+                          <SelectItem value="grok-4-1-fast-reasoning">Grok 4.1 Fast Reasoning</SelectItem>
+                          <SelectItem value="grok-4-1-fast-non-reasoning">Grok 4.1 Fast Non-Reasoning</SelectItem>
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
