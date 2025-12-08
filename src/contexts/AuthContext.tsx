@@ -8,6 +8,8 @@ interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signInWithGoogle: () => Promise<{ error: any }>;
+  signInWithAzure: () => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -59,12 +61,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: 'https://pronghorn.red/dashboard',
+        skipBrowserRedirect: false,
+      }
+    });
+    return { error };
+  };
+
+  const signInWithAzure = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'azure',
+      options: {
+        redirectTo: 'https://pronghorn.red/dashboard',
+        scopes: 'openid profile email',
+        skipBrowserRedirect: false,
+      }
+    });
+    return { error };
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signInWithGoogle, signInWithAzure, signOut }}>
       {children}
     </AuthContext.Provider>
   );
