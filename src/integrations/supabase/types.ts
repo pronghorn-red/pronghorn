@@ -680,6 +680,53 @@ export type Database = {
           },
         ]
       }
+      deployment_issues: {
+        Row: {
+          created_at: string
+          deployment_id: string
+          file_path: string | null
+          id: string
+          issue_type: string
+          line_number: number | null
+          message: string
+          metadata: Json | null
+          resolved: boolean | null
+          stack_trace: string | null
+        }
+        Insert: {
+          created_at?: string
+          deployment_id: string
+          file_path?: string | null
+          id?: string
+          issue_type?: string
+          line_number?: number | null
+          message: string
+          metadata?: Json | null
+          resolved?: boolean | null
+          stack_trace?: string | null
+        }
+        Update: {
+          created_at?: string
+          deployment_id?: string
+          file_path?: string | null
+          id?: string
+          issue_type?: string
+          line_number?: number | null
+          message?: string
+          metadata?: Json | null
+          resolved?: boolean | null
+          stack_trace?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deployment_issues_deployment_id_fkey"
+            columns: ["deployment_id"]
+            isOneToOne: false
+            referencedRelation: "project_deployments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deployment_logs: {
         Row: {
           created_at: string
@@ -2383,26 +2430,35 @@ export type Database = {
       get_deployments_with_token: {
         Args: { p_project_id: string; p_token?: string }
         Returns: {
-          branch: string
-          build_command: string
+          branch: string | null
+          build_command: string | null
           build_folder: string
           created_at: string
-          env_vars: Json
+          created_by: string | null
+          env_vars: Json | null
           environment: Database["public"]["Enums"]["deployment_environment"]
           id: string
-          last_deployed_at: string
+          last_deployed_at: string | null
           name: string
           platform: Database["public"]["Enums"]["deployment_platform"]
           project_id: string
           project_type: string
-          render_service_id: string
-          repo_id: string
+          render_deploy_id: string | null
+          render_service_id: string | null
+          repo_id: string | null
           run_command: string
           run_folder: string
+          secrets: Json | null
           status: Database["public"]["Enums"]["deployment_status"]
           updated_at: string
-          url: string
+          url: string | null
         }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_deployments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_file_content_with_token: {
         Args: { p_file_id: string; p_token?: string }
@@ -2946,14 +3002,14 @@ export type Database = {
           p_build_command?: string
           p_build_folder?: string
           p_environment?: Database["public"]["Enums"]["deployment_environment"]
-          p_name: string
+          p_name?: string
           p_platform?: Database["public"]["Enums"]["deployment_platform"]
           p_project_id: string
           p_project_type?: string
           p_repo_id?: string
           p_run_command?: string
           p_run_folder?: string
-          p_token: string
+          p_token?: string
         }
         Returns: {
           branch: string | null
@@ -3578,7 +3634,7 @@ export type Database = {
           p_run_command?: string
           p_run_folder?: string
           p_status?: Database["public"]["Enums"]["deployment_status"]
-          p_token: string
+          p_token?: string
           p_url?: string
         }
         Returns: {
@@ -3929,7 +3985,7 @@ export type Database = {
       app_role: "admin" | "user"
       audit_severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
       build_status: "RUNNING" | "COMPLETED" | "FAILED"
-      deployment_environment: "development" | "staging" | "production"
+      deployment_environment: "dev" | "uat" | "prod"
       deployment_platform: "pronghorn_cloud" | "local" | "dedicated_vm"
       deployment_status:
         | "pending"
@@ -4097,7 +4153,7 @@ export const Constants = {
       app_role: ["admin", "user"],
       audit_severity: ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
       build_status: ["RUNNING", "COMPLETED", "FAILED"],
-      deployment_environment: ["development", "staging", "production"],
+      deployment_environment: ["dev", "uat", "prod"],
       deployment_platform: ["pronghorn_cloud", "local", "dedicated_vm"],
       deployment_status: [
         "pending",

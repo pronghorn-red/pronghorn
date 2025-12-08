@@ -75,6 +75,46 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
   const handleStart = () => invokeRenderService('start');
   const handleStop = () => invokeRenderService('stop');
 
+  const handleDownloadPackage = async () => {
+    setIsActionLoading('download');
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-local-package', {
+        body: {
+          deploymentId: deployment.id,
+          shareToken: shareToken || null,
+        },
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+
+      // Decode base64 to binary
+      const binaryString = atob(data.data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      // Create a blob and trigger download
+      const blob = new Blob([bytes], { type: 'application/zip' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = data.filename || `${deployment.environment}-${deployment.name}-local.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Package downloaded');
+    } catch (error: any) {
+      console.error('Error downloading package:', error);
+      toast.error(error.message || 'Failed to download package');
+    } finally {
+      setIsActionLoading(null);
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirm("Are you sure you want to delete this deployment?")) return;
     
@@ -103,9 +143,8 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
 
   const getDeploymentUrl = () => {
     if (deployment.url) return deployment.url;
-    // Generate expected URL based on naming convention
-    const envPrefix = deployment.environment === "production" ? "" : `${deployment.environment}-`;
-    return `https://${envPrefix}${deployment.name}.onrender.com`;
+    // Generate expected URL: env-appname.onrender.com
+    return `https://${deployment.environment}-${deployment.name}.onrender.com`;
   };
 
   const hasRenderService = !!deployment.render_service_id;
@@ -239,8 +278,17 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
                 </>
               )}
               {deployment.platform === "local" && (
-                <Button variant="outline" size="sm" disabled>
-                  <Download className="h-4 w-4 mr-1" />
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleDownloadPackage}
+                  disabled={isActionLoading === 'download'}
+                >
+                  {isActionLoading === 'download' ? (
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-1" />
+                  )}
                   Download Package
                 </Button>
               )}

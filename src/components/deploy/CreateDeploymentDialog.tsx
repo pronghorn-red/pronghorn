@@ -63,7 +63,7 @@ const CreateDeploymentDialog = ({
   
   const [form, setForm] = useState({
     name: "",
-    environment: "development" as "development" | "staging" | "production",
+    environment: "dev" as "dev" | "uat" | "prod",
     platform: defaultPlatform,
     projectType: "node",
     runFolder: "/",
@@ -140,7 +140,7 @@ const CreateDeploymentDialog = ({
       // Reset form
       setForm({
         name: primeRepoName,
-        environment: "development",
+        environment: "dev",
         platform: defaultPlatform,
         projectType: "node",
         runFolder: "/",
@@ -177,7 +177,7 @@ const CreateDeploymentDialog = ({
               placeholder="my-app"
             />
             <p className="text-xs text-muted-foreground">
-              URL will be: {form.environment !== "production" ? `${form.environment}-` : ""}{form.name || "my-app"}.pronghorn.cloud
+              URL will be: {form.environment}-{form.name || "my-app"}.onrender.com
             </p>
           </div>
 
@@ -208,9 +208,9 @@ const CreateDeploymentDialog = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="development">Development</SelectItem>
-                  <SelectItem value="staging">Staging</SelectItem>
-                  <SelectItem value="production">Production</SelectItem>
+                  <SelectItem value="dev">Dev</SelectItem>
+                  <SelectItem value="uat">UAT</SelectItem>
+                  <SelectItem value="prod">Prod</SelectItem>
                 </SelectContent>
               </Select>
             </div>

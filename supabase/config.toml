@@ -74,3 +74,6 @@ verify_jwt = false
 
 [functions.render-service]
 verify_jwt = false
+
+[functions.generate-local-package]
+verify_jwt = false

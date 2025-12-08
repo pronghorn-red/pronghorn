@@ -146,8 +146,11 @@ async function createRenderService(
     envVars.push({ key, value: value as string });
   });
 
+  // Service name includes environment prefix: env-appname
+  const serviceName = `${deployment.environment}-${deployment.name}`;
+
   const servicePayload: any = {
-    name: deployment.name,
+    name: serviceName,
     type: isStaticSite ? 'static_site' : 'web_service',
     autoDeploy: 'no', // We'll trigger deploys manually
     branch: deployment.branch || 'main',
