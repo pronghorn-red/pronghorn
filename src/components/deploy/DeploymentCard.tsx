@@ -74,6 +74,7 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
   const handleDeploy = () => invokeRenderService('deploy');
   const handleStart = () => invokeRenderService('start');
   const handleStop = () => invokeRenderService('stop');
+  const handleRestart = () => invokeRenderService('restart');
 
   const handleDownloadPackage = async () => {
     setIsActionLoading('download');
@@ -222,19 +223,34 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
                   ) : (
                     <>
                       {deployment.status === "running" || deployment.status === "deploying" ? (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={handleStop}
-                          disabled={isActionLoading === 'stop'}
-                        >
-                          {isActionLoading === 'stop' ? (
-                            <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                          ) : (
-                            <Square className="h-4 w-4 mr-1" />
-                          )}
-                          Stop
-                        </Button>
+                        <>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={handleStop}
+                            disabled={isActionLoading === 'stop'}
+                          >
+                            {isActionLoading === 'stop' ? (
+                              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <Square className="h-4 w-4 mr-1" />
+                            )}
+                            Stop
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={handleRestart}
+                            disabled={isActionLoading === 'restart'}
+                          >
+                            {isActionLoading === 'restart' ? (
+                              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4 mr-1" />
+                            )}
+                            Restart
+                          </Button>
+                        </>
                       ) : (
                         <Button 
                           variant="outline" 

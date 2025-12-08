@@ -9,7 +9,7 @@ const corsHeaders = {
 const RENDER_API_URL = 'https://api.render.com/v1';
 
 interface RenderServiceRequest {
-  action: 'create' | 'deploy' | 'start' | 'stop' | 'status' | 'delete' | 'logs';
+  action: 'create' | 'deploy' | 'start' | 'stop' | 'restart' | 'status' | 'delete' | 'logs' | 'updateEnvVars';
   deploymentId: string;
   shareToken?: string;
   // For create action
@@ -21,6 +21,8 @@ interface RenderServiceRequest {
   envVars?: Record<string, string>;
   // For deploy action
   commitId?: string;
+  // For updateEnvVars action
+  newEnvVars?: Array<{key: string, value: string}>;
 }
 
 serve(async (req) => {
@@ -87,6 +89,9 @@ serve(async (req) => {
       case 'stop':
         result = await stopRenderService(deployment, renderHeaders, supabase, shareToken);
         break;
+      case 'restart':
+        result = await restartRenderService(deployment, renderHeaders);
+        break;
       case 'status':
         result = await getServiceStatus(deployment, renderHeaders);
         break;
@@ -95,6 +100,9 @@ serve(async (req) => {
         break;
       case 'logs':
         result = await getServiceLogs(deployment, renderHeaders);
+        break;
+      case 'updateEnvVars':
+        result = await updateEnvVarsRenderService(deployment, body, renderHeaders);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
@@ -132,10 +140,29 @@ async function createRenderService(
   console.log('[render-service] Creating Render service...');
 
   // Get the repo details for GitHub connection
-  const { data: repo } = await supabase.rpc('get_repo_by_id_with_token', {
-    p_repo_id: deployment.repo_id,
-    p_token: shareToken || null,
-  });
+  // First try deployment-specific repo, then fall back to project's prime repo
+  let repo = null;
+  
+  if (deployment.repo_id) {
+    const { data: repoData } = await supabase.rpc('get_repo_by_id_with_token', {
+      p_repo_id: deployment.repo_id,
+      p_token: shareToken || null,
+    });
+    repo = repoData;
+  }
+  
+  // Fall back to prime repo for the project if no specific repo
+  if (!repo) {
+    const { data: primeRepo } = await supabase.rpc('get_prime_repo_with_token', {
+      p_project_id: deployment.project_id,
+      p_token: shareToken || null,
+    });
+    repo = primeRepo;
+  }
+  
+  if (!repo) {
+    throw new Error('No repository found. Create a repository first before deploying.');
+  }
 
   // Determine service type based on project type
   const isStaticSite = ['react', 'vue', 'tanstack'].includes(deployment.project_type?.toLowerCase() || '');
@@ -164,10 +191,8 @@ async function createRenderService(
     envVars,
   };
 
-  // If we have a linked GitHub repo, use it
-  if (repo) {
-    servicePayload.repo = `https://github.com/${repo.organization}/${repo.repo}`;
-  }
+  // Set the GitHub repo URL
+  servicePayload.repo = `https://github.com/${repo.organization}/${repo.repo}`;
 
   // Add serviceDetails based on service type (required by Render API)
   if (isStaticSite) {
@@ -431,6 +456,60 @@ async function getServiceLogs(deployment: any, headers: Record<string, string>) 
     })),
     latestDeployId: recentDeploy.deploy?.id,
     latestStatus: recentDeploy.deploy?.status,
+  };
+}
+
+async function restartRenderService(deployment: any, headers: Record<string, string>) {
+  if (!deployment.render_service_id) {
+    throw new Error('Service not yet created on Render');
+  }
+
+  console.log('[render-service] Restarting service:', deployment.render_service_id);
+
+  const response = await fetch(`${RENDER_API_URL}/services/${deployment.render_service_id}/restart`, {
+    method: 'POST',
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[render-service] Restart error:', errorText);
+    throw new Error(`Failed to restart service: ${errorText}`);
+  }
+
+  return { status: 'restarted' };
+}
+
+async function updateEnvVarsRenderService(
+  deployment: any,
+  body: RenderServiceRequest,
+  headers: Record<string, string>
+) {
+  if (!deployment.render_service_id) {
+    throw new Error('Service not yet created on Render');
+  }
+
+  console.log('[render-service] Updating env vars for service:', deployment.render_service_id);
+
+  const envVars = body.newEnvVars || [];
+
+  const response = await fetch(`${RENDER_API_URL}/services/${deployment.render_service_id}/env-vars`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(envVars),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[render-service] Update env vars error:', errorText);
+    throw new Error(`Failed to update env vars: ${errorText}`);
+  }
+
+  const result = await response.json();
+  return { 
+    status: 'env_vars_updated', 
+    note: 'Deploy the service to apply changes',
+    envVars: result,
   };
 }
 
