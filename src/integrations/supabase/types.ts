@@ -680,6 +680,41 @@ export type Database = {
           },
         ]
       }
+      deployment_logs: {
+        Row: {
+          created_at: string
+          deployment_id: string
+          id: string
+          log_type: string
+          message: string
+          metadata: Json | null
+        }
+        Insert: {
+          created_at?: string
+          deployment_id: string
+          id?: string
+          log_type?: string
+          message: string
+          metadata?: Json | null
+        }
+        Update: {
+          created_at?: string
+          deployment_id?: string
+          id?: string
+          log_type?: string
+          message?: string
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deployment_logs_deployment_id_fkey"
+            columns: ["deployment_id"]
+            isOneToOne: false
+            referencedRelation: "project_deployments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
@@ -782,6 +817,96 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_deployments: {
+        Row: {
+          branch: string | null
+          build_command: string | null
+          build_folder: string
+          created_at: string
+          created_by: string | null
+          env_vars: Json | null
+          environment: Database["public"]["Enums"]["deployment_environment"]
+          id: string
+          last_deployed_at: string | null
+          name: string
+          platform: Database["public"]["Enums"]["deployment_platform"]
+          project_id: string
+          project_type: string
+          render_deploy_id: string | null
+          render_service_id: string | null
+          repo_id: string | null
+          run_command: string
+          run_folder: string
+          secrets: Json | null
+          status: Database["public"]["Enums"]["deployment_status"]
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          branch?: string | null
+          build_command?: string | null
+          build_folder?: string
+          created_at?: string
+          created_by?: string | null
+          env_vars?: Json | null
+          environment?: Database["public"]["Enums"]["deployment_environment"]
+          id?: string
+          last_deployed_at?: string | null
+          name: string
+          platform?: Database["public"]["Enums"]["deployment_platform"]
+          project_id: string
+          project_type?: string
+          render_deploy_id?: string | null
+          render_service_id?: string | null
+          repo_id?: string | null
+          run_command?: string
+          run_folder?: string
+          secrets?: Json | null
+          status?: Database["public"]["Enums"]["deployment_status"]
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          branch?: string | null
+          build_command?: string | null
+          build_folder?: string
+          created_at?: string
+          created_by?: string | null
+          env_vars?: Json | null
+          environment?: Database["public"]["Enums"]["deployment_environment"]
+          id?: string
+          last_deployed_at?: string | null
+          name?: string
+          platform?: Database["public"]["Enums"]["deployment_platform"]
+          project_id?: string
+          project_type?: string
+          render_deploy_id?: string | null
+          render_service_id?: string | null
+          repo_id?: string | null
+          run_command?: string
+          run_folder?: string
+          secrets?: Json | null
+          status?: Database["public"]["Enums"]["deployment_status"]
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_deployments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_deployments_repo_id_fkey"
+            columns: ["repo_id"]
+            isOneToOne: false
+            referencedRelation: "project_repos"
             referencedColumns: ["id"]
           },
         ]
@@ -1862,6 +1987,10 @@ export type Database = {
         Args: { p_id: string; p_token: string }
         Returns: undefined
       }
+      delete_deployment_with_token: {
+        Args: { p_deployment_id: string; p_token: string }
+        Returns: undefined
+      }
       delete_file_with_token: {
         Args: { p_file_id: string; p_token: string }
         Returns: boolean
@@ -2200,6 +2329,80 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_deployment_logs_with_token: {
+        Args: { p_deployment_id: string; p_limit?: number; p_token?: string }
+        Returns: {
+          created_at: string
+          deployment_id: string
+          id: string
+          log_type: string
+          message: string
+          metadata: Json | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "deployment_logs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_deployment_with_secrets_with_token: {
+        Args: { p_deployment_id: string; p_token?: string }
+        Returns: {
+          branch: string | null
+          build_command: string | null
+          build_folder: string
+          created_at: string
+          created_by: string | null
+          env_vars: Json | null
+          environment: Database["public"]["Enums"]["deployment_environment"]
+          id: string
+          last_deployed_at: string | null
+          name: string
+          platform: Database["public"]["Enums"]["deployment_platform"]
+          project_id: string
+          project_type: string
+          render_deploy_id: string | null
+          render_service_id: string | null
+          repo_id: string | null
+          run_command: string
+          run_folder: string
+          secrets: Json | null
+          status: Database["public"]["Enums"]["deployment_status"]
+          updated_at: string
+          url: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_deployments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_deployments_with_token: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: {
+          branch: string
+          build_command: string
+          build_folder: string
+          created_at: string
+          env_vars: Json
+          environment: Database["public"]["Enums"]["deployment_environment"]
+          id: string
+          last_deployed_at: string
+          name: string
+          platform: Database["public"]["Enums"]["deployment_platform"]
+          project_id: string
+          project_type: string
+          render_service_id: string
+          repo_id: string
+          run_command: string
+          run_folder: string
+          status: Database["public"]["Enums"]["deployment_status"]
+          updated_at: string
+          url: string
+        }[]
       }
       get_file_content_with_token: {
         Args: { p_file_id: string; p_token?: string }
@@ -2710,6 +2913,75 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "chat_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_deployment_log_with_token: {
+        Args: {
+          p_deployment_id: string
+          p_log_type: string
+          p_message: string
+          p_metadata?: Json
+          p_token: string
+        }
+        Returns: {
+          created_at: string
+          deployment_id: string
+          id: string
+          log_type: string
+          message: string
+          metadata: Json | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "deployment_logs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_deployment_with_token: {
+        Args: {
+          p_branch?: string
+          p_build_command?: string
+          p_build_folder?: string
+          p_environment?: Database["public"]["Enums"]["deployment_environment"]
+          p_name: string
+          p_platform?: Database["public"]["Enums"]["deployment_platform"]
+          p_project_id: string
+          p_project_type?: string
+          p_repo_id?: string
+          p_run_command?: string
+          p_run_folder?: string
+          p_token: string
+        }
+        Returns: {
+          branch: string | null
+          build_command: string | null
+          build_folder: string
+          created_at: string
+          created_by: string | null
+          env_vars: Json | null
+          environment: Database["public"]["Enums"]["deployment_environment"]
+          id: string
+          last_deployed_at: string | null
+          name: string
+          platform: Database["public"]["Enums"]["deployment_platform"]
+          project_id: string
+          project_type: string
+          render_deploy_id: string | null
+          render_service_id: string | null
+          repo_id: string | null
+          run_command: string
+          run_folder: string
+          secrets: Json | null
+          status: Database["public"]["Enums"]["deployment_status"]
+          updated_at: string
+          url: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_deployments"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3258,6 +3530,88 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_deployment_secrets_with_token: {
+        Args: { p_deployment_id: string; p_secrets: Json; p_token: string }
+        Returns: {
+          branch: string | null
+          build_command: string | null
+          build_folder: string
+          created_at: string
+          created_by: string | null
+          env_vars: Json | null
+          environment: Database["public"]["Enums"]["deployment_environment"]
+          id: string
+          last_deployed_at: string | null
+          name: string
+          platform: Database["public"]["Enums"]["deployment_platform"]
+          project_id: string
+          project_type: string
+          render_deploy_id: string | null
+          render_service_id: string | null
+          repo_id: string | null
+          run_command: string
+          run_folder: string
+          secrets: Json | null
+          status: Database["public"]["Enums"]["deployment_status"]
+          updated_at: string
+          url: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_deployments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_deployment_with_token: {
+        Args: {
+          p_branch?: string
+          p_build_command?: string
+          p_build_folder?: string
+          p_deployment_id: string
+          p_env_vars?: Json
+          p_environment?: Database["public"]["Enums"]["deployment_environment"]
+          p_name?: string
+          p_project_type?: string
+          p_render_deploy_id?: string
+          p_render_service_id?: string
+          p_run_command?: string
+          p_run_folder?: string
+          p_status?: Database["public"]["Enums"]["deployment_status"]
+          p_token: string
+          p_url?: string
+        }
+        Returns: {
+          branch: string | null
+          build_command: string | null
+          build_folder: string
+          created_at: string
+          created_by: string | null
+          env_vars: Json | null
+          environment: Database["public"]["Enums"]["deployment_environment"]
+          id: string
+          last_deployed_at: string | null
+          name: string
+          platform: Database["public"]["Enums"]["deployment_platform"]
+          project_id: string
+          project_type: string
+          render_deploy_id: string | null
+          render_service_id: string | null
+          repo_id: string | null
+          run_command: string
+          run_folder: string
+          secrets: Json | null
+          status: Database["public"]["Enums"]["deployment_status"]
+          updated_at: string
+          url: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_deployments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_project_llm_settings_with_token: {
         Args: {
           p_max_tokens: number
@@ -3575,6 +3929,16 @@ export type Database = {
       app_role: "admin" | "user"
       audit_severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
       build_status: "RUNNING" | "COMPLETED" | "FAILED"
+      deployment_environment: "development" | "staging" | "production"
+      deployment_platform: "pronghorn_cloud" | "local" | "dedicated_vm"
+      deployment_status:
+        | "pending"
+        | "building"
+        | "deploying"
+        | "running"
+        | "stopped"
+        | "failed"
+        | "deleted"
       node_type:
         | "COMPONENT"
         | "API"
@@ -3733,6 +4097,17 @@ export const Constants = {
       app_role: ["admin", "user"],
       audit_severity: ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
       build_status: ["RUNNING", "COMPLETED", "FAILED"],
+      deployment_environment: ["development", "staging", "production"],
+      deployment_platform: ["pronghorn_cloud", "local", "dedicated_vm"],
+      deployment_status: [
+        "pending",
+        "building",
+        "deploying",
+        "running",
+        "stopped",
+        "failed",
+        "deleted",
+      ],
       node_type: [
         "COMPONENT",
         "API",

@@ -13,6 +13,7 @@ import Build from "./pages/project/Build";
 import Repository from "./pages/project/Repository";
 import ProjectSettings from "./pages/project/ProjectSettings";
 import Specifications from "./pages/project/Specifications";
+import Deploy from "./pages/project/Deploy";
 import NotFound from "./pages/NotFound";
 
 import Artifacts from "./pages/project/Artifacts";
@@ -39,6 +40,7 @@ const App = () => (
     <Route path="/project/:projectId/build" element={<Build />} />
     <Route path="/project/:projectId/repository" element={<Repository />} />
     <Route path="/project/:projectId/specifications" element={<Specifications />} />
+    <Route path="/project/:projectId/deploy" element={<Deploy />} />
     
     {/* Project Routes - With Token (shared access via path-based token) */}
     <Route path="/project/:projectId/settings/t/:token" element={<ProjectSettings />} />
@@ -51,6 +53,7 @@ const App = () => (
     <Route path="/project/:projectId/build/t/:token" element={<Build />} />
     <Route path="/project/:projectId/repository/t/:token" element={<Repository />} />
     <Route path="/project/:projectId/specifications/t/:token" element={<Specifications />} />
+    <Route path="/project/:projectId/deploy/t/:token" element={<Deploy />} />
     
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
     <Route path="*" element={<NotFound />} />
