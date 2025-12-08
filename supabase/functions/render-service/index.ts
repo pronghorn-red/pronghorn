@@ -34,6 +34,11 @@ serve(async (req) => {
       throw new Error('RENDER_API_KEY not configured');
     }
 
+    const RENDER_OWNER_ID = Deno.env.get('RENDER_ID');
+    if (!RENDER_OWNER_ID) {
+      throw new Error('RENDER_ID (owner ID) not configured');
+    }
+
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
     
@@ -71,7 +76,7 @@ serve(async (req) => {
 
     switch (action) {
       case 'create':
-        result = await createRenderService(deployment, body, renderHeaders, supabase, shareToken);
+        result = await createRenderService(deployment, body, renderHeaders, supabase, shareToken, RENDER_OWNER_ID);
         break;
       case 'deploy':
         result = await deployRenderService(deployment, body, renderHeaders, supabase, shareToken);
@@ -121,7 +126,8 @@ async function createRenderService(
   body: RenderServiceRequest,
   headers: Record<string, string>,
   supabase: any,
-  shareToken?: string
+  shareToken?: string,
+  ownerId?: string
 ) {
   console.log('[render-service] Creating Render service...');
 
@@ -151,6 +157,7 @@ async function createRenderService(
 
   const servicePayload: any = {
     name: serviceName,
+    ownerId: ownerId,
     type: isStaticSite ? 'static_site' : 'web_service',
     autoDeploy: 'no', // We'll trigger deploys manually
     branch: deployment.branch || 'main',
