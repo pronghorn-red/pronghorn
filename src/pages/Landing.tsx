@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PronghornLogo } from "@/components/layout/PronghornLogo";
@@ -26,22 +27,181 @@ import {
   Github,
   Heart,
   Zap,
+  X,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function Landing() {
   const navigate = useNavigate();
 
+  const [selectedStep, setSelectedStep] = useState<typeof workflowSteps[0] | null>(null);
+
   const workflowSteps = [
-    { icon: Settings, label: "Settings", description: "Configure project, link standards & tech stacks", phase: "setup" },
-    { icon: Archive, label: "Artifacts", description: "Upload documents, images, reference files", phase: "setup" },
-    { icon: MessageSquare, label: "Chat", description: "AI-powered conversations about your project", phase: "design", hasAgent: true },
-    { icon: ListTree, label: "Requirements", description: "AI decomposes ideas into Epics → Stories", phase: "design", hasAgent: true },
-    { icon: ShieldCheck, label: "Standards", description: "Link organizational compliance standards", phase: "design", hasAgent: true },
-    { icon: Layout, label: "Canvas", description: "Visual architecture with 10+ AI agents", phase: "design", hasAgent: true, featured: true },
-    { icon: FileText, label: "Specifications", description: "Generate 13+ document types", phase: "design", hasAgent: true },
-    { icon: GitBranch, label: "Repository", description: "GitHub-synced code repository", phase: "ship" },
-    { icon: Hammer, label: "Build", description: "Autonomous AI coding agent", phase: "ship", hasAgent: true, featured: true },
-    { icon: Rocket, label: "Deploy", description: "Push to cloud or local environments", phase: "ship" },
+    { 
+      icon: Settings, 
+      label: "Settings", 
+      description: "Configure project, link standards & tech stacks", 
+      phase: "setup",
+      hasAgent: true,
+      aiDetails: {
+        title: "AI Model Configuration",
+        capabilities: [
+          "Select from Gemini, Claude, or Grok AI models",
+          "Configure max tokens and response length limits",
+          "Enable thinking mode for complex reasoning tasks",
+          "Set model preferences per project for optimal results"
+        ]
+      }
+    },
+    { 
+      icon: Archive, 
+      label: "Artifacts", 
+      description: "Upload documents, images, reference files", 
+      phase: "setup",
+      hasAgent: true,
+      aiDetails: {
+        title: "AI-Powered Document Processing",
+        capabilities: [
+          "Automatic summarization of uploaded documents",
+          "Smart indexing and content extraction",
+          "Parse PDFs, DOCX, Excel files into structured data",
+          "Generate AI titles and descriptions for quick reference"
+        ]
+      }
+    },
+    { 
+      icon: MessageSquare, 
+      label: "Chat", 
+      description: "AI-powered conversations about your project", 
+      phase: "design", 
+      hasAgent: true,
+      aiDetails: {
+        title: "Project-Aware AI Conversations",
+        capabilities: [
+          "AI agents with full project context awareness",
+          "Can read requirements, standards, canvas, and files",
+          "Multi-model support (Gemini, Claude, Grok)",
+          "Attach any project element as conversation context"
+        ]
+      }
+    },
+    { 
+      icon: ListTree, 
+      label: "Requirements", 
+      description: "AI decomposes ideas into Epics → Stories", 
+      phase: "design", 
+      hasAgent: true,
+      aiDetails: {
+        title: "AI Requirements Decomposition",
+        capabilities: [
+          "Transform unstructured text into structured requirements",
+          "Generate Epics → Features → User Stories → Acceptance Criteria",
+          "Automatic deduplication against existing requirements",
+          "Support for edit/create actions on existing items"
+        ]
+      }
+    },
+    { 
+      icon: ShieldCheck, 
+      label: "Standards", 
+      description: "Link organizational compliance standards", 
+      phase: "design", 
+      hasAgent: true,
+      aiDetails: {
+        title: "AI Standards Expansion",
+        capabilities: [
+          "Expand source documents into structured standards",
+          "Auto-link standards to project requirements",
+          "Intelligent categorization and hierarchy building",
+          "Generate compliance criteria from policy documents"
+        ]
+      }
+    },
+    { 
+      icon: Layout, 
+      label: "Canvas", 
+      description: "Visual architecture with 10+ AI agents", 
+      phase: "design", 
+      hasAgent: true, 
+      featured: true,
+      aiDetails: {
+        title: "AI Architecture Team (10 Agents)",
+        capabilities: [
+          "Architect, Developer, DBA agents for core design",
+          "QA, UAT, Compliance agents for quality assurance",
+          "Cyber Security agent for threat analysis",
+          "Agents iterate on shared blackboard until design stabilizes"
+        ]
+      }
+    },
+    { 
+      icon: FileText, 
+      label: "Specifications", 
+      description: "Generate 13+ document types", 
+      phase: "design", 
+      hasAgent: true,
+      aiDetails: {
+        title: "AI Document Generation",
+        capabilities: [
+          "13+ specification templates for any audience",
+          "Technical specs, executive summaries, procurement docs",
+          "Cloud architecture guides (AWS, Azure, GCP)",
+          "Security review and compliance documentation"
+        ]
+      }
+    },
+    { 
+      icon: GitBranch, 
+      label: "Repository", 
+      description: "GitHub-synced code repository", 
+      phase: "ship",
+      aiDetails: {
+        title: "GitHub Integration",
+        capabilities: [
+          "Bi-directional sync with GitHub repositories",
+          "Branch management and commit history",
+          "File browser with Monaco code editor",
+          "Personal Access Token support for private repos"
+        ]
+      }
+    },
+    { 
+      icon: Hammer, 
+      label: "Build", 
+      description: "Autonomous AI coding agent", 
+      phase: "ship", 
+      hasAgent: true, 
+      featured: true,
+      aiDetails: {
+        title: "Autonomous Coding Agent",
+        capabilities: [
+          "Read files, search codebase, understand project structure",
+          "Create, edit, rename, delete files with full audit trail",
+          "Stage changes with diff review before committing",
+          "Iterative orchestration with configurable max iterations"
+        ]
+      }
+    },
+    { 
+      icon: Rocket, 
+      label: "Deploy", 
+      description: "Push to cloud or local environments", 
+      phase: "ship",
+      aiDetails: {
+        title: "Deployment Options",
+        capabilities: [
+          "Deploy to Render.com cloud hosting",
+          "Local development runner with hot reload",
+          "Environment-based deployments (dev/uat/prod)",
+          "Bug telemetry integration for automated fixes"
+        ]
+      }
+    },
   ];
 
   const canvasAgents = [
@@ -304,7 +464,7 @@ export default function Landing() {
           </div>
 
           {/* Steps Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 gap-3">
             {workflowSteps.map((step, index) => {
               const phaseColors = {
                 setup: "border-blue-200 hover:border-blue-400 hover:bg-blue-50/50",
@@ -319,7 +479,8 @@ export default function Landing() {
               return (
                 <div
                   key={index}
-                  className={`relative bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${phaseColors[step.phase as keyof typeof phaseColors]} ${step.featured ? "ring-2 ring-offset-2 ring-[hsl(350,80%,60%)]" : ""}`}
+                  onClick={() => setSelectedStep(step)}
+                  className={`relative bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer min-w-0 ${phaseColors[step.phase as keyof typeof phaseColors]} ${step.featured ? "ring-2 ring-offset-2 ring-[hsl(350,80%,60%)]" : ""}`}
                 >
                   {/* Step Number */}
                   <div className="absolute -top-2 -left-2 w-6 h-6 bg-[hsl(240,30%,15%)] text-white text-xs font-bold rounded-full flex items-center justify-center">
@@ -336,12 +497,66 @@ export default function Landing() {
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${iconColors[step.phase as keyof typeof iconColors]}`}>
                     <step.icon className="w-5 h-5" />
                   </div>
-                  <h4 className="font-medium text-sm text-[hsl(240,30%,15%)] mb-1">{step.label}</h4>
-                  <p className="text-xs text-gray-500 leading-tight hidden md:block">{step.description}</p>
+                  <h4 className="font-medium text-sm text-[hsl(240,30%,15%)] mb-1 truncate">{step.label}</h4>
+                  <p className="text-xs text-gray-500 leading-tight hidden lg:block line-clamp-2">{step.description}</p>
                 </div>
               );
             })}
           </div>
+
+          {/* Step Details Dialog */}
+          <Dialog open={!!selectedStep} onOpenChange={(open) => !open && setSelectedStep(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  {selectedStep && (
+                    <>
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        selectedStep.phase === "setup" ? "bg-blue-100 text-blue-600" :
+                        selectedStep.phase === "design" ? "bg-rose-100 text-rose-600" :
+                        "bg-emerald-100 text-emerald-600"
+                      }`}>
+                        <selectedStep.icon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-lg">{selectedStep.label}</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            selectedStep.phase === "setup" ? "bg-blue-100 text-blue-700" :
+                            selectedStep.phase === "design" ? "bg-rose-100 text-rose-700" :
+                            "bg-emerald-100 text-emerald-700"
+                          }`}>
+                            {selectedStep.phase.charAt(0).toUpperCase() + selectedStep.phase.slice(1)} Phase
+                          </span>
+                          {selectedStep.hasAgent && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 flex items-center gap-1">
+                              <Bot className="w-3 h-3" />
+                              AI-Powered
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </DialogTitle>
+              </DialogHeader>
+              {selectedStep?.aiDetails && (
+                <div className="mt-4">
+                  <h4 className="font-medium text-sm text-muted-foreground mb-3">
+                    {selectedStep.aiDetails.title}
+                  </h4>
+                  <ul className="space-y-2">
+                    {selectedStep.aiDetails.capabilities.map((capability, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-sm">
+                        <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                        <span>{capability}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
 
           {/* Legend */}
           <div className="flex justify-center gap-8 mt-8 text-sm text-gray-600">
