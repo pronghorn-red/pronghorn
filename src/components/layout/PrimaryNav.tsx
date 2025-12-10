@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { AdminAccessButton } from "@/components/layout/AdminAccessButton";
 import { PronghornLogo } from "@/components/layout/PronghornLogo";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -43,6 +43,7 @@ export function PrimaryNav() {
             <PronghornLogo className="h-8 w-8" />
           </div>
           <span className="font-bold text-xl">Pronghorn</span>
+          <Link to="/terms" className="text-primary hover:underline text-sm font-medium">(Alpha)</Link>
         </NavLink>
 
         {/* Desktop Navigation */}

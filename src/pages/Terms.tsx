@@ -20,6 +20,7 @@ export default function Terms() {
           <Link to="/" className="flex items-center gap-3">
             <PronghornLogo className="h-8 w-8 rounded-lg" />
             <span className="text-xl font-semibold tracking-tight">Pronghorn</span>
+            <Link to="/terms" className="text-[hsl(350,80%,60%)] hover:underline text-sm font-medium">(Alpha)</Link>
           </Link>
           <div className="flex items-center gap-6 text-sm">
             <Link to="/privacy" className="text-gray-600 hover:text-[hsl(350,80%,60%)] transition-colors">
