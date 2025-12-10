@@ -7,6 +7,7 @@ import TechStacks from "./pages/TechStacks";
 import Settings from "./pages/Settings";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
+import License from "./pages/License";
 import Requirements from "./pages/project/Requirements";
 import ProjectStandards from "./pages/project/Standards";
 import Canvas from "./pages/project/Canvas";
@@ -29,6 +30,7 @@ const App = () => (
               <Route path="/tech-stacks" element={<TechStacks />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
+              <Route path="/license" element={<License />} />
     <Route path="/settings/organization" element={<Settings />} />
     <Route path="/settings/profile" element={<Settings />} />
     

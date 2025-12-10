@@ -385,9 +385,12 @@ export default function Landing() {
               <Link to="/privacy" className="text-gray-600 hover:text-[hsl(350,80%,60%)] transition-colors">
                 Privacy Policy
               </Link>
+              <Link to="/license" className="text-gray-600 hover:text-[hsl(350,80%,60%)] transition-colors">
+                License
+              </Link>
             </div>
             <div className="text-sm text-gray-500 text-center md:text-right">
-              <p>© 2025 Pronghorn. MIT License Open Source by the Government of Alberta.</p>
+              <p>© 2025 Pronghorn. <Link to="/license" className="text-[hsl(350,80%,60%)] hover:underline">MIT License</Link> Open Source by the Government of Alberta.</p>
               <a
                 href="https://pronghorn.red"
                 target="_blank"
