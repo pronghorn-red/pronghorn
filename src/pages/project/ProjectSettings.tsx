@@ -84,7 +84,8 @@ export default function ProjectSettings() {
       if (error) return [];
       return data as Array<{ id: string; token: string; role: string; label: string | null }>;
     },
-    enabled: !!projectId && isTokenSet && isOwner,
+    // Enable for authenticated users OR when token is ready
+    enabled: !!projectId && isOwner && (!!user || isTokenSet),
   });
 
   // Auto-update URL with owner token if not present

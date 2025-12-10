@@ -23,7 +23,7 @@ export function PrimaryNav() {
   const handleSignOut = async () => {
     await signOut();
     toast.success("Signed out successfully");
-    navigate("/dashboard");
+    navigate("/");
     setMobileOpen(false);
   };
 
