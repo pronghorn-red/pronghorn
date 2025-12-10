@@ -1,12 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -15,29 +15,29 @@ Deno.serve(async (req) => {
 
     // Allow null tokens for authenticated users (shareToken !== undefined)
     if (!projectId || !repoName || !sourceOrg || !sourceRepo || shareToken === undefined) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: "Missing required fields" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const branch = sourceBranch || 'main';
+    const branch = sourceBranch || "main";
 
     // Generate unique slugified repo name (same pattern as create-empty-repo)
     const baseSlug = repoName
       .toLowerCase()
       .trim()
-      .replace(/[^a-z0-9-]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .replace(/-{2,}/g, '-');
-    const uniqueSuffix = crypto.randomUUID().split('-')[0];
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .replace(/-{2,}/g, "-");
+    const uniqueSuffix = crypto.randomUUID().split("-")[0];
     const finalRepoName = `${baseSlug}-${uniqueSuffix}`;
 
     // Create Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const authHeader = req.headers.get('Authorization');
-    
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const authHeader = req.headers.get("Authorization");
+
     const supabase = createClient(supabaseUrl, supabaseKey, {
       global: {
         headers: authHeader ? { Authorization: authHeader } : {},
@@ -45,42 +45,42 @@ Deno.serve(async (req) => {
     });
 
     // Validate project access AND check role - must be editor or owner
-    const { data: role, error: roleError } = await supabase.rpc('authorize_project_access', {
+    const { data: role, error: roleError } = await supabase.rpc("authorize_project_access", {
       p_project_id: projectId,
-      p_token: shareToken
+      p_token: shareToken,
     });
 
     if (roleError || !role) {
-      console.error('[clone-public-repo] Access denied:', roleError);
-      throw new Error('Access denied');
+      console.error("[clone-public-repo] Access denied:", roleError);
+      throw new Error("Access denied");
     }
 
     // Check for editor role (owner has higher privileges than editor)
-    if (role !== 'owner' && role !== 'editor') {
-      console.error('[clone-public-repo] Insufficient permissions:', role);
+    if (role !== "owner" && role !== "editor") {
+      console.error("[clone-public-repo] Insufficient permissions:", role);
       return new Response(
-        JSON.stringify({ error: 'Insufficient permissions: editor role required to create repositories' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Insufficient permissions: editor role required to create repositories" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     // Get GitHub PAT
-    const githubPat = Deno.env.get('GITHUB_PAT');
+    const githubPat = Deno.env.get("GITHUB_PAT");
     if (!githubPat) {
-      throw new Error('GitHub PAT not configured');
+      throw new Error("GitHub PAT not configured");
     }
 
-    const organization = 'pronghorn-red';
+    const organization = "pronghorn-cloud";
 
     console.log(`Cloning ${sourceOrg}/${sourceRepo} (${branch}) to ${organization}/${finalRepoName}`);
 
-    // Create empty repository in pronghorn-red
+    // Create empty repository in pronghorn-cloud
     const createRepoResponse = await fetch(`https://api.github.com/orgs/${organization}/repos`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `token ${githubPat}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json',
+        Authorization: `token ${githubPat}`,
+        Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         name: finalRepoName,
@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
 
     if (!createRepoResponse.ok) {
       const errorData = await createRepoResponse.json();
-      throw new Error(`GitHub API error: ${errorData.message || 'Failed to create repository'}`);
+      throw new Error(`GitHub API error: ${errorData.message || "Failed to create repository"}`);
     }
 
     const newRepoData = await createRepoResponse.json();
@@ -102,9 +102,9 @@ Deno.serve(async (req) => {
       `https://api.github.com/repos/${sourceOrg}/${sourceRepo}/git/trees/${branch}?recursive=1`,
       {
         headers: {
-          'Accept': 'application/vnd.github.v3+json',
+          Accept: "application/vnd.github.v3+json",
         },
-      }
+      },
     );
 
     if (!treeResponse.ok) {
@@ -112,33 +112,33 @@ Deno.serve(async (req) => {
     }
 
     const treeData = await treeResponse.json();
-    
+
     // Filter only files (not directories)
-    const files = treeData.tree.filter((item: any) => item.type === 'blob');
-    
+    const files = treeData.tree.filter((item: any) => item.type === "blob");
+
     console.log(`Found ${files.length} files to clone`);
 
     // Fetch content for each file
     const fileContents: { path: string; content: string }[] = [];
-    
+
     for (const file of files) {
       const contentResponse = await fetch(
         `https://api.github.com/repos/${sourceOrg}/${sourceRepo}/contents/${file.path}?ref=${branch}`,
         {
           headers: {
-            'Accept': 'application/vnd.github.v3+json',
+            Accept: "application/vnd.github.v3+json",
           },
-        }
+        },
       );
 
       if (contentResponse.ok) {
         const contentData = await contentResponse.json();
-        
+
         if (contentData.content) {
           // Decode base64 content with proper UTF-8 handling
-          const base64Clean = contentData.content.replace(/\n/g, '');
-          const bytes = Uint8Array.from(atob(base64Clean), c => c.charCodeAt(0));
-          const decodedContent = new TextDecoder('utf-8').decode(bytes);
+          const base64Clean = contentData.content.replace(/\n/g, "");
+          const bytes = Uint8Array.from(atob(base64Clean), (c) => c.charCodeAt(0));
+          const decodedContent = new TextDecoder("utf-8").decode(bytes);
           fileContents.push({
             path: file.path,
             content: decodedContent,
@@ -154,10 +154,10 @@ Deno.serve(async (req) => {
       `https://api.github.com/repos/${organization}/${finalRepoName}/git/ref/heads/main`,
       {
         headers: {
-          'Authorization': `token ${githubPat}`,
-          'Accept': 'application/vnd.github.v3+json',
+          Authorization: `token ${githubPat}`,
+          Accept: "application/vnd.github.v3+json",
         },
-      }
+      },
     );
 
     const refData = await refResponse.json();
@@ -168,10 +168,10 @@ Deno.serve(async (req) => {
       `https://api.github.com/repos/${organization}/${finalRepoName}/git/commits/${latestCommitSha}`,
       {
         headers: {
-          'Authorization': `token ${githubPat}`,
-          'Accept': 'application/vnd.github.v3+json',
+          Authorization: `token ${githubPat}`,
+          Accept: "application/vnd.github.v3+json",
         },
-      }
+      },
     );
 
     const commitData = await commitResponse.json();
@@ -180,26 +180,23 @@ Deno.serve(async (req) => {
     // Create tree with all files
     const tree = fileContents.map((file) => ({
       path: file.path,
-      mode: '100644',
-      type: 'blob',
+      mode: "100644",
+      type: "blob",
       content: file.content,
     }));
 
-    const createTreeResponse = await fetch(
-      `https://api.github.com/repos/${organization}/${finalRepoName}/git/trees`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `token ${githubPat}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          base_tree: baseTreeSha,
-          tree,
-        }),
-      }
-    );
+    const createTreeResponse = await fetch(`https://api.github.com/repos/${organization}/${finalRepoName}/git/trees`, {
+      method: "POST",
+      headers: {
+        Authorization: `token ${githubPat}`,
+        Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        base_tree: baseTreeSha,
+        tree,
+      }),
+    });
 
     if (!createTreeResponse.ok) {
       const errorData = await createTreeResponse.json();
@@ -212,18 +209,18 @@ Deno.serve(async (req) => {
     const createCommitResponse = await fetch(
       `https://api.github.com/repos/${organization}/${finalRepoName}/git/commits`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `token ${githubPat}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json',
+          Authorization: `token ${githubPat}`,
+          Accept: "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           message: `Clone from ${sourceOrg}/${sourceRepo}`,
           tree: newTreeData.sha,
           parents: [latestCommitSha],
         }),
-      }
+      },
     );
 
     if (!createCommitResponse.ok) {
@@ -237,17 +234,17 @@ Deno.serve(async (req) => {
     const updateRefResponse = await fetch(
       `https://api.github.com/repos/${organization}/${finalRepoName}/git/refs/heads/main`,
       {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          'Authorization': `token ${githubPat}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json',
+          Authorization: `token ${githubPat}`,
+          Accept: "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           sha: commitResponseData.sha,
           force: true,
         }),
-      }
+      },
     );
 
     if (!updateRefResponse.ok) {
@@ -258,32 +255,32 @@ Deno.serve(async (req) => {
     console.log(`Successfully pushed ${fileContents.length} files to ${organization}/${finalRepoName}`);
 
     // Link repository to project
-    const { data: newRepo, error: repoError } = await supabase.rpc('create_project_repo_with_token', {
+    const { data: newRepo, error: repoError } = await supabase.rpc("create_project_repo_with_token", {
       p_project_id: projectId,
       p_token: shareToken,
       p_organization: organization,
       p_repo: finalRepoName,
-      p_branch: 'main',
+      p_branch: "main",
       p_is_default: true,
-      p_is_prime: true
+      p_is_prime: true,
     });
 
     if (repoError) {
-      console.error('Error linking repository:', repoError);
-      throw new Error('Failed to link repository to project');
+      console.error("Error linking repository:", repoError);
+      throw new Error("Failed to link repository to project");
     }
 
     // Pull files into database
-    const { error: pullError } = await supabase.functions.invoke('sync-repo-pull', {
+    const { error: pullError } = await supabase.functions.invoke("sync-repo-pull", {
       body: {
         projectId,
         repoId: newRepo.id,
-        shareToken
-      }
+        shareToken,
+      },
     });
 
     if (pullError) {
-      console.error('Error pulling cloned files:', pullError);
+      console.error("Error pulling cloned files:", pullError);
     }
 
     console.log(`Cloned repository: ${organization}/${finalRepoName} from ${sourceOrg}/${sourceRepo}`);
@@ -293,16 +290,15 @@ Deno.serve(async (req) => {
         success: true,
         repo: newRepo,
         githubUrl: newRepoData.html_url,
-        filesCloned: fileContents.length
+        filesCloned: fileContents.length,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-
   } catch (error) {
-    console.error('Error in clone-public-repo:', error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error("Error in clone-public-repo:", error);
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
