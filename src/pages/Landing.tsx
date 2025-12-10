@@ -17,10 +17,45 @@ import {
   Rocket,
   Shield,
   Award,
+  Settings,
+  Archive,
+  MessageSquare,
+  ListTree,
+  Hammer,
+  Sparkles,
+  Github,
+  Heart,
+  Zap,
 } from "lucide-react";
 
 export default function Landing() {
   const navigate = useNavigate();
+
+  const workflowSteps = [
+    { icon: Settings, label: "Settings", description: "Configure project, link standards & tech stacks", phase: "setup" },
+    { icon: Archive, label: "Artifacts", description: "Upload documents, images, reference files", phase: "setup" },
+    { icon: MessageSquare, label: "Chat", description: "AI-powered conversations about your project", phase: "design", hasAgent: true },
+    { icon: ListTree, label: "Requirements", description: "AI decomposes ideas into Epics → Stories", phase: "design", hasAgent: true },
+    { icon: ShieldCheck, label: "Standards", description: "Link organizational compliance standards", phase: "design", hasAgent: true },
+    { icon: Layout, label: "Canvas", description: "Visual architecture with 10+ AI agents", phase: "design", hasAgent: true, featured: true },
+    { icon: FileText, label: "Specifications", description: "Generate 13+ document types", phase: "design", hasAgent: true },
+    { icon: GitBranch, label: "Repository", description: "GitHub-synced code repository", phase: "ship" },
+    { icon: Hammer, label: "Build", description: "Autonomous AI coding agent", phase: "ship", hasAgent: true, featured: true },
+    { icon: Rocket, label: "Deploy", description: "Push to cloud or local environments", phase: "ship" },
+  ];
+
+  const canvasAgents = [
+    { name: "Architect", color: "bg-blue-500", description: "System architecture" },
+    { name: "Developer", color: "bg-orange-500", description: "Components & APIs" },
+    { name: "DBA", color: "bg-indigo-500", description: "Database schemas" },
+    { name: "Cloud Ops", color: "bg-teal-500", description: "Infrastructure" },
+    { name: "QA", color: "bg-green-500", description: "Testing & quality" },
+    { name: "UAT", color: "bg-yellow-500", description: "User validation" },
+    { name: "Compliance", color: "bg-purple-500", description: "Standards adherence" },
+    { name: "Cyber Security", color: "bg-red-500", description: "Security analysis", featured: true },
+    { name: "Integrator", color: "bg-pink-500", description: "System connections" },
+    { name: "Simplifier", color: "bg-gray-500", description: "Reduces complexity" },
+  ];
 
   const features = [
     {
@@ -234,51 +269,303 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* How It Works Section */}
+      {/* 10-Step Journey Section */}
       <section className="py-24 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">How Pronghorn Works</h2>
-            <p className="text-xl text-gray-600">Three phases to transform ideas into production-ready software</p>
+            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">
+              Your 10-Step Journey
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              From initial idea to deployed application—a complete workflow powered by AI at every step
+            </p>
+          </div>
+
+          {/* Phase Headers */}
+          <div className="grid grid-cols-3 gap-4 mb-8 max-w-4xl mx-auto">
+            <div className="text-center">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                <Settings className="w-4 h-4" />
+                Setup
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-rose-100 text-rose-700 rounded-full text-sm font-medium">
+                <Sparkles className="w-4 h-4" />
+                Design
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium">
+                <Rocket className="w-4 h-4" />
+                Ship
+              </div>
+            </div>
+          </div>
+
+          {/* Steps Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-3">
+            {workflowSteps.map((step, index) => {
+              const phaseColors = {
+                setup: "border-blue-200 hover:border-blue-400 hover:bg-blue-50/50",
+                design: "border-rose-200 hover:border-rose-400 hover:bg-rose-50/50",
+                ship: "border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/50",
+              };
+              const iconColors = {
+                setup: "text-blue-600 bg-blue-100",
+                design: "text-rose-600 bg-rose-100",
+                ship: "text-emerald-600 bg-emerald-100",
+              };
+              return (
+                <div
+                  key={index}
+                  className={`relative bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${phaseColors[step.phase as keyof typeof phaseColors]} ${step.featured ? "ring-2 ring-offset-2 ring-[hsl(350,80%,60%)]" : ""}`}
+                >
+                  {/* Step Number */}
+                  <div className="absolute -top-2 -left-2 w-6 h-6 bg-[hsl(240,30%,15%)] text-white text-xs font-bold rounded-full flex items-center justify-center">
+                    {index + 1}
+                  </div>
+                  
+                  {/* AI Badge */}
+                  {step.hasAgent && (
+                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-full flex items-center justify-center">
+                      <Bot className="w-3 h-3" />
+                    </div>
+                  )}
+
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${iconColors[step.phase as keyof typeof iconColors]}`}>
+                    <step.icon className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-medium text-sm text-[hsl(240,30%,15%)] mb-1">{step.label}</h4>
+                  <p className="text-xs text-gray-500 leading-tight hidden md:block">{step.description}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legend */}
+          <div className="flex justify-center gap-8 mt-8 text-sm text-gray-600">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center">
+                <Bot className="w-3 h-3 text-white" />
+              </div>
+              <span>AI-Powered Step</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 ring-2 ring-[hsl(350,80%,60%)] ring-offset-2 rounded-lg"></div>
+              <span>Featured</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Meet the AI Teams Section */}
+      <section className="py-24 px-6 bg-gradient-to-b from-white to-gray-50">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">
+              Meet the AI Teams
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Specialized agents that collaborate, iterate, and refine your architecture until it stabilizes
+            </p>
           </div>
 
           <div className="grid lg:grid-cols-3 gap-8">
-            <div className="relative bg-gradient-to-br from-blue-50 to-white p-10 rounded-3xl border border-blue-100">
-              <div className="absolute -top-4 -left-4 w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">
-                1
+            {/* Canvas Orchestration Agents */}
+            <Card className="bg-white p-8 rounded-2xl border border-border hover:shadow-xl transition-all duration-300">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                  <Layout className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-medium text-[hsl(240,30%,15%)]">Architecture Team</h3>
+                  <p className="text-sm text-gray-500">10 specialized canvas agents</p>
+                </div>
               </div>
-              <div className="pt-4">
-                <h3 className="text-2xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Design</h3>
-                <p className="text-gray-600 leading-relaxed">
-                  Define standards, requirements, and architecture on an interactive canvas. AI helps decompose ideas
-                  into structured specifications.
-                </p>
+              
+              <div className="grid grid-cols-2 gap-2 mb-6">
+                {canvasAgents.map((agent, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-center gap-2 p-2 rounded-lg bg-gray-50 ${agent.featured ? "ring-1 ring-red-300 bg-red-50" : ""}`}
+                  >
+                    <div className={`w-2 h-2 rounded-full ${agent.color}`}></div>
+                    <span className={`text-xs font-medium ${agent.featured ? "text-red-700" : "text-gray-700"}`}>
+                      {agent.name}
+                    </span>
+                  </div>
+                ))}
               </div>
-            </div>
+              
+              <p className="text-sm text-gray-600">
+                Agents iterate on a shared <span className="font-medium text-[hsl(240,30%,15%)]">blackboard</span> until your architecture stabilizes—each bringing their expertise to refine the design.
+              </p>
+            </Card>
 
-            <div className="relative bg-gradient-to-br from-rose-50 to-white p-10 rounded-3xl border border-rose-100">
-              <div className="absolute -top-4 -left-4 w-12 h-12 bg-[hsl(350,80%,55%)] rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">
-                2
+            {/* Coding Agent */}
+            <Card className="bg-white p-8 rounded-2xl border border-border hover:shadow-xl transition-all duration-300">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center">
+                  <Code className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-medium text-[hsl(240,30%,15%)]">Autonomous Coder</h3>
+                  <p className="text-sm text-gray-500">AI that writes code with audit trail</p>
+                </div>
               </div>
-              <div className="pt-4">
-                <h3 className="text-2xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Build</h3>
-                <p className="text-gray-600 leading-relaxed">
-                  AI agents generate code, audit compliance, and fix gaps autonomously. Review changes in a built-in
-                  editor with Git integration.
-                </p>
+              
+              <ul className="space-y-3 mb-6">
+                {[
+                  "Reads requirements & searches codebase",
+                  "Creates, edits, renames, deletes files",
+                  "Stages changes with diff review",
+                  "Commits and pushes to GitHub",
+                ].map((capability, i) => (
+                  <li key={i} className="flex items-center gap-3">
+                    <div className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Check className="w-3 h-3 text-amber-600" />
+                    </div>
+                    <span className="text-sm text-gray-700">{capability}</span>
+                  </li>
+                ))}
+              </ul>
+              
+              <div className="bg-gray-900 rounded-lg p-4 font-mono text-xs text-green-400">
+                <div className="opacity-60">// Agent executing...</div>
+                <div>staged: <span className="text-amber-400">3 files</span></div>
+                <div>commit: <span className="text-cyan-400">"Add user auth"</span></div>
               </div>
-            </div>
+            </Card>
 
-            <div className="relative bg-gradient-to-br from-emerald-50 to-white p-10 rounded-3xl border border-emerald-100">
-              <div className="absolute -top-4 -left-4 w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg">
-                3
+            {/* Specification Agents */}
+            <Card className="bg-white p-8 rounded-2xl border border-border hover:shadow-xl transition-all duration-300">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-medium text-[hsl(240,30%,15%)]">Document Generators</h3>
+                  <p className="text-sm text-gray-500">13+ specification templates</p>
+                </div>
               </div>
-              <div className="pt-4">
-                <h3 className="text-2xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Ship</h3>
-                <p className="text-gray-600 leading-relaxed">
-                  Generate comprehensive specs for any audience—technical docs, executive summaries, RFPs, or cloud
-                  architecture guides. Export and share with confidence.
-                </p>
+              
+              <div className="space-y-3 mb-6">
+                <div>
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Business</div>
+                  <div className="flex flex-wrap gap-1">
+                    {["Overview", "Executive Summary", "Procurement"].map((t) => (
+                      <span key={t} className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">{t}</span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Technical</div>
+                  <div className="flex flex-wrap gap-1">
+                    {["Tech Spec", "Solution Arch", "Agent Instructions"].map((t) => (
+                      <span key={t} className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full">{t}</span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Cloud & Security</div>
+                  <div className="flex flex-wrap gap-1">
+                    {["AWS", "Azure", "GCP", "Cyber Specialist"].map((t) => (
+                      <span key={t} className={`px-2 py-1 text-xs rounded-full ${t === "Cyber Specialist" ? "bg-red-50 text-red-700 font-medium" : "bg-violet-50 text-violet-700"}`}>{t}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Open Source & Evolving Section */}
+      <section className="py-16 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="bg-gradient-to-br from-[hsl(240,30%,15%)] to-[hsl(240,30%,20%)] rounded-3xl p-10 md:p-16 relative overflow-hidden">
+            {/* Background decorations */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-[hsl(350,80%,60%)]/20 rounded-full blur-3xl" />
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl" />
+            
+            <div className="relative z-10">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
+                  <Github className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-medium text-white">Open Source & Community-Driven</h2>
+                </div>
+              </div>
+              
+              <p className="text-white/80 text-lg leading-relaxed mb-8 max-w-3xl">
+                All AI agents are <span className="text-white font-medium">open source under MIT License</span> and continuously evolving based on community feedback. Agent configurations are stored as JSON files, making them easy to customize, extend, or contribute to.
+              </p>
+              
+              {/* Cyber Security Highlight */}
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-8 border border-white/10">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-6 h-6 text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-medium text-white mb-2">Evolving Cyber Security Agents</h3>
+                    <p className="text-white/70 text-sm leading-relaxed">
+                      Our Cyber Security agents are actively evolving to address emerging threats, compliance frameworks (SOC2, ISO 27001, NIST), and security best practices. Built to be extensible—add your organization's specific security requirements.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Key Points */}
+              <div className="grid md:grid-cols-3 gap-6 mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
+                    <Zap className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <div className="text-white font-medium">JSON Configs</div>
+                    <div className="text-white/60 text-sm">Easy to customize</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
+                    <Heart className="w-5 h-5 text-rose-400" />
+                  </div>
+                  <div>
+                    <div className="text-white font-medium">Community-Driven</div>
+                    <div className="text-white/60 text-sm">Shaped by feedback</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <div className="text-white font-medium">MIT License</div>
+                    <div className="text-white/60 text-sm">Use anywhere</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex flex-wrap gap-4">
+                <Button
+                  variant="outline"
+                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                  onClick={() => window.open("https://github.com", "_blank")}
+                >
+                  <Github className="w-4 h-4 mr-2" />
+                  View on GitHub
+                </Button>
+                <Button
+                  variant="outline"
+                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                  onClick={() => window.location.href = "mailto:ti.deputyminister@gov.ab.ca?subject=Agent Suggestion for Pronghorn"}
+                >
+                  <Heart className="w-4 h-4 mr-2" />
+                  Suggest an Agent
+                </Button>
               </div>
             </div>
           </div>
