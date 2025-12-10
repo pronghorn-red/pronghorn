@@ -1,8 +1,8 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 interface PushRequest {
@@ -23,53 +23,67 @@ interface RepoFile {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
-    );
+    const supabaseClient = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+      global: {
+        headers: { Authorization: req.headers.get("Authorization")! },
+      },
+    });
 
-    const { repoId, projectId, shareToken, branch, commitMessage, filePaths, deletePaths, forcePush = false, sourceRepoId }: PushRequest = await req.json();
+    const {
+      repoId,
+      projectId,
+      shareToken,
+      branch,
+      commitMessage,
+      filePaths,
+      deletePaths,
+      forcePush = false,
+      sourceRepoId,
+    }: PushRequest = await req.json();
 
     // Use sourceRepoId if provided (for Prime->Mirror sync), otherwise use repoId
     const fileSourceRepoId = sourceRepoId || repoId;
 
-    console.log('Push request:', { repoId, projectId, branch, filePaths: filePaths?.length || 'all', deletePaths: deletePaths?.length || 0, forcePush, sourceRepoId: sourceRepoId || 'same as target' });
+    console.log("Push request:", {
+      repoId,
+      projectId,
+      branch,
+      filePaths: filePaths?.length || "all",
+      deletePaths: deletePaths?.length || 0,
+      forcePush,
+      sourceRepoId: sourceRepoId || "same as target",
+    });
 
     // Validate project access using new RBAC pattern - requires editor role for push
-    const { data: accessRole, error: accessError } = await supabaseClient.rpc('authorize_project_access', {
+    const { data: accessRole, error: accessError } = await supabaseClient.rpc("authorize_project_access", {
       p_project_id: projectId,
       p_token: shareToken || null,
     });
 
     if (accessError || !accessRole) {
-      console.error('Access validation error:', accessError);
-      return new Response(JSON.stringify({ error: 'Access denied' }), {
+      console.error("Access validation error:", accessError);
+      return new Response(JSON.stringify({ error: "Access denied" }), {
         status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Push requires at least editor role
-    const roleHierarchy = { 'viewer': 1, 'editor': 2, 'owner': 3 };
-    if (roleHierarchy[accessRole as keyof typeof roleHierarchy] < roleHierarchy['editor']) {
-      return new Response(JSON.stringify({ error: 'Editor role required for push operations' }), {
+    const roleHierarchy = { viewer: 1, editor: 2, owner: 3 };
+    if (roleHierarchy[accessRole as keyof typeof roleHierarchy] < roleHierarchy["editor"]) {
+      return new Response(JSON.stringify({ error: "Editor role required for push operations" }), {
         status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Get repo details using RPC with token validation
-    const { data: repoData, error: repoError } = await supabaseClient.rpc('get_repo_by_id_with_token', {
+    const { data: repoData, error: repoError } = await supabaseClient.rpc("get_repo_by_id_with_token", {
       p_repo_id: repoId,
       p_token: shareToken || null,
     });
@@ -77,41 +91,41 @@ Deno.serve(async (req) => {
     const repo = repoData && repoData.length > 0 ? repoData[0] : null;
 
     if (repoError || !repo) {
-      console.error('Repo not found:', repoError);
-      return new Response(JSON.stringify({ error: 'Repository not found' }), {
+      console.error("Repo not found:", repoError);
+      return new Response(JSON.stringify({ error: "Repository not found" }), {
         status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Get PAT (default or user-provided)
     let pat: string;
     if (repo.is_default) {
-      // Use system PAT for default pronghorn-red repo
-      pat = Deno.env.get('GITHUB_PAT') ?? '';
+      // Use system PAT for default pronghorn-cloud repo
+      pat = Deno.env.get("GITHUB_PAT") ?? "";
       if (!pat) {
-        return new Response(JSON.stringify({ error: 'GitHub PAT not configured' }), {
+        return new Response(JSON.stringify({ error: "GitHub PAT not configured" }), {
           status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     } else {
       // Get user PAT from database (using service role to bypass RLS)
       const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       );
 
       const { data: patData, error: patError } = await supabaseAdmin
-        .from('repo_pats')
-        .select('pat')
-        .eq('repo_id', repoId)
+        .from("repo_pats")
+        .select("pat")
+        .eq("repo_id", repoId)
         .single();
 
       if (patError || !patData) {
-        return new Response(JSON.stringify({ error: 'PAT required for this repository' }), {
+        return new Response(JSON.stringify({ error: "PAT required for this repository" }), {
           status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -120,17 +134,17 @@ Deno.serve(async (req) => {
 
     // Get files to push using RPC with token validation
     // Use fileSourceRepoId to fetch from Prime repo when doing Prime->Mirror sync
-    const { data: filesToPush, error: filesError } = await supabaseClient.rpc('get_repo_files_with_token', {
+    const { data: filesToPush, error: filesError } = await supabaseClient.rpc("get_repo_files_with_token", {
       p_repo_id: fileSourceRepoId,
       p_token: shareToken || null,
       p_file_paths: filePaths && filePaths.length > 0 ? filePaths : null,
     });
 
     if (filesError) {
-      console.error('Error fetching files:', filesError);
-      return new Response(JSON.stringify({ error: 'Failed to fetch files' }), {
+      console.error("Error fetching files:", filesError);
+      return new Response(JSON.stringify({ error: "Failed to fetch files" }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -139,21 +153,23 @@ Deno.serve(async (req) => {
     const hasDeletions = deletePaths && deletePaths.length > 0;
 
     if (!hasFilesToPush && !hasDeletions) {
-      return new Response(JSON.stringify({ error: 'No files to push' }), {
+      return new Response(JSON.stringify({ error: "No files to push" }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`Pushing ${filesToPush?.length || 0} files, deleting ${deletePaths?.length || 0} files to ${repo.organization}/${repo.repo} on branch ${branch}`);
+    console.log(
+      `Pushing ${filesToPush?.length || 0} files, deleting ${deletePaths?.length || 0} files to ${repo.organization}/${repo.repo} on branch ${branch}`,
+    );
 
     // Check if target branch exists
     const targetBranchUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/refs/heads/${branch}`;
     const targetBranchResponse = await fetch(targetBranchUrl, {
       headers: {
-        'Authorization': `token ${pat}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'Pronghorn-Sync',
+        Authorization: `token ${pat}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "Pronghorn-Sync",
       },
     });
 
@@ -162,21 +178,21 @@ Deno.serve(async (req) => {
     if (!targetBranchResponse.ok) {
       // Branch doesn't exist, create it from main
       console.log(`Branch ${branch} doesn't exist, creating from main`);
-      
+
       const mainRefUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/refs/heads/main`;
       const mainRefResponse = await fetch(mainRefUrl, {
         headers: {
-          'Authorization': `token ${pat}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'Pronghorn-Sync',
+          Authorization: `token ${pat}`,
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "Pronghorn-Sync",
         },
       });
 
       if (!mainRefResponse.ok) {
-        console.error('Failed to get main branch:', await mainRefResponse.text());
-        return new Response(JSON.stringify({ error: 'Failed to get main branch for creating new branch' }), {
+        console.error("Failed to get main branch:", await mainRefResponse.text());
+        return new Response(JSON.stringify({ error: "Failed to get main branch for creating new branch" }), {
           status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -186,12 +202,12 @@ Deno.serve(async (req) => {
       // Create new branch
       const createBranchUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/refs`;
       const createBranchResponse = await fetch(createBranchUrl, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `token ${pat}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'Pronghorn-Sync',
-          'Content-Type': 'application/json',
+          Authorization: `token ${pat}`,
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "Pronghorn-Sync",
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           ref: `refs/heads/${branch}`,
@@ -200,10 +216,10 @@ Deno.serve(async (req) => {
       });
 
       if (!createBranchResponse.ok) {
-        console.error('Failed to create branch:', await createBranchResponse.text());
+        console.error("Failed to create branch:", await createBranchResponse.text());
         return new Response(JSON.stringify({ error: `Failed to create branch ${branch}` }), {
           status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -217,17 +233,17 @@ Deno.serve(async (req) => {
     const commitUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/commits/${currentSha}`;
     const commitResponse = await fetch(commitUrl, {
       headers: {
-        'Authorization': `token ${pat}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'Pronghorn-Sync',
+        Authorization: `token ${pat}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "Pronghorn-Sync",
       },
     });
 
     if (!commitResponse.ok) {
-      console.error('Failed to get commit:', await commitResponse.text());
-      return new Response(JSON.stringify({ error: 'Failed to get current commit' }), {
+      console.error("Failed to get commit:", await commitResponse.text());
+      return new Response(JSON.stringify({ error: "Failed to get current commit" }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -238,61 +254,59 @@ Deno.serve(async (req) => {
     const currentTreeUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/trees/${baseTreeSha}?recursive=1`;
     const currentTreeResponse = await fetch(currentTreeUrl, {
       headers: {
-        'Authorization': `token ${pat}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'Pronghorn-Sync',
+        Authorization: `token ${pat}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "Pronghorn-Sync",
       },
     });
 
     if (!currentTreeResponse.ok) {
-      console.error('Failed to get current tree:', await currentTreeResponse.text());
+      console.error("Failed to get current tree:", await currentTreeResponse.text());
     }
 
     const currentTreeData = await currentTreeResponse.json();
     // Only track actual files (blobs), not folders (trees)
     const currentFiles = new Set(
-      currentTreeData.tree
-        ?.filter((item: any) => item.type === 'blob')
-        .map((item: any) => item.path) || []
+      currentTreeData.tree?.filter((item: any) => item.type === "blob").map((item: any) => item.path) || [],
     );
     const dbFilePaths = new Set(filesToPush.map((f: RepoFile) => f.path));
 
     // Create blobs for each file (only if there are files to push)
     const tree: any[] = [];
-    
+
     if (hasFilesToPush) {
       const fileBlobs = await Promise.all(
         filesToPush.map(async (file: RepoFile) => {
-        // Detect if content is base64 (binary file) by checking if it's valid base64 and substantial length
-        const isBase64 = /^[A-Za-z0-9+/\n\r]+=*$/.test(file.content.replace(/\s/g, '')) && file.content.length > 100;
-        
-        const blobUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/blobs`;
-        const blobResponse = await fetch(blobUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `token ${pat}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': 'Pronghorn-Sync',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            content: file.content,
-            encoding: isBase64 ? 'base64' : 'utf-8',
-          }),
-        });
+          // Detect if content is base64 (binary file) by checking if it's valid base64 and substantial length
+          const isBase64 = /^[A-Za-z0-9+/\n\r]+=*$/.test(file.content.replace(/\s/g, "")) && file.content.length > 100;
 
-        if (!blobResponse.ok) {
-          throw new Error(`Failed to create blob for ${file.path}: ${await blobResponse.text()}`);
-        }
+          const blobUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/blobs`;
+          const blobResponse = await fetch(blobUrl, {
+            method: "POST",
+            headers: {
+              Authorization: `token ${pat}`,
+              Accept: "application/vnd.github.v3+json",
+              "User-Agent": "Pronghorn-Sync",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              content: file.content,
+              encoding: isBase64 ? "base64" : "utf-8",
+            }),
+          });
 
-        const blobData = await blobResponse.json();
-        return {
-          path: file.path,
-          mode: '100644',
-          type: 'blob',
-          sha: blobData.sha,
-        };
-      })
+          if (!blobResponse.ok) {
+            throw new Error(`Failed to create blob for ${file.path}: ${await blobResponse.text()}`);
+          }
+
+          const blobData = await blobResponse.json();
+          return {
+            path: file.path,
+            mode: "100644",
+            type: "blob",
+            sha: blobData.sha,
+          };
+        }),
       );
       tree.push(...fileBlobs);
     }
@@ -300,22 +314,22 @@ Deno.serve(async (req) => {
     // Handle explicit deletions from deletePaths (delta mode)
     // Only delete files that actually exist in GitHub's current tree
     if (hasDeletions) {
-      const validDeletions = deletePaths!.filter(path => currentFiles.has(path));
-      const skippedDeletions = deletePaths!.filter(path => !currentFiles.has(path));
-      
+      const validDeletions = deletePaths!.filter((path) => currentFiles.has(path));
+      const skippedDeletions = deletePaths!.filter((path) => !currentFiles.has(path));
+
       if (skippedDeletions.length > 0) {
         console.log(`Skipping deletion of ${skippedDeletions.length} files not in GitHub:`, skippedDeletions);
       }
-      
-      validDeletions.forEach(path => {
+
+      validDeletions.forEach((path) => {
         tree.push({
           path,
-          mode: '100644',
-          type: 'blob',
+          mode: "100644",
+          type: "blob",
           sha: null, // null sha = delete
         });
       });
-      
+
       if (validDeletions.length > 0) {
         console.log(`Delta push: deleting ${validDeletions.length} files from GitHub:`, validDeletions);
       }
@@ -326,12 +340,12 @@ Deno.serve(async (req) => {
     const isFullSync = !filePaths || filePaths.length === 0;
 
     if (isFullSync) {
-      const deletions = Array.from(currentFiles).filter(path => !dbFilePaths.has(path as string));
-      deletions.forEach(path => {
+      const deletions = Array.from(currentFiles).filter((path) => !dbFilePaths.has(path as string));
+      deletions.forEach((path) => {
         tree.push({
           path: path as string,
-          mode: '100644',
-          type: 'blob',
+          mode: "100644",
+          type: "blob",
           sha: null, // null sha means delete this file
         });
       });
@@ -347,12 +361,12 @@ Deno.serve(async (req) => {
     // We use base_tree and send all DB-backed files plus explicit deletions
     const treeUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/trees`;
     const treeResponse = await fetch(treeUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `token ${pat}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'Pronghorn-Sync',
-        'Content-Type': 'application/json',
+        Authorization: `token ${pat}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "Pronghorn-Sync",
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         base_tree: baseTreeSha,
@@ -361,10 +375,10 @@ Deno.serve(async (req) => {
     });
 
     if (!treeResponse.ok) {
-      console.error('Failed to create tree:', await treeResponse.text());
-      return new Response(JSON.stringify({ error: 'Failed to create tree' }), {
+      console.error("Failed to create tree:", await treeResponse.text());
+      return new Response(JSON.stringify({ error: "Failed to create tree" }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -374,12 +388,12 @@ Deno.serve(async (req) => {
     const newCommitUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/commits`;
     const totalChanges = (filesToPush?.length || 0) + (deletePaths?.length || 0);
     const newCommitResponse = await fetch(newCommitUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `token ${pat}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'Pronghorn-Sync',
-        'Content-Type': 'application/json',
+        Authorization: `token ${pat}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "Pronghorn-Sync",
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         message: commitMessage || `Update ${totalChanges} file(s) via Pronghorn`,
@@ -389,10 +403,10 @@ Deno.serve(async (req) => {
     });
 
     if (!newCommitResponse.ok) {
-      console.error('Failed to create commit:', await newCommitResponse.text());
-      return new Response(JSON.stringify({ error: 'Failed to create commit' }), {
+      console.error("Failed to create commit:", await newCommitResponse.text());
+      return new Response(JSON.stringify({ error: "Failed to create commit" }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -401,12 +415,12 @@ Deno.serve(async (req) => {
     // Update branch ref (with force push support)
     const updateRefUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/refs/heads/${branch}`;
     const updateRefResponse = await fetch(updateRefUrl, {
-      method: 'PATCH',
+      method: "PATCH",
       headers: {
-        'Authorization': `token ${pat}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'Pronghorn-Sync',
-        'Content-Type': 'application/json',
+        Authorization: `token ${pat}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "Pronghorn-Sync",
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         sha: newCommitData.sha,
@@ -415,10 +429,10 @@ Deno.serve(async (req) => {
     });
 
     if (!updateRefResponse.ok) {
-      console.error('Failed to update ref:', await updateRefResponse.text());
-      return new Response(JSON.stringify({ error: 'Failed to update branch' }), {
+      console.error("Failed to update ref:", await updateRefResponse.text());
+      return new Response(JSON.stringify({ error: "Failed to update branch" }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -428,7 +442,7 @@ Deno.serve(async (req) => {
     // First try to mark existing pending commits as pushed (Build page workflow)
     // If none found, create a new commit record (Repository page workflow)
     try {
-      const { data: updatedCount, error: updateError } = await supabaseClient.rpc('mark_commits_pushed_with_token', {
+      const { data: updatedCount, error: updateError } = await supabaseClient.rpc("mark_commits_pushed_with_token", {
         p_repo_id: repoId,
         p_token: shareToken,
         p_github_sha: newCommitData.sha,
@@ -437,7 +451,7 @@ Deno.serve(async (req) => {
 
       // If no pending commits were updated (Repository page scenario), create new record
       if (!updateError && (updatedCount === 0 || updatedCount === null)) {
-        await supabaseClient.rpc('log_repo_commit_with_token', {
+        await supabaseClient.rpc("log_repo_commit_with_token", {
           p_repo_id: repoId,
           p_token: shareToken,
           p_branch: branch,
@@ -449,10 +463,9 @@ Deno.serve(async (req) => {
         console.log(`Marked ${updatedCount} pending commit(s) as pushed with SHA: ${newCommitData.sha}`);
       }
     } catch (logError) {
-      console.error('Failed to log commit:', logError);
+      console.error("Failed to log commit:", logError);
       // Don't fail the entire operation if logging fails
     }
-
 
     return new Response(
       JSON.stringify({
@@ -463,15 +476,15 @@ Deno.serve(async (req) => {
         commitUrl: newCommitData.html_url,
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   } catch (error) {
-    console.error('Error in sync-repo-push:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error("Error in sync-repo-push:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
