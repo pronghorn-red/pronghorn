@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PronghornLogo } from "@/components/layout/PronghornLogo";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   FileText,
   Library,
@@ -83,7 +83,10 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <PronghornLogo className="h-8 w-8 rounded-lg" />
-            <span className="text-xl font-semibold tracking-tight">Pronghorn</span>
+            <span className="text-xl font-semibold tracking-tight">
+              Pronghorn{" "}
+              <Link to="/terms" className="text-[hsl(350,80%,60%)] hover:underline">(Alpha)</Link>
+            </span>
           </div>
 
           <Button
@@ -374,16 +377,26 @@ export default function Landing() {
             <PronghornLogo className="h-8 w-8 rounded-lg" />
             <span className="text-lg font-semibold tracking-tight text-[hsl(240,30%,15%)]">Pronghorn</span>
           </div>
-          <div className="text-sm text-gray-500 text-center md:text-right">
-            <p>© 2025 Pronghorn. MIT License Open Source by the Government of Alberta.</p>
-            <a
-              href="https://pronghorn.red"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[hsl(350,80%,60%)] hover:underline"
-            >
-              pronghorn.red
-            </a>
+          <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
+            <div className="flex gap-6 text-sm">
+              <Link to="/terms" className="text-gray-600 hover:text-[hsl(350,80%,60%)] transition-colors">
+                Terms of Use
+              </Link>
+              <Link to="/privacy" className="text-gray-600 hover:text-[hsl(350,80%,60%)] transition-colors">
+                Privacy Policy
+              </Link>
+            </div>
+            <div className="text-sm text-gray-500 text-center md:text-right">
+              <p>© 2025 Pronghorn. MIT License Open Source by the Government of Alberta.</p>
+              <a
+                href="https://pronghorn.red"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[hsl(350,80%,60%)] hover:underline"
+              >
+                pronghorn.red
+              </a>
+            </div>
           </div>
         </div>
       </footer>

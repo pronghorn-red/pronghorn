@@ -5,6 +5,8 @@ import Auth from "./pages/Auth";
 import Standards from "./pages/Standards";
 import TechStacks from "./pages/TechStacks";
 import Settings from "./pages/Settings";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 import Requirements from "./pages/project/Requirements";
 import ProjectStandards from "./pages/project/Standards";
 import Canvas from "./pages/project/Canvas";
@@ -15,17 +17,18 @@ import ProjectSettings from "./pages/project/ProjectSettings";
 import Specifications from "./pages/project/Specifications";
 import Deploy from "./pages/project/Deploy";
 import NotFound from "./pages/NotFound";
-
 import Artifacts from "./pages/project/Artifacts";
 import Chat from "./pages/project/Chat";
 
 const App = () => (
   <Routes>
-    <Route path="/" element={<Landing />} />
-    <Route path="/auth" element={<Auth />} />
-    <Route path="/dashboard" element={<Dashboard />} />
-    <Route path="/standards" element={<Standards />} />
-    <Route path="/tech-stacks" element={<TechStacks />} />
+              <Route path="/" element={<Landing />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/standards" element={<Standards />} />
+              <Route path="/tech-stacks" element={<TechStacks />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
     <Route path="/settings/organization" element={<Settings />} />
     <Route path="/settings/profile" element={<Settings />} />
     
