@@ -809,24 +809,6 @@ export default function Landing() {
                 </div>
               </div>
               
-              <div className="flex flex-wrap gap-4">
-                <Button
-                  variant="outline"
-                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                  onClick={() => window.open("https://github.com", "_blank")}
-                >
-                  <Github className="w-4 h-4 mr-2" />
-                  View on GitHub
-                </Button>
-                <Button
-                  variant="outline"
-                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-                  onClick={() => window.location.href = "mailto:ti.deputyminister@gov.ab.ca?subject=Agent Suggestion for Pronghorn"}
-                >
-                  <Heart className="w-4 h-4 mr-2" />
-                  Suggest an Agent
-                </Button>
-              </div>
             </div>
           </div>
         </div>
