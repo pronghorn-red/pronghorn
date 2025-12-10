@@ -148,7 +148,7 @@ export default function Terms() {
           </p>
           <h3>User-Generated Content</h3>
           <p>
-            You retain ownership of content you create using the platform, but grant Pronghorn a non-exclusive license to 
+            You retain ownership of content you create using the platform, but grant the Government of Alberta a non-exclusive license to 
             use, modify, and display such content for operational purposes. You are responsible for ensuring your content 
             does not infringe on others' intellectual property rights.
           </p>
@@ -174,7 +174,7 @@ export default function Terms() {
           </p>
           <h3>Limitation of Liability</h3>
           <p>
-            To the maximum extent permitted by law, the Government of Alberta and Pronghorn shall not be liable for any 
+            To the maximum extent permitted by law, the Government of Alberta shall not be liable for any 
             indirect, incidental, special, consequential, or punitive damages arising from your use of the service, even 
             if we have been advised of the possibility of such damages.
           </p>
@@ -213,7 +213,7 @@ export default function Terms() {
           </p>
           <p>
             <strong>Email:</strong>{" "}
-            <a href="mailto:aiacademy@gov.ab.ca">aiacademy@gov.ab.ca</a>
+            <a href="mailto:ti.deputyminister@gov.ab.ca">ti.deputyminister@gov.ab.ca</a>
           </p>
           <p>
             <strong>Organization:</strong> Government of Alberta, Ministry of Technology and Innovation
