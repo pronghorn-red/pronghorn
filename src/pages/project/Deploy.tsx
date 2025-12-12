@@ -29,6 +29,28 @@ const Deploy = () => {
   const [isCreateDatabaseOpen, setIsCreateDatabaseOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("cloud");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [primeRepoName, setPrimeRepoName] = useState("");
+
+  // Fetch prime repo name for auto-generating deployment/database names
+  const fetchPrimeRepoName = async () => {
+    if (!projectId || !isTokenSet) return;
+    
+    try {
+      const { data, error } = await supabase.rpc("get_project_repos_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+      });
+      
+      if (!error && data) {
+        const primeRepo = data.find((r: any) => r.is_prime) || data[0];
+        if (primeRepo) {
+          setPrimeRepoName(primeRepo.repo);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching prime repo:", error);
+    }
+  };
 
   const fetchDeployments = async () => {
     if (!projectId || !isTokenSet) return;
@@ -73,6 +95,7 @@ const Deploy = () => {
   useEffect(() => {
     fetchDeployments();
     fetchDatabases();
+    fetchPrimeRepoName();
   }, [projectId, isTokenSet, shareToken]);
 
   const cloudDeployments = deployments.filter(d => d.platform === "pronghorn_cloud");
@@ -311,6 +334,7 @@ const Deploy = () => {
           projectId={projectId || ""}
           shareToken={shareToken}
           onSuccess={fetchDatabases}
+          primeRepoName={primeRepoName}
         />
       </div>
     </div>

@@ -69,6 +69,21 @@ const DeploymentDialog = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncingEnvVars, setIsSyncingEnvVars] = useState(false);
   const [primeRepoName, setPrimeRepoName] = useState("");
+  
+  // Generate a random 4-character alphanumeric ID
+  const generateUniqueId = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 4; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+  
+  const generateDeploymentName = (repoName: string) => {
+    const baseName = repoName || 'deployment';
+    return `${baseName}-service-${generateUniqueId()}`;
+  };
   const [activeTab, setActiveTab] = useState("config");
   const [clearExisting, setClearExisting] = useState(false);
   const [originalKeys, setOriginalKeys] = useState<Set<string>>(new Set());
@@ -156,8 +171,8 @@ const DeploymentDialog = ({
       // Create mode: reset form and fetch prime repo
       const defaultType = projectTypes.find(t => t.value === "static") || projectTypes[0];
       if (defaultType) {
-        setForm({
-          name: primeRepoName || "",
+      setForm({
+          name: generateDeploymentName(primeRepoName),
           environment: "dev",
           platform: defaultPlatform,
           projectType: defaultType.value,
@@ -255,11 +270,6 @@ const DeploymentDialog = ({
   };
 
   const handleSubmit = async () => {
-    if (!form.name.trim()) {
-      toast.error("Deployment name is required");
-      return;
-    }
-
     if (form.diskEnabled && !form.diskName.trim()) {
       toast.error("Disk name is required when disk mounting is enabled");
       return;
@@ -407,7 +417,7 @@ const DeploymentDialog = ({
         const defaultType = projectTypes.find(t => t.value === "static") || projectTypes[0];
         if (defaultType) {
           setForm({
-            name: primeRepoName,
+            name: generateDeploymentName(primeRepoName),
             environment: "dev",
             platform: defaultPlatform,
             projectType: defaultType.value,
@@ -482,9 +492,13 @@ const DeploymentDialog = ({
                 <Input
                   id="name"
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="my-app"
+                  readOnly
+                  disabled
+                  className="bg-muted"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Auto-generated from repository name
+                </p>
                 {form.platform === "pronghorn_cloud" && (
                   <p className="text-xs text-muted-foreground">
                     URL will be: {form.environment}-{form.name || "my-app"}.onrender.com

@@ -95,11 +95,28 @@ export function DatabaseDialog({
   projectId,
   shareToken,
   onSuccess,
-}: DatabaseDialogProps) {
+  primeRepoName = "",
+}: DatabaseDialogProps & { primeRepoName?: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("configuration");
+  
+  // Generate a random 4-character alphanumeric ID
+  const generateUniqueId = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 4; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+  
+  const generateDatabaseName = (repoName: string) => {
+    const baseName = repoName || 'database';
+    return `${baseName}-database-${generateUniqueId()}`;
+  };
+  
   const [form, setForm] = useState({
-    name: "",
+    name: generateDatabaseName(primeRepoName),
     provider: "render_postgres",
     plan: "basic_256mb",
     region: "oregon",
@@ -132,7 +149,7 @@ export function DatabaseDialog({
       setAllowAnyIp(hasInternet);
     } else if (mode === "create") {
       setForm({
-        name: "",
+        name: generateDatabaseName(primeRepoName),
         provider: "render_postgres",
         plan: "basic_256mb",
         region: "oregon",
@@ -183,11 +200,6 @@ export function DatabaseDialog({
   };
 
   const handleSubmit = async () => {
-    if (!form.name.trim()) {
-      toast.error("Database name is required");
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
@@ -284,11 +296,11 @@ export function DatabaseDialog({
                     <Input
                       id="name"
                       value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      placeholder="my-database"
-                      disabled={!isEditable && mode === "edit"}
+                      readOnly
+                      disabled
+                      className="bg-muted"
                     />
-                    <p className="text-xs text-muted-foreground">Name shown in Render dashboard</p>
+                    <p className="text-xs text-muted-foreground">Auto-generated from repository name</p>
                   </div>
 
                   <div className="space-y-2">
