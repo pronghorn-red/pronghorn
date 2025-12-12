@@ -21,19 +21,19 @@ interface SqlQueryEditorProps {
 
 const MAX_HISTORY = 20;
 
-// Patterns for query type detection
+// Patterns for query type detection - search anywhere in the query
 const DESTRUCTIVE_PATTERNS = [
-  /^\s*DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|FUNCTION|TRIGGER|SEQUENCE)/i,
-  /^\s*TRUNCATE\s+/i,
-  /^\s*DELETE\s+FROM\s+/i,
-  /^\s*ALTER\s+TABLE\s+.*\s+DROP\s+/i,
+  /\bDROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|FUNCTION|TRIGGER|SEQUENCE)\b/i,
+  /\bTRUNCATE\s+/i,
+  /\bDELETE\s+FROM\b/i,
+  /\bALTER\s+TABLE\b.*\bDROP\b/i,
 ];
 
 const WRITE_PATTERNS = [
-  /^\s*INSERT\s+/i,
-  /^\s*UPDATE\s+/i,
-  /^\s*CREATE\s+/i,
-  /^\s*ALTER\s+/i,
+  /\bINSERT\s+/i,
+  /\bUPDATE\s+\w+\s+SET\b/i,
+  /\bCREATE\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|FUNCTION|TRIGGER|SEQUENCE|TYPE|EXTENSION)\b/i,
+  /\bALTER\s+(TABLE|DATABASE|SCHEMA)\b/i,
 ];
 
 export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, onSaveQuery }: SqlQueryEditorProps) {
