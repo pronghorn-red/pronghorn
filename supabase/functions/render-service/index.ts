@@ -219,7 +219,7 @@ async function createRenderService(
     name: serviceName,
     ownerId: ownerId,
     type: isStaticSite ? 'static_site' : 'web_service',
-    autoDeploy: 'no',
+    autoDeploy: 'yes',
     branch: deployment.branch || 'main',
     envVars,
     repo: `https://github.com/${repo.organization}/${repo.repo}`,

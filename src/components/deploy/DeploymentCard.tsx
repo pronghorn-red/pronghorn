@@ -165,22 +165,32 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate }: DeploymentCardProp
   };
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this deployment?")) return;
+    if (!confirm("Are you sure you want to delete this deployment? This will also delete the service on Render.com.")) return;
     
     setIsDeleting(true);
     try {
-      // If there's a Render service, delete it first
+      // If there's a Render service, delete it on Render.com first
       if (deployment.render_service_id) {
-        await invokeRenderService('delete');
+        const { data, error } = await supabase.functions.invoke('render-service', {
+          body: {
+            action: 'delete',
+            deploymentId: deployment.id,
+            shareToken: shareToken || null,
+          },
+        });
+        
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Failed to delete Render service');
       }
       
+      // Then delete from our database
       const { error } = await supabase.rpc("delete_deployment_with_token", {
         p_deployment_id: deployment.id,
         p_token: shareToken || null,
       });
       
       if (error) throw error;
-      toast.success("Deployment deleted");
+      toast.success("Deployment deleted from Render and database");
       onUpdate();
     } catch (error: any) {
       console.error("Error deleting deployment:", error);
