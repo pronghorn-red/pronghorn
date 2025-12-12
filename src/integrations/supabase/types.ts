@@ -868,6 +868,71 @@ export type Database = {
           },
         ]
       }
+      project_databases: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dashboard_url: string | null
+          has_connection_info: boolean | null
+          id: string
+          name: string
+          plan: Database["public"]["Enums"]["database_plan"]
+          postgres_version: string | null
+          project_id: string
+          provider: Database["public"]["Enums"]["database_provider"]
+          region: string | null
+          render_postgres_id: string | null
+          status: Database["public"]["Enums"]["database_status"]
+          supabase_project_id: string | null
+          supabase_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dashboard_url?: string | null
+          has_connection_info?: boolean | null
+          id?: string
+          name: string
+          plan?: Database["public"]["Enums"]["database_plan"]
+          postgres_version?: string | null
+          project_id: string
+          provider?: Database["public"]["Enums"]["database_provider"]
+          region?: string | null
+          render_postgres_id?: string | null
+          status?: Database["public"]["Enums"]["database_status"]
+          supabase_project_id?: string | null
+          supabase_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dashboard_url?: string | null
+          has_connection_info?: boolean | null
+          id?: string
+          name?: string
+          plan?: Database["public"]["Enums"]["database_plan"]
+          postgres_version?: string | null
+          project_id?: string
+          provider?: Database["public"]["Enums"]["database_provider"]
+          region?: string | null
+          render_postgres_id?: string | null
+          status?: Database["public"]["Enums"]["database_status"]
+          supabase_project_id?: string | null
+          supabase_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_databases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_deployments: {
         Row: {
           branch: string | null
@@ -2034,6 +2099,10 @@ export type Database = {
         Args: { p_id: string; p_token: string }
         Returns: undefined
       }
+      delete_database_with_token: {
+        Args: { p_database_id: string; p_token?: string }
+        Returns: undefined
+      }
       delete_deployment_with_token: {
         Args: { p_deployment_id: string; p_token: string }
         Returns: undefined
@@ -2373,6 +2442,60 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "repo_commits"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_database_with_token: {
+        Args: { p_database_id: string; p_token?: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          dashboard_url: string | null
+          has_connection_info: boolean | null
+          id: string
+          name: string
+          plan: Database["public"]["Enums"]["database_plan"]
+          postgres_version: string | null
+          project_id: string
+          provider: Database["public"]["Enums"]["database_provider"]
+          region: string | null
+          render_postgres_id: string | null
+          status: Database["public"]["Enums"]["database_status"]
+          supabase_project_id: string | null
+          supabase_url: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_databases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_databases_with_token: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          dashboard_url: string | null
+          has_connection_info: boolean | null
+          id: string
+          name: string
+          plan: Database["public"]["Enums"]["database_plan"]
+          postgres_version: string | null
+          project_id: string
+          provider: Database["public"]["Enums"]["database_provider"]
+          region: string | null
+          render_postgres_id: string | null
+          status: Database["public"]["Enums"]["database_status"]
+          supabase_project_id: string | null
+          supabase_url: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_databases"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -2969,6 +3092,41 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "chat_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_database_with_token: {
+        Args: {
+          p_name?: string
+          p_plan?: Database["public"]["Enums"]["database_plan"]
+          p_postgres_version?: string
+          p_project_id: string
+          p_provider?: Database["public"]["Enums"]["database_provider"]
+          p_region?: string
+          p_token?: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          dashboard_url: string | null
+          has_connection_info: boolean | null
+          id: string
+          name: string
+          plan: Database["public"]["Enums"]["database_plan"]
+          postgres_version: string | null
+          project_id: string
+          provider: Database["public"]["Enums"]["database_provider"]
+          region: string | null
+          render_postgres_id: string | null
+          status: Database["public"]["Enums"]["database_status"]
+          supabase_project_id: string | null
+          supabase_url: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_databases"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3634,6 +3792,42 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_database_with_token: {
+        Args: {
+          p_dashboard_url?: string
+          p_database_id: string
+          p_has_connection_info?: boolean
+          p_name?: string
+          p_plan?: Database["public"]["Enums"]["database_plan"]
+          p_render_postgres_id?: string
+          p_status?: Database["public"]["Enums"]["database_status"]
+          p_token?: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          dashboard_url: string | null
+          has_connection_info: boolean | null
+          id: string
+          name: string
+          plan: Database["public"]["Enums"]["database_plan"]
+          postgres_version: string | null
+          project_id: string
+          provider: Database["public"]["Enums"]["database_provider"]
+          region: string | null
+          render_postgres_id: string | null
+          status: Database["public"]["Enums"]["database_status"]
+          supabase_project_id: string | null
+          supabase_url: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_databases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_deployment_secrets_with_token: {
         Args: { p_deployment_id: string; p_secrets: Json; p_token: string }
         Returns: {
@@ -4033,6 +4227,45 @@ export type Database = {
       app_role: "admin" | "user"
       audit_severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
       build_status: "RUNNING" | "COMPLETED" | "FAILED"
+      database_plan:
+        | "free"
+        | "starter"
+        | "standard"
+        | "pro"
+        | "pro_plus"
+        | "custom"
+        | "basic_256mb"
+        | "basic_1gb"
+        | "basic_4gb"
+        | "pro_4gb"
+        | "pro_8gb"
+        | "pro_16gb"
+        | "pro_32gb"
+        | "pro_64gb"
+        | "pro_128gb"
+        | "pro_192gb"
+        | "pro_256gb"
+        | "pro_384gb"
+        | "pro_512gb"
+        | "accelerated_16gb"
+        | "accelerated_32gb"
+        | "accelerated_64gb"
+        | "accelerated_128gb"
+        | "accelerated_256gb"
+        | "accelerated_384gb"
+        | "accelerated_512gb"
+        | "accelerated_768gb"
+        | "accelerated_1024gb"
+      database_provider: "render_postgres" | "supabase"
+      database_status:
+        | "pending"
+        | "creating"
+        | "available"
+        | "suspended"
+        | "restarting"
+        | "updating"
+        | "failed"
+        | "deleted"
       deployment_environment: "dev" | "uat" | "prod"
       deployment_platform: "pronghorn_cloud" | "local" | "dedicated_vm"
       deployment_status:
@@ -4201,6 +4434,47 @@ export const Constants = {
       app_role: ["admin", "user"],
       audit_severity: ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
       build_status: ["RUNNING", "COMPLETED", "FAILED"],
+      database_plan: [
+        "free",
+        "starter",
+        "standard",
+        "pro",
+        "pro_plus",
+        "custom",
+        "basic_256mb",
+        "basic_1gb",
+        "basic_4gb",
+        "pro_4gb",
+        "pro_8gb",
+        "pro_16gb",
+        "pro_32gb",
+        "pro_64gb",
+        "pro_128gb",
+        "pro_192gb",
+        "pro_256gb",
+        "pro_384gb",
+        "pro_512gb",
+        "accelerated_16gb",
+        "accelerated_32gb",
+        "accelerated_64gb",
+        "accelerated_128gb",
+        "accelerated_256gb",
+        "accelerated_384gb",
+        "accelerated_512gb",
+        "accelerated_768gb",
+        "accelerated_1024gb",
+      ],
+      database_provider: ["render_postgres", "supabase"],
+      database_status: [
+        "pending",
+        "creating",
+        "available",
+        "suspended",
+        "restarting",
+        "updating",
+        "failed",
+        "deleted",
+      ],
       deployment_environment: ["dev", "uat", "prod"],
       deployment_platform: ["pronghorn_cloud", "local", "dedicated_vm"],
       deployment_status: [
