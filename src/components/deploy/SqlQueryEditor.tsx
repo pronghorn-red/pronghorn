@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import Editor, { OnMount } from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,8 +37,10 @@ const WRITE_PATTERNS = [
 ];
 
 export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, onSaveQuery }: SqlQueryEditorProps) {
-  // Parent owns the state - we just use the query prop directly (no internal state)
-  const editorValue = query ?? "SELECT 1;";
+  // Internal query state is the source of truth; parent can seed/replace via query prop
+  const [internalQuery, setInternalQuery] = useState<string>(query ?? "SELECT 1;");
+  const lastExternalQuery = useRef<string | null>(query ?? "SELECT 1;");
+  const editorValue = internalQuery;
 
   const [queryHistory, setQueryHistory] = useState<string[]>(() => {
     try {
@@ -49,6 +51,15 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
     }
   });
   const editorRef = useRef<any>(null);
+
+  // Sync internal state when parent intentionally changes query (e.g. schema tree, saved queries)
+  useEffect(() => {
+    if (query !== lastExternalQuery.current) {
+      const next = query ?? "SELECT 1;";
+      setInternalQuery(next);
+      lastExternalQuery.current = next;
+    }
+  }, [query]);
 
   // Detect query type for visual indicator
   const queryType = useMemo(() => {
@@ -74,7 +85,7 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
   };
 
   const handleEditorChange = (value: string | undefined) => {
-    onQueryChange(value || "");
+    setInternalQuery(value || "");
   };
 
   const handleExecute = useCallback(async () => {
@@ -94,7 +105,7 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
   };
 
   const handleSelectHistory = (historyQuery: string) => {
-    onQueryChange(historyQuery);
+    setInternalQuery(historyQuery);
   };
 
   const handleFormat = () => {
@@ -118,7 +129,7 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
       .replace(/\bLIMIT\b/gi, "\nLIMIT")
       .replace(/\bOFFSET\b/gi, "\nOFFSET")
       .trim();
-    onQueryChange(formatted);
+    setInternalQuery(formatted);
   };
 
   return (
