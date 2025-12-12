@@ -1,0 +1,128 @@
+{
+  "projectTypes": [
+    {
+      "value": "node",
+      "label": "Node.js Backend",
+      "renderType": "web_service",
+      "runtime": "node",
+      "buildCommand": "npm install",
+      "runCommand": "node index.js",
+      "buildFolder": "/",
+      "runFolder": "/",
+      "description": "Standard Node.js application"
+    },
+    {
+      "value": "python",
+      "label": "Python Backend",
+      "renderType": "web_service",
+      "runtime": "python",
+      "buildCommand": "pip install -r requirements.txt",
+      "runCommand": "python main.py",
+      "buildFolder": "/",
+      "runFolder": "/",
+      "description": "Python application with requirements.txt"
+    },
+    {
+      "value": "go",
+      "label": "Go Backend",
+      "renderType": "web_service",
+      "runtime": "go",
+      "buildCommand": "go build -o app",
+      "runCommand": "./app",
+      "buildFolder": "/",
+      "runFolder": "/",
+      "description": "Go application compiled to binary"
+    },
+    {
+      "value": "ruby",
+      "label": "Ruby Backend",
+      "renderType": "web_service",
+      "runtime": "ruby",
+      "buildCommand": "bundle install",
+      "runCommand": "bundle exec ruby app.rb",
+      "buildFolder": "/",
+      "runFolder": "/",
+      "description": "Ruby application with Bundler"
+    },
+    {
+      "value": "rust",
+      "label": "Rust Backend",
+      "renderType": "web_service",
+      "runtime": "rust",
+      "buildCommand": "cargo build --release",
+      "runCommand": "./target/release/app",
+      "buildFolder": "/",
+      "runFolder": "/",
+      "description": "Rust application compiled with Cargo"
+    },
+    {
+      "value": "elixir",
+      "label": "Elixir Backend",
+      "renderType": "web_service",
+      "runtime": "elixir",
+      "buildCommand": "mix deps.get && mix compile",
+      "runCommand": "mix run --no-halt",
+      "buildFolder": "/",
+      "runFolder": "/",
+      "description": "Elixir/Phoenix application"
+    },
+    {
+      "value": "docker",
+      "label": "Docker Container",
+      "renderType": "web_service",
+      "runtime": "docker",
+      "buildCommand": "",
+      "runCommand": "",
+      "buildFolder": "/",
+      "runFolder": "/",
+      "description": "Uses Dockerfile in repository root"
+    },
+    {
+      "value": "react_vite",
+      "label": "React (Vite)",
+      "renderType": "web_service",
+      "runtime": "node",
+      "buildCommand": "npm install && npm run build",
+      "runCommand": "npx http-server dist -p $PORT",
+      "buildFolder": "dist",
+      "runFolder": "/",
+      "description": "React app built with Vite, served via http-server"
+    },
+    {
+      "value": "vue_vite",
+      "label": "Vue (Vite)",
+      "renderType": "web_service",
+      "runtime": "node",
+      "buildCommand": "npm install && npm run build",
+      "runCommand": "npx http-server dist -p $PORT",
+      "buildFolder": "dist",
+      "runFolder": "/",
+      "description": "Vue app built with Vite, served via http-server"
+    },
+    {
+      "value": "static",
+      "label": "Static Web App",
+      "renderType": "static_site",
+      "runtime": null,
+      "buildCommand": "npm run build",
+      "runCommand": null,
+      "buildFolder": "dist",
+      "runFolder": "/",
+      "publishPath": "dist",
+      "description": "Static site deployed to Render CDN"
+    },
+    {
+      "value": "tanstack",
+      "label": "TanStack (Static)",
+      "renderType": "static_site",
+      "runtime": null,
+      "buildCommand": "npm install && npm run build",
+      "runCommand": null,
+      "buildFolder": "dist",
+      "runFolder": "/",
+      "publishPath": "dist",
+      "description": "TanStack Start/Router static build"
+    }
+  ],
+  "runtimes": ["docker", "elixir", "go", "node", "python", "ruby", "rust", "image"]
+}

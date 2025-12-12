@@ -8,6 +8,22 @@ const corsHeaders = {
 
 const RENDER_API_URL = 'https://api.render.com/v1';
 
+// Runtime mapping based on project type
+const RUNTIME_MAP: Record<string, string> = {
+  node: 'node',
+  python: 'python',
+  go: 'go',
+  ruby: 'ruby',
+  rust: 'rust',
+  elixir: 'elixir',
+  docker: 'docker',
+  react_vite: 'node',
+  vue_vite: 'node',
+};
+
+// Project types that should be deployed as static sites
+const STATIC_SITE_TYPES = ['static', 'tanstack'];
+
 interface RenderServiceRequest {
   action: 'create' | 'deploy' | 'start' | 'stop' | 'restart' | 'status' | 'delete' | 'logs' | 'updateEnvVars' | 'getEnvVars' | 'getEvents' | 'syncEnvVars' | 'updateServiceConfig';
   deploymentId: string;
@@ -140,6 +156,15 @@ serve(async (req) => {
   }
 });
 
+function getRuntime(projectType?: string): string {
+  const type = projectType?.toLowerCase() || 'node';
+  return RUNTIME_MAP[type] || 'node';
+}
+
+function isStaticSiteType(projectType?: string): boolean {
+  return STATIC_SITE_TYPES.includes(projectType?.toLowerCase() || '');
+}
+
 async function createRenderService(
   deployment: any,
   body: RenderServiceRequest,
@@ -151,7 +176,6 @@ async function createRenderService(
   console.log('[render-service] Creating Render service...');
 
   // Get the repo details for GitHub connection
-  // First try deployment-specific repo, then fall back to project's prime repo
   let repo = null;
   
   if (deployment.repo_id) {
@@ -168,7 +192,6 @@ async function createRenderService(
       p_project_id: deployment.project_id,
       p_token: shareToken || null,
     });
-    // RPC returns array, get first element
     repo = Array.isArray(primeRepoData) ? primeRepoData[0] : primeRepoData;
   }
   
@@ -177,10 +200,10 @@ async function createRenderService(
   }
 
   // Determine service type based on project type
-  const isStaticSite = ['react', 'vue', 'tanstack'].includes(deployment.project_type?.toLowerCase() || '');
+  const isStaticSite = isStaticSiteType(deployment.project_type);
+  const runtime = getRuntime(deployment.project_type);
   
   // Build environment variables array from client-provided values (NOT from DB)
-  // The DB only stores keys, client passes full key:value pairs
   const envVars = body.envVars || [];
 
   // Add secrets to env vars
@@ -196,30 +219,37 @@ async function createRenderService(
     name: serviceName,
     ownerId: ownerId,
     type: isStaticSite ? 'static_site' : 'web_service',
-    autoDeploy: 'no', // We'll trigger deploys manually
+    autoDeploy: 'no',
     branch: deployment.branch || 'main',
     envVars,
+    repo: `https://github.com/${repo.organization}/${repo.repo}`,
   };
 
-  // Set the GitHub repo URL
-  servicePayload.repo = `https://github.com/${repo.organization}/${repo.repo}`;
-
-  // Add serviceDetails based on service type (required by Render API)
+  // Add serviceDetails based on service type
   if (isStaticSite) {
     servicePayload.serviceDetails = {
       buildCommand: deployment.build_command || 'npm run build',
       publishPath: deployment.build_folder || 'dist',
     };
   } else {
-    // Web service requires serviceDetails with env, envSpecificDetails, and plan
+    // Web service requires runtime and commands
     servicePayload.serviceDetails = {
-      env: getRuntime(deployment.project_type), // 'node', 'python', 'go', etc.
+      runtime: runtime,
       envSpecificDetails: {
         buildCommand: deployment.build_command || 'npm install',
         startCommand: deployment.run_command || 'npm start',
       },
-      plan: 'starter', // Cannot use 'free' via API - 'starter' is cheapest paid plan
+      plan: 'starter',
     };
+
+    // Add disk if enabled
+    if (deployment.disk_enabled && deployment.disk_name) {
+      servicePayload.serviceDetails.disk = {
+        name: deployment.disk_name,
+        mountPath: deployment.disk_mount_path || '/data',
+        sizeGB: deployment.disk_size_gb || 1,
+      };
+    }
   }
 
   console.log('[render-service] Service payload:', JSON.stringify(servicePayload, null, 2));
@@ -264,7 +294,6 @@ async function deployRenderService(
 
   console.log('[render-service] Triggering deploy for service:', deployment.render_service_id);
 
-  // Trigger a deploy
   const response = await fetch(`${RENDER_API_URL}/services/${deployment.render_service_id}/deploys`, {
     method: 'POST',
     headers,
@@ -282,7 +311,6 @@ async function deployRenderService(
   const result = await response.json();
   console.log('[render-service] Deploy triggered:', result);
 
-  // Update deployment status
   await supabase.rpc('update_deployment_with_token', {
     p_deployment_id: deployment.id,
     p_token: shareToken || null,
@@ -316,7 +344,6 @@ async function startRenderService(
     throw new Error(`Failed to resume service: ${errorText}`);
   }
 
-  // Update deployment status
   await supabase.rpc('update_deployment_with_token', {
     p_deployment_id: deployment.id,
     p_token: shareToken || null,
@@ -349,7 +376,6 @@ async function stopRenderService(
     throw new Error(`Failed to suspend service: ${errorText}`);
   }
 
-  // Update deployment status
   await supabase.rpc('update_deployment_with_token', {
     p_deployment_id: deployment.id,
     p_token: shareToken || null,
@@ -385,7 +411,6 @@ async function getServiceStatus(
   const result = await response.json();
   console.log('[render-service] Service status:', result);
 
-  // Map Render status to our status
   let mappedStatus = 'pending';
   const service = result.service;
   
@@ -397,7 +422,7 @@ async function getServiceStatus(
     }
   }
 
-  // Also check latest deploy status
+  // Check latest deploy status
   try {
     const deploysResponse = await fetch(
       `${RENDER_API_URL}/services/${deployment.render_service_id}/deploys?limit=1`,
@@ -412,7 +437,6 @@ async function getServiceStatus(
         const deployStatus = latestDeploy.status;
         console.log('[render-service] Latest deploy status:', deployStatus);
         
-        // Override status based on deploy state
         if (deployStatus === 'build_in_progress' || deployStatus === 'update_in_progress') {
           mappedStatus = 'building';
         } else if (deployStatus === 'created') {
@@ -432,7 +456,6 @@ async function getServiceStatus(
 
   const serviceUrl = service?.serviceDetails?.url;
 
-  // Persist the synced status to database
   if (supabase && deployment.id) {
     console.log('[render-service] Updating deployment status in DB:', mappedStatus);
     await supabase.rpc('update_deployment_with_token', {
@@ -459,7 +482,6 @@ async function deleteRenderService(
   shareToken?: string
 ) {
   if (!deployment.render_service_id) {
-    // Just update status if no Render service exists
     await supabase.rpc('update_deployment_with_token', {
       p_deployment_id: deployment.id,
       p_token: shareToken || null,
@@ -481,7 +503,6 @@ async function deleteRenderService(
     throw new Error(`Failed to delete service: ${errorText}`);
   }
 
-  // Update deployment status
   await supabase.rpc('update_deployment_with_token', {
     p_deployment_id: deployment.id,
     p_token: shareToken || null,
@@ -499,7 +520,6 @@ async function getServiceLogs(deployment: any, headers: Record<string, string>) 
 
   console.log('[render-service] Getting logs for service:', deployment.render_service_id);
 
-  // Get recent deploys to find log endpoints
   const deploysResponse = await fetch(
     `${RENDER_API_URL}/services/${deployment.render_service_id}/deploys?limit=5`,
     { method: 'GET', headers }
@@ -513,7 +533,6 @@ async function getServiceLogs(deployment: any, headers: Record<string, string>) 
 
   const deploysResult = await deploysResponse.json();
   
-  // Get logs from the most recent deploy if available
   const recentDeploy = deploysResult[0];
   if (!recentDeploy) {
     return { logs: [], deploys: [] };
@@ -566,9 +585,7 @@ async function updateEnvVarsRenderService(
 
   let envVarsToSend = body.newEnvVars || [];
   
-  // If not clearing existing, we need to merge with current vars
   if (!body.clearExisting && envVarsToSend.length > 0) {
-    // First, get current env vars
     const currentResponse = await fetch(
       `${RENDER_API_URL}/services/${deployment.render_service_id}/env-vars`,
       { method: 'GET', headers }
@@ -578,31 +595,24 @@ async function updateEnvVarsRenderService(
       const currentVars = await currentResponse.json();
       console.log('[render-service] Current env vars count:', currentVars.length);
       
-      // Create a map of new vars for quick lookup
       const newVarsMap = new Map(envVarsToSend.map(v => [v.key, v.value]));
-      
-      // Start with current vars, then overwrite with new ones
       const mergedVarsMap = new Map<string, string>();
       
-      // Add all current vars
       for (const v of currentVars) {
         if (v.envVar?.key && v.envVar?.value !== undefined) {
           mergedVarsMap.set(v.envVar.key, v.envVar.value);
         }
       }
       
-      // Overwrite/add new vars
       for (const [key, value] of newVarsMap) {
         mergedVarsMap.set(key, value);
       }
       
-      // Convert back to array
       envVarsToSend = Array.from(mergedVarsMap.entries()).map(([key, value]) => ({ key, value }));
       console.log('[render-service] Merged env vars count:', envVarsToSend.length);
     }
   }
 
-  // PUT replaces all env vars on Render
   const response = await fetch(`${RENDER_API_URL}/services/${deployment.render_service_id}/env-vars`, {
     method: 'PUT',
     headers,
@@ -646,7 +656,6 @@ async function getEnvVarsRenderService(
 
   const result = await response.json();
   
-  // Render API returns array of { envVar: { key, value } } objects
   const envVars = result.map((item: any) => ({
     key: item.envVar?.key || '',
     value: item.envVar?.value || '',
@@ -665,7 +674,6 @@ async function getEventsRenderService(
 
   console.log('[render-service] Getting events for service:', deployment.render_service_id);
 
-  // Get service events
   let events: any[] = [];
   try {
     const eventsResponse = await fetch(
@@ -687,7 +695,6 @@ async function getEventsRenderService(
     console.error('[render-service] Error getting events:', e);
   }
 
-  // Get recent deploys
   let deploys: any[] = [];
   let latestDeploy: any = null;
   try {
@@ -717,7 +724,6 @@ async function getEventsRenderService(
   return { events, deploys, latestDeploy };
 }
 
-// Sync env vars: add/update keys with values, delete specified keys
 async function syncEnvVarsRenderService(
   deployment: any,
   body: RenderServiceRequest,
@@ -729,7 +735,6 @@ async function syncEnvVarsRenderService(
 
   console.log('[render-service] Syncing env vars for service:', deployment.render_service_id);
 
-  // Get current env vars from Render
   const currentResponse = await fetch(
     `${RENDER_API_URL}/services/${deployment.render_service_id}/env-vars`,
     { method: 'GET', headers }
@@ -751,13 +756,11 @@ async function syncEnvVarsRenderService(
 
   console.log('[render-service] Current env vars count:', currentVarsMap.size);
 
-  // Remove keys marked for deletion
   const keysToDelete = new Set(body.keysToDelete || []);
   for (const key of keysToDelete) {
     currentVarsMap.delete(key);
   }
 
-  // Add/update keys with values (skip blank values to preserve existing)
   const newEnvVars = body.newEnvVars || [];
   for (const { key, value } of newEnvVars) {
     if (key && value) {
@@ -765,12 +768,10 @@ async function syncEnvVarsRenderService(
     }
   }
 
-  // Convert to array for Render API
   const envVarsToSend = Array.from(currentVarsMap.entries()).map(([key, value]) => ({ key, value }));
 
   console.log('[render-service] Final env vars count:', envVarsToSend.length, 'Deleted:', keysToDelete.size);
 
-  // PUT replaces all env vars on Render
   const response = await fetch(`${RENDER_API_URL}/services/${deployment.render_service_id}/env-vars`, {
     method: 'PUT',
     headers,
@@ -791,7 +792,6 @@ async function syncEnvVarsRenderService(
   };
 }
 
-// Update service configuration (build/run commands, etc.)
 async function updateServiceConfigRenderService(
   deployment: any,
   headers: Record<string, string>
@@ -802,7 +802,7 @@ async function updateServiceConfigRenderService(
 
   console.log('[render-service] Updating service config for:', deployment.render_service_id);
 
-  const isStaticSite = ['react', 'vue', 'tanstack'].includes(deployment.project_type?.toLowerCase() || '');
+  const isStaticSite = isStaticSiteType(deployment.project_type);
   const serviceName = `${deployment.environment}-${deployment.name}`;
 
   const updatePayload: any = {
@@ -823,6 +823,15 @@ async function updateServiceConfigRenderService(
         startCommand: deployment.run_command || 'npm start',
       },
     };
+
+    // Add/update disk if enabled
+    if (deployment.disk_enabled && deployment.disk_name) {
+      updatePayload.serviceDetails.disk = {
+        name: deployment.disk_name,
+        mountPath: deployment.disk_mount_path || '/data',
+        sizeGB: deployment.disk_size_gb || 1,
+      };
+    }
   }
 
   console.log('[render-service] Update payload:', JSON.stringify(updatePayload, null, 2));
@@ -844,17 +853,4 @@ async function updateServiceConfigRenderService(
     status: 'config_updated', 
     note: 'Deploy the service to apply changes',
   };
-}
-
-function getRuntime(projectType?: string): string {
-  switch (projectType?.toLowerCase()) {
-    case 'node':
-      return 'node';
-    case 'python':
-      return 'python';
-    case 'go':
-      return 'go';
-    default:
-      return 'node';
-  }
 }

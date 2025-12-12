@@ -18,9 +18,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, AlertTriangle } from "lucide-react";
+import { Loader2, RefreshCw, HardDrive, Plus, X } from "lucide-react";
 import EnvVarEditor from "./EnvVarEditor";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -37,27 +38,23 @@ interface DeploymentDialogProps {
   onSuccess: () => void;
 }
 
-const projectTypes = [
-  { value: "node", label: "Node.js Backend" },
-  { value: "python", label: "Python Backend" },
-  { value: "go", label: "Go Backend" },
-  { value: "react", label: "React (Vite)" },
-  { value: "vue", label: "Vue (Vite)" },
-  { value: "static", label: "Static Web App" },
-  { value: "tanstack", label: "TanStack (Static)" },
-  { value: "monorepo", label: "Monorepo (Full Stack)" },
-];
+interface ProjectTypeConfig {
+  value: string;
+  label: string;
+  renderType: "web_service" | "static_site";
+  runtime: string | null;
+  buildCommand: string;
+  runCommand: string | null;
+  buildFolder: string;
+  runFolder: string;
+  publishPath?: string;
+  description?: string;
+}
 
-const defaultCommands: Record<string, { run: string; build: string; buildFolder: string }> = {
-  node: { run: "node index.js", build: "npm i", buildFolder: "/" },
-  python: { run: "python main.py", build: "pip install -r requirements.txt", buildFolder: "/" },
-  go: { run: "./app", build: "go build -o app", buildFolder: "/" },
-  react: { run: "npx http-server dist -p $PORT", build: "npm i && npm run build", buildFolder: "dist" },
-  vue: { run: "npx http-server dist -p $PORT", build: "npm i && npm run build", buildFolder: "dist" },
-  static: { run: "npx http-server . -p $PORT", build: "npm i -g http-server", buildFolder: "/" },
-  tanstack: { run: "npx http-server dist -p $PORT", build: "npm i && npm run build", buildFolder: "dist" },
-  monorepo: { run: "npm run start", build: "npm i && npm run build", buildFolder: "dist" },
-};
+interface DeploymentSettings {
+  projectTypes: ProjectTypeConfig[];
+  runtimes: string[];
+}
 
 const DeploymentDialog = ({
   open,
@@ -75,6 +72,8 @@ const DeploymentDialog = ({
   const [activeTab, setActiveTab] = useState("config");
   const [clearExisting, setClearExisting] = useState(false);
   const [originalKeys, setOriginalKeys] = useState<Set<string>>(new Set());
+  const [projectTypes, setProjectTypes] = useState<ProjectTypeConfig[]>([]);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -83,16 +82,42 @@ const DeploymentDialog = ({
     projectType: "node",
     runFolder: "/",
     buildFolder: "/",
-    buildCommand: "npm i",
+    buildCommand: "npm install",
     runCommand: "node index.js",
     branch: "main",
+    diskEnabled: false,
+    diskName: "",
+    diskMountPath: "/data",
+    diskSizeGB: 1,
   });
 
   const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([]);
 
+  // Load deployment settings from JSON
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const response = await fetch("/data/deploymentSettings.json");
+        if (response.ok) {
+          const settings: DeploymentSettings = await response.json();
+          setProjectTypes(settings.projectTypes);
+          setSettingsLoaded(true);
+        }
+      } catch (error) {
+        console.error("Failed to load deployment settings:", error);
+        // Fallback to defaults
+        setProjectTypes([
+          { value: "node", label: "Node.js Backend", renderType: "web_service", runtime: "node", buildCommand: "npm install", runCommand: "node index.js", buildFolder: "/", runFolder: "/" },
+        ]);
+        setSettingsLoaded(true);
+      }
+    };
+    loadSettings();
+  }, []);
+
   // Initialize form based on mode
   useEffect(() => {
-    if (!open) return;
+    if (!open || !settingsLoaded) return;
 
     if (mode === "edit" && deployment) {
       // Edit mode: load deployment data
@@ -106,6 +131,10 @@ const DeploymentDialog = ({
         buildCommand: deployment.build_command || "",
         runCommand: deployment.run_command,
         branch: deployment.branch || "main",
+        diskEnabled: (deployment as any).disk_enabled || false,
+        diskName: (deployment as any).disk_name || "",
+        diskMountPath: (deployment as any).disk_mount_path || "/data",
+        diskSizeGB: (deployment as any).disk_size_gb || 1,
       });
       // Load env var keys from database (values shown as masked)
       const storedEnvVars = deployment.env_vars as Record<string, boolean> | null;
@@ -125,23 +154,29 @@ const DeploymentDialog = ({
       setClearExisting(false);
     } else {
       // Create mode: reset form and fetch prime repo
-      const defaultCmd = defaultCommands.node;
-      setForm({
-        name: primeRepoName || "",
-        environment: "dev",
-        platform: defaultPlatform,
-        projectType: "node",
-        runFolder: "/",
-        buildFolder: defaultCmd.buildFolder,
-        buildCommand: defaultCmd.build,
-        runCommand: defaultCmd.run,
-        branch: "main",
-      });
+      const defaultType = projectTypes.find(t => t.value === "node") || projectTypes[0];
+      if (defaultType) {
+        setForm({
+          name: primeRepoName || "",
+          environment: "dev",
+          platform: defaultPlatform,
+          projectType: defaultType.value,
+          runFolder: defaultType.runFolder,
+          buildFolder: defaultType.buildFolder,
+          buildCommand: defaultType.buildCommand,
+          runCommand: defaultType.runCommand || "",
+          branch: "main",
+          diskEnabled: false,
+          diskName: "",
+          diskMountPath: "/data",
+          diskSizeGB: 1,
+        });
+      }
       setEnvVars([]);
       setOriginalKeys(new Set());
       setActiveTab("config");
     }
-  }, [open, mode, deployment, defaultPlatform, primeRepoName]);
+  }, [open, mode, deployment, defaultPlatform, primeRepoName, settingsLoaded, projectTypes]);
 
   // Fetch prime repo name for default deployment name (create mode only)
   useEffect(() => {
@@ -169,18 +204,19 @@ const DeploymentDialog = ({
 
   // Update commands when project type changes (create mode only)
   useEffect(() => {
-    if (mode !== "create") return;
+    if (mode !== "create" || !settingsLoaded) return;
     
-    const commands = defaultCommands[form.projectType];
-    if (commands) {
+    const typeConfig = projectTypes.find(t => t.value === form.projectType);
+    if (typeConfig) {
       setForm((f) => ({
         ...f,
-        runCommand: commands.run,
-        buildCommand: commands.build,
-        buildFolder: commands.buildFolder,
+        runCommand: typeConfig.runCommand || "",
+        buildCommand: typeConfig.buildCommand,
+        buildFolder: typeConfig.buildFolder,
+        runFolder: typeConfig.runFolder,
       }));
     }
-  }, [form.projectType, mode]);
+  }, [form.projectType, mode, settingsLoaded, projectTypes]);
 
   const handleSyncFromRender = async () => {
     if (!deployment?.render_service_id) {
@@ -224,6 +260,11 @@ const DeploymentDialog = ({
       return;
     }
 
+    if (form.diskEnabled && !form.diskName.trim()) {
+      toast.error("Disk name is required when disk mounting is enabled");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       // Build env vars - store only keys in database
@@ -257,6 +298,10 @@ const DeploymentDialog = ({
           p_build_command: form.buildCommand,
           p_branch: form.branch,
           p_env_vars: envVarsKeysOnly,
+          p_disk_enabled: form.diskEnabled,
+          p_disk_name: form.diskEnabled ? form.diskName : null,
+          p_disk_mount_path: form.diskEnabled ? form.diskMountPath : "/data",
+          p_disk_size_gb: form.diskEnabled ? form.diskSizeGB : 1,
         });
 
         if (error) throw error;
@@ -297,6 +342,10 @@ const DeploymentDialog = ({
           p_build_command: form.buildCommand,
           p_branch: form.branch,
           p_env_vars: envVarsKeysOnly,
+          p_disk_enabled: form.diskEnabled,
+          p_disk_name: form.diskEnabled ? form.diskName : null,
+          p_disk_mount_path: form.diskEnabled ? form.diskMountPath : "/data",
+          p_disk_size_gb: form.diskEnabled ? form.diskSizeGB : 1,
         });
 
         if (error) throw error;
@@ -355,18 +404,24 @@ const DeploymentDialog = ({
 
       // Reset form for create mode
       if (mode === "create") {
-        const defaultCmd = defaultCommands.node;
-        setForm({
-          name: primeRepoName,
-          environment: "dev",
-          platform: defaultPlatform,
-          projectType: "node",
-          runFolder: "/",
-          buildFolder: defaultCmd.buildFolder,
-          buildCommand: defaultCmd.build,
-          runCommand: defaultCmd.run,
-          branch: "main",
-        });
+        const defaultType = projectTypes.find(t => t.value === "node") || projectTypes[0];
+        if (defaultType) {
+          setForm({
+            name: primeRepoName,
+            environment: "dev",
+            platform: defaultPlatform,
+            projectType: defaultType.value,
+            runFolder: defaultType.runFolder,
+            buildFolder: defaultType.buildFolder,
+            buildCommand: defaultType.buildCommand,
+            runCommand: defaultType.runCommand || "",
+            branch: "main",
+            diskEnabled: false,
+            diskName: "",
+            diskMountPath: "/data",
+            diskSizeGB: 1,
+          });
+        }
         setEnvVars([]);
         setActiveTab("config");
       }
@@ -380,6 +435,8 @@ const DeploymentDialog = ({
 
   const hasRenderService = mode === "edit" && deployment?.render_service_id;
   const isEditMode = mode === "edit";
+  const currentTypeConfig = projectTypes.find(t => t.value === form.projectType);
+  const isStaticSite = currentTypeConfig?.renderType === "static_site";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -396,13 +453,22 @@ const DeploymentDialog = ({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 px-6">
-          <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
+          <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
             <TabsTrigger value="config">Configuration</TabsTrigger>
             <TabsTrigger value="env">
               Environment Variables
               {envVars.length > 0 && (
                 <span className="ml-2 text-xs bg-primary/20 px-1.5 py-0.5 rounded-full">
                   {envVars.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="disk">
+              <HardDrive className="h-4 w-4 mr-1.5" />
+              Disk
+              {form.diskEnabled && (
+                <span className="ml-1.5 text-xs bg-primary/20 px-1.5 py-0.5 rounded-full">
+                  {form.diskSizeGB}GB
                 </span>
               )}
             </TabsTrigger>
@@ -477,11 +543,19 @@ const DeploymentDialog = ({
                     <SelectContent>
                       {projectTypes.map((type) => (
                         <SelectItem key={type.value} value={type.value}>
-                          {type.label}
+                          <div className="flex flex-col">
+                            <span>{type.label}</span>
+                            {type.renderType === "static_site" && (
+                              <span className="text-xs text-muted-foreground">(Static Site)</span>
+                            )}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {currentTypeConfig?.description && (
+                    <p className="text-xs text-muted-foreground">{currentTypeConfig.description}</p>
+                  )}
                 </div>
 
                 <div className="grid gap-2">
@@ -508,7 +582,7 @@ const DeploymentDialog = ({
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="buildFolder">Build Folder</Label>
+                  <Label htmlFor="buildFolder">{isStaticSite ? "Publish Path" : "Build Folder"}</Label>
                   <Input
                     id="buildFolder"
                     value={form.buildFolder}
@@ -525,34 +599,31 @@ const DeploymentDialog = ({
                   id="buildCommand"
                   value={form.buildCommand}
                   onChange={(e) => setForm({ ...form, buildCommand: e.target.value })}
-                  placeholder="npm i && npm run build"
-                  className="font-mono text-sm"
+                  placeholder="npm install && npm run build"
                 />
                 <p className="text-xs text-muted-foreground">
                   Chain multiple commands with &&
                 </p>
               </div>
 
-              {/* Run Command */}
-              <div className="grid gap-2">
-                <Label htmlFor="runCommand">Run Command</Label>
-                <Input
-                  id="runCommand"
-                  value={form.runCommand}
-                  onChange={(e) => setForm({ ...form, runCommand: e.target.value })}
-                  placeholder="node index.js"
-                  className="font-mono text-sm"
-                />
-              </div>
+              {/* Run Command - only for web services */}
+              {!isStaticSite && (
+                <div className="grid gap-2">
+                  <Label htmlFor="runCommand">Run Command</Label>
+                  <Input
+                    id="runCommand"
+                    value={form.runCommand}
+                    onChange={(e) => setForm({ ...form, runCommand: e.target.value })}
+                    placeholder="npm start"
+                  />
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="env" className="space-y-4 mt-0 h-full">
-              {hasRenderService && (
-                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
-                  <div className="flex items-center gap-2 text-sm">
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    <span>Sync with Render.com</span>
-                  </div>
+              <div className="flex items-center justify-between">
+                <Label className="text-base">Environment Variables</Label>
+                {hasRenderService && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -560,28 +631,111 @@ const DeploymentDialog = ({
                     disabled={isSyncingEnvVars}
                   >
                     {isSyncingEnvVars ? (
-                      <RefreshCw className="h-3 w-3 mr-2 animate-spin" />
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     ) : (
-                      <RefreshCw className="h-3 w-3 mr-2" />
+                      <RefreshCw className="h-4 w-4 mr-2" />
                     )}
                     Pull from Render
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
 
               <EnvVarEditor
                 value={envVars}
                 onChange={setEnvVars}
-                showClearExisting={!!hasRenderService}
-                clearExisting={clearExisting}
-                onClearExistingChange={setClearExisting}
-                keysOnlyMode={isEditMode && !hasRenderService}
               />
+
+              {hasRenderService && (
+                <div className="flex items-center gap-2 pt-2 border-t">
+                  <input
+                    type="checkbox"
+                    id="clearExisting"
+                    checked={clearExisting}
+                    onChange={(e) => setClearExisting(e.target.checked)}
+                    className="rounded border-input"
+                  />
+                  <Label htmlFor="clearExisting" className="text-sm font-normal">
+                    Clear existing variables on Render before sync
+                  </Label>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                Only keys are stored in Pronghorn. Values are sent directly to Render and not persisted here.
+                Leave values blank to preserve existing Render values.
+              </p>
+            </TabsContent>
+
+            <TabsContent value="disk" className="space-y-4 mt-0 h-full">
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Enable Disk Mount</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Attach persistent storage to your service
+                  </p>
+                </div>
+                <Switch
+                  checked={form.diskEnabled}
+                  onCheckedChange={(checked) => setForm({ ...form, diskEnabled: checked })}
+                />
+              </div>
+
+              {form.diskEnabled && (
+                <div className="space-y-4 p-4 border rounded-lg">
+                  <div className="grid gap-2">
+                    <Label htmlFor="diskName">Disk Name *</Label>
+                    <Input
+                      id="diskName"
+                      value={form.diskName}
+                      onChange={(e) => setForm({ ...form, diskName: e.target.value })}
+                      placeholder="my-disk"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      A unique name for this disk
+                    </p>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="diskMountPath">Mount Path *</Label>
+                    <Input
+                      id="diskMountPath"
+                      value={form.diskMountPath}
+                      onChange={(e) => setForm({ ...form, diskMountPath: e.target.value })}
+                      placeholder="/data"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Where the disk will be mounted in your container
+                    </p>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="diskSizeGB">Size (GB)</Label>
+                    <Input
+                      id="diskSizeGB"
+                      type="number"
+                      min={1}
+                      value={form.diskSizeGB}
+                      onChange={(e) => setForm({ ...form, diskSizeGB: parseInt(e.target.value) || 1 })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Minimum 1 GB. Additional costs apply for disk storage.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!form.diskEnabled && (
+                <div className="text-center text-muted-foreground py-8">
+                  <HardDrive className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>No disk configured</p>
+                  <p className="text-sm">Enable disk mounting to attach persistent storage</p>
+                </div>
+              )}
             </TabsContent>
           </div>
         </Tabs>
 
-        <DialogFooter className="p-6 pt-4 flex-shrink-0 border-t">
+        <DialogFooter className="p-6 pt-0 flex-shrink-0 border-t mt-0 pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
