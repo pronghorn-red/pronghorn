@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -17,14 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import EnvVarEditor from "./EnvVarEditor";
 
 interface CreateDeploymentDialogProps {
@@ -42,18 +38,20 @@ const projectTypes = [
   { value: "go", label: "Go Backend" },
   { value: "react", label: "React (Vite)" },
   { value: "vue", label: "Vue (Vite)" },
+  { value: "static", label: "Static Web App" },
   { value: "tanstack", label: "TanStack (Static)" },
   { value: "monorepo", label: "Monorepo (Full Stack)" },
 ];
 
-const defaultCommands: Record<string, { run: string; build: string }> = {
-  node: { run: "npm run dev", build: "npm run build" },
-  python: { run: "python main.py", build: "pip install -r requirements.txt" },
-  go: { run: "go run main.go", build: "go build -o app" },
-  react: { run: "npm run dev", build: "npm run build" },
-  vue: { run: "npm run dev", build: "npm run build" },
-  tanstack: { run: "npm run dev", build: "npm run build" },
-  monorepo: { run: "npm run dev", build: "npm run build" },
+const defaultCommands: Record<string, { run: string; build: string; buildFolder: string }> = {
+  node: { run: "node index.js", build: "npm i", buildFolder: "/" },
+  python: { run: "python main.py", build: "pip install -r requirements.txt", buildFolder: "/" },
+  go: { run: "./app", build: "go build -o app", buildFolder: "/" },
+  react: { run: "npx http-server dist -p $PORT", build: "npm i && npm run build", buildFolder: "dist" },
+  vue: { run: "npx http-server dist -p $PORT", build: "npm i && npm run build", buildFolder: "dist" },
+  static: { run: "npx http-server . -p $PORT", build: "npm i -g http-server", buildFolder: "/" },
+  tanstack: { run: "npx http-server dist -p $PORT", build: "npm i && npm run build", buildFolder: "dist" },
+  monorepo: { run: "npm run start", build: "npm i && npm run build", buildFolder: "dist" },
 };
 
 const CreateDeploymentDialog = ({
@@ -66,7 +64,7 @@ const CreateDeploymentDialog = ({
 }: CreateDeploymentDialogProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [primeRepoName, setPrimeRepoName] = useState("");
-  const [envVarsOpen, setEnvVarsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("config");
   const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([]);
   
   const [form, setForm] = useState({
@@ -75,9 +73,9 @@ const CreateDeploymentDialog = ({
     platform: defaultPlatform,
     projectType: "node",
     runFolder: "/",
-    buildFolder: "dist",
-    runCommand: "npm run dev",
-    buildCommand: "npm run build",
+    buildFolder: "/",
+    buildCommand: "npm i",
+    runCommand: "node index.js",
     branch: "main",
   });
 
@@ -113,6 +111,7 @@ const CreateDeploymentDialog = ({
         ...f,
         runCommand: commands.run,
         buildCommand: commands.build,
+        buildFolder: commands.buildFolder,
       }));
     }
   }, [form.projectType]);
@@ -155,19 +154,20 @@ const CreateDeploymentDialog = ({
       onCreated();
       
       // Reset form
+      const defaultCmd = defaultCommands.node;
       setForm({
         name: primeRepoName,
         environment: "dev",
         platform: defaultPlatform,
         projectType: "node",
         runFolder: "/",
-        buildFolder: "dist",
-        runCommand: "npm run dev",
-        buildCommand: "npm run build",
+        buildFolder: defaultCmd.buildFolder,
+        buildCommand: defaultCmd.build,
+        runCommand: defaultCmd.run,
         branch: "main",
       });
       setEnvVars([]);
-      setEnvVarsOpen(false);
+      setActiveTab("config");
     } catch (error: any) {
       console.error("Error creating deployment:", error);
       toast.error(error.message || "Failed to create deployment");
@@ -182,161 +182,158 @@ const CreateDeploymentDialog = ({
         <DialogHeader>
           <DialogTitle>Create Deployment</DialogTitle>
           <DialogDescription>
-            Configure a new deployment for your project. This will set up the build and run configuration.
+            Configure a new deployment for your project.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="name">Deployment Name</Label>
-            <Input
-              id="name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="my-app"
-            />
-            <p className="text-xs text-muted-foreground">
-              URL will be: {form.environment}-{form.name || "my-app"}.onrender.com
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label>Platform</Label>
-              <Select
-                value={form.platform}
-                onValueChange={(value) => setForm({ ...form, platform: value as any })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pronghorn_cloud">Render.com</SelectItem>
-                  <SelectItem value="local">Local Development</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Environment</Label>
-              <Select
-                value={form.environment}
-                onValueChange={(value) => setForm({ ...form, environment: value as any })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="dev">Dev</SelectItem>
-                  <SelectItem value="uat">UAT</SelectItem>
-                  <SelectItem value="prod">Prod</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label>Project Type</Label>
-              <Select
-                value={form.projectType}
-                onValueChange={(value) => setForm({ ...form, projectType: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {projectTypes.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="branch">Branch</Label>
-              <Input
-                id="branch"
-                value={form.branch}
-                onChange={(e) => setForm({ ...form, branch: e.target.value })}
-                placeholder="main"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="runFolder">Run Folder</Label>
-              <Input
-                id="runFolder"
-                value={form.runFolder}
-                onChange={(e) => setForm({ ...form, runFolder: e.target.value })}
-                placeholder="/"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="buildFolder">Build Folder</Label>
-              <Input
-                id="buildFolder"
-                value={form.buildFolder}
-                onChange={(e) => setForm({ ...form, buildFolder: e.target.value })}
-                placeholder="dist"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="runCommand">Run Command</Label>
-            <Input
-              id="runCommand"
-              value={form.runCommand}
-              onChange={(e) => setForm({ ...form, runCommand: e.target.value })}
-              placeholder="npm run dev"
-              className="font-mono text-sm"
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="buildCommand">Build Command</Label>
-            <Input
-              id="buildCommand"
-              value={form.buildCommand}
-              onChange={(e) => setForm({ ...form, buildCommand: e.target.value })}
-              placeholder="npm run build"
-              className="font-mono text-sm"
-            />
-          </div>
-
-          {/* Environment Variables Collapsible */}
-          <Collapsible open={envVarsOpen} onOpenChange={setEnvVarsOpen}>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" className="w-full justify-between p-2 h-auto">
-                <span className="flex items-center gap-2 text-sm font-medium">
-                  Environment Variables
-                  {envVars.length > 0 && (
-                    <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
-                      {envVars.length}
-                    </span>
-                  )}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="config">Configuration</TabsTrigger>
+            <TabsTrigger value="env">
+              Environment Variables
+              {envVars.length > 0 && (
+                <span className="ml-2 text-xs bg-primary/20 px-1.5 py-0.5 rounded-full">
+                  {envVars.length}
                 </span>
-                {envVarsOpen ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-2">
-              <EnvVarEditor
-                value={envVars}
-                onChange={setEnvVars}
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="config" className="space-y-4 pt-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Deployment Name</Label>
+              <Input
+                id="name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="my-app"
               />
-            </CollapsibleContent>
-          </Collapsible>
-        </div>
+              <p className="text-xs text-muted-foreground">
+                URL will be: {form.environment}-{form.name || "my-app"}.onrender.com
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Platform</Label>
+                <Select
+                  value={form.platform}
+                  onValueChange={(value) => setForm({ ...form, platform: value as any })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pronghorn_cloud">Render.com</SelectItem>
+                    <SelectItem value="local">Local Development</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Environment</Label>
+                <Select
+                  value={form.environment}
+                  onValueChange={(value) => setForm({ ...form, environment: value as any })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dev">Dev</SelectItem>
+                    <SelectItem value="uat">UAT</SelectItem>
+                    <SelectItem value="prod">Prod</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Project Type</Label>
+                <Select
+                  value={form.projectType}
+                  onValueChange={(value) => setForm({ ...form, projectType: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projectTypes.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="branch">Branch</Label>
+                <Input
+                  id="branch"
+                  value={form.branch}
+                  onChange={(e) => setForm({ ...form, branch: e.target.value })}
+                  placeholder="main"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="runFolder">Run Folder</Label>
+                <Input
+                  id="runFolder"
+                  value={form.runFolder}
+                  onChange={(e) => setForm({ ...form, runFolder: e.target.value })}
+                  placeholder="/"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="buildFolder">Build Folder</Label>
+                <Input
+                  id="buildFolder"
+                  value={form.buildFolder}
+                  onChange={(e) => setForm({ ...form, buildFolder: e.target.value })}
+                  placeholder="dist"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="buildCommand">Build Command</Label>
+              <Input
+                id="buildCommand"
+                value={form.buildCommand}
+                onChange={(e) => setForm({ ...form, buildCommand: e.target.value })}
+                placeholder="npm i && npm run build"
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Chain multiple commands with &&
+              </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="runCommand">Run Command</Label>
+              <Input
+                id="runCommand"
+                value={form.runCommand}
+                onChange={(e) => setForm({ ...form, runCommand: e.target.value })}
+                placeholder="node index.js"
+                className="font-mono text-sm"
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="env" className="space-y-4 pt-4">
+            <EnvVarEditor
+              value={envVars}
+              onChange={setEnvVars}
+            />
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

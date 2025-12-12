@@ -40,9 +40,21 @@ const projectTypes = [
   { value: "go", label: "Go Backend" },
   { value: "react", label: "React (Vite)" },
   { value: "vue", label: "Vue (Vite)" },
+  { value: "static", label: "Static Web App" },
   { value: "tanstack", label: "TanStack (Static)" },
   { value: "monorepo", label: "Monorepo (Full Stack)" },
 ];
+
+const defaultCommands: Record<string, { run: string; build: string; buildFolder: string }> = {
+  node: { run: "node index.js", build: "npm i", buildFolder: "/" },
+  python: { run: "python main.py", build: "pip install -r requirements.txt", buildFolder: "/" },
+  go: { run: "./app", build: "go build -o app", buildFolder: "/" },
+  react: { run: "npx http-server dist -p $PORT", build: "npm i && npm run build", buildFolder: "dist" },
+  vue: { run: "npx http-server dist -p $PORT", build: "npm i && npm run build", buildFolder: "dist" },
+  static: { run: "npx http-server . -p $PORT", build: "npm i -g http-server", buildFolder: "/" },
+  tanstack: { run: "npx http-server dist -p $PORT", build: "npm i && npm run build", buildFolder: "dist" },
+  monorepo: { run: "npm run start", build: "npm i && npm run build", buildFolder: "dist" },
+};
 
 const DeploymentConfigDialog = ({
   open,
@@ -62,8 +74,8 @@ const DeploymentConfigDialog = ({
     projectType: deployment.project_type,
     runFolder: deployment.run_folder,
     buildFolder: deployment.build_folder,
-    runCommand: deployment.run_command,
     buildCommand: deployment.build_command || "",
+    runCommand: deployment.run_command,
     branch: deployment.branch || "main",
   });
 
@@ -79,8 +91,8 @@ const DeploymentConfigDialog = ({
         projectType: deployment.project_type,
         runFolder: deployment.run_folder,
         buildFolder: deployment.build_folder,
-        runCommand: deployment.run_command,
         buildCommand: deployment.build_command || "",
+        runCommand: deployment.run_command,
         branch: deployment.branch || "main",
       });
       setEnvVars(
@@ -203,7 +215,14 @@ const DeploymentConfigDialog = ({
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="config">Configuration</TabsTrigger>
-            <TabsTrigger value="env">Environment Variables</TabsTrigger>
+            <TabsTrigger value="env">
+              Environment Variables
+              {envVars.length > 0 && (
+                <span className="ml-2 text-xs bg-primary/20 px-1.5 py-0.5 rounded-full">
+                  {envVars.length}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="config" className="space-y-4 pt-4">
@@ -284,21 +303,24 @@ const DeploymentConfigDialog = ({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="runCommand">Run Command</Label>
-              <Input
-                id="runCommand"
-                value={form.runCommand}
-                onChange={(e) => setForm({ ...form, runCommand: e.target.value })}
-                className="font-mono text-sm"
-              />
-            </div>
-
-            <div className="grid gap-2">
               <Label htmlFor="buildCommand">Build Command</Label>
               <Input
                 id="buildCommand"
                 value={form.buildCommand}
                 onChange={(e) => setForm({ ...form, buildCommand: e.target.value })}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Chain multiple commands with &&
+              </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="runCommand">Run Command</Label>
+              <Input
+                id="runCommand"
+                value={form.runCommand}
+                onChange={(e) => setForm({ ...form, runCommand: e.target.value })}
                 className="font-mono text-sm"
               />
             </div>
