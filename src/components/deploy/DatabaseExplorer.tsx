@@ -190,18 +190,66 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
   const handleShowFirst100 = (schema: string, name: string) => { handleTableSelect(schema, name, 0); };
 
   const handleGetDefinition = async (type: TreeItemContextType, schema: string, name: string, extra?: any) => {
-    let sql = "";
-    if (type === 'table') sql = `SELECT pg_get_tabledef('"${schema}"."${name}"'::regclass) AS definition;\n-- Or manually:\nSELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = '${schema}' AND table_name = '${name}' ORDER BY ordinal_position;`;
-    else if (type === 'view') sql = `SELECT definition FROM pg_views WHERE schemaname = '${schema}' AND viewname = '${name}';`;
-    else if (type === 'function') sql = `SELECT pg_get_functiondef(p.oid) FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = '${schema}' AND p.proname = '${name}';`;
-    else if (type === 'trigger') sql = `SELECT pg_get_triggerdef(t.oid) FROM pg_trigger t JOIN pg_class c ON t.tgrelid = c.oid JOIN pg_namespace n ON c.relnamespace = n.oid WHERE n.nspname = '${schema}' AND t.tgname = '${name}';`;
-    else if (type === 'index') { navigator.clipboard.writeText(extra?.definition || ""); toast.success("Index definition copied"); return; }
-    else if (type === 'sequence') sql = `SELECT * FROM "${schema}"."${name}";`;
-    else if (type === 'type') sql = `SELECT typname, typtype, typcategory FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE n.nspname = '${schema}' AND t.typname = '${name}';`;
-    else if (type === 'constraint') sql = `SELECT conname, contype, pg_get_constraintdef(c.oid) FROM pg_constraint c JOIN pg_namespace n ON c.connamespace = n.oid WHERE n.nspname = '${schema}' AND c.conname = '${name}';`;
-    setCurrentQuery(sql);
-    setActiveTab('query');
-    if (isMobile) setMobileActiveTab("query");
+    try {
+      let actionMap: Record<string, string> = {
+        'table': 'get_table_definition',
+        'view': 'get_view_definition',
+        'function': 'get_function_definition',
+        'trigger': 'get_trigger_definition',
+        'index': 'get_index_definition',
+        'sequence': 'get_sequence_info',
+        'type': 'get_type_definition',
+      };
+
+      const action = actionMap[type];
+      if (!action) {
+        // For constraint, just copy the name
+        if (type === 'constraint') {
+          navigator.clipboard.writeText(name);
+          toast.success("Constraint name copied");
+        }
+        return;
+      }
+
+      if (type === 'index' && extra?.definition) {
+        // For indexes, we already have the definition from schema
+        setCurrentQuery(extra.definition + ';');
+        navigator.clipboard.writeText(extra.definition + ';');
+        toast.success("Index definition copied and loaded into editor");
+        setActiveTab('query');
+        if (isMobile) setMobileActiveTab("query");
+        return;
+      }
+
+      toast.info(`Fetching ${type} definition...`);
+      const result = await invokeManageDatabase(action, { 
+        schema, 
+        ...(type === 'table' ? { table: name } : { name }) 
+      });
+
+      if (result.definition) {
+        setCurrentQuery(result.definition);
+        navigator.clipboard.writeText(result.definition);
+        toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} definition copied and loaded into editor`);
+        setActiveTab('query');
+        if (isMobile) setMobileActiveTab("query");
+      }
+    } catch (error: any) {
+      toast.error(`Failed to get definition: ${error.message}`);
+      // Fallback to SQL query
+      let sql = "";
+      if (type === 'table') sql = `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = '${schema}' AND table_name = '${name}' ORDER BY ordinal_position;`;
+      else if (type === 'view') sql = `SELECT definition FROM pg_views WHERE schemaname = '${schema}' AND viewname = '${name}';`;
+      else if (type === 'function') sql = `SELECT pg_get_functiondef(p.oid) FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = '${schema}' AND p.proname = '${name}';`;
+      else if (type === 'trigger') sql = `SELECT pg_get_triggerdef(t.oid) FROM pg_trigger t JOIN pg_class c ON t.tgrelid = c.oid JOIN pg_namespace n ON c.relnamespace = n.oid WHERE n.nspname = '${schema}' AND t.tgname = '${name}';`;
+      else if (type === 'sequence') sql = `SELECT * FROM "${schema}"."${name}";`;
+      else if (type === 'type') sql = `SELECT typname, typtype FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE n.nspname = '${schema}' AND t.typname = '${name}';`;
+      if (sql) {
+        setCurrentQuery(sql);
+        setActiveTab('query');
+        if (isMobile) setMobileActiveTab("query");
+      }
+    }
   };
 
   const handleLoadQuery = (query: SavedQuery) => { setCurrentQuery(query.sql_content); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); };
