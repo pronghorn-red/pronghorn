@@ -17,20 +17,21 @@ import Repository from "./pages/project/Repository";
 import ProjectSettings from "./pages/project/ProjectSettings";
 import Specifications from "./pages/project/Specifications";
 import Deploy from "./pages/project/Deploy";
+import Database from "./pages/project/Database";
 import NotFound from "./pages/NotFound";
 import Artifacts from "./pages/project/Artifacts";
 import Chat from "./pages/project/Chat";
 
 const App = () => (
   <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/standards" element={<Standards />} />
-              <Route path="/tech-stacks" element={<TechStacks />} />
-              <Route path="/terms" element={<Terms />} />
-              <Route path="/privacy" element={<Privacy />} />
-              <Route path="/license" element={<License />} />
+    <Route path="/" element={<Landing />} />
+    <Route path="/auth" element={<Auth />} />
+    <Route path="/dashboard" element={<Dashboard />} />
+    <Route path="/standards" element={<Standards />} />
+    <Route path="/tech-stacks" element={<TechStacks />} />
+    <Route path="/terms" element={<Terms />} />
+    <Route path="/privacy" element={<Privacy />} />
+    <Route path="/license" element={<License />} />
     <Route path="/settings/organization" element={<Settings />} />
     <Route path="/settings/profile" element={<Settings />} />
     
@@ -45,6 +46,7 @@ const App = () => (
     <Route path="/project/:projectId/build" element={<Build />} />
     <Route path="/project/:projectId/repository" element={<Repository />} />
     <Route path="/project/:projectId/specifications" element={<Specifications />} />
+    <Route path="/project/:projectId/database" element={<Database />} />
     <Route path="/project/:projectId/deploy" element={<Deploy />} />
     
     {/* Project Routes - With Token (shared access via path-based token) */}
@@ -58,6 +60,7 @@ const App = () => (
     <Route path="/project/:projectId/build/t/:token" element={<Build />} />
     <Route path="/project/:projectId/repository/t/:token" element={<Repository />} />
     <Route path="/project/:projectId/specifications/t/:token" element={<Specifications />} />
+    <Route path="/project/:projectId/database/t/:token" element={<Database />} />
     <Route path="/project/:projectId/deploy/t/:token" element={<Deploy />} />
     
     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

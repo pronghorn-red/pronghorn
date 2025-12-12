@@ -30,9 +30,10 @@ interface DatabaseCardProps {
   database: any;
   shareToken: string | null;
   onRefresh: () => void;
+  showExploreOnly?: boolean;
 }
 
-export function DatabaseCard({ database, shareToken, onRefresh }: DatabaseCardProps) {
+export function DatabaseCard({ database, shareToken, onRefresh, showExploreOnly = false }: DatabaseCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -264,65 +265,87 @@ export function DatabaseCard({ database, shareToken, onRefresh }: DatabaseCardPr
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">Region</span>
-              <p className="font-medium">{database.region || "oregon"}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Version</span>
-              <p className="font-medium">PostgreSQL {database.postgres_version || "16"}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Plan</span>
-              <p className="font-medium capitalize">{database.plan}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Created</span>
-              <p className="font-medium">{new Date(database.created_at).toLocaleDateString()}</p>
-            </div>
-          </div>
-
-          {canCreate && (
-            <div className="mt-4 pt-4 border-t border-border">
-              <Button onClick={handleCreate} disabled={isLoading} className="w-full">
-                {loadingAction === "create" ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4 mr-2" />
-                    Create Database on Render
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-
-          {canGetConnection && (
-            <div className="mt-4 pt-4 border-t border-border">
-              <div className="flex gap-2">
-                <Button onClick={handleGetConnectionInfo} variant="outline" disabled={isLoading} className="flex-1">
-                  {loadingAction === "connectionInfo" ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Fetching...
-                    </>
-                  ) : (
-                    <>
-                      <Key className="h-4 w-4 mr-2" />
-                      Connection String
-                    </>
-                  )}
-                </Button>
-                <Button onClick={() => setShowExplorerModal(true)} variant="default" disabled={isLoading} className="flex-1">
-                  <Terminal className="h-4 w-4 mr-2" />
-                  Explore
-                </Button>
+          {showExploreOnly ? (
+            // Simplified view for Manage tab - just show explore button
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                PostgreSQL {database.postgres_version || "16"} • {database.region || "oregon"}
               </div>
+              {canExplore ? (
+                <Button onClick={() => setShowExplorerModal(true)} variant="default" size="sm">
+                  <Terminal className="h-4 w-4 mr-2" />
+                  Explore Database
+                </Button>
+              ) : (
+                <span className="text-sm text-muted-foreground">
+                  {database.status === "pending" ? "Database not created yet" : "Database not available"}
+                </span>
+              )}
             </div>
+          ) : (
+            // Full view for Deploy tab
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Region</span>
+                  <p className="font-medium">{database.region || "oregon"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Version</span>
+                  <p className="font-medium">PostgreSQL {database.postgres_version || "16"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Plan</span>
+                  <p className="font-medium capitalize">{database.plan}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Created</span>
+                  <p className="font-medium">{new Date(database.created_at).toLocaleDateString()}</p>
+                </div>
+              </div>
+
+              {canCreate && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <Button onClick={handleCreate} disabled={isLoading} className="w-full">
+                    {loadingAction === "create" ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4 mr-2" />
+                        Create Database on Render
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {canGetConnection && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="flex gap-2">
+                    <Button onClick={handleGetConnectionInfo} variant="outline" disabled={isLoading} className="flex-1">
+                      {loadingAction === "connectionInfo" ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Fetching...
+                        </>
+                      ) : (
+                        <>
+                          <Key className="h-4 w-4 mr-2" />
+                          Connection String
+                        </>
+                      )}
+                    </Button>
+                    <Button onClick={() => setShowExplorerModal(true)} variant="default" disabled={isLoading} className="flex-1">
+                      <Terminal className="h-4 w-4 mr-2" />
+                      Explore
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

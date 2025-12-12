@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Cloud, Laptop, Server, Plus, RefreshCw, Database } from "lucide-react";
+import { Cloud, Laptop, Server, Plus, RefreshCw } from "lucide-react";
 import { useShareToken } from "@/hooks/useShareToken";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -12,8 +12,6 @@ import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import DeploymentCard from "@/components/deploy/DeploymentCard";
 import DeploymentDialog from "@/components/deploy/DeploymentDialog";
-import { DatabaseCard } from "@/components/deploy/DatabaseCard";
-import { DatabaseDialog } from "@/components/deploy/DatabaseDialog";
 import type { Database as DBTypes } from "@/integrations/supabase/types";
 
 type Deployment = DBTypes["public"]["Tables"]["project_deployments"]["Row"];
@@ -22,35 +20,10 @@ const Deploy = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
-  const [databases, setDatabases] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDatabasesLoading, setIsDatabasesLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isCreateDatabaseOpen, setIsCreateDatabaseOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("cloud");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [primeRepoName, setPrimeRepoName] = useState("");
-
-  // Fetch prime repo name for auto-generating deployment/database names
-  const fetchPrimeRepoName = async () => {
-    if (!projectId || !isTokenSet) return;
-    
-    try {
-      const { data, error } = await supabase.rpc("get_project_repos_with_token", {
-        p_project_id: projectId,
-        p_token: shareToken || null,
-      });
-      
-      if (!error && data) {
-        const primeRepo = data.find((r: any) => r.is_prime) || data[0];
-        if (primeRepo) {
-          setPrimeRepoName(primeRepo.repo);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching prime repo:", error);
-    }
-  };
 
   const fetchDeployments = async () => {
     if (!projectId || !isTokenSet) return;
@@ -72,50 +45,12 @@ const Deploy = () => {
     }
   };
 
-  const fetchDatabases = async () => {
-    if (!projectId || !isTokenSet) return;
-    
-    setIsDatabasesLoading(true);
-    try {
-      const { data, error } = await supabase.rpc("get_databases_with_token", {
-        p_project_id: projectId,
-        p_token: shareToken || null,
-      });
-      
-      if (error) throw error;
-      setDatabases(data || []);
-    } catch (error: any) {
-      console.error("Error fetching databases:", error);
-      toast.error("Failed to load databases");
-    } finally {
-      setIsDatabasesLoading(false);
-    }
-  };
-
   useEffect(() => {
     fetchDeployments();
-    fetchDatabases();
-    fetchPrimeRepoName();
   }, [projectId, isTokenSet, shareToken]);
 
   const cloudDeployments = deployments.filter(d => d.platform === "pronghorn_cloud");
   const localDeployments = deployments.filter(d => d.platform === "local");
-
-  const handleRefresh = () => {
-    if (activeTab === "databases") {
-      fetchDatabases();
-    } else {
-      fetchDeployments();
-    }
-  };
-
-  const handleCreate = () => {
-    if (activeTab === "databases") {
-      setIsCreateDatabaseOpen(true);
-    } else {
-      setIsCreateOpen(true);
-    }
-  };
 
   return (
     <div className="flex h-screen bg-background">
@@ -148,22 +83,16 @@ const Deploy = () => {
                   <span className="hidden sm:inline">VMs</span>
                   <Badge variant="secondary" className="text-[10px] px-1">Soon</Badge>
                 </TabsTrigger>
-                <TabsTrigger value="databases" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                  <Database className="h-4 w-4" />
-                  <span className="hidden sm:inline">Databases</span>
-                </TabsTrigger>
               </TabsList>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                <Button variant="outline" size="sm" onClick={handleRefresh} className="flex-1 sm:flex-none">
+                <Button variant="outline" size="sm" onClick={fetchDeployments} className="flex-1 sm:flex-none">
                   <RefreshCw className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Refresh</span>
                 </Button>
-                <Button size="sm" onClick={handleCreate} className="flex-1 sm:flex-none">
+                <Button size="sm" onClick={() => setIsCreateOpen(true)} className="flex-1 sm:flex-none">
                   <Plus className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">
-                    {activeTab === "databases" ? "New Database" : "New Deployment"}
-                  </span>
+                  <span className="hidden sm:inline">New Deployment</span>
                 </Button>
               </div>
             </div>
@@ -273,47 +202,6 @@ const Deploy = () => {
                 </CardContent>
               </Card>
             </TabsContent>
-
-            <TabsContent value="databases" className="space-y-4 mt-4">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                    <Database className="h-5 w-5 text-primary" />
-                    Databases
-                  </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">
-                    Create and manage PostgreSQL databases. Get connection strings to use in your deployments.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isDatabasesLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : databases.length > 0 ? (
-                    <div className="grid gap-4">
-                      {databases.map((database) => (
-                        <DatabaseCard
-                          key={database.id}
-                          database={database}
-                          shareToken={shareToken}
-                          onRefresh={fetchDatabases}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Database className="h-10 w-10 mx-auto mb-3 opacity-50" />
-                      <p className="mb-3 text-sm">No databases yet</p>
-                      <Button size="sm" onClick={() => setIsCreateDatabaseOpen(true)}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create First Database
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
           </Tabs>
         </div>
 
@@ -325,16 +213,6 @@ const Deploy = () => {
           mode="create"
           defaultPlatform={activeTab === "local" ? "local" : "pronghorn_cloud"}
           onSuccess={fetchDeployments}
-        />
-
-        <DatabaseDialog
-          open={isCreateDatabaseOpen}
-          onOpenChange={setIsCreateDatabaseOpen}
-          mode="create"
-          projectId={projectId || ""}
-          shareToken={shareToken}
-          onSuccess={fetchDatabases}
-          primeRepoName={primeRepoName}
         />
       </div>
     </div>
