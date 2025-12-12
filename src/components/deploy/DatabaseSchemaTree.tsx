@@ -53,25 +53,25 @@ function TreeItem({ label, type, icon, level, count, children, onClick, defaultO
     <div>
       <button
         className={cn(
-          "w-full text-left px-2 py-1 text-sm flex items-center gap-1.5 transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/50",
-          type === 'table' || type === 'view' ? 'hover:bg-primary/10' : ''
+          "w-full text-left px-2 py-1 text-sm flex items-center gap-1.5 transition-colors text-[#858585] hover:text-[#cccccc] hover:bg-[#2a2d2e]/50",
+          type === 'table' || type === 'view' ? 'hover:bg-[#264f78]/30' : ''
         )}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
         onClick={handleClick}
       >
         {hasChildren ? (
           isOpen ? (
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
           ) : (
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#858585]" />
           )
         ) : (
           <span className="w-3.5" />
         )}
         {icon}
-        <span className="truncate flex-1 text-foreground">{label}</span>
+        <span className="truncate flex-1 text-[#cccccc]">{label}</span>
         {count !== undefined && (
-          <span className="text-xs text-muted-foreground">({count})</span>
+          <span className="text-xs text-[#858585]">({count})</span>
         )}
       </button>
       {isOpen && children && <div>{children}</div>}
@@ -117,7 +117,7 @@ export function DatabaseSchemaTree({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
+      <div className="flex items-center justify-center h-full text-[#858585]">
         <div className="text-center space-y-2">
           <Database className="h-8 w-8 animate-pulse mx-auto" />
           <p className="text-sm">Loading schema...</p>
@@ -128,7 +128,7 @@ export function DatabaseSchemaTree({
 
   if (schemas.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground">
+      <div className="flex items-center justify-center h-full text-[#858585]">
         <p className="text-sm">No schema data available</p>
       </div>
     );
@@ -136,14 +136,14 @@ export function DatabaseSchemaTree({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-2 border-b border-border">
+      <div className="p-2 border-b border-[#3e3e42]">
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-[#858585]" />
           <Input
             placeholder="Search..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8 h-8 text-sm"
+            className="pl-8 h-8 text-sm bg-[#3c3c3c] border-[#3e3e42] text-[#cccccc] placeholder:text-[#858585] focus-visible:ring-[#007acc]"
           />
         </div>
       </div>
@@ -163,7 +163,7 @@ export function DatabaseSchemaTree({
                 <TreeItem
                   label="Tables"
                   type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-muted-foreground" />}
+              icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                   level={1}
                   count={schema.tables.length}
                   defaultOpen={schema.name === 'public'}
@@ -189,7 +189,7 @@ export function DatabaseSchemaTree({
                 <TreeItem
                   label="Views"
                   type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-muted-foreground" />}
+                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                   level={1}
                   count={schema.views.length}
                 >
@@ -214,7 +214,7 @@ export function DatabaseSchemaTree({
                 <TreeItem
                   label="Functions"
                   type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-muted-foreground" />}
+                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                   level={1}
                   count={schema.functions.length}
                 >
@@ -236,7 +236,7 @@ export function DatabaseSchemaTree({
                 <TreeItem
                   label="Triggers"
                   type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-muted-foreground" />}
+                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                   level={1}
                   count={schema.triggers.length}
                 >
@@ -258,7 +258,7 @@ export function DatabaseSchemaTree({
                 <TreeItem
                   label="Indexes"
                   type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-muted-foreground" />}
+                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                   level={1}
                   count={schema.indexes.length}
                 >
@@ -280,7 +280,7 @@ export function DatabaseSchemaTree({
                 <TreeItem
                   label="Sequences"
                   type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-muted-foreground" />}
+                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                   level={1}
                   count={schema.sequences.length}
                 >
@@ -302,7 +302,7 @@ export function DatabaseSchemaTree({
                 <TreeItem
                   label="Types"
                   type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-muted-foreground" />}
+                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                   level={1}
                   count={schema.types.length}
                 >
@@ -324,7 +324,7 @@ export function DatabaseSchemaTree({
                 <TreeItem
                   label="Constraints"
                   type="category"
-                  icon={<FolderClosed className="h-4 w-4 text-muted-foreground" />}
+                  icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                   level={1}
                   count={schema.constraints.length}
                 >
