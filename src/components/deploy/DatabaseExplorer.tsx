@@ -64,7 +64,6 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
   
   const [activeTab, setActiveTab] = useState<'query' | 'table' | 'structure'>('query');
   const [currentQuery, setCurrentQuery] = useState("SELECT 1;");
-  const [editorKey, setEditorKey] = useState(0);
   const [isExecuting, setIsExecuting] = useState(false);
   
   const [queryResults, setQueryResults] = useState<{
@@ -192,7 +191,7 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
 
   const handleGetDefinition = async (type: TreeItemContextType, schema: string, name: string, extra?: any) => {
     try {
-      const actionMap: Record<string, string> = {
+      let actionMap: Record<string, string> = {
         'table': 'get_table_definition',
         'view': 'get_view_definition',
         'function': 'get_function_definition',
@@ -215,7 +214,6 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
       if (type === 'index' && extra?.definition) {
         // For indexes, we already have the definition from schema
         setCurrentQuery(extra.definition + ';');
-        setEditorKey(k => k + 1);
         navigator.clipboard.writeText(extra.definition + ';');
         toast.success("Index definition copied and loaded into editor");
         setActiveTab('query');
@@ -231,7 +229,6 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
 
       if (result.definition) {
         setCurrentQuery(result.definition);
-        setEditorKey(k => k + 1);
         navigator.clipboard.writeText(result.definition);
         toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} definition copied and loaded into editor`);
         setActiveTab('query');
@@ -249,14 +246,13 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
       else if (type === 'type') sql = `SELECT typname, typtype FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE n.nspname = '${schema}' AND t.typname = '${name}';`;
       if (sql) {
         setCurrentQuery(sql);
-        setEditorKey(k => k + 1);
         setActiveTab('query');
         if (isMobile) setMobileActiveTab("query");
       }
     }
   };
 
-  const handleLoadQuery = (query: SavedQuery) => { setCurrentQuery(query.sql_content); setEditorKey(k => k + 1); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); };
+  const handleLoadQuery = (query: SavedQuery) => { setCurrentQuery(query.sql_content); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); };
   const handleEditQuery = (query: SavedQuery) => { setEditingQuery(query); setSaveDialogOpen(true); };
   const handleDeleteQuery = async (query: SavedQuery) => {
     try {
@@ -281,7 +277,6 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
   };
 
   const handleOpenSaveDialog = (sql: string) => { setPendingSqlToSave(sql); setEditingQuery(null); setSaveDialogOpen(true); };
-  const handleQueryChange = useCallback((sql: string) => { setCurrentQuery(sql); }, []);
 
   const handleExport = async (format: 'json' | 'csv' | 'sql') => {
     if (!selectedTable) return;
@@ -335,9 +330,9 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
           </TabsList>
         </div>
         <TabsContent value="query" className="flex-1 m-0 min-h-0">
-          {isMobile ? <SqlQueryEditor key={editorKey} onExecute={handleExecuteQuery} isExecuting={isExecuting} initialQuery={currentQuery} onSaveQuery={handleOpenSaveDialog} /> : (
+          {isMobile ? <SqlQueryEditor onExecute={handleExecuteQuery} isExecuting={isExecuting} initialQuery={currentQuery} onSaveQuery={handleOpenSaveDialog} /> : (
             <ResizablePanelGroup direction="vertical">
-              <ResizablePanel defaultSize={40} minSize={20}><SqlQueryEditor key={editorKey} onExecute={handleExecuteQuery} isExecuting={isExecuting} initialQuery={currentQuery} onSaveQuery={handleOpenSaveDialog} /></ResizablePanel>
+              <ResizablePanel defaultSize={40} minSize={20}><SqlQueryEditor onExecute={handleExecuteQuery} isExecuting={isExecuting} initialQuery={currentQuery} onSaveQuery={handleOpenSaveDialog} /></ResizablePanel>
               <ResizableHandle withHandle />
               <ResizablePanel defaultSize={60} minSize={20}><div className="h-full bg-background">{queryResults ? <QueryResultsViewer columns={queryResults.columns} rows={queryResults.rows} totalRows={queryResults.totalRows} executionTime={queryResults.executionTime} onExport={handleExportQueryResults} /> : <div className="flex items-center justify-center h-full text-muted-foreground"><p className="text-sm">Run a query to see results</p></div>}</div></ResizablePanel>
             </ResizablePanelGroup>
@@ -359,7 +354,7 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
         <Tabs value={mobileActiveTab} onValueChange={setMobileActiveTab} className="flex-1 flex flex-col min-h-0">
           <TabsList className="w-full h-10 rounded-none border-b grid grid-cols-4"><TabsTrigger value="schema" className="text-xs">Schema</TabsTrigger><TabsTrigger value="query" className="text-xs">Query</TabsTrigger><TabsTrigger value="results" className="text-xs">Results</TabsTrigger><TabsTrigger value="agent" className="text-xs">Agent</TabsTrigger></TabsList>
           <TabsContent value="schema" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "schema" ? "active" : "inactive"}><div className={mobileActiveTab === "schema" ? "h-full" : "hidden"}><SchemaTreePanel /></div></TabsContent>
-          <TabsContent value="query" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "query" ? "active" : "inactive"}><div className={mobileActiveTab === "query" ? "h-full" : "hidden"}><SqlQueryEditor key={editorKey} onExecute={handleExecuteQuery} isExecuting={isExecuting} initialQuery={currentQuery} onSaveQuery={handleOpenSaveDialog} /></div></TabsContent>
+          <TabsContent value="query" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "query" ? "active" : "inactive"}><div className={mobileActiveTab === "query" ? "h-full" : "hidden"}><SqlQueryEditor onExecute={handleExecuteQuery} isExecuting={isExecuting} initialQuery={currentQuery} onSaveQuery={handleOpenSaveDialog} /></div></TabsContent>
           <TabsContent value="results" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "results" ? "active" : "inactive"}><div className={mobileActiveTab === "results" ? "h-full" : "hidden"}><ResultsPanel /></div></TabsContent>
           <TabsContent value="agent" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "agent" ? "active" : "inactive"}><div className={mobileActiveTab === "agent" ? "h-full" : "hidden"}><AgentPanel /></div></TabsContent>
         </Tabs>

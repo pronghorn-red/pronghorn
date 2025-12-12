@@ -54,6 +54,13 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQue
     return 'read';
   }, [query]);
 
+  // Update query when initialQuery changes
+  useEffect(() => {
+    if (initialQuery && initialQuery !== query) {
+      setQuery(initialQuery);
+    }
+  }, [initialQuery]);
+
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
 
@@ -132,7 +139,7 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQue
             )}
             Run
           </Button>
-          <span className="text-xs text-[#858585]">Ctrl+Enter</span>
+          <span className="text-xs text-muted-foreground">Ctrl+Enter</span>
           
           {/* Query type indicator */}
           {queryType === 'destructive' && (
@@ -212,7 +219,7 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQue
           language="sql"
           theme="vs-dark"
           value={query}
-                onChange={(value) => setQuery(value || "")}
+          onChange={(value) => setQuery(value || "")}
           onMount={handleEditorMount}
           options={{
             minimap: { enabled: false },
