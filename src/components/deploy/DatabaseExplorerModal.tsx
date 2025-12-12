@@ -87,12 +87,21 @@ export function DatabaseExplorerModal({
     });
 
     // When edge function returns non-2xx, data still contains response body
-    // Check data.error first (from our edge function response), then fallback to invoke error
     if (data && !data.success) {
       throw new Error(data.error || `Failed to ${action}`);
     }
     
     if (error) {
+      // Try to parse JSON from error message (e.g., "Edge function returned 400: Error, {...}")
+      const jsonMatch = error.message?.match(/\{.*\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.error) {
+            throw new Error(parsed.error);
+          }
+        } catch {}
+      }
       throw new Error(error.message || `Failed to ${action}`);
     }
 
