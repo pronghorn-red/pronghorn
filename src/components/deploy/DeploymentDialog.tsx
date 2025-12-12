@@ -79,11 +79,11 @@ const DeploymentDialog = ({
     name: "",
     environment: "dev" as "dev" | "uat" | "prod",
     platform: defaultPlatform as "pronghorn_cloud" | "local",
-    projectType: "node",
+    projectType: "static",
     runFolder: "/",
     buildFolder: "/",
-    buildCommand: "npm install",
-    runCommand: "node index.js",
+    buildCommand: "",
+    runCommand: "",
     branch: "main",
     diskEnabled: false,
     diskName: "",
@@ -154,7 +154,7 @@ const DeploymentDialog = ({
       setClearExisting(false);
     } else {
       // Create mode: reset form and fetch prime repo
-      const defaultType = projectTypes.find(t => t.value === "node") || projectTypes[0];
+      const defaultType = projectTypes.find(t => t.value === "static") || projectTypes[0];
       if (defaultType) {
         setForm({
           name: primeRepoName || "",
@@ -404,7 +404,7 @@ const DeploymentDialog = ({
 
       // Reset form for create mode
       if (mode === "create") {
-        const defaultType = projectTypes.find(t => t.value === "node") || projectTypes[0];
+        const defaultType = projectTypes.find(t => t.value === "static") || projectTypes[0];
         if (defaultType) {
           setForm({
             name: primeRepoName,
@@ -543,12 +543,7 @@ const DeploymentDialog = ({
                     <SelectContent>
                       {projectTypes.map((type) => (
                         <SelectItem key={type.value} value={type.value}>
-                          <div className="flex flex-col">
-                            <span>{type.label}</span>
-                            {type.renderType === "static_site" && (
-                              <span className="text-xs text-muted-foreground">(Static Site)</span>
-                            )}
-                          </div>
+                          {type.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
