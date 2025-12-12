@@ -159,26 +159,31 @@ export function DatabaseSchemaSelector({
           try {
             // Fetch schema, saved queries, and migrations in parallel
             const [schemaResponse, savedQueriesResult, migrationsResult] = await Promise.all([
-              supabase.functions.invoke('manage-database', {
+              supabase.functions.invoke("manage-database", {
                 body: {
                   databaseId: db.id,
                   shareToken,
-                  action: 'get_schema'
-                }
+                  action: "get_schema",
+                },
               }),
-              supabase.rpc('get_saved_queries_with_token', {
+              supabase.rpc("get_saved_queries_with_token", {
                 p_database_id: db.id,
-                p_token: shareToken
+                p_token: shareToken,
               }),
-              supabase.rpc('get_migrations_with_token', {
+              supabase.rpc("get_migrations_with_token", {
                 p_database_id: db.id,
-                p_token: shareToken
-              })
+                p_token: shareToken,
+              }),
             ]);
 
             if (schemaResponse.error) throw schemaResponse.error;
 
-            const schemaData = schemaResponse.data;
+            // Edge function wraps result as { success, data }
+            const schemaEnvelope = schemaResponse.data as { success?: boolean; data?: any } | null;
+            const schemaData = schemaEnvelope && "data" in schemaEnvelope
+              ? (schemaEnvelope.data ?? {})
+              : (schemaEnvelope ?? {});
+
             const schemas: SchemaInfo[] = [];
 
             // Process the schemas array from the response
