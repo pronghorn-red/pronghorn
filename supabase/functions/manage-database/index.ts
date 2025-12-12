@@ -9,14 +9,17 @@ const corsHeaders = {
 const RENDER_API_URL = "https://api.render.com/v1";
 
 interface ManageDatabaseRequest {
-  action: 'get_schema' | 'execute_sql' | 'get_table_data' | 'get_table_columns' | 'export_table';
+  action: 'get_schema' | 'execute_sql' | 'get_table_data' | 'get_table_columns' | 'export_table' 
+    | 'get_table_definition' | 'get_view_definition' | 'get_function_definition' 
+    | 'get_trigger_definition' | 'get_index_definition' | 'get_sequence_info' | 'get_type_definition';
   databaseId: string;
   shareToken?: string;
   // For execute_sql
   sql?: string;
-  // For get_table_data
+  // For get_table_data and definitions
   schema?: string;
   table?: string;
+  name?: string; // For functions, triggers, indexes, sequences, types
   limit?: number;
   offset?: number;
   orderBy?: string;
@@ -162,6 +165,48 @@ Deno.serve(async (req) => {
           body.table,
           body.format || 'json'
         );
+        break;
+      case 'get_table_definition':
+        if (!body.schema || !body.table) {
+          throw new Error("Schema and table are required");
+        }
+        result = await getTableDefinition(connectionString, body.schema, body.table);
+        break;
+      case 'get_view_definition':
+        if (!body.schema || !body.name) {
+          throw new Error("Schema and view name are required");
+        }
+        result = await getViewDefinition(connectionString, body.schema, body.name);
+        break;
+      case 'get_function_definition':
+        if (!body.schema || !body.name) {
+          throw new Error("Schema and function name are required");
+        }
+        result = await getFunctionDefinition(connectionString, body.schema, body.name);
+        break;
+      case 'get_trigger_definition':
+        if (!body.schema || !body.name) {
+          throw new Error("Schema and trigger name are required");
+        }
+        result = await getTriggerDefinition(connectionString, body.schema, body.name);
+        break;
+      case 'get_index_definition':
+        if (!body.schema || !body.name) {
+          throw new Error("Schema and index name are required");
+        }
+        result = await getIndexDefinition(connectionString, body.schema, body.name);
+        break;
+      case 'get_sequence_info':
+        if (!body.schema || !body.name) {
+          throw new Error("Schema and sequence name are required");
+        }
+        result = await getSequenceInfo(connectionString, body.schema, body.name);
+        break;
+      case 'get_type_definition':
+        if (!body.schema || !body.name) {
+          throw new Error("Schema and type name are required");
+        }
+        result = await getTypeDefinition(connectionString, body.schema, body.name);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
@@ -472,6 +517,242 @@ async function exportTable(
     }
 
     throw new Error(`Unsupported format: ${format}`);
+  } finally {
+    await client.end();
+  }
+}
+
+async function getTableDefinition(connectionString: string, schema: string, table: string) {
+  const client = new Client(connectionString);
+  await client.connect();
+
+  try {
+    // Get columns
+    const columnsResult = await client.queryObject<{
+      column_name: string;
+      data_type: string;
+      is_nullable: string;
+      column_default: string | null;
+      character_maximum_length: number | null;
+    }>`
+      SELECT column_name, data_type, is_nullable, column_default, character_maximum_length
+      FROM information_schema.columns
+      WHERE table_schema = ${schema} AND table_name = ${table}
+      ORDER BY ordinal_position
+    `;
+
+    // Get primary key columns
+    const pkResult = await client.queryObject<{ column_name: string }>`
+      SELECT kcu.column_name
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu 
+        ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+      WHERE tc.constraint_type = 'PRIMARY KEY'
+        AND tc.table_schema = ${schema}
+        AND tc.table_name = ${table}
+    `;
+    const pkColumns = new Set(pkResult.rows.map(r => r.column_name));
+
+    // Build CREATE TABLE statement
+    const columnDefs = columnsResult.rows.map(col => {
+      let def = `  "${col.column_name}" ${col.data_type}`;
+      if (col.character_maximum_length) {
+        def += `(${col.character_maximum_length})`;
+      }
+      if (col.is_nullable === 'NO') {
+        def += ' NOT NULL';
+      }
+      if (col.column_default) {
+        def += ` DEFAULT ${col.column_default}`;
+      }
+      if (pkColumns.has(col.column_name)) {
+        def += ' PRIMARY KEY';
+      }
+      return def;
+    });
+
+    const createStatement = `CREATE TABLE "${schema}"."${table}" (\n${columnDefs.join(',\n')}\n);`;
+
+    return {
+      definition: createStatement,
+      columns: columnsResult.rows,
+    };
+  } finally {
+    await client.end();
+  }
+}
+
+async function getViewDefinition(connectionString: string, schema: string, viewName: string) {
+  const client = new Client(connectionString);
+  await client.connect();
+
+  try {
+    const result = await client.queryObject<{ view_definition: string }>`
+      SELECT view_definition
+      FROM information_schema.views
+      WHERE table_schema = ${schema} AND table_name = ${viewName}
+    `;
+
+    if (result.rows.length === 0) {
+      throw new Error(`View ${schema}.${viewName} not found`);
+    }
+
+    const viewDef = result.rows[0].view_definition;
+    const createStatement = `CREATE OR REPLACE VIEW "${schema}"."${viewName}" AS\n${viewDef}`;
+
+    return { definition: createStatement };
+  } finally {
+    await client.end();
+  }
+}
+
+async function getFunctionDefinition(connectionString: string, schema: string, funcName: string) {
+  const client = new Client(connectionString);
+  await client.connect();
+
+  try {
+    const result = await client.queryObject<{ definition: string }>`
+      SELECT pg_get_functiondef(p.oid) as definition
+      FROM pg_proc p
+      JOIN pg_namespace n ON p.pronamespace = n.oid
+      WHERE n.nspname = ${schema} AND p.proname = ${funcName}
+      LIMIT 1
+    `;
+
+    if (result.rows.length === 0) {
+      throw new Error(`Function ${schema}.${funcName} not found`);
+    }
+
+    return { definition: result.rows[0].definition };
+  } finally {
+    await client.end();
+  }
+}
+
+async function getTriggerDefinition(connectionString: string, schema: string, triggerName: string) {
+  const client = new Client(connectionString);
+  await client.connect();
+
+  try {
+    const result = await client.queryObject<{
+      trigger_name: string;
+      event_manipulation: string;
+      event_object_table: string;
+      action_statement: string;
+      action_timing: string;
+    }>`
+      SELECT trigger_name, event_manipulation, event_object_table, action_statement, action_timing
+      FROM information_schema.triggers
+      WHERE trigger_schema = ${schema} AND trigger_name = ${triggerName}
+    `;
+
+    if (result.rows.length === 0) {
+      throw new Error(`Trigger ${schema}.${triggerName} not found`);
+    }
+
+    const t = result.rows[0];
+    const createStatement = `CREATE TRIGGER "${t.trigger_name}"\n${t.action_timing} ${t.event_manipulation}\nON "${schema}"."${t.event_object_table}"\n${t.action_statement}`;
+
+    return { definition: createStatement };
+  } finally {
+    await client.end();
+  }
+}
+
+async function getIndexDefinition(connectionString: string, schema: string, indexName: string) {
+  const client = new Client(connectionString);
+  await client.connect();
+
+  try {
+    const result = await client.queryObject<{ indexdef: string }>`
+      SELECT indexdef
+      FROM pg_indexes
+      WHERE schemaname = ${schema} AND indexname = ${indexName}
+    `;
+
+    if (result.rows.length === 0) {
+      throw new Error(`Index ${schema}.${indexName} not found`);
+    }
+
+    return { definition: result.rows[0].indexdef + ';' };
+  } finally {
+    await client.end();
+  }
+}
+
+async function getSequenceInfo(connectionString: string, schema: string, seqName: string) {
+  const client = new Client(connectionString);
+  await client.connect();
+
+  try {
+    const safeSchema = schema.replace(/[^a-zA-Z0-9_]/g, '');
+    const safeSeq = seqName.replace(/[^a-zA-Z0-9_]/g, '');
+    
+    const result = await client.queryObject<{
+      last_value: bigint;
+      start_value: bigint;
+      increment_by: bigint;
+      max_value: bigint;
+      min_value: bigint;
+      cache_value: bigint;
+      is_cycled: boolean;
+    }>(`SELECT * FROM "${safeSchema}"."${safeSeq}"`);
+
+    if (result.rows.length === 0) {
+      throw new Error(`Sequence ${schema}.${seqName} not found`);
+    }
+
+    const seq = result.rows[0];
+    const createStatement = `CREATE SEQUENCE "${schema}"."${seqName}"\n  START WITH ${seq.start_value}\n  INCREMENT BY ${seq.increment_by}\n  MINVALUE ${seq.min_value}\n  MAXVALUE ${seq.max_value}\n  CACHE ${seq.cache_value}${seq.is_cycled ? '\n  CYCLE' : ''};`;
+
+    return { 
+      definition: createStatement,
+      lastValue: seq.last_value,
+    };
+  } finally {
+    await client.end();
+  }
+}
+
+async function getTypeDefinition(connectionString: string, schema: string, typeName: string) {
+  const client = new Client(connectionString);
+  await client.connect();
+
+  try {
+    // Check if it's an enum
+    const enumResult = await client.queryObject<{ enumlabel: string }>`
+      SELECT e.enumlabel
+      FROM pg_type t
+      JOIN pg_enum e ON t.oid = e.enumtypid
+      JOIN pg_namespace n ON t.typnamespace = n.oid
+      WHERE n.nspname = ${schema} AND t.typname = ${typeName}
+      ORDER BY e.enumsortorder
+    `;
+
+    if (enumResult.rows.length > 0) {
+      const values = enumResult.rows.map(r => `'${r.enumlabel}'`).join(', ');
+      return { definition: `CREATE TYPE "${schema}"."${typeName}" AS ENUM (${values});` };
+    }
+
+    // Check if it's a composite type
+    const compositeResult = await client.queryObject<{ attname: string; typname: string }>`
+      SELECT a.attname, t.typname
+      FROM pg_type ct
+      JOIN pg_namespace n ON ct.typnamespace = n.oid
+      JOIN pg_attribute a ON a.attrelid = ct.typrelid
+      JOIN pg_type t ON a.atttypid = t.oid
+      WHERE n.nspname = ${schema} AND ct.typname = ${typeName}
+        AND a.attnum > 0 AND NOT a.attisdropped
+      ORDER BY a.attnum
+    `;
+
+    if (compositeResult.rows.length > 0) {
+      const fields = compositeResult.rows.map(r => `  "${r.attname}" ${r.typname}`).join(',\n');
+      return { definition: `CREATE TYPE "${schema}"."${typeName}" AS (\n${fields}\n);` };
+    }
+
+    throw new Error(`Type ${schema}.${typeName} not found or unsupported type`);
   } finally {
     await client.end();
   }
