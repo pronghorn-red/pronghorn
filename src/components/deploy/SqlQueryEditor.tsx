@@ -12,9 +12,10 @@ import { Play, Trash2, History, Loader2, AlignLeft, AlertTriangle, ShieldAlert, 
 import { cn } from "@/lib/utils";
 
 interface SqlQueryEditorProps {
+  query: string;
+  onQueryChange: (sql: string) => void;
   onExecute: (sql: string) => Promise<void>;
   isExecuting?: boolean;
-  initialQuery?: string;
   onSaveQuery?: (sql: string) => void;
 }
 
@@ -35,8 +36,7 @@ const WRITE_PATTERNS = [
   /^\s*ALTER\s+/i,
 ];
 
-export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQuery }: SqlQueryEditorProps) {
-  const [query, setQuery] = useState(initialQuery || "SELECT 1;");
+export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, onSaveQuery }: SqlQueryEditorProps) {
   const [queryHistory, setQueryHistory] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem("db-query-history");
@@ -53,13 +53,6 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQue
     if (WRITE_PATTERNS.some(p => p.test(query))) return 'write';
     return 'read';
   }, [query]);
-
-  // Update query when initialQuery changes
-  useEffect(() => {
-    if (initialQuery && initialQuery !== query) {
-      setQuery(initialQuery);
-    }
-  }, [initialQuery]);
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -89,12 +82,12 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQue
   }, [query, queryHistory, onExecute, isExecuting]);
 
   const handleClear = () => {
-    setQuery("");
+    onQueryChange("");
     editorRef.current?.focus();
   };
 
   const handleSelectHistory = (historyQuery: string) => {
-    setQuery(historyQuery);
+    onQueryChange(historyQuery);
   };
 
   const handleFormat = () => {
@@ -118,7 +111,7 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQue
       .replace(/\bLIMIT\b/gi, "\nLIMIT")
       .replace(/\bOFFSET\b/gi, "\nOFFSET")
       .trim();
-    setQuery(formatted);
+    onQueryChange(formatted);
   };
 
   return (
@@ -219,7 +212,7 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery, onSaveQue
           language="sql"
           theme="vs-dark"
           value={query}
-          onChange={(value) => setQuery(value || "")}
+          onChange={(value) => onQueryChange(value || "")}
           onMount={handleEditorMount}
           options={{
             minimap: { enabled: false },

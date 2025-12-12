@@ -334,9 +334,10 @@ export function DatabaseExplorerModal({
                   <ResizablePanelGroup direction="vertical">
                     <ResizablePanel defaultSize={40} minSize={20}>
                       <SqlQueryEditor
+                        query={currentQuery}
+                        onQueryChange={setCurrentQuery}
                         onExecute={handleExecuteQuery}
                         isExecuting={isExecuting}
-                        initialQuery={currentQuery}
                       />
                     </ResizablePanel>
                     <ResizableHandle withHandle />
