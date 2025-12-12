@@ -117,15 +117,29 @@ async function createRenderDatabase(
     throw new Error("Database already created on Render");
   }
 
-  const createPayload = {
+  // Build the create payload according to Render API spec
+  const createPayload: any = {
     name: database.name,
     ownerId: ownerId,
-    databaseName: database.name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
-    databaseUser: `user_${database.id.substring(0, 8)}`,
     plan: database.plan,
     version: database.postgres_version || "16",
     region: database.region || "oregon",
   };
+
+  // Only add databaseName if user provided a custom one
+  if (database.database_internal_name) {
+    createPayload.databaseName = database.database_internal_name;
+  }
+
+  // Only add databaseUser if user provided a custom one
+  if (database.database_user) {
+    createPayload.databaseUser = database.database_user;
+  }
+
+  // Add IP allow list if configured
+  if (database.ip_allow_list && Array.isArray(database.ip_allow_list) && database.ip_allow_list.length > 0) {
+    createPayload.ipAllowList = database.ip_allow_list;
+  }
 
   console.log("[render-database] Creating Render Postgres:", JSON.stringify(createPayload));
 

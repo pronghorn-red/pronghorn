@@ -873,8 +873,11 @@ export type Database = {
           created_at: string
           created_by: string | null
           dashboard_url: string | null
+          database_internal_name: string | null
+          database_user: string | null
           has_connection_info: boolean | null
           id: string
+          ip_allow_list: Json | null
           name: string
           plan: Database["public"]["Enums"]["database_plan"]
           postgres_version: string | null
@@ -891,8 +894,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           dashboard_url?: string | null
+          database_internal_name?: string | null
+          database_user?: string | null
           has_connection_info?: boolean | null
           id?: string
+          ip_allow_list?: Json | null
           name: string
           plan?: Database["public"]["Enums"]["database_plan"]
           postgres_version?: string | null
@@ -909,8 +915,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           dashboard_url?: string | null
+          database_internal_name?: string | null
+          database_user?: string | null
           has_connection_info?: boolean | null
           id?: string
+          ip_allow_list?: Json | null
           name?: string
           plan?: Database["public"]["Enums"]["database_plan"]
           postgres_version?: string | null
@@ -2452,8 +2461,11 @@ export type Database = {
           created_at: string
           created_by: string | null
           dashboard_url: string | null
+          database_internal_name: string | null
+          database_user: string | null
           has_connection_info: boolean | null
           id: string
+          ip_allow_list: Json | null
           name: string
           plan: Database["public"]["Enums"]["database_plan"]
           postgres_version: string | null
@@ -2479,8 +2491,11 @@ export type Database = {
           created_at: string
           created_by: string | null
           dashboard_url: string | null
+          database_internal_name: string | null
+          database_user: string | null
           has_connection_info: boolean | null
           id: string
+          ip_allow_list: Json | null
           name: string
           plan: Database["public"]["Enums"]["database_plan"]
           postgres_version: string | null
@@ -3098,6 +3113,9 @@ export type Database = {
       }
       insert_database_with_token: {
         Args: {
+          p_database_internal_name?: string
+          p_database_user?: string
+          p_ip_allow_list?: Json
           p_name?: string
           p_plan?: Database["public"]["Enums"]["database_plan"]
           p_postgres_version?: string
@@ -3110,8 +3128,11 @@ export type Database = {
           created_at: string
           created_by: string | null
           dashboard_url: string | null
+          database_internal_name: string | null
+          database_user: string | null
           has_connection_info: boolean | null
           id: string
+          ip_allow_list: Json | null
           name: string
           plan: Database["public"]["Enums"]["database_plan"]
           postgres_version: string | null
@@ -3797,6 +3818,7 @@ export type Database = {
           p_dashboard_url?: string
           p_database_id: string
           p_has_connection_info?: boolean
+          p_ip_allow_list?: Json
           p_name?: string
           p_plan?: Database["public"]["Enums"]["database_plan"]
           p_render_postgres_id?: string
@@ -3807,8 +3829,11 @@ export type Database = {
           created_at: string
           created_by: string | null
           dashboard_url: string | null
+          database_internal_name: string | null
+          database_user: string | null
           has_connection_info: boolean | null
           id: string
+          ip_allow_list: Json | null
           name: string
           plan: Database["public"]["Enums"]["database_plan"]
           postgres_version: string | null
@@ -4229,11 +4254,6 @@ export type Database = {
       build_status: "RUNNING" | "COMPLETED" | "FAILED"
       database_plan:
         | "free"
-        | "starter"
-        | "standard"
-        | "pro"
-        | "pro_plus"
-        | "custom"
         | "basic_256mb"
         | "basic_1gb"
         | "basic_4gb"
@@ -4436,11 +4456,6 @@ export const Constants = {
       build_status: ["RUNNING", "COMPLETED", "FAILED"],
       database_plan: [
         "free",
-        "starter",
-        "standard",
-        "pro",
-        "pro_plus",
-        "custom",
         "basic_256mb",
         "basic_1gb",
         "basic_4gb",

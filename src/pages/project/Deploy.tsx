@@ -111,14 +111,10 @@ const Deploy = () => {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4 space-y-4">
             {/* Header with tabs and buttons - responsive */}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <TabsList className="w-full lg:w-auto overflow-x-auto flex-shrink-0">
+              <TabsList className="w-full lg:w-auto flex-shrink-0 h-auto flex-wrap">
                 <TabsTrigger value="cloud" className="flex items-center gap-1.5 text-xs sm:text-sm">
                   <Cloud className="h-4 w-4" />
                   <span className="hidden sm:inline">Cloud</span>
-                </TabsTrigger>
-                <TabsTrigger value="databases" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                  <Database className="h-4 w-4" />
-                  <span className="hidden sm:inline">Databases</span>
                 </TabsTrigger>
                 <TabsTrigger value="local" className="flex items-center gap-1.5 text-xs sm:text-sm">
                   <Laptop className="h-4 w-4" />
@@ -128,6 +124,10 @@ const Deploy = () => {
                   <Server className="h-4 w-4" />
                   <span className="hidden sm:inline">VMs</span>
                   <Badge variant="secondary" className="text-[10px] px-1">Soon</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="databases" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                  <Database className="h-4 w-4" />
+                  <span className="hidden sm:inline">Databases</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -179,47 +179,6 @@ const Deploy = () => {
                       <Button size="sm" onClick={() => setIsCreateOpen(true)}>
                         <Plus className="h-4 w-4 mr-2" />
                         Create First Deployment
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="databases" className="space-y-4 mt-4">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                    <Database className="h-5 w-5 text-primary" />
-                    Databases
-                  </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">
-                    Create and manage PostgreSQL databases. Get connection strings to use in your deployments.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isDatabasesLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : databases.length > 0 ? (
-                    <div className="grid gap-4">
-                      {databases.map((database) => (
-                        <DatabaseCard
-                          key={database.id}
-                          database={database}
-                          shareToken={shareToken}
-                          onRefresh={fetchDatabases}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Database className="h-10 w-10 mx-auto mb-3 opacity-50" />
-                      <p className="mb-3 text-sm">No databases yet</p>
-                      <Button size="sm" onClick={() => setIsCreateDatabaseOpen(true)}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create First Database
                       </Button>
                     </div>
                   )}
@@ -288,6 +247,47 @@ const Deploy = () => {
                       Full SSH access, custom deployment scripts, real-time monitoring, and bug telemetry.
                     </p>
                   </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="databases" className="space-y-4 mt-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <Database className="h-5 w-5 text-primary" />
+                    Databases
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">
+                    Create and manage PostgreSQL databases. Get connection strings to use in your deployments.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isDatabasesLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : databases.length > 0 ? (
+                    <div className="grid gap-4">
+                      {databases.map((database) => (
+                        <DatabaseCard
+                          key={database.id}
+                          database={database}
+                          shareToken={shareToken}
+                          onRefresh={fetchDatabases}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Database className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                      <p className="mb-3 text-sm">No databases yet</p>
+                      <Button size="sm" onClick={() => setIsCreateDatabaseOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create First Database
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
