@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import Editor, { OnMount } from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,9 +37,8 @@ const WRITE_PATTERNS = [
 ];
 
 export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, onSaveQuery }: SqlQueryEditorProps) {
-  // Internal query state is the single source of truth for the editor
-  const isBufferMode = typeof query === "string" && typeof onQueryChange === "function";
-  const [internalQuery, setInternalQuery] = useState<string>(query ?? "SELECT 1;");
+  // Parent owns the state - we just use the query prop directly (no internal state)
+  const editorValue = query ?? "SELECT 1;";
 
   const [queryHistory, setQueryHistory] = useState<string[]>(() => {
     try {
@@ -51,20 +50,12 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
   });
   const editorRef = useRef<any>(null);
 
-  // Always update internalQuery first, then optionally notify parent
-  const setEditorQuery = (value: string) => {
-    setInternalQuery(value);
-    if (isBufferMode) {
-      onQueryChange?.(value);
-    }
-  };
-
-  // Detect query type for visual indicator based on current editor text
+  // Detect query type for visual indicator
   const queryType = useMemo(() => {
-    if (DESTRUCTIVE_PATTERNS.some((p) => p.test(internalQuery))) return "destructive";
-    if (WRITE_PATTERNS.some((p) => p.test(internalQuery))) return "write";
+    if (DESTRUCTIVE_PATTERNS.some((p) => p.test(editorValue))) return "destructive";
+    if (WRITE_PATTERNS.some((p) => p.test(editorValue))) return "write";
     return "read";
-  }, [internalQuery]);
+  }, [editorValue]);
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -76,27 +67,26 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
 
     // Add Ctrl+S keyboard shortcut for save
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      if (onSaveQuery && internalQuery.trim()) {
-        onSaveQuery(internalQuery);
+      if (onSaveQuery && editorValue.trim()) {
+        onSaveQuery(editorValue);
       }
     });
   };
 
   const handleEditorChange = (value: string | undefined) => {
-    const newValue = value || "";
-    setEditorQuery(newValue);
+    onQueryChange(value || "");
   };
 
   const handleExecute = useCallback(async () => {
-    if (!internalQuery.trim() || isExecuting) return;
+    if (!editorValue.trim() || isExecuting) return;
 
     // Add to history
-    const newHistory = [internalQuery, ...queryHistory.filter(q => q !== internalQuery)].slice(0, MAX_HISTORY);
+    const newHistory = [editorValue, ...queryHistory.filter(q => q !== editorValue)].slice(0, MAX_HISTORY);
     setQueryHistory(newHistory);
     localStorage.setItem("db-query-history", JSON.stringify(newHistory));
 
-    await onExecute(internalQuery);
-  }, [internalQuery, queryHistory, onExecute, isExecuting]);
+    await onExecute(editorValue);
+  }, [editorValue, queryHistory, onExecute, isExecuting]);
 
   const handleClear = () => {
     handleEditorChange("");
@@ -104,12 +94,12 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
   };
 
   const handleSelectHistory = (historyQuery: string) => {
-    handleEditorChange(historyQuery);
+    onQueryChange(historyQuery);
   };
 
   const handleFormat = () => {
     // Basic SQL formatting - in production you'd use a proper SQL formatter library
-    const formatted = internalQuery
+    const formatted = editorValue
       .replace(/\s+/g, " ")
       .replace(/\s*,\s*/g, ",\n  ")
       .replace(/\bSELECT\b/gi, "SELECT\n  ")
@@ -128,7 +118,7 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
       .replace(/\bLIMIT\b/gi, "\nLIMIT")
       .replace(/\bOFFSET\b/gi, "\nOFFSET")
       .trim();
-    handleEditorChange(formatted);
+    onQueryChange(formatted);
   };
 
   return (
@@ -139,7 +129,7 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
           <Button
             size="sm"
             onClick={handleExecute}
-            disabled={isExecuting || !internalQuery.trim()}
+            disabled={isExecuting || !editorValue.trim()}
             className="h-7 gap-1.5"
           >
             {isExecuting ? (
@@ -170,8 +160,8 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => onSaveQuery(internalQuery)}
-              disabled={!internalQuery.trim()}
+              onClick={() => onSaveQuery(editorValue)}
+              disabled={!editorValue.trim()}
               className="h-7 px-2 text-muted-foreground hover:text-foreground"
               title="Save Query (Ctrl+S)"
             >
@@ -228,7 +218,7 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
           height="100%"
           language="sql"
           theme="vs-dark"
-          value={internalQuery}
+          value={editorValue}
           onChange={handleEditorChange}
           onMount={handleEditorMount}
           options={{
