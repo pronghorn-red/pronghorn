@@ -1,12 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   ResizableHandle, 
@@ -19,7 +16,8 @@ import {
   Loader2, 
   AlertCircle,
   Table2,
-  Code
+  Code,
+  X
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -95,8 +93,12 @@ export function DatabaseExplorerModal({
     return data.data;
   };
 
-  const loadSchema = useCallback(async () => {
-    setLoadingSchema(true);
+  const initialLoadDone = useRef(false);
+
+  const loadSchema = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoadingSchema(true);
+    }
     setSchemaError(null);
 
     try {
@@ -104,11 +106,26 @@ export function DatabaseExplorerModal({
       setSchemas(result.schemas || []);
     } catch (error: any) {
       setSchemaError(error.message);
-      toast.error("Failed to load schema: " + error.message);
+      if (!silent) {
+        toast.error("Failed to load schema: " + error.message);
+      }
     } finally {
       setLoadingSchema(false);
     }
   }, [database.id, shareToken]);
+
+  // Auto-load schema when modal opens
+  useEffect(() => {
+    if (open && !initialLoadDone.current) {
+      initialLoadDone.current = true;
+      loadSchema();
+    }
+  }, [open, loadSchema]);
+
+  // Silent refresh after query execution or table operations
+  const silentRefresh = useCallback(() => {
+    loadSchema(true);
+  }, [loadSchema]);
 
   const handleExecuteQuery = async (sql: string) => {
     setIsExecuting(true);
@@ -123,6 +140,8 @@ export function DatabaseExplorerModal({
         totalRows: result.rowCount,
       });
       toast.success(`Query executed: ${result.rowCount} rows`);
+      // Silent refresh schema after query execution
+      silentRefresh();
     } catch (error: any) {
       toast.error("Query failed: " + error.message);
       setQueryResults({
@@ -213,45 +232,41 @@ export function DatabaseExplorerModal({
     }
   };
 
-  // Load schema when modal opens
-  const handleOpenChange = (newOpen: boolean) => {
-    if (newOpen && schemas.length === 0) {
-      loadSchema();
-    }
-    onOpenChange(newOpen);
+  const handleCloseTable = () => {
+    setSelectedTable(null);
+    setTableData(null);
+    setActiveTab('query');
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh] h-[90vh] p-0 gap-0">
-        <DialogHeader className="px-4 py-3 border-b border-border">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Database className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <DialogTitle className="text-lg">{database.name}</DialogTitle>
-                <p className="text-sm text-muted-foreground">
-                  PostgreSQL {database.postgres_version || "16"} • {database.region}
-                </p>
-              </div>
+        <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Database className="h-5 w-5 text-primary" />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={loadSchema}
-              disabled={loadingSchema}
-            >
-              {loadingSchema ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              <span className="ml-2">Refresh Schema</span>
-            </Button>
+            <div>
+              <h2 className="text-lg font-semibold">{database.name}</h2>
+              <p className="text-sm text-muted-foreground">
+                PostgreSQL {database.postgres_version || "16"} • {database.region}
+              </p>
+            </div>
           </div>
-        </DialogHeader>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => loadSchema()}
+            disabled={loadingSchema}
+          >
+            {loadingSchema ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            <span className="ml-2">Refresh Schema</span>
+          </Button>
+        </div>
 
         <div className="flex-1 min-h-0">
           <ResizablePanelGroup direction="horizontal">
@@ -265,7 +280,7 @@ export function DatabaseExplorerModal({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={loadSchema}
+                      onClick={() => loadSchema()}
                       className="mt-4"
                     >
                       Retry
@@ -291,16 +306,27 @@ export function DatabaseExplorerModal({
             {/* Right Panel - Query/Results */}
             <ResizablePanel defaultSize={75}>
               <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full flex flex-col">
-                <div className="border-b border-border px-4">
+                <div className="border-b border-border px-4 flex items-center justify-between">
                   <TabsList className="h-10">
                     <TabsTrigger value="query" className="gap-2">
                       <Code className="h-4 w-4" />
                       SQL Query
                     </TabsTrigger>
-                    <TabsTrigger value="table" className="gap-2" disabled={!selectedTable}>
-                      <Table2 className="h-4 w-4" />
-                      {selectedTable ? `${selectedTable.schema}.${selectedTable.table}` : 'Table Data'}
-                    </TabsTrigger>
+                    {selectedTable && (
+                      <TabsTrigger value="table" className="gap-2 pr-1">
+                        <Table2 className="h-4 w-4" />
+                        {`${selectedTable.schema}.${selectedTable.table}`}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCloseTable();
+                          }}
+                          className="ml-1 p-0.5 rounded hover:bg-muted"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </TabsTrigger>
+                    )}
                   </TabsList>
                 </div>
 
