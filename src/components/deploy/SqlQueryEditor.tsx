@@ -37,11 +37,9 @@ const WRITE_PATTERNS = [
 ];
 
 export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, onSaveQuery }: SqlQueryEditorProps) {
-  // Buffer-style pattern, same as CodeEditor: use external query when provided, otherwise internal state
+  // Internal query state is the single source of truth for the editor
   const isBufferMode = typeof query === "string" && typeof onQueryChange === "function";
   const [internalQuery, setInternalQuery] = useState<string>(query ?? "SELECT 1;");
-
-  const editorQuery = isBufferMode ? (query as string) : internalQuery;
 
   const [queryHistory, setQueryHistory] = useState<string[]>(() => {
     try {
@@ -53,20 +51,20 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
   });
   const editorRef = useRef<any>(null);
 
+  // Always update internalQuery first, then optionally notify parent
   const setEditorQuery = (value: string) => {
+    setInternalQuery(value);
     if (isBufferMode) {
       onQueryChange?.(value);
-    } else {
-      setInternalQuery(value);
     }
   };
 
-  // Detect query type for visual indicator
+  // Detect query type for visual indicator based on current editor text
   const queryType = useMemo(() => {
-    if (DESTRUCTIVE_PATTERNS.some(p => p.test(editorQuery))) return 'destructive';
-    if (WRITE_PATTERNS.some(p => p.test(editorQuery))) return 'write';
-    return 'read';
-  }, [editorQuery]);
+    if (DESTRUCTIVE_PATTERNS.some((p) => p.test(internalQuery))) return "destructive";
+    if (WRITE_PATTERNS.some((p) => p.test(internalQuery))) return "write";
+    return "read";
+  }, [internalQuery]);
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
