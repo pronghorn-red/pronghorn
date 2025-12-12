@@ -304,7 +304,7 @@ async function executeSql(connectionString: string, sql: string) {
     return {
       rows: result.rows,
       rowCount: result.rows.length,
-      columns: result.columns?.map(c => c.name) || [],
+      columns: result.columns || [],
       executionTime,
     };
   } finally {
@@ -409,7 +409,7 @@ async function exportTable(
     const safeTable = table.replace(/[^a-zA-Z0-9_]/g, '');
 
     const result = await client.queryObject(`SELECT * FROM "${safeSchema}"."${safeTable}"`);
-    const columns = result.columns?.map(c => c.name) || [];
+    const columns = result.columns || [];
 
     if (format === 'json') {
       return {
