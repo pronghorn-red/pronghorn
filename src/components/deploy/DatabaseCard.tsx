@@ -24,22 +24,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ConnectionStringDialog } from "./ConnectionStringDialog";
 import { DatabaseDialog } from "./DatabaseDialog";
-import { DatabaseExplorerModal } from "./DatabaseExplorerModal";
 
 interface DatabaseCardProps {
   database: any;
   shareToken: string | null;
   onRefresh: () => void;
+  onExplore?: () => void;
   showExploreOnly?: boolean;
 }
 
-export function DatabaseCard({ database, shareToken, onRefresh, showExploreOnly = false }: DatabaseCardProps) {
+export function DatabaseCard({ database, shareToken, onRefresh, onExplore, showExploreOnly = false }: DatabaseCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showConnectionDialog, setShowConnectionDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showExplorerModal, setShowExplorerModal] = useState(false);
   const [connectionInfo, setConnectionInfo] = useState<any>(null);
 
   const invokeRenderDatabase = async (action: string, extraBody: any = {}) => {
@@ -205,8 +204,8 @@ export function DatabaseCard({ database, shareToken, onRefresh, showExploreOnly 
                     Get Connection String
                   </DropdownMenuItem>
                 )}
-                {canExplore && (
-                  <DropdownMenuItem onClick={() => setShowExplorerModal(true)}>
+                {canExplore && onExplore && (
+                  <DropdownMenuItem onClick={onExplore}>
                     <Terminal className="h-4 w-4 mr-2" />
                     Explore Database
                   </DropdownMenuItem>
@@ -271,8 +270,8 @@ export function DatabaseCard({ database, shareToken, onRefresh, showExploreOnly 
               <div className="text-sm text-muted-foreground">
                 PostgreSQL {database.postgres_version || "16"} • {database.region || "oregon"}
               </div>
-              {canExplore ? (
-                <Button onClick={() => setShowExplorerModal(true)} variant="default" size="sm">
+              {canExplore && onExplore ? (
+                <Button onClick={onExplore} variant="default" size="sm">
                   <Terminal className="h-4 w-4 mr-2" />
                   Explore Database
                 </Button>
@@ -338,10 +337,12 @@ export function DatabaseCard({ database, shareToken, onRefresh, showExploreOnly 
                         </>
                       )}
                     </Button>
-                    <Button onClick={() => setShowExplorerModal(true)} variant="default" disabled={isLoading} className="flex-1">
-                      <Terminal className="h-4 w-4 mr-2" />
-                      Explore
-                    </Button>
+                    {onExplore && (
+                      <Button onClick={onExplore} variant="default" disabled={isLoading} className="flex-1">
+                        <Terminal className="h-4 w-4 mr-2" />
+                        Explore
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}
@@ -395,12 +396,6 @@ export function DatabaseCard({ database, shareToken, onRefresh, showExploreOnly 
         onSuccess={onRefresh}
       />
 
-      <DatabaseExplorerModal
-        open={showExplorerModal}
-        onOpenChange={setShowExplorerModal}
-        database={database}
-        shareToken={shareToken}
-      />
     </>
   );
 }

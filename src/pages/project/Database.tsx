@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Database as DatabaseIcon, Plus, RefreshCw, Settings } from "lucide-react";
+import { Database as DatabaseIcon, Plus, RefreshCw, Settings, ChevronLeft } from "lucide-react";
 import { useShareToken } from "@/hooks/useShareToken";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -11,16 +11,20 @@ import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { DatabaseCard } from "@/components/deploy/DatabaseCard";
 import { DatabaseDialog } from "@/components/deploy/DatabaseDialog";
+import { DatabaseExplorer } from "@/components/deploy/DatabaseExplorer";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const Database = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const isMobile = useIsMobile();
   const [databases, setDatabases] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("deploy");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [primeRepoName, setPrimeRepoName] = useState("");
+  const [selectedDatabase, setSelectedDatabase] = useState<any>(null);
 
   // Fetch prime repo name for auto-generating database names
   const fetchPrimeRepoName = async () => {
@@ -67,6 +71,49 @@ const Database = () => {
     fetchDatabases();
     fetchPrimeRepoName();
   }, [projectId, isTokenSet, shareToken]);
+
+  const handleExploreDatabase = (database: any) => {
+    setSelectedDatabase(database);
+  };
+
+  const handleBackFromExplorer = () => {
+    setSelectedDatabase(null);
+  };
+
+  // If a database is selected for exploration, show the full explorer
+  if (selectedDatabase) {
+    return (
+      <div className="flex h-screen bg-background">
+        <ProjectSidebar 
+          projectId={projectId || ""} 
+          isOpen={isSidebarOpen} 
+          onOpenChange={setIsSidebarOpen} 
+        />
+        <div className="flex-1 flex flex-col h-full overflow-hidden">
+          {/* Mobile menu button */}
+          {isMobile && (
+            <div className="border-b bg-background px-3 py-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsSidebarOpen(true)}
+                className="h-8 w-8"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          <div className="flex-1 min-h-0">
+            <DatabaseExplorer
+              database={selectedDatabase}
+              shareToken={shareToken}
+              onBack={handleBackFromExplorer}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background">
@@ -135,6 +182,7 @@ const Database = () => {
                           database={database}
                           shareToken={shareToken}
                           onRefresh={fetchDatabases}
+                          onExplore={() => handleExploreDatabase(database)}
                         />
                       ))}
                     </div>
@@ -177,6 +225,7 @@ const Database = () => {
                           database={database}
                           shareToken={shareToken}
                           onRefresh={fetchDatabases}
+                          onExplore={() => handleExploreDatabase(database)}
                           showExploreOnly
                         />
                       ))}
