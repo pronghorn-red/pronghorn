@@ -37,10 +37,12 @@ const WRITE_PATTERNS = [
 ];
 
 export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, onSaveQuery }: SqlQueryEditorProps) {
-  // Use internal state to prevent re-renders on every keystroke
-  const [internalQuery, setInternalQuery] = useState(query);
-  const lastExternalQuery = useRef(query);
-  
+  // Buffer-style pattern, same as CodeEditor: use external query when provided, otherwise internal state
+  const isBufferMode = typeof query === "string" && typeof onQueryChange === "function";
+  const [internalQuery, setInternalQuery] = useState<string>(query ?? "SELECT 1;");
+
+  const editorQuery = isBufferMode ? (query as string) : internalQuery;
+
   const [queryHistory, setQueryHistory] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem("db-query-history");
@@ -51,20 +53,20 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
   });
   const editorRef = useRef<any>(null);
 
-  // Sync from parent only when parent changes externally (e.g., loading saved query)
-  useEffect(() => {
-    if (query !== lastExternalQuery.current) {
-      setInternalQuery(query);
-      lastExternalQuery.current = query;
+  const setEditorQuery = (value: string) => {
+    if (isBufferMode) {
+      onQueryChange?.(value);
+    } else {
+      setInternalQuery(value);
     }
-  }, [query]);
+  };
 
   // Detect query type for visual indicator
   const queryType = useMemo(() => {
-    if (DESTRUCTIVE_PATTERNS.some(p => p.test(internalQuery))) return 'destructive';
-    if (WRITE_PATTERNS.some(p => p.test(internalQuery))) return 'write';
+    if (DESTRUCTIVE_PATTERNS.some(p => p.test(editorQuery))) return 'destructive';
+    if (WRITE_PATTERNS.some(p => p.test(editorQuery))) return 'write';
     return 'read';
-  }, [internalQuery]);
+  }, [editorQuery]);
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -84,9 +86,7 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
 
   const handleEditorChange = (value: string | undefined) => {
     const newValue = value || "";
-    setInternalQuery(newValue);
-    lastExternalQuery.current = newValue;
-    onQueryChange(newValue);
+    setEditorQuery(newValue);
   };
 
   const handleExecute = useCallback(async () => {
