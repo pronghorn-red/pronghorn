@@ -68,18 +68,22 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
     return "read";
   }, [editorValue]);
 
+  // Use ref to always have access to latest execute logic
+  const executeRef = useRef<() => Promise<void>>();
+  
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
 
-    // Add Ctrl+Enter keyboard shortcut
+    // Add Ctrl+Enter keyboard shortcut - use ref to avoid stale closure
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      handleExecute();
+      executeRef.current?.();
     });
 
     // Add Ctrl+S keyboard shortcut for save
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      if (onSaveQuery && editorValue.trim()) {
-        onSaveQuery(editorValue);
+      const currentValue = editor.getValue();
+      if (onSaveQuery && currentValue.trim()) {
+        onSaveQuery(currentValue);
       }
     });
   };
@@ -102,6 +106,11 @@ export function SqlQueryEditor({ query, onQueryChange, onExecute, isExecuting, o
 
     await onExecute(internalQuery);
   }, [internalQuery, queryHistory, onExecute, isExecuting, onQueryChange]);
+
+  // Keep executeRef updated so keyboard shortcut always uses latest
+  useEffect(() => {
+    executeRef.current = handleExecute;
+  }, [handleExecute]);
 
   const handleClear = () => {
     const next = "";
