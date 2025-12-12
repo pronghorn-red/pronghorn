@@ -122,7 +122,7 @@ async function createRenderDatabase(
     name: database.name,
     ownerId: ownerId,
     plan: database.plan,
-    version: database.postgres_version || "16",
+    version: database.postgres_version || "18",
     region: database.region || "oregon",
   };
 
