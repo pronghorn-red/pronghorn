@@ -322,6 +322,36 @@ export function DatabaseExplorerModal({
                             rows={queryResults.rows}
                             totalRows={queryResults.totalRows}
                             executionTime={queryResults.executionTime}
+                            onExport={async (format) => {
+                              // Export current query results
+                              const content = format === 'json' 
+                                ? JSON.stringify(queryResults.rows, null, 2)
+                                : format === 'csv'
+                                ? [queryResults.columns.join(','), ...queryResults.rows.map(row => 
+                                    queryResults.columns.map(col => JSON.stringify(row[col] ?? '')).join(',')
+                                  )].join('\n')
+                                : queryResults.rows.map(row => 
+                                    `INSERT INTO query_result (${queryResults.columns.join(', ')}) VALUES (${
+                                      queryResults.columns.map(col => {
+                                        const v = row[col];
+                                        return v === null ? 'NULL' : typeof v === 'string' ? `'${v.replace(/'/g, "''")}'` : v;
+                                      }).join(', ')
+                                    });`
+                                  ).join('\n');
+                              
+                              const blob = new Blob([content], { 
+                                type: format === 'json' ? 'application/json' : format === 'csv' ? 'text/csv' : 'text/plain' 
+                              });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `query_results.${format}`;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              URL.revokeObjectURL(url);
+                              toast.success(`Exported ${queryResults.rows.length} rows as ${format.toUpperCase()}`);
+                            }}
                           />
                         ) : (
                           <div className="flex items-center justify-center h-full text-muted-foreground">

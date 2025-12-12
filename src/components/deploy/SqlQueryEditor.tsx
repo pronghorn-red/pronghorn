@@ -1,13 +1,14 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import Editor, { OnMount } from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { Play, Trash2, History, Loader2, AlignLeft } from "lucide-react";
+import { Play, Trash2, History, Loader2, AlignLeft, AlertTriangle, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SqlQueryEditorProps {
@@ -17,6 +18,21 @@ interface SqlQueryEditorProps {
 }
 
 const MAX_HISTORY = 20;
+
+// Patterns for query type detection
+const DESTRUCTIVE_PATTERNS = [
+  /^\s*DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|FUNCTION|TRIGGER|SEQUENCE)/i,
+  /^\s*TRUNCATE\s+/i,
+  /^\s*DELETE\s+FROM\s+/i,
+  /^\s*ALTER\s+TABLE\s+.*\s+DROP\s+/i,
+];
+
+const WRITE_PATTERNS = [
+  /^\s*INSERT\s+/i,
+  /^\s*UPDATE\s+/i,
+  /^\s*CREATE\s+/i,
+  /^\s*ALTER\s+/i,
+];
 
 export function SqlQueryEditor({ onExecute, isExecuting, initialQuery }: SqlQueryEditorProps) {
   const [query, setQuery] = useState(initialQuery || "SELECT 1;");
@@ -29,6 +45,13 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery }: SqlQuer
     }
   });
   const editorRef = useRef<any>(null);
+
+  // Detect query type for visual indicator
+  const queryType = useMemo(() => {
+    if (DESTRUCTIVE_PATTERNS.some(p => p.test(query))) return 'destructive';
+    if (WRITE_PATTERNS.some(p => p.test(query))) return 'write';
+    return 'read';
+  }, [query]);
 
   // Update query when initialQuery changes
   useEffect(() => {
@@ -109,6 +132,20 @@ export function SqlQueryEditor({ onExecute, isExecuting, initialQuery }: SqlQuer
             Run
           </Button>
           <span className="text-xs text-muted-foreground">Ctrl+Enter</span>
+          
+          {/* Query type indicator */}
+          {queryType === 'destructive' && (
+            <Badge variant="destructive" className="gap-1 h-5 text-[10px]">
+              <ShieldAlert className="h-3 w-3" />
+              Destructive
+            </Badge>
+          )}
+          {queryType === 'write' && (
+            <Badge variant="secondary" className="gap-1 h-5 text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30">
+              <AlertTriangle className="h-3 w-3" />
+              Write
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <Button

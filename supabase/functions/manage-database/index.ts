@@ -116,7 +116,21 @@ Deno.serve(async (req) => {
         if (!body.sql) {
           throw new Error("SQL query is required");
         }
-        result = await executeSql(connectionString, body.sql);
+        // Validate query for destructive operations
+        const sqlQuery = body.sql;
+        const destructivePatterns = [
+          /^\s*DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|FUNCTION|TRIGGER|SEQUENCE)/i,
+          /^\s*TRUNCATE\s+/i,
+          /^\s*DELETE\s+FROM\s+.*(?!WHERE)/i, // DELETE without WHERE
+          /^\s*ALTER\s+TABLE\s+.*\s+DROP\s+/i,
+        ];
+        
+        const isDestructive = destructivePatterns.some(pattern => pattern.test(sqlQuery));
+        if (isDestructive && role !== 'owner') {
+          throw new Error("Destructive queries (DROP, TRUNCATE, DELETE without WHERE) require owner role");
+        }
+        
+        result = await executeSql(connectionString, sqlQuery);
         break;
       case 'get_table_data':
         if (!body.schema || !body.table) {
