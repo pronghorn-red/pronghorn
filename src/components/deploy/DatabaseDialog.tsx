@@ -33,7 +33,7 @@ interface DatabaseDialogProps {
 }
 
 const PLANS = [
-  { value: "free", label: "Free", enabled: false },
+  { value: "free", label: "Free", enabled: true },
   { value: "basic_256mb", label: "Basic 256MB", enabled: true },
   { value: "basic_1gb", label: "Basic 1GB", enabled: true },
   { value: "basic_4gb", label: "Basic 4GB", enabled: false },
@@ -120,7 +120,7 @@ export function DatabaseDialog({
     provider: "render_postgres",
     plan: "basic_256mb",
     region: "oregon",
-    postgresVersion: "16",
+    postgresVersion: "18",
     databaseUser: "",
     databaseInternalName: "",
     autoGenerateUser: true,
@@ -139,7 +139,7 @@ export function DatabaseDialog({
         provider: database.provider || "render_postgres",
         plan: database.plan || "basic_256mb",
         region: database.region || "oregon",
-        postgresVersion: database.postgres_version || "16",
+        postgresVersion: database.postgres_version || "18",
         databaseUser: database.database_user || "",
         databaseInternalName: database.database_internal_name || "",
         autoGenerateUser: !database.database_user,
@@ -153,7 +153,7 @@ export function DatabaseDialog({
         provider: "render_postgres",
         plan: "basic_256mb",
         region: "oregon",
-        postgresVersion: "16",
+        postgresVersion: "18",
         databaseUser: "",
         databaseInternalName: "",
         autoGenerateUser: true,
