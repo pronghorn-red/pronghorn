@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Sparkles, Loader2, FileSearch, FileText, CheckSquare, Layers, Box, MessageSquare, FolderOpen } from "lucide-react";
+import { Sparkles, Loader2, FileSearch, FileText, CheckSquare, Layers, Box, MessageSquare, FolderOpen, Database } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ProjectSelector, ProjectSelectionResult } from "@/components/project/ProjectSelector";
@@ -37,7 +37,8 @@ export function AIDecomposeDialog({ projectId, shareToken, open, onClose, onRefr
     selectedContext.techStacks?.length ||
     selectedContext.canvasNodes?.length ||
     selectedContext.chatSessions?.length ||
-    selectedContext.files?.length
+    selectedContext.files?.length ||
+    selectedContext.databases?.length
   );
 
   const handleDecompose = async () => {
@@ -105,6 +106,7 @@ export function AIDecomposeDialog({ projectId, shareToken, open, onClose, onRefr
     if (selectedContext.canvasNodes?.length) counts.push(`${selectedContext.canvasNodes.length} canvas nodes`);
     if (selectedContext.chatSessions?.length) counts.push(`${selectedContext.chatSessions.length} chats`);
     if (selectedContext.files?.length) counts.push(`${selectedContext.files.length} files`);
+    if (selectedContext.databases?.length) counts.push(`${selectedContext.databases.length} database items`);
     
     return counts;
   };
@@ -187,6 +189,12 @@ export function AIDecomposeDialog({ projectId, shareToken, open, onClose, onRefr
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <FolderOpen className="h-3 w-3" />
                         <span>{selectedContext.files.length} files</span>
+                      </div>
+                    ) : null}
+                    {selectedContext?.databases?.length ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Database className="h-3 w-3" />
+                        <span>{selectedContext.databases.length} database items</span>
                       </div>
                     ) : null}
                   </div>

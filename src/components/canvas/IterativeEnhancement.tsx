@@ -465,6 +465,7 @@ export function IterativeEnhancement({
                 {selectedContext.canvasEdges?.length > 0 && <p>✓ {selectedContext.canvasEdges.length} edge{selectedContext.canvasEdges.length !== 1 ? 's' : ''}</p>}
                 {selectedContext.canvasLayers?.length > 0 && <p>✓ {selectedContext.canvasLayers.length} layer{selectedContext.canvasLayers.length !== 1 ? 's' : ''}</p>}
                 {selectedContext.files?.length > 0 && <p>✓ {selectedContext.files.length} file{selectedContext.files.length !== 1 ? 's' : ''}</p>}
+                {selectedContext.databases?.length > 0 && <p>✓ {selectedContext.databases.length} database item{selectedContext.databases.length !== 1 ? 's' : ''}</p>}
               </div>
             )}
             
