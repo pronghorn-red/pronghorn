@@ -1,13 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, Sparkles, CheckCircle2, AlertCircle, Clock, RefreshCw, Download, Trash2 } from "lucide-react";
+import { Loader2, Sparkles, CheckCircle2, AlertCircle, Clock, RefreshCw, Download, Trash2, Save, History } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
@@ -21,6 +22,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import JSZip from "jszip";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
+import { SavedSpecificationsPanel, SavedSpecification } from "@/components/specifications/SavedSpecificationsPanel";
+import { VersionHistoryDropdown } from "@/components/specifications/VersionHistoryDropdown";
 
 interface Agent {
   id: string;
@@ -36,6 +39,10 @@ interface AgentResult {
   content: string;
   contentLength: number;
   error?: string;
+  // New fields for saved specs
+  specificationId?: string;
+  version?: number;
+  savedAt?: string;
 }
 
 export default function Specifications() {
@@ -54,6 +61,11 @@ export default function Specifications() {
   const [agentResults, setAgentResults] = useState<AgentResult[]>([]);
   const [activeAgentView, setActiveAgentView] = useState<string | null>(null);
   const [customizedAgents, setCustomizedAgents] = useState<Record<string, string>>({});
+  
+  // Saved specifications state
+  const [savedSpecs, setSavedSpecs] = useState<SavedSpecification[]>([]);
+  const [allVersions, setAllVersions] = useState<Record<string, SavedSpecification[]>>({});
+  const [isLoadingSavedSpecs, setIsLoadingSavedSpecs] = useState(false);
 
   // Load agents from JSON
   useEffect(() => {
@@ -71,6 +83,110 @@ export default function Specifications() {
     };
     loadAgents();
   }, []);
+
+  // Load saved specifications
+  const loadSavedSpecifications = useCallback(async () => {
+    if (!projectId || !isTokenSet) return;
+    
+    setIsLoadingSavedSpecs(true);
+    try {
+      const { data, error } = await supabase.rpc('get_project_specifications_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_agent_id: null,
+        p_latest_only: true
+      });
+      
+      if (error) {
+        console.error('Error loading saved specifications:', error);
+      } else if (data) {
+        const specs = (data as any[]).map(s => ({
+          id: s.id,
+          agent_id: s.agent_id,
+          agent_title: s.agent_title,
+          version: s.version,
+          is_latest: s.is_latest,
+          generated_spec: s.generated_spec,
+          raw_data: s.raw_data,
+          created_at: s.created_at,
+          generated_by_user_id: s.generated_by_user_id,
+          generated_by_token: s.generated_by_token
+        }));
+        setSavedSpecs(specs);
+        setHasGeneratedSpec(specs.length > 0);
+      }
+    } catch (err) {
+      console.error('Failed to load saved specifications:', err);
+    } finally {
+      setIsLoadingSavedSpecs(false);
+    }
+  }, [projectId, shareToken, isTokenSet]);
+
+  // Load versions for a specific agent
+  const loadVersionsForAgent = useCallback(async (agentId: string) => {
+    if (!projectId || !isTokenSet) return;
+    
+    try {
+      const { data, error } = await supabase.rpc('get_specification_versions_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_agent_id: agentId
+      });
+      
+      if (error) {
+        console.error('Error loading versions:', error);
+      } else if (data) {
+        const versions = (data as any[]).map(s => ({
+          id: s.id,
+          agent_id: s.agent_id,
+          agent_title: s.agent_title,
+          version: s.version,
+          is_latest: s.is_latest,
+          generated_spec: s.generated_spec,
+          raw_data: s.raw_data,
+          created_at: s.created_at,
+          generated_by_user_id: s.generated_by_user_id,
+          generated_by_token: s.generated_by_token
+        }));
+        setAllVersions(prev => ({ ...prev, [agentId]: versions }));
+      }
+    } catch (err) {
+      console.error('Failed to load versions:', err);
+    }
+  }, [projectId, shareToken, isTokenSet]);
+
+  // Save specification to database
+  const saveSpecification = useCallback(async (agentId: string, agentTitle: string, content: string) => {
+    if (!projectId || !isTokenSet) return null;
+    
+    try {
+      const { data, error } = await supabase.rpc('insert_specification_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+        p_agent_id: agentId,
+        p_agent_title: agentTitle,
+        p_generated_spec: content,
+        p_raw_data: selectedContent ? JSON.parse(JSON.stringify(selectedContent)) : null
+      });
+      
+      if (error) {
+        console.error('Error saving specification:', error);
+        toast.error(`Failed to save ${agentTitle}`);
+        return null;
+      }
+      
+      const savedSpec = data as any;
+      toast.success(`Saved ${agentTitle} v${savedSpec.version}`);
+      
+      // Reload saved specs to get updated list
+      loadSavedSpecifications();
+      
+      return savedSpec;
+    } catch (err) {
+      console.error('Failed to save specification:', err);
+      return null;
+    }
+  }, [projectId, shareToken, isTokenSet, selectedContent, loadSavedSpecifications]);
 
   // Load project settings
   useEffect(() => {
@@ -94,7 +210,8 @@ export default function Specifications() {
     };
 
     loadData();
-  }, [projectId, shareToken, isTokenSet]);
+    loadSavedSpecifications();
+  }, [projectId, shareToken, isTokenSet, loadSavedSpecifications]);
 
   if (shareToken && !isTokenSet) {
     return (
@@ -320,7 +437,7 @@ export default function Specifications() {
         : r
     ));
 
-    return accumulated;
+    return { agentId, content: accumulated };
   };
 
   const generateSpecifications = async () => {
@@ -363,7 +480,19 @@ export default function Specifications() {
 
       try {
         const response = await generateForAgent(agent, userPrompt);
-        await streamAgentResponse(agentId, response);
+        const result = await streamAgentResponse(agentId, response);
+        
+        // Auto-save after streaming completes
+        if (result && result.content) {
+          const savedSpec = await saveSpecification(result.agentId, agent.title, result.content);
+          if (savedSpec) {
+            setAgentResults(prev => prev.map(r => 
+              r.agentId === agentId 
+                ? { ...r, specificationId: savedSpec.id, version: savedSpec.version, savedAt: savedSpec.created_at }
+                : r
+            ));
+          }
+        }
       } catch (error) {
         console.error(`Error generating for ${agentId}:`, error);
         setAgentResults(prev => prev.map(r => 
@@ -376,7 +505,7 @@ export default function Specifications() {
 
     await Promise.all(promises);
     setHasGeneratedSpec(true);
-    toast.success("All specifications generated!");
+    toast.success("All specifications generated and saved!");
   };
 
   const retryAgent = async (agentId: string) => {
@@ -387,13 +516,25 @@ export default function Specifications() {
 
     setAgentResults(prev => prev.map(r => 
       r.agentId === agentId 
-        ? { ...r, status: 'pending', content: '', contentLength: 0, error: undefined }
+        ? { ...r, status: 'pending', content: '', contentLength: 0, error: undefined, specificationId: undefined, version: undefined, savedAt: undefined }
         : r
     ));
 
     try {
       const response = await generateForAgent(agent, userPrompt);
-      await streamAgentResponse(agentId, response);
+      const result = await streamAgentResponse(agentId, response);
+      
+      // Auto-save after retry completes
+      if (result && result.content) {
+        const savedSpec = await saveSpecification(result.agentId, agent.title, result.content);
+        if (savedSpec) {
+          setAgentResults(prev => prev.map(r => 
+            r.agentId === agentId 
+              ? { ...r, specificationId: savedSpec.id, version: savedSpec.version, savedAt: savedSpec.created_at }
+              : r
+          ));
+        }
+      }
     } catch (error) {
       console.error(`Error retrying ${agentId}:`, error);
       setAgentResults(prev => prev.map(r => 
@@ -404,15 +545,106 @@ export default function Specifications() {
     }
   };
 
+  // Handle viewing a saved specification
+  const handleViewSavedSpec = (spec: SavedSpecification) => {
+    // Add to agent results or replace existing
+    setAgentResults(prev => {
+      const existing = prev.find(r => r.agentId === spec.agent_id);
+      if (existing) {
+        return prev.map(r => r.agentId === spec.agent_id 
+          ? { 
+              ...r, 
+              status: 'completed' as const, 
+              content: spec.generated_spec, 
+              contentLength: spec.generated_spec.length,
+              specificationId: spec.id,
+              version: spec.version,
+              savedAt: spec.created_at
+            } 
+          : r
+        );
+      } else {
+        return [...prev, {
+          agentId: spec.agent_id,
+          agentTitle: spec.agent_title,
+          status: 'completed' as const,
+          content: spec.generated_spec,
+          contentLength: spec.generated_spec.length,
+          specificationId: spec.id,
+          version: spec.version,
+          savedAt: spec.created_at
+        }];
+      }
+    });
+    setActiveAgentView(spec.agent_id);
+  };
+
+  // Handle downloading a saved specification
+  const handleDownloadSavedSpec = (spec: SavedSpecification) => {
+    const blob = new Blob([spec.generated_spec], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${projectName}-${spec.agent_title.replace(/[^a-z0-9]/gi, '_')}-v${spec.version}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Downloaded ${spec.agent_title} v${spec.version}`);
+  };
+
+  // Handle deleting a saved specification
+  const handleDeleteSavedSpec = async (specId: string) => {
+    try {
+      const { error } = await supabase.rpc('delete_specification_with_token', {
+        p_specification_id: specId,
+        p_token: shareToken || null
+      });
+      
+      if (error) {
+        console.error('Error deleting specification:', error);
+        toast.error('Failed to delete specification');
+        return;
+      }
+      
+      toast.success('Specification deleted');
+      loadSavedSpecifications();
+    } catch (err) {
+      console.error('Failed to delete specification:', err);
+      toast.error('Failed to delete specification');
+    }
+  };
+
+  // Handle setting a version as latest
+  const handleSetAsLatest = async (specId: string) => {
+    try {
+      const { error } = await supabase.rpc('set_specification_latest_with_token', {
+        p_specification_id: specId,
+        p_token: shareToken || null
+      });
+      
+      if (error) {
+        console.error('Error setting as latest:', error);
+        toast.error('Failed to set as latest');
+        return;
+      }
+      
+      toast.success('Set as latest version');
+      loadSavedSpecifications();
+    } catch (err) {
+      console.error('Failed to set as latest:', err);
+      toast.error('Failed to set as latest');
+    }
+  };
+
   const downloadSingleAgent = (result: AgentResult) => {
+    const versionSuffix = result.version ? `-v${result.version}` : '';
     const blob = new Blob([result.content], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${projectName}-${result.agentTitle.replace(/[^a-z0-9]/gi, '_')}.md`;
+    a.download = `${projectName}-${result.agentTitle.replace(/[^a-z0-9]/gi, '_')}${versionSuffix}.md`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(`Downloaded ${result.agentTitle}`);
+    toast.success(`Downloaded ${result.agentTitle}${result.version ? ` v${result.version}` : ''}`);
   };
 
   const downloadAllAgents = async () => {
@@ -829,7 +1061,20 @@ export default function Specifications() {
                             <CardHeader className="pb-3">
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
-                                  <CardTitle className="text-base">{result.agentTitle}</CardTitle>
+                                  <div className="flex items-center gap-2">
+                                    <CardTitle className="text-base">{result.agentTitle}</CardTitle>
+                                    {result.version && (
+                                      <Badge variant="secondary" className="text-xs">
+                                        v{result.version}
+                                      </Badge>
+                                    )}
+                                    {result.savedAt && (
+                                      <Badge variant="outline" className="text-xs text-green-600">
+                                        <Save className="h-3 w-3 mr-1" />
+                                        Saved
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </div>
                                 {getStatusIcon(result.status)}
                               </div>
@@ -933,6 +1178,20 @@ export default function Specifications() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Saved Specifications */}
+            {(savedSpecs.length > 0 || isLoadingSavedSpecs) && (
+              <SavedSpecificationsPanel
+                specifications={savedSpecs}
+                allVersions={allVersions}
+                onView={handleViewSavedSpec}
+                onDownload={handleDownloadSavedSpec}
+                onDelete={handleDeleteSavedSpec}
+                onSetAsLatest={handleSetAsLatest}
+                onLoadVersions={loadVersionsForAgent}
+                isLoading={isLoadingSavedSpecs}
+              />
+            )}
 
             {/* Download Specifications */}
             <Card>

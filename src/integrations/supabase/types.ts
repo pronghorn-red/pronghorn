@@ -1207,28 +1207,46 @@ export type Database = {
       }
       project_specifications: {
         Row: {
+          agent_id: string | null
+          agent_title: string | null
           created_at: string
+          generated_by_token: string | null
+          generated_by_user_id: string | null
           generated_spec: string
           id: string
+          is_latest: boolean | null
           project_id: string
           raw_data: Json | null
           updated_at: string
+          version: number | null
         }
         Insert: {
+          agent_id?: string | null
+          agent_title?: string | null
           created_at?: string
+          generated_by_token?: string | null
+          generated_by_user_id?: string | null
           generated_spec: string
           id?: string
+          is_latest?: boolean | null
           project_id: string
           raw_data?: Json | null
           updated_at?: string
+          version?: number | null
         }
         Update: {
+          agent_id?: string | null
+          agent_title?: string | null
           created_at?: string
+          generated_by_token?: string | null
+          generated_by_user_id?: string | null
           generated_spec?: string
           id?: string
+          is_latest?: boolean | null
           project_id?: string
           raw_data?: Json | null
           updated_at?: string
+          version?: number | null
         }
         Relationships: [
           {
@@ -2286,6 +2304,10 @@ export type Database = {
         Args: { p_query_id: string; p_token?: string }
         Returns: undefined
       }
+      delete_specification_with_token: {
+        Args: { p_specification_id: string; p_token: string }
+        Returns: undefined
+      }
       discard_staged_with_token: {
         Args: { p_repo_id: string; p_token: string }
         Returns: number
@@ -2896,18 +2918,52 @@ export type Database = {
       get_project_specification_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
+          agent_id: string | null
+          agent_title: string | null
           created_at: string
+          generated_by_token: string | null
+          generated_by_user_id: string | null
           generated_spec: string
           id: string
+          is_latest: boolean | null
           project_id: string
           raw_data: Json | null
           updated_at: string
+          version: number | null
         }
         SetofOptions: {
           from: "*"
           to: "project_specifications"
           isOneToOne: true
           isSetofReturn: false
+        }
+      }
+      get_project_specifications_with_token: {
+        Args: {
+          p_agent_id?: string
+          p_latest_only?: boolean
+          p_project_id: string
+          p_token: string
+        }
+        Returns: {
+          agent_id: string | null
+          agent_title: string | null
+          created_at: string
+          generated_by_token: string | null
+          generated_by_user_id: string | null
+          generated_spec: string
+          id: string
+          is_latest: boolean | null
+          project_id: string
+          raw_data: Json | null
+          updated_at: string
+          version: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_specifications"
+          isOneToOne: false
+          isSetofReturn: true
         }
       }
       get_project_standards_with_token: {
@@ -3167,6 +3223,52 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "agent_session_context"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_specification_by_id_with_token: {
+        Args: { p_specification_id: string; p_token: string }
+        Returns: {
+          agent_id: string | null
+          agent_title: string | null
+          created_at: string
+          generated_by_token: string | null
+          generated_by_user_id: string | null
+          generated_spec: string
+          id: string
+          is_latest: boolean | null
+          project_id: string
+          raw_data: Json | null
+          updated_at: string
+          version: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_specifications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_specification_versions_with_token: {
+        Args: { p_agent_id: string; p_project_id: string; p_token: string }
+        Returns: {
+          agent_id: string | null
+          agent_title: string | null
+          created_at: string
+          generated_by_token: string | null
+          generated_by_user_id: string | null
+          generated_spec: string
+          id: string
+          is_latest: boolean | null
+          project_id: string
+          raw_data: Json | null
+          updated_at: string
+          version: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_specifications"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -3685,6 +3787,36 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      insert_specification_with_token: {
+        Args: {
+          p_agent_id: string
+          p_agent_title: string
+          p_generated_spec: string
+          p_project_id: string
+          p_raw_data?: Json
+          p_token: string
+        }
+        Returns: {
+          agent_id: string | null
+          agent_title: string | null
+          created_at: string
+          generated_by_token: string | null
+          generated_by_user_id: string | null
+          generated_spec: string
+          id: string
+          is_latest: boolean | null
+          project_id: string
+          raw_data: Json | null
+          updated_at: string
+          version: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_specifications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       is_admin: { Args: never; Returns: boolean }
       is_project_owner: { Args: { p_project_id: string }; Returns: boolean }
       is_valid_token_for_project: {
@@ -3893,12 +4025,18 @@ export type Database = {
           p_token: string
         }
         Returns: {
+          agent_id: string | null
+          agent_title: string | null
           created_at: string
+          generated_by_token: string | null
+          generated_by_user_id: string | null
           generated_spec: string
           id: string
+          is_latest: boolean | null
           project_id: string
           raw_data: Json | null
           updated_at: string
+          version: number | null
         }
         SetofOptions: {
           from: "*"
@@ -3971,6 +4109,29 @@ export type Database = {
         }
       }
       set_share_token: { Args: { token: string }; Returns: undefined }
+      set_specification_latest_with_token: {
+        Args: { p_specification_id: string; p_token: string }
+        Returns: {
+          agent_id: string | null
+          agent_title: string | null
+          created_at: string
+          generated_by_token: string | null
+          generated_by_user_id: string | null
+          generated_spec: string
+          id: string
+          is_latest: boolean | null
+          project_id: string
+          raw_data: Json | null
+          updated_at: string
+          version: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_specifications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       stage_file_change_with_token: {
         Args: {
           p_file_path: string
