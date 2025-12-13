@@ -838,7 +838,7 @@ async function getTableStructure(connectionString: string, schema: string, table
       type: col.data_type,
       nullable: col.is_nullable === 'YES',
       default: col.column_default,
-      maxLength: col.character_maximum_length,
+      maxLength: col.character_maximum_length ? Number(col.character_maximum_length) : null,
       isPrimaryKey: pkColumns.has(col.column_name),
       isForeignKey: fkMap.has(col.column_name),
       foreignKeyRef: fkMap.get(col.column_name) || null,
@@ -854,7 +854,7 @@ async function getTableStructure(connectionString: string, schema: string, table
     const columnDefs = columnsResult.rows.map(col => {
       let def = `  "${col.column_name}" ${col.data_type}`;
       if (col.character_maximum_length) {
-        def += `(${col.character_maximum_length})`;
+        def += `(${Number(col.character_maximum_length)})`;
       }
       if (col.is_nullable === 'NO') {
         def += ' NOT NULL';
