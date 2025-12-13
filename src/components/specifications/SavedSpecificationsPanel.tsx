@@ -8,9 +8,8 @@ import {
   Download,
   Trash2,
   Eye,
-  History,
-  ChevronRight,
   RotateCcw,
+  AlertTriangle,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -41,10 +40,12 @@ export interface SavedSpecification {
 interface SavedSpecificationsPanelProps {
   specifications: SavedSpecification[];
   allVersions: Record<string, SavedSpecification[]>;
+  selectedVersions: Record<string, SavedSpecification>;
   onView: (spec: SavedSpecification) => void;
   onDownload: (spec: SavedSpecification) => void;
   onDelete: (specId: string) => void;
   onSetAsLatest: (specId: string) => void;
+  onReturnToLatest: (agentId: string) => void;
   onLoadVersions: (agentId: string) => void;
   isLoading?: boolean;
 }
@@ -52,10 +53,12 @@ interface SavedSpecificationsPanelProps {
 export function SavedSpecificationsPanel({
   specifications,
   allVersions,
+  selectedVersions,
   onView,
   onDownload,
   onDelete,
   onSetAsLatest,
+  onReturnToLatest,
   onLoadVersions,
   isLoading = false,
 }: SavedSpecificationsPanelProps) {
@@ -73,6 +76,11 @@ export function SavedSpecificationsPanel({
     }
     setDeleteDialogOpen(false);
     setSpecToDelete(null);
+  };
+
+  // Get the displayed spec for an agent (selected version or latest)
+  const getDisplayedSpec = (agentId: string): SavedSpecification => {
+    return selectedVersions[agentId] || specifications.find(s => s.agent_id === agentId)!;
   };
 
   if (specifications.length === 0 && !isLoading) {
@@ -99,44 +107,71 @@ export function SavedSpecificationsPanel({
           ) : (
             <ScrollArea className="max-h-[400px]">
               <div className="space-y-2">
-                {specifications.map((spec) => {
-                  const versions = allVersions[spec.agent_id] || [spec];
+                {specifications.map((latestSpec) => {
+                  const versions = allVersions[latestSpec.agent_id] || [latestSpec];
+                  const displayedSpec = getDisplayedSpec(latestSpec.agent_id);
+                  const isViewingOldVersion = displayedSpec && !displayedSpec.is_latest;
+                  const totalVersions = versions.length;
+                  
                   return (
                     <div
-                      key={spec.id}
-                      className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                      key={latestSpec.agent_id}
+                      className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                        isViewingOldVersion 
+                          ? 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20' 
+                          : 'bg-card hover:bg-accent/50'
+                      }`}
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium truncate">
-                            {spec.agent_title}
+                            {displayedSpec.agent_title}
                           </span>
                           <VersionHistoryDropdown
                             versions={versions}
-                            currentVersion={spec.version}
+                            currentVersion={displayedSpec.version}
+                            totalVersions={totalVersions}
                             onSelectVersion={(id) => {
                               const selectedSpec = versions.find((v) => v.id === id);
                               if (selectedSpec) onView(selectedSpec);
                             }}
                             onSetAsLatest={onSetAsLatest}
                           />
+                          {isViewingOldVersion && (
+                            <Badge variant="outline" className="text-amber-600 border-amber-500/50 bg-amber-500/10 text-xs">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              Not Latest
+                            </Badge>
+                          )}
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
-                          Generated {format(new Date(spec.created_at), "MMM d, yyyy 'at' HH:mm")}
-                          {spec.generated_spec && (
+                          Generated {format(new Date(displayedSpec.created_at), "MMM d, yyyy 'at' HH:mm")}
+                          {displayedSpec.generated_spec && (
                             <span className="ml-2">
-                              • {(spec.generated_spec.length / 1000).toFixed(1)}k chars
+                              • {(displayedSpec.generated_spec.length / 1000).toFixed(1)}k chars
                             </span>
                           )}
                         </div>
                       </div>
 
                       <div className="flex items-center gap-1">
+                        {isViewingOldVersion && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-xs gap-1 text-amber-600 hover:text-amber-700"
+                            onClick={() => onReturnToLatest(latestSpec.agent_id)}
+                            title="Return to latest version"
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                            Latest
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => onView(spec)}
+                          onClick={() => onView(displayedSpec)}
                           title="View specification"
                         >
                           <Eye className="h-4 w-4" />
@@ -145,7 +180,7 @@ export function SavedSpecificationsPanel({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => onDownload(spec)}
+                          onClick={() => onDownload(displayedSpec)}
                           title="Download"
                         >
                           <Download className="h-4 w-4" />
@@ -154,8 +189,8 @@ export function SavedSpecificationsPanel({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteClick(spec.id)}
-                          title="Delete"
+                          onClick={() => handleDeleteClick(displayedSpec.id)}
+                          title="Delete this version"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

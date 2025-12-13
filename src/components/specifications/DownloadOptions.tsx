@@ -20,6 +20,7 @@ interface CompletedAgentResult {
   agentTitle: string;
   content: string;
   contentLength: number;
+  version?: number;
 }
 
 interface DownloadOptionsProps {
@@ -113,7 +114,8 @@ export function DownloadOptions({ projectId, projectName, shareToken, hasGenerat
             markdown += '# AI Analysis\n';
             markdown += '='.repeat(80) + '\n\n';
             agentResults.forEach((result, index) => {
-              markdown += `## ${result.agentTitle}\n\n`;
+              const versionLabel = result.version ? ` (v${result.version})` : '';
+              markdown += `## ${result.agentTitle}${versionLabel}\n\n`;
               markdown += result.content + '\n\n';
               if (index < agentResults.length - 1) {
                 markdown += '\n---\n\n';

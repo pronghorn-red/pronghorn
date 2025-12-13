@@ -21,6 +21,7 @@ interface SpecVersion {
 interface VersionHistoryDropdownProps {
   versions: SpecVersion[];
   currentVersion: number;
+  totalVersions?: number;
   onSelectVersion: (specId: string) => void;
   onSetAsLatest: (specId: string) => void;
   disabled?: boolean;
@@ -29,11 +30,14 @@ interface VersionHistoryDropdownProps {
 export function VersionHistoryDropdown({
   versions,
   currentVersion,
+  totalVersions,
   onSelectVersion,
   onSetAsLatest,
   disabled = false,
 }: VersionHistoryDropdownProps) {
   const [open, setOpen] = useState(false);
+  const total = totalVersions ?? versions.length;
+  const currentIsLatest = versions.find(v => v.version === currentVersion)?.is_latest ?? true;
 
   // Always show version badge, but only show dropdown if multiple versions
   if (versions.length <= 1) {
@@ -54,7 +58,7 @@ export function VersionHistoryDropdown({
           disabled={disabled}
         >
           <History className="h-3 w-3" />
-          v{currentVersion}
+          v{currentVersion} of {total}
           <ChevronDown className="h-3 w-3" />
         </Button>
       </DropdownMenuTrigger>
@@ -66,11 +70,18 @@ export function VersionHistoryDropdown({
         {versions.map((v) => (
           <DropdownMenuItem
             key={v.id}
-            className="flex items-center justify-between cursor-pointer"
+            className={`flex items-center justify-between cursor-pointer ${
+              v.version === currentVersion ? 'bg-accent' : ''
+            }`}
             onClick={() => onSelectVersion(v.id)}
           >
             <div className="flex items-center gap-2">
-              <span className="font-medium">v{v.version}</span>
+              {v.version === currentVersion && (
+                <Check className="h-3 w-3 text-primary" />
+              )}
+              <span className={`font-medium ${v.version === currentVersion ? 'text-primary' : ''}`}>
+                v{v.version}
+              </span>
               {v.is_latest && (
                 <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
                   Latest
@@ -83,7 +94,7 @@ export function VersionHistoryDropdown({
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        {versions.find((v) => v.version === currentVersion && !v.is_latest) && (
+        {!currentIsLatest && (
           <DropdownMenuItem
             className="cursor-pointer text-primary"
             onClick={() => {

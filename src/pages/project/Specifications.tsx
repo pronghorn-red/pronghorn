@@ -66,6 +66,8 @@ export default function Specifications() {
   const [savedSpecs, setSavedSpecs] = useState<SavedSpecification[]>([]);
   const [allVersions, setAllVersions] = useState<Record<string, SavedSpecification[]>>({});
   const [isLoadingSavedSpecs, setIsLoadingSavedSpecs] = useState(false);
+  // Track currently selected/viewed version for each agent
+  const [selectedVersions, setSelectedVersions] = useState<Record<string, SavedSpecification>>({});
 
   // Load agents from JSON
   useEffect(() => {
@@ -565,6 +567,12 @@ export default function Specifications() {
 
   // Handle viewing a saved specification
   const handleViewSavedSpec = (spec: SavedSpecification) => {
+    // Track this as the currently selected version for this agent
+    setSelectedVersions(prev => ({
+      ...prev,
+      [spec.agent_id]: spec
+    }));
+    
     // Add to agent results or replace existing
     setAgentResults(prev => {
       const existing = prev.find(r => r.agentId === spec.agent_id);
@@ -595,6 +603,19 @@ export default function Specifications() {
       }
     });
     setActiveAgentView(spec.agent_id);
+  };
+
+  // Return to latest version for an agent
+  const handleReturnToLatest = (agentId: string) => {
+    const latestSpec = savedSpecs.find(s => s.agent_id === agentId);
+    if (latestSpec) {
+      handleViewSavedSpec(latestSpec);
+    }
+  };
+
+  // Get the currently displayed version for an agent
+  const getDisplayedSpec = (agentId: string): SavedSpecification | undefined => {
+    return selectedVersions[agentId] || savedSpecs.find(s => s.agent_id === agentId);
   };
 
   // Handle downloading a saved specification
@@ -1167,30 +1188,56 @@ export default function Specifications() {
                       )}
 
                       {/* Active Agent View */}
-                      {activeAgentView && (
-                        <Card>
-                          <CardHeader>
-                            <CardTitle>
-                              {agentResults.find(r => r.agentId === activeAgentView)?.agentTitle}
-                            </CardTitle>
-                          </CardHeader>
-                           <CardContent>
-                            <ScrollArea className="h-[600px] w-full rounded-md border p-4">
-                              {agentResults.find(r => r.agentId === activeAgentView)?.content ? (
-                                <div className="prose prose-sm dark:prose-invert max-w-none break-words whitespace-normal [&_p]:mb-4 [&_p]:break-words [&_ul]:my-4 [&_ol]:my-4 [&_li]:mb-2 [&_li]:break-words [&_h1]:mb-4 [&_h1]:break-words [&_h2]:mb-4 [&_h2]:break-words [&_h3]:mb-3 [&_h3]:break-words [&_h4]:mb-3 [&_h4]:break-words [&_table]:border [&_table]:border-border [&_table]:w-full [&_table]:table-auto [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_th]:break-words [&_td]:border [&_td]:border-border [&_td]:p-2 [&_td]:break-words [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_code]:break-words [&_a]:break-words">
-                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                    {agentResults.find(r => r.agentId === activeAgentView)?.content || ''}
-                                  </ReactMarkdown>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-center h-full text-muted-foreground">
-                                  Generating...
-                                </div>
+                      {activeAgentView && (() => {
+                        const activeResult = agentResults.find(r => r.agentId === activeAgentView);
+                        const versions = allVersions[activeAgentView] || [];
+                        const totalVersions = versions.length;
+                        const isHistorical = activeResult?.version && totalVersions > 0 && 
+                          !versions.find(v => v.version === activeResult.version)?.is_latest;
+                        
+                        return (
+                          <Card className={isHistorical ? 'border-amber-500/30' : ''}>
+                            <CardHeader>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <CardTitle className="flex items-center gap-2">
+                                  {activeResult?.agentTitle}
+                                </CardTitle>
+                                {activeResult?.version && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    v{activeResult.version}{totalVersions > 1 ? ` of ${totalVersions}` : ''}
+                                  </Badge>
+                                )}
+                                {isHistorical && (
+                                  <Badge variant="outline" className="text-amber-600 border-amber-500/50 bg-amber-500/10 text-xs">
+                                    <History className="h-3 w-3 mr-1" />
+                                    Viewing Historical Version
+                                  </Badge>
+                                )}
+                              </div>
+                              {isHistorical && (
+                                <p className="text-xs text-amber-600 mt-1">
+                                  This is an older version. Downloads will include this version.
+                                </p>
                               )}
-                            </ScrollArea>
-                          </CardContent>
-                        </Card>
-                      )}
+                            </CardHeader>
+                             <CardContent>
+                              <ScrollArea className="h-[600px] w-full rounded-md border p-4">
+                                {activeResult?.content ? (
+                                  <div className="prose prose-sm dark:prose-invert max-w-none break-words whitespace-normal [&_p]:mb-4 [&_p]:break-words [&_ul]:my-4 [&_ol]:my-4 [&_li]:mb-2 [&_li]:break-words [&_h1]:mb-4 [&_h1]:break-words [&_h2]:mb-4 [&_h2]:break-words [&_h3]:mb-3 [&_h3]:break-words [&_h4]:mb-3 [&_h4]:break-words [&_table]:border [&_table]:border-border [&_table]:w-full [&_table]:table-auto [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_th]:break-words [&_td]:border [&_td]:border-border [&_td]:p-2 [&_td]:break-words [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_code]:break-words [&_a]:break-words">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                      {activeResult?.content || ''}
+                                    </ReactMarkdown>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                                    Generating...
+                                  </div>
+                                )}
+                              </ScrollArea>
+                            </CardContent>
+                          </Card>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -1202,10 +1249,12 @@ export default function Specifications() {
               <SavedSpecificationsPanel
                 specifications={savedSpecs}
                 allVersions={allVersions}
+                selectedVersions={selectedVersions}
                 onView={handleViewSavedSpec}
                 onDownload={handleDownloadSavedSpec}
                 onDelete={handleDeleteSavedSpec}
                 onSetAsLatest={handleSetAsLatest}
+                onReturnToLatest={handleReturnToLatest}
                 onLoadVersions={loadVersionsForAgent}
                 isLoading={isLoadingSavedSpecs}
               />
@@ -1232,7 +1281,8 @@ export default function Specifications() {
                       agentId: r.agentId,
                       agentTitle: r.agentTitle,
                       content: r.content,
-                      contentLength: r.contentLength
+                      contentLength: r.contentLength,
+                      version: r.version
                     }))}
                 />
               </CardContent>
