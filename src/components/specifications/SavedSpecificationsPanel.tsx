@@ -132,17 +132,6 @@ export function SavedSpecificationsPanel({
                       </div>
 
                       <div className="flex items-center gap-1">
-                        {versions.length > 1 && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => onLoadVersions(spec.agent_id)}
-                            title="View all versions"
-                          >
-                            <History className="h-4 w-4" />
-                          </Button>
-                        )}
                         <Button
                           variant="ghost"
                           size="icon"

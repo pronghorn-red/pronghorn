@@ -84,23 +84,24 @@ export default function Specifications() {
     loadAgents();
   }, []);
 
-  // Load saved specifications
+  // Load saved specifications and all versions
   const loadSavedSpecifications = useCallback(async () => {
     if (!projectId || !isTokenSet) return;
     
     setIsLoadingSavedSpecs(true);
     try {
+      // Load ALL specifications (not just latest) to build version history
       const { data, error } = await supabase.rpc('get_project_specifications_with_token', {
         p_project_id: projectId,
         p_token: shareToken || null,
         p_agent_id: null,
-        p_latest_only: true
+        p_latest_only: false // Get all versions
       });
       
       if (error) {
         console.error('Error loading saved specifications:', error);
       } else if (data) {
-        const specs = (data as any[]).map(s => ({
+        const allSpecs = (data as any[]).map(s => ({
           id: s.id,
           agent_id: s.agent_id,
           agent_title: s.agent_title,
@@ -112,8 +113,25 @@ export default function Specifications() {
           generated_by_user_id: s.generated_by_user_id,
           generated_by_token: s.generated_by_token
         }));
-        setSavedSpecs(specs);
-        setHasGeneratedSpec(specs.length > 0);
+        
+        // Separate latest specs from version history
+        const latestSpecs = allSpecs.filter(s => s.is_latest);
+        setSavedSpecs(latestSpecs);
+        setHasGeneratedSpec(latestSpecs.length > 0);
+        
+        // Build version history by agent_id
+        const versionsByAgent: Record<string, SavedSpecification[]> = {};
+        allSpecs.forEach(spec => {
+          if (!versionsByAgent[spec.agent_id]) {
+            versionsByAgent[spec.agent_id] = [];
+          }
+          versionsByAgent[spec.agent_id].push(spec);
+        });
+        // Sort each agent's versions by version number descending
+        Object.keys(versionsByAgent).forEach(agentId => {
+          versionsByAgent[agentId].sort((a, b) => b.version - a.version);
+        });
+        setAllVersions(versionsByAgent);
       }
     } catch (err) {
       console.error('Failed to load saved specifications:', err);

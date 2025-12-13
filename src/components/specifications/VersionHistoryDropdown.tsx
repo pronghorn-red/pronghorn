@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,11 +35,12 @@ export function VersionHistoryDropdown({
 }: VersionHistoryDropdownProps) {
   const [open, setOpen] = useState(false);
 
+  // Always show version badge, but only show dropdown if multiple versions
   if (versions.length <= 1) {
     return (
-      <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
+      <Badge variant="secondary" className="text-xs">
         v{currentVersion}
-      </span>
+      </Badge>
     );
   }
 
