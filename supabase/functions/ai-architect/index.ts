@@ -244,6 +244,14 @@ Use clear, descriptive names. Be specific about what each component does.`;
       if (attachedContext.files?.length) {
         contextParts.push(`REPOSITORY FILES: ${attachedContext.files.length} files attached`);
       }
+      if (attachedContext.databases?.length) {
+        const dbTypes = attachedContext.databases.reduce((acc: Record<string, number>, d: any) => {
+          acc[d.type] = (acc[d.type] || 0) + 1;
+          return acc;
+        }, {});
+        const dbSummary = Object.entries(dbTypes).map(([t, c]) => `${c} ${t}s`).join(', ');
+        contextParts.push(`DATABASE SCHEMAS: ${attachedContext.databases.length} items (${dbSummary})`);
+      }
 
       if (contextParts.length > 0) {
         const jsonString = JSON.stringify(attachedContext, null, 2);

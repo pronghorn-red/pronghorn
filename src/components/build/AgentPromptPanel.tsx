@@ -66,6 +66,7 @@ export function AgentPromptPanel({
       attachedContext.canvasNodes.length > 0 ? `${attachedContext.canvasNodes.length} Nodes` : null,
       attachedContext.canvasEdges.length > 0 ? `${attachedContext.canvasEdges.length} Edges` : null,
       attachedContext.canvasLayers.length > 0 ? `${attachedContext.canvasLayers.length} Layers` : null,
+      attachedContext.databases?.length > 0 ? `${attachedContext.databases.length} DB Items` : null,
     ].filter(Boolean);
     
     return counts.join(", ");

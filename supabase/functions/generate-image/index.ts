@@ -61,6 +61,10 @@ serve(async (req) => {
       ? selectedContent.files.map((f: any) => `- ${f.path}`).join('\n')
       : '';
 
+    const databasesList = selectedContent.databases && selectedContent.databases.length > 0
+      ? selectedContent.databases.map((d: any) => `- ${d.type}: ${d.name}${d.columns ? ` (${d.columns.length} columns)` : ''}`).join('\n')
+      : '';
+
     // Use style prompt from JSON or fallback to basic instruction
     const styleInstructions = stylePrompt || `Apply ${style} style to the visual.`;
     
@@ -95,6 +99,10 @@ ${nodesList}`;
 
       if (filesList) {
         prompt += `\n\n**Repository Files:**\n${filesList}`;
+      }
+
+      if (databasesList) {
+        prompt += `\n\n**Database Schema:**\n${databasesList}`;
       }
 
       prompt += `

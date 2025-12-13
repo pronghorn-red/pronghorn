@@ -469,6 +469,18 @@ serve(async (req) => {
         parts.push(`Repository Files (${files.length} attached by user - FULL CONTENT):\n\n${allFilesContent}`);
       }
 
+      if (projectContext.databases?.length > 0) {
+        const dbs = projectContext.databases as any[];
+        const dbItems = dbs.map((d: any) => {
+          let itemStr = `- ${d.type}: ${d.name}`;
+          if (d.sql_content) itemStr += `\n  SQL: ${d.sql_content.substring(0, 500)}${d.sql_content.length > 500 ? '...' : ''}`;
+          if (d.columns) itemStr += `\n  Columns: ${d.columns.join(', ')}`;
+          if (d.sampleData?.length) itemStr += `\n  Sample rows: ${d.sampleData.length}`;
+          return itemStr;
+        }).join("\n");
+        parts.push(`Database Schemas (${dbs.length} items attached):\n${dbItems}`);
+      }
+
       contextSummary = parts.join("\n\n");
     }
 

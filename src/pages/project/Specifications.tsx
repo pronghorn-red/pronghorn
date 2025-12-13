@@ -126,7 +126,8 @@ export default function Specifications() {
       selection.canvasNodes.length +
       selection.canvasEdges.length +
       selection.canvasLayers.length +
-      (selection.files?.length || 0)
+      (selection.files?.length || 0) +
+      (selection.databases?.length || 0)
     );
   };
 
@@ -196,6 +197,9 @@ export default function Specifications() {
     }
     if (selectedContent.files && selectedContent.files.length > 0) {
       contextParts.push(`# Repository Files\n${JSON.stringify(selectedContent.files, null, 2)}`);
+    }
+    if (selectedContent.databases && selectedContent.databases.length > 0) {
+      contextParts.push(`# Database Schemas\n${JSON.stringify(selectedContent.databases, null, 2)}`);
     }
 
     return contextParts.join('\n\n');
