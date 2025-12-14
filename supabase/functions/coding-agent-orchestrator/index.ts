@@ -998,7 +998,22 @@ Use them to understand context and inform your file operations.` : ''}`;
 
       // Sort edit_lines operations by start_line DESCENDING (back-to-front) to prevent line number corruption
       // When multiple edits target the same file, editing from the end first preserves earlier line numbers
-      const operations = [...(agentResponse.operations || [])];
+      // Ensure operations is an array - LLM sometimes returns it as a JSON string
+      let rawOps = agentResponse.operations || [];
+      if (typeof rawOps === 'string') {
+        try {
+          rawOps = JSON.parse(rawOps);
+          console.log('Parsed operations from string, got', Array.isArray(rawOps) ? rawOps.length : 0, 'operations');
+        } catch (e) {
+          console.error('Failed to parse operations string:', e);
+          rawOps = [];
+        }
+      }
+      if (!Array.isArray(rawOps)) {
+        console.error('Operations is not an array, got:', typeof rawOps);
+        rawOps = [];
+      }
+      const operations = [...rawOps];
       const editsByFile = new Map<string, any[]>();
       const nonEditOps: any[] = [];
 
