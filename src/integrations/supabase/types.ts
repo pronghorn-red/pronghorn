@@ -3260,8 +3260,12 @@ export type Database = {
       get_staged_changes_with_token: {
         Args: { p_repo_id: string; p_token?: string }
         Returns: {
+          created_at: string
           file_path: string
           id: string
+          is_binary: boolean
+          new_content: string
+          old_content: string
           old_path: string
           operation_type: string
         }[]
