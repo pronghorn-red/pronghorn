@@ -200,7 +200,6 @@ function getClaudeResponseTool() {
   return {
     name: "respond_with_actions",
     description: "Return your reasoning, file operations, and status as structured output. You MUST use this tool to respond.",
-    strict: true,
     input_schema: {
       type: "object",
       properties: {
@@ -216,33 +215,33 @@ function getClaudeResponseTool() {
               type: {
                 type: "string",
                 enum: [
-                "list_files",
-                "wildcard_search",
-                "search",
-                "read_file",
-                "edit_lines",
-                "create_file",
-                "delete_file",
-                "move_file",
-                "get_staged_changes",
-                "unstage_file",
-                "discard_all_staged",
-                "project_inventory",
-                "project_category",
-                "project_elements",
-              ],
+                  "list_files",
+                  "wildcard_search",
+                  "search",
+                  "read_file",
+                  "edit_lines",
+                  "create_file",
+                  "delete_file",
+                  "move_file",
+                  "get_staged_changes",
+                  "unstage_file",
+                  "discard_all_staged",
+                  "project_inventory",
+                  "project_category",
+                  "project_elements",
+                ],
+              },
+              params: {
+                type: "object",
+                description: "Operation-specific parameters",
+                additionalProperties: false,
+              },
             },
-            params: {
-              type: "object",
-              description: "Operation-specific parameters",
-              additionalProperties: false,
-            },
+            required: ["type", "params"],
+            additionalProperties: false,
           },
-          required: ["type", "params"],
-          additionalProperties: false,
         },
-      },
-      blackboard_entry: {
+        blackboard_entry: {
           type: "object",
           properties: {
             entry_type: {
