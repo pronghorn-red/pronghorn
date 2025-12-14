@@ -56,7 +56,7 @@ serve(async (req) => {
       repo = repoData;
     } else {
       // Find Prime repo (or default, or first available) for the project
-      const { data: repos, error: reposError } = await supabase.rpc('get_repos_with_token', {
+      const { data: repos, error: reposError } = await supabase.rpc('get_project_repos_with_token', {
         p_project_id: deployment.project_id,
         p_token: shareToken || null,
       });
