@@ -235,6 +235,7 @@ function getClaudeResponseTool() {
             params: {
               type: "object",
               description: "Operation-specific parameters",
+              additionalProperties: false,
             },
           },
           required: ["type", "params"],
