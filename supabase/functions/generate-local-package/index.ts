@@ -199,7 +199,7 @@ function generatePackageJson(deployment: any): object {
     description: `Pronghorn Real-Time Local Development Runner for ${deployment.name}`,
     main: 'pronghorn-runner.js',
     scripts: {
-      start: 'node pronghorn-runner.js',
+      start: 'node --permission --allow-fs-read=./* --allow-fs-write=./* pronghorn-runner.js',
     },
     dependencies: {
       '@supabase/supabase-js': '^2.45.0',
@@ -210,8 +210,18 @@ function generatePackageJson(deployment: any): object {
   };
 }
 
+function isViteProject(projectType: string | undefined): boolean {
+  return projectType === 'vue_vite' || projectType === 'react_vite';
+}
+
 function generateRunnerScript(deployment: any, repo: any): string {
   const repoUrl = repo ? `https://github.com/${repo.organization}/${repo.repo}.git` : '';
+  
+  // For Vue/React Vite projects, use fixed config
+  const isVite = isViteProject(deployment.project_type);
+  const runCommand = isVite ? 'npm run dev' : (deployment.run_command || 'npm run dev');
+  const buildCommand = isVite ? '' : (deployment.build_command || 'npm run build');
+  const runFolder = isVite ? '/' : (deployment.run_folder || '/');
   
   return `#!/usr/bin/env node
 /**
@@ -258,10 +268,10 @@ const CONFIG = {
   shareToken: process.env.PRONGHORN_SHARE_TOKEN,
   
   // App config
-  projectType: process.env.PROJECT_TYPE || '${deployment.project_type || 'node'}',
-  runCommand: '${deployment.run_command || 'npm run dev'}',
-  buildCommand: '${deployment.build_command || 'npm run build'}',
-  runFolder: '${deployment.run_folder || '/'}',
+  projectType: process.env.PROJECT_TYPE || '${deployment.project_type || 'vue_vite'}',
+  runCommand: '${runCommand}',
+  buildCommand: '${buildCommand}',
+  runFolder: '${runFolder}',
 };
 
 const APP_DIR = path.join(process.cwd(), 'app');
