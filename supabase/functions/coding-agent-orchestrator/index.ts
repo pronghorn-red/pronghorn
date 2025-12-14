@@ -91,11 +91,11 @@ function parseAgentResponseText(rawText: string): any {
     if (result) return result;
   }
 
-  // Final fallback
-  console.error("All JSON parsing methods failed for response:", originalText.slice(0, 1000));
+  // Final fallback - log full raw output for debugging
+  console.error("All JSON parsing methods failed for response:", originalText);
   return {
     reasoning: "Failed to parse agent response as JSON. Raw output preserved.",
-    raw_output: originalText.slice(0, 2000),
+    raw_output: originalText,
     operations: [],
     status: "parse_error",
   };
@@ -941,7 +941,7 @@ Use them to understand context and inform your file operations.` : ''}`;
 
       console.log("Parsed agent response:", agentResponse);
 
-      // Log agent response to database
+      // Log agent response to database - include raw_output for parse_error debugging
       await supabase.rpc("insert_agent_message_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
@@ -951,6 +951,7 @@ Use them to understand context and inform your file operations.` : ''}`;
           operations: agentResponse.operations,
           status: agentResponse.status,
           blackboard_entry: agentResponse.blackboard_entry || null,
+          raw_output: agentResponse.raw_output || null,
         }),
         p_metadata: { iteration },
       });
