@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
+import JSON5 from "https://esm.sh/json5@2.2.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,14 +28,39 @@ function parseAgentResponseText(rawText: string): any {
   console.log("Parsing agent response, length:", rawText.length);
   console.log("Raw preview:", rawText.slice(0, 300) + (rawText.length > 300 ? "..." : ""));
 
-  // Helper to try parsing safely
+  // Helper to try parsing safely - JSON5 first (handles single quotes, trailing commas, etc.)
   const tryParse = (jsonStr: string, method: string): any | null => {
+    // Try JSON5 first (more lenient parser)
+    try {
+      const parsed = JSON5.parse(jsonStr);
+      console.log(`JSON5 parsed successfully via ${method}`);
+      return parsed;
+    } catch (e5) {
+      const error = e5 as Error;
+      // Extract position info from error message if available
+      const posMatch = error.message.match(/position (\d+)/i);
+      if (posMatch) {
+        const pos = parseInt(posMatch[1]);
+        console.log(`JSON5.parse failed at position ${pos} in ${method}:`, jsonStr.slice(Math.max(0, pos - 50), pos + 50));
+      } else {
+        console.log(`JSON5.parse failed in ${method}:`, error.message);
+      }
+    }
+    
+    // Fallback to strict JSON.parse
     try {
       const parsed = JSON.parse(jsonStr);
-      console.log(`JSON parsed successfully via ${method}`);
+      console.log(`JSON.parse fallback succeeded via ${method}`);
       return parsed;
     } catch (e) {
-      console.log(`JSON.parse failed in ${method}:`, (e as Error).message);
+      const error = e as Error;
+      const posMatch = error.message.match(/position (\d+)/i);
+      if (posMatch) {
+        const pos = parseInt(posMatch[1]);
+        console.log(`JSON.parse failed at position ${pos} in ${method}:`, jsonStr.slice(Math.max(0, pos - 50), pos + 50));
+      } else {
+        console.log(`JSON.parse also failed in ${method}:`, error.message);
+      }
       return null;
     }
   };
