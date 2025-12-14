@@ -272,16 +272,16 @@ export function EnhancedCreateProjectDialog() {
           Create New Project
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="w-[90vw] h-[90vh] max-w-[90vw] max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Create New Project</DialogTitle>
           <DialogDescription>
             Set up a new project with detailed metadata and optional AI-powered requirements generation
           </DialogDescription>
         </DialogHeader>
         
-        <Tabs defaultValue="basic" className="w-full flex-1 overflow-hidden flex flex-col">
-          <div className="overflow-x-auto -mx-1 px-1">
+        <Tabs defaultValue="basic" className="w-full flex-1 overflow-hidden flex flex-col min-h-0">
+          <div className="overflow-x-auto -mx-1 px-1 flex-shrink-0">
             <TabsList className="inline-flex w-auto min-w-full md:grid md:grid-cols-5 md:w-full">
               <TabsTrigger value="basic" className="shrink-0">Basic</TabsTrigger>
               <TabsTrigger value="metadata" className="shrink-0">Details</TabsTrigger>
@@ -294,7 +294,7 @@ export function EnhancedCreateProjectDialog() {
             </TabsList>
           </div>
 
-          <ScrollArea className="flex-1 pr-4">
+          <div className="flex-1 overflow-y-auto min-h-0 pr-4 mt-4">
             <TabsContent value="basic" className="space-y-4 mt-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Project Name *</Label>
@@ -401,30 +401,30 @@ export function EnhancedCreateProjectDialog() {
               </div>
             </TabsContent>
 
-            <TabsContent value="standards" className="space-y-4 mt-4">
+            <TabsContent value="standards" className="space-y-4 data-[state=active]:flex-1">
               <div>
                 <h3 className="font-semibold mb-3">Select Standards</h3>
-                <ScrollArea className="h-[400px] border rounded-lg p-4">
+                <div className="border rounded-lg p-4">
                   <StandardsTreeSelector
                     categories={standardCategories}
                     selectedStandards={selectedStandards}
                     onSelectionChange={setSelectedStandards}
                   />
-                </ScrollArea>
+                </div>
               </div>
             </TabsContent>
 
-            <TabsContent value="techstacks" className="space-y-4 mt-4">
+            <TabsContent value="techstacks" className="space-y-4 data-[state=active]:flex-1">
               <div>
                 <h3 className="font-semibold mb-3">Select Tech Stacks</h3>
-                <ScrollArea className="h-[400px] border rounded-lg p-4">
+                <div className="border rounded-lg p-4">
                   <TechStackTreeSelector
                     techStacks={techStacks}
                     selectedItems={selectedTechStacks}
                     onSelectionChange={setSelectedTechStacks}
                     preloadedItems={true}
                   />
-                </ScrollArea>
+                </div>
               </div>
             </TabsContent>
 
@@ -448,7 +448,7 @@ export function EnhancedCreateProjectDialog() {
                 </p>
               </div>
             </TabsContent>
-          </ScrollArea>
+          </div>
         </Tabs>
         
         <DialogFooter className="mt-4">
