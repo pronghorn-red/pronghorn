@@ -20,44 +20,7 @@ export function useInfiniteAgentOperations(projectId: string | null, shareToken:
   const [offset, setOffset] = useState(0);
   const LIMIT = 10;
 
-  // Load initial operations
-  useEffect(() => {
-    if (!projectId) {
-      setOperations([]);
-      setOffset(0);
-      setHasMore(true);
-      return;
-    }
-
-    loadInitialOperations();
-  }, [projectId, shareToken]);
-
-  // Real-time subscription for new operations across all sessions
-  useEffect(() => {
-    if (!projectId) return;
-
-    const channel = supabase
-      .channel(`agent-operations-project-${projectId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "agent_file_operations",
-        },
-        (payload) => {
-          console.log("Agent operations change:", payload);
-          loadInitialOperations();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [projectId, shareToken]);
-
-  const loadInitialOperations = async () => {
+  const loadInitialOperations = useCallback(async () => {
     if (!projectId) return;
 
     setLoading(true);
@@ -83,7 +46,46 @@ export function useInfiniteAgentOperations(projectId: string | null, shareToken:
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, shareToken]);
+
+  // Load initial operations
+  useEffect(() => {
+    if (!projectId) {
+      setOperations([]);
+      setOffset(0);
+      setHasMore(true);
+      return;
+    }
+
+    loadInitialOperations();
+  }, [projectId, shareToken, loadInitialOperations]);
+
+  // Real-time subscription for new operations across all sessions
+  useEffect(() => {
+    if (!projectId) return;
+
+    const channel = supabase
+      .channel(`agent-operations-project-${projectId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "agent_file_operations",
+        },
+        (payload) => {
+          console.log("Agent operations change:", payload);
+          loadInitialOperations();
+        }
+      )
+      .subscribe((status) => {
+        console.log("Agent operations subscription status:", status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [projectId, shareToken, loadInitialOperations]);
 
   const loadMore = useCallback(async () => {
     if (!projectId || loading || !hasMore) return;

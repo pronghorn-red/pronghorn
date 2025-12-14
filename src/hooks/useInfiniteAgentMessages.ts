@@ -17,44 +17,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
   const [offset, setOffset] = useState(0);
   const LIMIT = 10;
 
-  // Load initial messages
-  useEffect(() => {
-    if (!projectId) {
-      setMessages([]);
-      setOffset(0);
-      setHasMore(true);
-      return;
-    }
-
-    loadInitialMessages();
-  }, [projectId, shareToken]);
-
-  // Real-time subscription for new messages across all sessions
-  useEffect(() => {
-    if (!projectId) return;
-
-    const channel = supabase
-      .channel(`agent-messages-project-${projectId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "agent_messages",
-        },
-        (payload) => {
-          console.log("Agent messages change:", payload);
-          loadInitialMessages();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [projectId, shareToken]);
-
-  const loadInitialMessages = async () => {
+  const loadInitialMessages = useCallback(async () => {
     if (!projectId) return;
 
     setLoading(true);
@@ -80,7 +43,46 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, shareToken]);
+
+  // Load initial messages
+  useEffect(() => {
+    if (!projectId) {
+      setMessages([]);
+      setOffset(0);
+      setHasMore(true);
+      return;
+    }
+
+    loadInitialMessages();
+  }, [projectId, shareToken, loadInitialMessages]);
+
+  // Real-time subscription for new messages across all sessions
+  useEffect(() => {
+    if (!projectId) return;
+
+    const channel = supabase
+      .channel(`agent-messages-project-${projectId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "agent_messages",
+        },
+        (payload) => {
+          console.log("Agent messages change:", payload);
+          loadInitialMessages();
+        }
+      )
+      .subscribe((status) => {
+        console.log("Agent messages subscription status:", status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [projectId, shareToken, loadInitialMessages]);
 
   const loadMore = useCallback(async () => {
     if (!projectId || loading || !hasMore) return;
