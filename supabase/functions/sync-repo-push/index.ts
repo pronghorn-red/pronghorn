@@ -134,10 +134,11 @@ Deno.serve(async (req) => {
 
     // Get files to push using RPC with token validation
     // Use fileSourceRepoId to fetch from Prime repo when doing Prime->Mirror sync
-    const { data: filesToPush, error: filesError } = await supabaseClient.rpc("get_repo_files_with_token", {
+    // Fetch all files and filter client-side if specific paths requested
+    const { data: allRepoFiles, error: filesError } = await supabaseClient.rpc("get_repo_files_with_token", {
       p_repo_id: fileSourceRepoId,
       p_token: shareToken || null,
-      p_file_paths: filePaths && filePaths.length > 0 ? filePaths : null,
+      p_path_prefix: "", // Fetch all files
     });
 
     if (filesError) {
@@ -147,6 +148,11 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Filter to specific paths if provided
+    const filesToPush = filePaths && filePaths.length > 0
+      ? (allRepoFiles || []).filter((f: RepoFile) => filePaths.includes(f.path))
+      : allRepoFiles;
 
     // Allow push to proceed if there are files to push OR explicit deletions
     const hasFilesToPush = filesToPush && filesToPush.length > 0;
