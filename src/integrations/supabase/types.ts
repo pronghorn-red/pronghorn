@@ -3106,32 +3106,76 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      get_repo_file_paths_with_token: {
-        Args: { p_path_prefix?: string; p_repo_id: string; p_token?: string }
-        Returns: {
-          id: string
-          is_binary: boolean
-          is_staged: boolean
-          operation_type: string
-          path: string
-          size_bytes: number
-          updated_at: string
-        }[]
-      }
-      get_repo_files_with_token: {
-        Args: { p_path_prefix?: string; p_repo_id: string; p_token?: string }
-        Returns: {
-          content: string
-          id: string
-          is_binary: boolean
-          is_staged: boolean
-          last_commit_sha: string
-          operation_type: string
-          path: string
-          size_bytes: number
-          updated_at: string
-        }[]
-      }
+      get_repo_file_paths_with_token:
+        | {
+            Args: { p_repo_id: string; p_token?: string }
+            Returns: {
+              id: string
+              is_binary: boolean
+              is_staged: boolean
+              operation_type: string
+              path: string
+              size_bytes: number
+              updated_at: string
+            }[]
+          }
+        | {
+            Args: {
+              p_path_prefix?: string
+              p_repo_id: string
+              p_token?: string
+            }
+            Returns: {
+              id: string
+              is_binary: boolean
+              is_staged: boolean
+              operation_type: string
+              path: string
+              size_bytes: number
+              updated_at: string
+            }[]
+          }
+      get_repo_files_with_token:
+        | {
+            Args: { p_repo_id: string; p_token?: string }
+            Returns: {
+              content: string
+              created_at: string
+              id: string
+              is_binary: boolean
+              last_commit_sha: string | null
+              path: string
+              project_id: string
+              repo_id: string
+              updated_at: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "repo_files"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
+        | {
+            Args: { p_path_prefix: string; p_repo_id: string; p_token: string }
+            Returns: {
+              content: string
+              created_at: string
+              id: string
+              is_binary: boolean
+              last_commit_sha: string | null
+              path: string
+              project_id: string
+              repo_id: string
+              updated_at: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "repo_files"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
       get_requirement_standards_with_token: {
         Args: { p_requirement_id: string; p_token: string }
         Returns: {
