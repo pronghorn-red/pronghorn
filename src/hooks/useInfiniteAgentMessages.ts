@@ -61,6 +61,8 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
   useEffect(() => {
     if (!projectId) return;
 
+    console.log(`[AgentMessages] Setting up subscription for project ${projectId}`);
+
     const channel = supabase
       .channel(`agent-messages-project-${projectId}`)
       .on(
@@ -71,18 +73,24 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
           table: "agent_messages",
         },
         (payload) => {
-          console.log("Agent messages change:", payload);
+          console.log("[AgentMessages] Postgres change received:", payload);
           loadInitialMessages();
         }
       )
+      // Broadcast listener for immediate updates from orchestrator
+      .on("broadcast", { event: "agent_message_refresh" }, (payload) => {
+        console.log("[AgentMessages] Broadcast received:", payload);
+        loadInitialMessages();
+      })
       .subscribe((status) => {
-        console.log("Agent messages subscription status:", status);
+        console.log(`[AgentMessages] Subscription status: ${status}`);
       });
 
     return () => {
+      console.log(`[AgentMessages] Cleaning up subscription for project ${projectId}`);
       supabase.removeChannel(channel);
     };
-  }, [projectId, shareToken, loadInitialMessages]);
+  }, [projectId, loadInitialMessages]);
 
   const loadMore = useCallback(async () => {
     if (!projectId || loading || !hasMore) return;

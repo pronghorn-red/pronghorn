@@ -332,6 +332,14 @@ serve(async (req) => {
       p_content: taskDescription,
       p_metadata: { attachedFiles, projectContext },
     });
+    
+    // Broadcast to notify subscribers immediately
+    await supabase.channel(`agent-messages-project-${projectId}`).send({
+      type: 'broadcast',
+      event: 'agent_message_refresh',
+      payload: { sessionId, iteration: 0 }
+    });
+    
     console.log("Created session:", session.id);
 
     // Load instruction manifest
@@ -954,6 +962,14 @@ Use them to understand context and inform your file operations.` : ''}`;
         }),
         p_metadata: { iteration },
       });
+      
+      // Broadcast to notify subscribers immediately after each iteration
+      await supabase.channel(`agent-messages-project-${projectId}`).send({
+        type: 'broadcast',
+        event: 'agent_message_refresh',
+        payload: { sessionId, iteration }
+      });
+      console.log(`[BROADCAST] Sent agent_message_refresh for iteration ${iteration}`);
 
       // Add blackboard entry
       if (agentResponse.blackboard_entry) {
