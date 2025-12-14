@@ -259,11 +259,15 @@ const CONFIG = {
 
 const APP_DIR = path.join(process.cwd(), 'app');
 let devProcess = null;
-
-// Cache for staging records (DELETE events only contain id, not file_path)
-// Map<staging_id, { file_path, operation_type, repo_id }>
-const stagingCache = new Map();
 let isRestarting = false;
+
+// Track known staged files for detecting unstaging
+// Map<file_path, { operation_type, new_content }>
+let knownStagedFiles = new Map();
+
+// Debounce timer for staging sync
+let stagingSyncTimer = null;
+const STAGING_DEBOUNCE_MS = 150;
 
 // ============================================
 // SUPABASE CLIENT INITIALIZATION
@@ -523,32 +527,159 @@ async function restartDevServer() {
 }
 
 // ============================================
-// REALTIME SUBSCRIPTION
+// STAGING SYNC (simplified approach)
 // ============================================
 
-async function populateStagingCache() {
-  console.log('[Pronghorn] Pre-populating staging cache...');
+async function syncStagingToLocal() {
+  console.log('[Pronghorn] Syncing all staged files to local...');
   
-  const { data: existingStaging, error } = await supabase.rpc('get_staged_changes_with_token', {
+  try {
+    // Fetch current staging state
+    const { data: stagedFiles, error } = await supabase.rpc('get_staged_changes_with_token', {
+      p_repo_id: CONFIG.repoId,
+      p_token: CONFIG.shareToken || null,
+    });
+    
+    if (error) {
+      console.error('[Pronghorn] Error fetching staging:', error.message);
+      return;
+    }
+    
+    const currentStagedPaths = new Set();
+    let needsRestart = false;
+    
+    // Process all staged files
+    for (const staged of (stagedFiles || [])) {
+      currentStagedPaths.add(staged.file_path);
+      const fullPath = path.join(APP_DIR, staged.file_path);
+      const dirPath = path.dirname(fullPath);
+      
+      if (staged.operation_type === 'delete') {
+        // File marked for deletion - delete locally
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+          console.log(\`[Pronghorn] Deleted (staged delete): \${staged.file_path}\`);
+        }
+      } else {
+        // 'add' or 'edit' - write new_content
+        if (!fs.existsSync(dirPath)) {
+          fs.mkdirSync(dirPath, { recursive: true });
+        }
+        
+        // Check if content actually changed before writing
+        let existingContent = '';
+        if (fs.existsSync(fullPath)) {
+          existingContent = fs.readFileSync(fullPath, 'utf8');
+        }
+        
+        if (existingContent !== (staged.new_content || '')) {
+          fs.writeFileSync(fullPath, staged.new_content || '', 'utf8');
+          console.log(\`[Pronghorn] Written (staged \${staged.operation_type}): \${staged.file_path}\`);
+          
+          // Check for package.json changes
+          if (path.basename(staged.file_path) === 'package.json') {
+            needsRestart = true;
+            console.log('[Pronghorn] package.json changed - will run npm install');
+            await runNpmInstallInDirs([dirPath]);
+          }
+        }
+      }
+    }
+    
+    // Check for unstaged files (were in knownStagedFiles, now absent)
+    for (const [filePath, oldState] of knownStagedFiles) {
+      if (!currentStagedPaths.has(filePath)) {
+        console.log(\`[Pronghorn] File unstaged: \${filePath}\`);
+        
+        // Fetch from repo_files to revert to committed version
+        const { data: repoFiles, error: repoError } = await supabase.rpc('get_repo_files_with_token', {
+          p_repo_id: CONFIG.repoId,
+          p_token: CONFIG.shareToken || null,
+        });
+        
+        if (repoError) {
+          console.error('[Pronghorn] Error fetching repo_files:', repoError.message);
+          continue;
+        }
+        
+        const committedFile = repoFiles?.find(f => f.path === filePath);
+        const fullPath = path.join(APP_DIR, filePath);
+        const dirPath = path.dirname(fullPath);
+        
+        if (committedFile) {
+          // Revert to committed version
+          if (!fs.existsSync(dirPath)) {
+            fs.mkdirSync(dirPath, { recursive: true });
+          }
+          fs.writeFileSync(fullPath, committedFile.content || '', 'utf8');
+          console.log(\`[Pronghorn] Reverted to committed version: \${filePath}\`);
+        } else {
+          // Was a staged 'add' that got rolled back - delete local file
+          if (fs.existsSync(fullPath)) {
+            fs.unlinkSync(fullPath);
+            console.log(\`[Pronghorn] Deleted (staged add rolled back): \${filePath}\`);
+          }
+        }
+      }
+    }
+    
+    // Update known state
+    knownStagedFiles.clear();
+    for (const staged of (stagedFiles || [])) {
+      knownStagedFiles.set(staged.file_path, {
+        operation_type: staged.operation_type,
+        new_content: staged.new_content
+      });
+    }
+    
+    console.log(\`[Pronghorn] Synced \${stagedFiles?.length || 0} staged files\`);
+    
+    // Handle server restart if needed
+    if (needsRestart) {
+      await restartDevServer();
+    }
+    
+  } catch (err) {
+    console.error('[Pronghorn] Error syncing staging:', err.message);
+    await reportLog('error', \`Failed to sync staging: \${err.message}\`);
+  }
+}
+
+function scheduleStagingSync() {
+  // Debounce to handle DELETE+INSERT pairs during updates
+  clearTimeout(stagingSyncTimer);
+  stagingSyncTimer = setTimeout(async () => {
+    await syncStagingToLocal();
+  }, STAGING_DEBOUNCE_MS);
+}
+
+async function initializeKnownStagedFiles() {
+  console.log('[Pronghorn] Initializing known staged files...');
+  
+  const { data: stagedFiles, error } = await supabase.rpc('get_staged_changes_with_token', {
     p_repo_id: CONFIG.repoId,
     p_token: CONFIG.shareToken || null,
   });
   
   if (error) {
-    console.error('[Pronghorn] Error fetching staging for cache:', error.message);
+    console.error('[Pronghorn] Error fetching initial staging:', error.message);
     return;
   }
   
-  if (existingStaging) {
-    existingStaging.forEach(record => {
-      stagingCache.set(record.id, { 
-        file_path: record.file_path, 
-        operation_type: record.operation_type 
+  if (stagedFiles) {
+    for (const staged of stagedFiles) {
+      knownStagedFiles.set(staged.file_path, {
+        operation_type: staged.operation_type,
+        new_content: staged.new_content
       });
-    });
-    console.log(\`[Pronghorn] Cached \${existingStaging.length} staging records\`);
+    }
+    console.log(\`[Pronghorn] Initialized with \${stagedFiles.length} known staged files\`);
   }
 }
+
+// ============================================
+// REALTIME SUBSCRIPTION
+// ============================================
 
 async function setupRealtimeSubscription() {
   console.log('[Pronghorn] Setting up real-time subscriptions...');
@@ -567,11 +698,8 @@ async function setupRealtimeSubscription() {
       },
       async (payload) => {
         if (!CONFIG.rebuildOnStaging) return;
-        console.log('[Pronghorn] === STAGING EVENT ===');
-        console.log('[Pronghorn] Event type:', payload.eventType);
-        console.log('[Pronghorn] payload.new:', JSON.stringify(payload.new));
-        console.log('[Pronghorn] payload.old:', JSON.stringify(payload.old));
-        await handleFileChange('staging', payload);
+        console.log(\`[Pronghorn] Staging event: \${payload.eventType} - scheduling sync...\`);
+        scheduleStagingSync();
       }
     )
     .on(
@@ -586,9 +714,7 @@ async function setupRealtimeSubscription() {
         if (!CONFIG.rebuildOnFiles) return;
         console.log('[Pronghorn] === FILES EVENT ===');
         console.log('[Pronghorn] Event type:', payload.eventType);
-        console.log('[Pronghorn] payload.new:', JSON.stringify(payload.new));
-        console.log('[Pronghorn] payload.old:', JSON.stringify(payload.old));
-        await handleFileChange('files', payload);
+        await handleRepoFileChange(payload);
       }
     )
     .subscribe((status) => {
@@ -601,127 +727,43 @@ async function setupRealtimeSubscription() {
   return channel;
 }
 
-async function handleFileChange(source, payload) {
-  console.log(\`[Pronghorn] Processing \${source} change: \${payload.eventType}\`);
+async function handleRepoFileChange(payload) {
+  console.log(\`[Pronghorn] Processing repo_files change: \${payload.eventType}\`);
   
   try {
     let filePath, content, isDelete = false;
     
-    if (source === 'staging') {
-      // STAGING EVENTS
-      if (payload.eventType === 'DELETE') {
-        // Staging record was deleted - could be rollback or commit
-        // DELETE events only contain 'id' in payload.old, not the full record
-        const record = payload.old;
-        const recordId = record?.id;
-        
-        if (!recordId) {
-          console.log('[Pronghorn] No id in deleted staging record, skipping');
-          return;
-        }
-        
-        // Try to get file_path from cache
-        const cached = stagingCache.get(recordId);
-        if (cached) {
-          filePath = cached.file_path;
-          stagingCache.delete(recordId); // Clean up cache
-          console.log(\`[Pronghorn] Found cached file_path for \${recordId}: \${filePath}\`);
-        } else {
-          console.log(\`[Pronghorn] No cached file_path for id: \${recordId}\`);
-          console.log('[Pronghorn] Current cache keys:', Array.from(stagingCache.keys()).slice(0, 5));
-          return;
-        }
-        
-        console.log(\`[Pronghorn] Staging cleared for: \${filePath}, fetching from repo_files...\`);
-        
-        // Query repo_files to get canonical version using RPC
-        const { data: repoFiles, error } = await supabase.rpc('get_repo_files_with_token', {
-          p_repo_id: CONFIG.repoId,
-          p_token: CONFIG.shareToken || null,
-        });
-        
-        if (error) {
-          console.error('[Pronghorn] Error fetching repo_files:', error.message);
-        }
-        
-        const currentFile = repoFiles?.find(f => f.path === filePath);
-        
-        if (currentFile) {
-          // File exists in repo - revert to committed version
-          content = currentFile.content;
-          isDelete = false;
-          console.log(\`[Pronghorn] Reverting to repo version: \${filePath}\`);
-        } else {
-          // File doesn't exist in repo - was a staged 'add' that got rolled back
-          isDelete = true;
-          console.log(\`[Pronghorn] Staged add was rolled back, deleting: \${filePath}\`);
-        }
-      } else {
-        // INSERT or UPDATE on staging
-        const record = payload.new;
-        if (!record || !record.file_path) {
-          console.log('[Pronghorn] No file_path in staging record');
-          console.log('[Pronghorn] Available fields:', Object.keys(record || {}));
-          return;
-        }
-        filePath = record.file_path;
-        
-        // Cache this record for DELETE lookup later
-        if (record.id) {
-          stagingCache.set(record.id, { 
-            file_path: record.file_path, 
-            operation_type: record.operation_type 
-          });
-          console.log(\`[Pronghorn] Cached staging record: \${record.id} → \${record.file_path}\`);
-        }
-        
-        if (record.operation_type === 'delete') {
-          // File is marked for deletion in staging
-          isDelete = true;
-          console.log(\`[Pronghorn] File marked for deletion: \${filePath}\`);
-        } else {
-          // 'add' or 'edit' - use the new content
-          content = record.new_content;
-          isDelete = false;
-          console.log(\`[Pronghorn] Staging \${record.operation_type}: \${filePath}\`);
-        }
+    if (payload.eventType === 'DELETE') {
+      const record = payload.old;
+      if (!record || !record.path) {
+        console.log('[Pronghorn] No path in deleted file record, skipping');
+        return;
       }
+      filePath = record.path;
+      isDelete = true;
+      console.log(\`[Pronghorn] File deleted from repo: \${filePath}\`);
     } else {
-      // REPO_FILES EVENTS - direct mapping
-      if (payload.eventType === 'DELETE') {
-        const record = payload.old;
-        if (!record || !record.path) {
-          console.log('[Pronghorn] No path in deleted file record, skipping');
-          return;
-        }
-        filePath = record.path;
-        isDelete = true;
-        console.log(\`[Pronghorn] File deleted from repo: \${filePath}\`);
-      } else {
-        const record = payload.new;
-        if (!record || !record.path) {
-          console.log('[Pronghorn] No path in file record, skipping');
-          return;
-        }
-        filePath = record.path;
-        content = record.content;
-        isDelete = false;
-        console.log(\`[Pronghorn] File \${payload.eventType.toLowerCase()}d in repo: \${filePath}\`);
+      const record = payload.new;
+      if (!record || !record.path) {
+        console.log('[Pronghorn] No path in file record, skipping');
+        return;
       }
+      filePath = record.path;
+      content = record.content;
+      isDelete = false;
+      console.log(\`[Pronghorn] File \${payload.eventType.toLowerCase()}d in repo: \${filePath}\`);
     }
     
     const fullPath = path.join(APP_DIR, filePath);
     const dirPath = path.dirname(fullPath);
     
     if (isDelete) {
-      // Handle file deletion
       if (fs.existsSync(fullPath)) {
         fs.unlinkSync(fullPath);
         console.log(\`[Pronghorn] Deleted from disk: \${filePath}\`);
       }
       await reportLog('info', \`File deleted: \${filePath}\`);
     } else {
-      // Handle file create/update
       if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
       }
@@ -738,28 +780,24 @@ async function handleFileChange(source, payload) {
         }
       }
       
-      // Write the single file
       fs.writeFileSync(fullPath, content || '', 'utf8');
       console.log(\`[Pronghorn] Written to disk: \${filePath}\`);
       
-      // Handle server restart if needed
       if (needsNpmInstall) {
         console.log('[Pronghorn] package.json changed - running npm install...');
         await stopDevServer();
         await runNpmInstallInDirs([dirPath]);
         startDevServer();
       } else if (CONFIG.projectType === 'node' || CONFIG.projectType === 'express') {
-        // Node.js projects need restart for any file change
         await restartDevServer();
       } else {
-        // Vite/webpack handle HMR automatically
         console.log('[Pronghorn] HMR will refresh');
       }
       
       await reportLog('info', \`File synced: \${filePath}\`);
     }
   } catch (err) {
-    console.error('[Pronghorn] Error handling file change:', err.message);
+    console.error('[Pronghorn] Error handling repo file change:', err.message);
     await reportLog('error', \`Failed to sync file: \${err.message}\`);
   }
 }
@@ -850,8 +888,8 @@ async function main() {
     
     await reportLog('info', \`Initial sync complete (\${files.length} files)\`);
     
-    // Pre-populate staging cache for DELETE event handling
-    await populateStagingCache();
+    // Initialize known staged files for unstaging detection
+    await initializeKnownStagedFiles();
     
     // Setup realtime subscription
     await setupRealtimeSubscription();
