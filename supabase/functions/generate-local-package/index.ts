@@ -579,14 +579,16 @@ async function syncStagingToLocal() {
           fs.mkdirSync(dirPath, { recursive: true });
         }
         
-        // Check if content actually changed before writing
+        // Check if file exists and content actually changed before writing
+        const fileExists = fs.existsSync(fullPath);
         let existingContent = '';
-        if (fs.existsSync(fullPath)) {
+        if (fileExists) {
           existingContent = fs.readFileSync(fullPath, 'utf8');
         }
         
         const newContent = staged.new_content || '';
-        if (existingContent !== newContent) {
+        // Write if: file doesn't exist OR content changed (handles empty file creation)
+        if (!fileExists || existingContent !== newContent) {
           fs.writeFileSync(fullPath, newContent, 'utf8');
           console.log(\`[Pronghorn] Written (staged \${staged.operation_type}): \${staged.file_path} [\${newContent.length} bytes]\`);
           

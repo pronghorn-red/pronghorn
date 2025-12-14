@@ -29,9 +29,10 @@ interface StagingPanelProps {
   onViewDiff?: (change: any) => void;
   autoCommit: boolean;
   onAutoCommitChange: (checked: boolean) => void;
+  refreshTrigger?: number; // Increment to force refresh when panel becomes visible
 }
 
-export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, onAutoCommitChange }: StagingPanelProps) {
+export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, onAutoCommitChange, refreshTrigger }: StagingPanelProps) {
   const { toast } = useToast();
 
   const [stagedChanges, setStagedChanges] = useState<StagedChange[]>([]);
@@ -48,7 +49,7 @@ export function StagingPanel({ projectId, shareToken, onViewDiff, autoCommit, on
 
   useEffect(() => {
     loadRepoAndStagedChanges();
-  }, [projectId, shareToken]);
+  }, [projectId, shareToken, refreshTrigger]);
 
   // Real-time subscription for staged changes - using broadcast pattern
   useEffect(() => {

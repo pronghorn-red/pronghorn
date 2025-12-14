@@ -53,6 +53,8 @@ export default function Build() {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [itemToRename, setItemToRename] = useState<{ id: string; path: string; type: "file" | "folder" } | null>(null);
   const [autoCommit, setAutoCommit] = useState(false);
+  const [desktopActiveTab, setDesktopActiveTab] = useState("chat");
+  const [stagingRefreshTrigger, setStagingRefreshTrigger] = useState(0);
 
   // File buffer system for instant file switching and background saves
   const {
@@ -827,7 +829,12 @@ export default function Build() {
                                 <ChevronRight className="h-4 w-4" />
                               </Button>
                             </div>
-                          <Tabs defaultValue="chat" className="flex-1 flex flex-col min-h-0 min-w-0 w-full overflow-hidden">
+                          <Tabs value={desktopActiveTab} onValueChange={(v) => {
+                            setDesktopActiveTab(v);
+                            if (v === 'staging') {
+                              setStagingRefreshTrigger(prev => prev + 1);
+                            }
+                          }} className="flex-1 flex flex-col min-h-0 min-w-0 w-full overflow-hidden">
                             {/* Fixed tabs header - cannot shrink */}
                             <div className="shrink-0 p-1 w-full">
                               <TabsList className="grid w-full grid-cols-3">
@@ -859,6 +866,7 @@ export default function Build() {
                                   onViewDiff={handleViewDiff}
                                   autoCommit={autoCommit}
                                   onAutoCommitChange={setAutoCommit}
+                                  refreshTrigger={stagingRefreshTrigger}
                                 />
                               </TabsContent>
 
@@ -894,7 +902,12 @@ export default function Build() {
             {/* Mobile Layout */}
             {isMobile && (
               <div className="flex-1 flex flex-col overflow-hidden">
-                <Tabs value={mobileActiveTab} onValueChange={setMobileActiveTab} className="flex-1 flex flex-col min-h-0">
+                <Tabs value={mobileActiveTab} onValueChange={(v) => {
+                  setMobileActiveTab(v);
+                  if (v === 'staging') {
+                    setStagingRefreshTrigger(prev => prev + 1);
+                  }
+                }} className="flex-1 flex flex-col min-h-0">
                   <TabsList className="grid w-full grid-cols-4 shrink-0">
                     <TabsTrigger value="files">Files</TabsTrigger>
                     <TabsTrigger value="editor">Editor</TabsTrigger>
@@ -1036,6 +1049,7 @@ export default function Build() {
                       onViewDiff={handleViewDiff}
                       autoCommit={autoCommit}
                       onAutoCommitChange={setAutoCommit}
+                      refreshTrigger={stagingRefreshTrigger}
                     />
                   </TabsContent>
                 </Tabs>
