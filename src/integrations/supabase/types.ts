@@ -3106,47 +3106,19 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      get_repo_files_with_token:
-        | {
-            Args: { p_repo_id: string; p_token?: string }
-            Returns: {
-              id: string
-              is_binary: boolean
-              is_staged: boolean
-              last_commit_sha: string
-              operation_type: string
-              path: string
-              size_bytes: number
-              updated_at: string
-            }[]
-          }
-        | {
-            Args: {
-              p_path_prefix?: string
-              p_repo_id: string
-              p_token?: string
-            }
-            Returns: {
-              content: string
-              id: string
-              is_binary: boolean
-              is_staged: boolean
-              last_commit_sha: string
-              path: string
-              updated_at: string
-            }[]
-          }
-        | {
-            Args: {
-              p_file_paths?: string[]
-              p_repo_id: string
-              p_token: string
-            }
-            Returns: {
-              content: string
-              path: string
-            }[]
-          }
+      get_repo_files_with_token: {
+        Args: { p_path_prefix?: string; p_repo_id: string; p_token?: string }
+        Returns: {
+          id: string
+          is_binary: boolean
+          is_staged: boolean
+          last_commit_sha: string
+          operation_type: string
+          path: string
+          size_bytes: number
+          updated_at: string
+        }[]
+      }
       get_requirement_standards_with_token: {
         Args: { p_requirement_id: string; p_token: string }
         Returns: {
