@@ -1007,6 +1007,12 @@ Use them to understand context and inform your file operations.` : ''}`;
       const nonEditOps: any[] = [];
 
       for (const op of operations) {
+        // Skip invalid operations without params
+        if (!op || !op.params) {
+          console.warn(`[AGENT] Skipping invalid operation (missing params):`, JSON.stringify(op));
+          nonEditOps.push(op); // Still process it, will handle gracefully later
+          continue;
+        }
         if (op.type === 'edit_lines') {
           const fileId = op.params.file_id;
           if (!editsByFile.has(fileId)) editsByFile.set(fileId, []);
