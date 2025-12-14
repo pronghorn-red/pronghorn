@@ -752,13 +752,12 @@ export function UnifiedAgentInterface({
       const parsed = JSON.parse(content);
       return {
         reasoning: parsed.reasoning || '',
-        operations: Array.isArray(parsed.operations) ? parsed.operations : [],
+        operations: parsed.operations || [],
         status: parsed.status || '',
         blackboardEntry: parsed.blackboard_entry || null,
-        rawOutput: parsed.raw_output || null,
       };
     } catch {
-      return { reasoning: content, operations: [], status: '', blackboardEntry: null, rawOutput: null };
+      return { reasoning: content, operations: [], status: '', blackboardEntry: null };
     }
   };
 
@@ -882,16 +881,6 @@ export function UnifiedAgentInterface({
                     <div className="mb-3">
                       <p className="text-xs font-semibold mb-1 text-muted-foreground">Reasoning:</p>
                       <p className="text-sm whitespace-pre-wrap">{parsed.reasoning}</p>
-                    </div>
-                  )}
-                  
-                  {/* PARSE ERROR: Show raw LLM output for debugging */}
-                  {parsed.status === 'parse_error' && parsed.rawOutput && (
-                    <div className="mb-3 p-2 bg-destructive/10 rounded border border-destructive/20">
-                      <p className="text-xs font-semibold mb-1 text-destructive">Raw LLM Output (parse failed):</p>
-                      <pre className="text-xs text-destructive/80 whitespace-pre-wrap overflow-x-auto max-h-96 overflow-y-auto font-mono">
-                        {parsed.rawOutput}
-                      </pre>
                     </div>
                   )}
                   

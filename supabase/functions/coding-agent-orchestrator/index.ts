@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
-import JSON5 from "https://esm.sh/json5@2.2.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,39 +27,14 @@ function parseAgentResponseText(rawText: string): any {
   console.log("Parsing agent response, length:", rawText.length);
   console.log("Raw preview:", rawText.slice(0, 300) + (rawText.length > 300 ? "..." : ""));
 
-  // Helper to try parsing safely - JSON5 first (handles single quotes, trailing commas, etc.)
+  // Helper to try parsing safely
   const tryParse = (jsonStr: string, method: string): any | null => {
-    // Try JSON5 first (more lenient parser)
-    try {
-      const parsed = JSON5.parse(jsonStr);
-      console.log(`JSON5 parsed successfully via ${method}`);
-      return parsed;
-    } catch (e5) {
-      const error = e5 as Error;
-      // Extract position info from error message if available
-      const posMatch = error.message.match(/position (\d+)/i);
-      if (posMatch) {
-        const pos = parseInt(posMatch[1]);
-        console.log(`JSON5.parse failed at position ${pos} in ${method}:`, jsonStr.slice(Math.max(0, pos - 50), pos + 50));
-      } else {
-        console.log(`JSON5.parse failed in ${method}:`, error.message);
-      }
-    }
-    
-    // Fallback to strict JSON.parse
     try {
       const parsed = JSON.parse(jsonStr);
-      console.log(`JSON.parse fallback succeeded via ${method}`);
+      console.log(`JSON parsed successfully via ${method}`);
       return parsed;
     } catch (e) {
-      const error = e as Error;
-      const posMatch = error.message.match(/position (\d+)/i);
-      if (posMatch) {
-        const pos = parseInt(posMatch[1]);
-        console.log(`JSON.parse failed at position ${pos} in ${method}:`, jsonStr.slice(Math.max(0, pos - 50), pos + 50));
-      } else {
-        console.log(`JSON.parse also failed in ${method}:`, error.message);
-      }
+      console.log(`JSON.parse failed in ${method}:`, (e as Error).message);
       return null;
     }
   };
@@ -117,11 +91,11 @@ function parseAgentResponseText(rawText: string): any {
     if (result) return result;
   }
 
-  // Final fallback - log full raw output for debugging
-  console.error("All JSON parsing methods failed for response:", originalText);
+  // Final fallback
+  console.error("All JSON parsing methods failed for response:", originalText.slice(0, 1000));
   return {
     reasoning: "Failed to parse agent response as JSON. Raw output preserved.",
-    raw_output: originalText,
+    raw_output: originalText.slice(0, 2000),
     operations: [],
     status: "parse_error",
   };
@@ -200,6 +174,7 @@ function getClaudeResponseTool() {
   return {
     name: "respond_with_actions",
     description: "Return your reasoning, file operations, and status as structured output. You MUST use this tool to respond.",
+    strict: true,
     input_schema: {
       type: "object",
       properties: {
@@ -215,33 +190,32 @@ function getClaudeResponseTool() {
               type: {
                 type: "string",
                 enum: [
-                  "list_files",
-                  "wildcard_search",
-                  "search",
-                  "read_file",
-                  "edit_lines",
-                  "create_file",
-                  "delete_file",
-                  "move_file",
-                  "get_staged_changes",
-                  "unstage_file",
-                  "discard_all_staged",
-                  "project_inventory",
-                  "project_category",
-                  "project_elements",
-                ],
-              },
-              params: {
-                type: "object",
-                description: "Operation-specific parameters",
-                additionalProperties: false,
-              },
+                "list_files",
+                "wildcard_search",
+                "search",
+                "read_file",
+                "edit_lines",
+                "create_file",
+                "delete_file",
+                "move_file",
+                "get_staged_changes",
+                "unstage_file",
+                "discard_all_staged",
+                "project_inventory",
+                "project_category",
+                "project_elements",
+              ],
             },
-            required: ["type", "params"],
-            additionalProperties: false,
+            params: {
+              type: "object",
+              description: "Operation-specific parameters",
+            },
           },
+          required: ["type", "params"],
+          additionalProperties: false,
         },
-        blackboard_entry: {
+      },
+      blackboard_entry: {
           type: "object",
           properties: {
             entry_type: {
@@ -885,7 +859,7 @@ Use them to understand context and inform your file operations.` : ''}`;
             "Content-Type": "application/json",
             "x-api-key": apiKey,
             "anthropic-version": "2023-06-01",
-            "anthropic-beta": "structured-outputs-2025-11-13,context-1m-2025-08-07",
+            "anthropic-beta": "structured-outputs-2025-11-13",
           },
           body: JSON.stringify({
             model: modelName,
@@ -967,7 +941,7 @@ Use them to understand context and inform your file operations.` : ''}`;
 
       console.log("Parsed agent response:", agentResponse);
 
-      // Log agent response to database - include raw_output for parse_error debugging
+      // Log agent response to database
       await supabase.rpc("insert_agent_message_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
@@ -977,7 +951,6 @@ Use them to understand context and inform your file operations.` : ''}`;
           operations: agentResponse.operations,
           status: agentResponse.status,
           blackboard_entry: agentResponse.blackboard_entry || null,
-          raw_output: agentResponse.raw_output || null,
         }),
         p_metadata: { iteration },
       });
@@ -998,22 +971,7 @@ Use them to understand context and inform your file operations.` : ''}`;
 
       // Sort edit_lines operations by start_line DESCENDING (back-to-front) to prevent line number corruption
       // When multiple edits target the same file, editing from the end first preserves earlier line numbers
-      let operations = agentResponse.operations || [];
-      
-      // Defensive parsing: LLM sometimes returns operations as a JSON string instead of array
-      if (typeof operations === 'string') {
-        try {
-          operations = JSON.parse(operations);
-          console.log('[AGENT] Parsed operations from string');
-        } catch (e) {
-          console.error('[AGENT] Failed to parse operations string:', e);
-          operations = [];
-        }
-      }
-      if (!Array.isArray(operations)) {
-        console.error('[AGENT] Operations is not an array, got:', typeof operations);
-        operations = [];
-      }
+      const operations = [...(agentResponse.operations || [])];
       const editsByFile = new Map<string, any[]>();
       const nonEditOps: any[] = [];
 
@@ -1066,7 +1024,7 @@ Use them to understand context and inform your file operations.` : ''}`;
 
           switch (op.type) {
             case "list_files":
-              result = await supabase.rpc("get_repo_file_paths_with_token", {
+              result = await supabase.rpc("get_repo_files_with_token", {
                 p_repo_id: repoId,
                 p_token: shareToken,
                 p_path_prefix: op.params.path_prefix || null,

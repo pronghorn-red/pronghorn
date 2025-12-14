@@ -160,7 +160,7 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
 
       const existing = (staged || []).find(
         (change: any) => change.file_path === filePath
-      ) as { file_path: string; old_content?: string | null; operation_type: string } | undefined;
+      );
 
       let oldContentToUse = file.originalContent;
 

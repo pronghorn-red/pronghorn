@@ -238,7 +238,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
 
       const existing = (staged || []).find(
         (change: any) => change.file_path === filePath,
-      ) as { file_path: string; old_content?: string | null; operation_type: string } | undefined;
+      );
 
       // Preserve the original baseline content for this file
       let oldContentToUse = internalOriginalContent;

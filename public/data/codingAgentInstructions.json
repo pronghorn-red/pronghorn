@@ -47,14 +47,14 @@
     },
     
     "list_files": {
-      "rpc_function": "get_repo_file_paths_with_token",
-      "description": "List all files in repository with metadata (NO CONTENT - lightweight). Call this at the START of every task to load complete file structure.",
+      "rpc_function": "get_repo_files_with_token",
+      "description": "List all files in repository with metadata. Call this at the START of every task to load complete file structure.",
       "parameters": {
         "p_repo_id": "UUID of the repository",
         "p_token": "Share token for authorization",
         "p_path_prefix": "Optional directory path filter (e.g., 'src/components/'). Leave null to get all files."
       },
-      "returns": "Array of all files with id, path, is_binary, is_staged, operation_type, size_bytes, updated_at (NO CONTENT)",
+      "returns": "Array of all files with id, path, content, is_binary, last_commit_sha, updated_at, is_staged",
       "use_cases": [
         "CRITICAL: Call at task start to understand project structure",
         "Load complete file inventory before making changes",
