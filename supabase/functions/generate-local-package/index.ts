@@ -567,96 +567,145 @@ async function setupRealtimeSubscription() {
   return channel;
 }
 
-let debounceTimer = null;
 async function handleFileChange(source, payload) {
-  // Debounce rapid changes
-  if (debounceTimer) clearTimeout(debounceTimer);
+  console.log(\`[Pronghorn] Processing \${source} change: \${payload.eventType}\`);
+  console.log('[Pronghorn] Payload:', JSON.stringify(payload, null, 2));
   
-  debounceTimer = setTimeout(async () => {
-    console.log(\`[Pronghorn] Processing \${source} change...\`);
+  try {
+    let filePath, content, isDelete = false;
     
-    try {
-      // Extract file info from payload for single-file update
-      let filePath, content, isDelete = false;
-      
-      if (source === 'staging') {
-        const record = payload.new || payload.old;
-        if (!record) {
-          console.log('[Pronghorn] No record in payload, skipping');
+    if (source === 'staging') {
+      // STAGING EVENTS
+      if (payload.eventType === 'DELETE') {
+        // Staging record was deleted - could be rollback or commit
+        // Need to fetch current state from repo_files
+        const record = payload.old;
+        if (!record || !record.file_path) {
+          console.log('[Pronghorn] No file_path in deleted staging record, skipping');
           return;
         }
         filePath = record.file_path;
-        content = record.new_content;
-        isDelete = record.operation_type === 'delete' || payload.eventType === 'DELETE';
+        
+        console.log(\`[Pronghorn] Staging cleared for: \${filePath}, fetching from repo_files...\`);
+        
+        // Query repo_files to get canonical version
+        const { data: currentFile, error } = await supabase
+          .from('repo_files')
+          .select('content, path')
+          .eq('repo_id', CONFIG.repoId)
+          .eq('path', filePath)
+          .single();
+        
+        if (error && error.code !== 'PGRST116') {
+          console.error('[Pronghorn] Error fetching repo_files:', error.message);
+        }
+        
+        if (currentFile) {
+          // File exists in repo - revert to committed version
+          content = currentFile.content;
+          isDelete = false;
+          console.log(\`[Pronghorn] Reverting to repo version: \${filePath}\`);
+        } else {
+          // File doesn't exist in repo - was a staged 'add' that got rolled back
+          isDelete = true;
+          console.log(\`[Pronghorn] Staged add was rolled back, deleting: \${filePath}\`);
+        }
       } else {
-        const record = payload.new || payload.old;
-        if (!record) {
-          console.log('[Pronghorn] No record in payload, skipping');
+        // INSERT or UPDATE on staging
+        const record = payload.new;
+        if (!record || !record.file_path) {
+          console.log('[Pronghorn] No file_path in staging record, skipping');
+          return;
+        }
+        filePath = record.file_path;
+        
+        if (record.operation_type === 'delete') {
+          // File is marked for deletion in staging
+          isDelete = true;
+          console.log(\`[Pronghorn] File marked for deletion: \${filePath}\`);
+        } else {
+          // 'add' or 'edit' - use the new content
+          content = record.new_content;
+          isDelete = false;
+          console.log(\`[Pronghorn] Staging \${record.operation_type}: \${filePath}\`);
+        }
+      }
+    } else {
+      // REPO_FILES EVENTS - direct mapping
+      if (payload.eventType === 'DELETE') {
+        const record = payload.old;
+        if (!record || !record.path) {
+          console.log('[Pronghorn] No path in deleted file record, skipping');
+          return;
+        }
+        filePath = record.path;
+        isDelete = true;
+        console.log(\`[Pronghorn] File deleted from repo: \${filePath}\`);
+      } else {
+        const record = payload.new;
+        if (!record || !record.path) {
+          console.log('[Pronghorn] No path in file record, skipping');
           return;
         }
         filePath = record.path;
         content = record.content;
-        isDelete = payload.eventType === 'DELETE';
+        isDelete = false;
+        console.log(\`[Pronghorn] File \${payload.eventType.toLowerCase()}d in repo: \${filePath}\`);
       }
-      
-      if (!filePath) {
-        console.log('[Pronghorn] No file path in payload, skipping');
-        return;
-      }
-      
-      const fullPath = path.join(APP_DIR, filePath);
-      const dirPath = path.dirname(fullPath);
-      
-      if (isDelete) {
-        // Handle file deletion
-        if (fs.existsSync(fullPath)) {
-          fs.unlinkSync(fullPath);
-          console.log(\`[Pronghorn] Deleted: \${filePath}\`);
-        }
-        await reportLog('info', \`File deleted: \${filePath}\`);
-      } else {
-        // Handle file create/update
-        if (!fs.existsSync(dirPath)) {
-          fs.mkdirSync(dirPath, { recursive: true });
-        }
-        
-        // Check if package.json and content actually changed
-        let needsNpmInstall = false;
-        if (path.basename(filePath) === 'package.json') {
-          let existingContent = '';
-          if (fs.existsSync(fullPath)) {
-            existingContent = fs.readFileSync(fullPath, 'utf8');
-          }
-          if (existingContent !== (content || '')) {
-            needsNpmInstall = true;
-          }
-        }
-        
-        // Write the single file
-        fs.writeFileSync(fullPath, content || '', 'utf8');
-        console.log(\`[Pronghorn] Updated: \${filePath}\`);
-        
-        // Handle server restart if needed
-        if (needsNpmInstall) {
-          console.log('[Pronghorn] package.json changed - running npm install...');
-          await stopDevServer();
-          await runNpmInstallInDirs([dirPath]);
-          startDevServer();
-        } else if (CONFIG.projectType === 'node' || CONFIG.projectType === 'express') {
-          // Node.js projects need restart for any file change
-          await restartDevServer();
-        } else {
-          // Vite/webpack handle HMR automatically
-          console.log('[Pronghorn] Single file updated - HMR will refresh');
-        }
-        
-        await reportLog('info', \`File synced: \${filePath}\`);
-      }
-    } catch (err) {
-      console.error('[Pronghorn] Error handling file change:', err.message);
-      await reportLog('error', \`Failed to sync file: \${err.message}\`);
     }
-  }, 300);  // Shorter debounce for single files
+    
+    const fullPath = path.join(APP_DIR, filePath);
+    const dirPath = path.dirname(fullPath);
+    
+    if (isDelete) {
+      // Handle file deletion
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+        console.log(\`[Pronghorn] Deleted from disk: \${filePath}\`);
+      }
+      await reportLog('info', \`File deleted: \${filePath}\`);
+    } else {
+      // Handle file create/update
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+      }
+      
+      // Check if package.json and content actually changed
+      let needsNpmInstall = false;
+      if (path.basename(filePath) === 'package.json') {
+        let existingContent = '';
+        if (fs.existsSync(fullPath)) {
+          existingContent = fs.readFileSync(fullPath, 'utf8');
+        }
+        if (existingContent !== (content || '')) {
+          needsNpmInstall = true;
+        }
+      }
+      
+      // Write the single file
+      fs.writeFileSync(fullPath, content || '', 'utf8');
+      console.log(\`[Pronghorn] Written to disk: \${filePath}\`);
+      
+      // Handle server restart if needed
+      if (needsNpmInstall) {
+        console.log('[Pronghorn] package.json changed - running npm install...');
+        await stopDevServer();
+        await runNpmInstallInDirs([dirPath]);
+        startDevServer();
+      } else if (CONFIG.projectType === 'node' || CONFIG.projectType === 'express') {
+        // Node.js projects need restart for any file change
+        await restartDevServer();
+      } else {
+        // Vite/webpack handle HMR automatically
+        console.log('[Pronghorn] HMR will refresh');
+      }
+      
+      await reportLog('info', \`File synced: \${filePath}\`);
+    }
+  } catch (err) {
+    console.error('[Pronghorn] Error handling file change:', err.message);
+    await reportLog('error', \`Failed to sync file: \${err.message}\`);
+  }
 }
 
 // ============================================
