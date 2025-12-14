@@ -752,7 +752,7 @@ export function UnifiedAgentInterface({
       const parsed = JSON.parse(content);
       return {
         reasoning: parsed.reasoning || '',
-        operations: parsed.operations || [],
+        operations: Array.isArray(parsed.operations) ? parsed.operations : [],
         status: parsed.status || '',
         blackboardEntry: parsed.blackboard_entry || null,
         rawOutput: parsed.raw_output || null,
