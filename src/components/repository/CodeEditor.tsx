@@ -241,19 +241,15 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({
       );
 
       // Preserve the original baseline content for this file
+      // Use local originalContent - staging no longer returns content for token optimization
       let oldContentToUse = internalOriginalContent;
 
       if (existing) {
-        // CRITICAL: Always preserve the original baseline from the first staged change
-        // For AI-created files, old_content might be NULL or empty string - use that
-        // For subsequent user edits, use the existing old_content to maintain diff baseline
-        if (existing.old_content !== null && existing.old_content !== undefined) {
-          oldContentToUse = existing.old_content;
-        } else if (existing.operation_type === 'add') {
-          // For new files created by AI, old_content should be empty string
+        // For new files (add operation), old_content should be empty string
+        if (existing.operation_type === 'add') {
           oldContentToUse = "";
         }
-
+        // Otherwise use the locally tracked originalContent
         // Remove existing staged row so we maintain a single staged entry per file
         const { error: unstageError } = await supabase.rpc("unstage_file_with_token", {
           p_repo_id: repoId,

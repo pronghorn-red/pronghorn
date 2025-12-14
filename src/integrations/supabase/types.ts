@@ -3108,24 +3108,17 @@ export type Database = {
       }
       get_repo_files_with_token:
         | {
-            Args: { p_repo_id: string; p_token: string }
+            Args: { p_repo_id: string; p_token?: string }
             Returns: {
-              content: string
-              created_at: string
               id: string
               is_binary: boolean
-              last_commit_sha: string | null
+              is_staged: boolean
+              last_commit_sha: string
+              operation_type: string
               path: string
-              project_id: string
-              repo_id: string
+              size_bytes: number
               updated_at: string
             }[]
-            SetofOptions: {
-              from: "*"
-              to: "repo_files"
-              isOneToOne: false
-              isSetofReturn: true
-            }
           }
         | {
             Args: {
@@ -3274,26 +3267,13 @@ export type Database = {
         }
       }
       get_staged_changes_with_token: {
-        Args: { p_repo_id: string; p_token: string }
+        Args: { p_repo_id: string; p_token?: string }
         Returns: {
-          created_at: string | null
-          created_by: string | null
           file_path: string
           id: string
-          is_binary: boolean
-          new_content: string | null
-          old_content: string | null
-          old_path: string | null
+          old_path: string
           operation_type: string
-          project_id: string
-          repo_id: string
         }[]
-        SetofOptions: {
-          from: "*"
-          to: "repo_staging"
-          isOneToOne: false
-          isSetofReturn: true
-        }
       }
       get_user_project_role_with_token: {
         Args: { p_project_id: string; p_token?: string }

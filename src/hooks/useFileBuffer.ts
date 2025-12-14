@@ -162,16 +162,15 @@ export function useFileBuffer({ repoId, shareToken, onFileSaved }: UseFileBuffer
         (change: any) => change.file_path === filePath
       );
 
+      // Use locally tracked originalContent - staging no longer returns content for token optimization
       let oldContentToUse = file.originalContent;
 
       if (existing) {
-        // Preserve original baseline from existing staged record
-        if (existing.old_content !== null && existing.old_content !== undefined) {
-          oldContentToUse = existing.old_content;
-        } else if (existing.operation_type === "add") {
+        // For new files (add operation), old_content should be empty string
+        if (existing.operation_type === "add") {
           oldContentToUse = "";
         }
-
+        // Otherwise use the locally tracked originalContent
         // Remove existing staged row
         await supabase.rpc("unstage_file_with_token", {
           p_repo_id: repoId,
