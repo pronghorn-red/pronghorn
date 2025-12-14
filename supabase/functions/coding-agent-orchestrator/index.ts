@@ -998,22 +998,7 @@ Use them to understand context and inform your file operations.` : ''}`;
 
       // Sort edit_lines operations by start_line DESCENDING (back-to-front) to prevent line number corruption
       // When multiple edits target the same file, editing from the end first preserves earlier line numbers
-      // Ensure operations is an array - LLM sometimes returns it as a JSON string
-      let rawOps = agentResponse.operations || [];
-      if (typeof rawOps === 'string') {
-        try {
-          rawOps = JSON.parse(rawOps);
-          console.log('Parsed operations from string, got', Array.isArray(rawOps) ? rawOps.length : 0, 'operations');
-        } catch (e) {
-          console.error('Failed to parse operations string:', e);
-          rawOps = [];
-        }
-      }
-      if (!Array.isArray(rawOps)) {
-        console.error('Operations is not an array, got:', typeof rawOps);
-        rawOps = [];
-      }
-      const operations = [...rawOps];
+      const operations = [...(agentResponse.operations || [])];
       const editsByFile = new Map<string, any[]>();
       const nonEditOps: any[] = [];
 
@@ -1065,8 +1050,8 @@ Use them to understand context and inform your file operations.` : ''}`;
           let result;
 
           switch (op.type) {
-          case "list_files":
-              result = await supabase.rpc("get_repo_file_paths_with_token", {
+            case "list_files":
+              result = await supabase.rpc("get_repo_files_with_token", {
                 p_repo_id: repoId,
                 p_token: shareToken,
                 p_path_prefix: op.params.path_prefix || null,

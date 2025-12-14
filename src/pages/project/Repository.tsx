@@ -123,10 +123,22 @@ export default function Repository() {
 
       const tree = buildFileTree((data as any[]) || []);
       setFileStructure(tree);
+
+      // Load all file contents for content search
+      const files = (data as any[]) || [];
+      const filePaths = files.filter((f: any) => f.type === "file").map((f: any) => f.path);
       
-      // Content search disabled - content is now fetched on-demand via read_file
-      // to prevent loading entire repository contents into memory
-      setAllFilesWithContent([]);
+      if (filePaths.length > 0) {
+        const { data: filesData, error: filesError } = await supabase.rpc("get_repo_files_with_token", {
+          p_repo_id: selectedRepoId,
+          p_token: shareToken || null,
+          p_file_paths: filePaths,
+        });
+
+        if (!filesError && filesData) {
+          setAllFilesWithContent(filesData);
+        }
+      }
     } catch (error) {
       console.error("Error loading file structure:", error);
       toast({
