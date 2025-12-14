@@ -43,9 +43,24 @@ export function AgentChatViewer({ projectId, shareToken }: AgentChatViewerProps)
   const parseAgentContent = (content: string) => {
     try {
       const parsed = JSON.parse(content);
+      
+      // Handle operations that might be a string (double-encoded JSON)
+      let operations = parsed.operations || [];
+      if (typeof operations === 'string') {
+        try {
+          operations = JSON.parse(operations);
+        } catch {
+          operations = [];
+        }
+      }
+      // Ensure operations is an array
+      if (!Array.isArray(operations)) {
+        operations = [];
+      }
+      
       return {
         reasoning: parsed.reasoning || '',
-        operations: parsed.operations || [],
+        operations,
         status: parsed.status || '',
       };
     } catch {

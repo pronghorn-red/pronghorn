@@ -750,9 +750,26 @@ export function UnifiedAgentInterface({
   const parseAgentContent = (content: string) => {
     try {
       const parsed = JSON.parse(content);
+      
+      // Handle operations that might be a string (double-encoded JSON)
+      let operations = parsed.operations || [];
+      if (typeof operations === 'string') {
+        try {
+          operations = JSON.parse(operations);
+        } catch {
+          console.warn('Failed to parse operations string:', operations.slice(0, 100));
+          operations = [];
+        }
+      }
+      // Ensure operations is an array
+      if (!Array.isArray(operations)) {
+        console.warn('Operations is not an array:', typeof operations);
+        operations = [];
+      }
+      
       return {
         reasoning: parsed.reasoning || '',
-        operations: parsed.operations || [],
+        operations,
         status: parsed.status || '',
         blackboardEntry: parsed.blackboard_entry || null,
       };
