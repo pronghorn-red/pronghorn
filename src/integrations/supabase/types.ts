@@ -131,6 +131,69 @@ export type Database = {
           },
         ]
       }
+      agent_llm_logs: {
+        Row: {
+          api_response_status: number | null
+          created_at: string
+          id: string
+          input_char_count: number
+          input_prompt: string
+          iteration: number
+          model: string
+          output_char_count: number | null
+          output_raw: string | null
+          parse_error_message: string | null
+          project_id: string
+          session_id: string
+          was_parse_success: boolean
+        }
+        Insert: {
+          api_response_status?: number | null
+          created_at?: string
+          id?: string
+          input_char_count: number
+          input_prompt: string
+          iteration: number
+          model: string
+          output_char_count?: number | null
+          output_raw?: string | null
+          parse_error_message?: string | null
+          project_id: string
+          session_id: string
+          was_parse_success?: boolean
+        }
+        Update: {
+          api_response_status?: number | null
+          created_at?: string
+          id?: string
+          input_char_count?: number
+          input_prompt?: string
+          iteration?: number
+          model?: string
+          output_char_count?: number | null
+          output_raw?: string | null
+          parse_error_message?: string | null
+          project_id?: string
+          session_id?: string
+          was_parse_success?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_llm_logs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_llm_logs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "agent_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_messages: {
         Row: {
           content: string
@@ -2379,6 +2442,30 @@ export type Database = {
         Args: { p_parent_id: string; p_project_id: string; p_type: string }
         Returns: string
       }
+      get_agent_llm_logs_with_token: {
+        Args: { p_limit?: number; p_session_id: string; p_token: string }
+        Returns: {
+          api_response_status: number | null
+          created_at: string
+          id: string
+          input_char_count: number
+          input_prompt: string
+          iteration: number
+          model: string
+          output_char_count: number | null
+          output_raw: string | null
+          parse_error_message: string | null
+          project_id: string
+          session_id: string
+          was_parse_success: boolean
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "agent_llm_logs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_agent_messages_with_token: {
         Args: {
           p_limit?: number
@@ -3378,6 +3465,41 @@ export type Database = {
         }
         Returns: boolean
       }
+      insert_agent_llm_log_with_token: {
+        Args: {
+          p_api_response_status?: number
+          p_input_prompt: string
+          p_iteration: number
+          p_model: string
+          p_output_raw?: string
+          p_parse_error_message?: string
+          p_project_id: string
+          p_session_id: string
+          p_token: string
+          p_was_parse_success?: boolean
+        }
+        Returns: {
+          api_response_status: number | null
+          created_at: string
+          id: string
+          input_char_count: number
+          input_prompt: string
+          iteration: number
+          model: string
+          output_char_count: number | null
+          output_raw: string | null
+          parse_error_message: string | null
+          project_id: string
+          session_id: string
+          was_parse_success: boolean
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_llm_logs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       insert_agent_message_with_token: {
         Args: {
           p_content: string
@@ -4303,6 +4425,36 @@ export type Database = {
       unstage_files_with_token: {
         Args: { p_file_paths: string[]; p_repo_id: string; p_token: string }
         Returns: number
+      }
+      update_agent_llm_log_parse_status_with_token: {
+        Args: {
+          p_iteration: number
+          p_parse_error_message?: string
+          p_session_id: string
+          p_token: string
+          p_was_parse_success: boolean
+        }
+        Returns: {
+          api_response_status: number | null
+          created_at: string
+          id: string
+          input_char_count: number
+          input_prompt: string
+          iteration: number
+          model: string
+          output_char_count: number | null
+          output_raw: string | null
+          parse_error_message: string | null
+          project_id: string
+          session_id: string
+          was_parse_success: boolean
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_llm_logs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       update_agent_operation_status_with_token: {
         Args: {

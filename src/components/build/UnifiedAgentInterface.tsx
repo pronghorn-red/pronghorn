@@ -25,7 +25,8 @@ import {
   Square,
   BookOpen,
   Download,
-  Wrench
+  Wrench,
+  Database
 } from 'lucide-react';
 import { AgentConfigurationModal, AgentConfiguration } from './AgentConfigurationModal';
 import { useInfiniteAgentMessages } from '@/hooks/useInfiniteAgentMessages';
@@ -38,6 +39,8 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RawLLMLogsViewer } from './RawLLMLogsViewer';
 
 interface UnifiedAgentInterfaceProps {
   projectId: string;
@@ -1191,168 +1194,190 @@ export function UnifiedAgentInterface({
 
       {/* Chat History Settings Dialog */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh] w-[90vw] h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[90vw] max-h-[90vh] w-[90vw] h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle>Chat History Settings</DialogTitle>
+            <DialogTitle>Agent Settings & Debug</DialogTitle>
             <DialogDescription>
-              Configure how chat history is included as context when submitting tasks.
+              Configure chat history settings and view raw LLM logs for debugging.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-6 py-4">
-            {/* Include History Toggle */}
-            <div className="flex items-center gap-2">
-              <Checkbox 
-                id="include-history" 
-                checked={chatHistorySettings.includeHistory}
-                onCheckedChange={(checked) => 
-                  setChatHistorySettings(prev => ({ ...prev, includeHistory: checked as boolean }))
-                }
-              />
-              <Label htmlFor="include-history" className="text-sm font-medium">
-                Include recent chat history with task submissions
-              </Label>
-            </div>
-
-            {/* Duration Type Selection */}
-            {chatHistorySettings.includeHistory && (
-              <>
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">History Duration</Label>
-                  <RadioGroup
-                    value={chatHistorySettings.durationType}
-                    onValueChange={(value: 'time' | 'messages') =>
-                      setChatHistorySettings(prev => ({ ...prev, durationType: value }))
-                    }
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="time" id="time" />
-                      <Label htmlFor="time" className="font-normal cursor-pointer">
-                        Last N minutes
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="messages" id="messages" />
-                      <Label htmlFor="messages" className="font-normal cursor-pointer">
-                        Last N messages
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                {/* Duration Value Input */}
-                <div className="space-y-2">
-                  <Label htmlFor="duration-value" className="text-sm font-medium">
-                    {chatHistorySettings.durationType === 'time' ? 'Minutes' : 'Message Count'}
-                  </Label>
-                  <Input
-                    id="duration-value"
-                    type="number"
-                    min="1"
-                    max={chatHistorySettings.durationType === 'time' ? 1440 : 1000}
-                    value={chatHistorySettings.durationValue}
-                    onChange={(e) =>
-                      setChatHistorySettings(prev => ({
-                        ...prev,
-                        durationValue: parseInt(e.target.value) || 1
-                      }))
+          <Tabs defaultValue="settings" className="flex-1 flex flex-col overflow-hidden">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="settings">
+                <Settings className="h-4 w-4 mr-2" />
+                History Settings
+              </TabsTrigger>
+              <TabsTrigger value="raw-logs">
+                <Database className="h-4 w-4 mr-2" />
+                Raw LLM Logs
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="settings" className="flex-1 overflow-y-auto">
+              <div className="space-y-6 py-4">
+                {/* Include History Toggle */}
+                <div className="flex items-center gap-2">
+                  <Checkbox 
+                    id="include-history" 
+                    checked={chatHistorySettings.includeHistory}
+                    onCheckedChange={(checked) => 
+                      setChatHistorySettings(prev => ({ ...prev, includeHistory: checked as boolean }))
                     }
                   />
-                  <p className="text-xs text-muted-foreground">
-                    {chatHistorySettings.durationType === 'time'
-                      ? 'Include messages from the last N minutes (max 1440 = 24 hours)'
-                      : 'Include the last N reasoning messages (max 1000)'}
-                  </p>
+                  <Label htmlFor="include-history" className="text-sm font-medium">
+                    Include recent chat history with task submissions
+                  </Label>
                 </div>
-              </>
-            )}
-          </div>
-          
-          {/* Agent Message Verbosity */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Agent Message Verbosity</Label>
-            <RadioGroup
-              value={chatHistorySettings.verbosity}
-              onValueChange={(value: 'minimal' | 'standard' | 'detailed') =>
-                setChatHistorySettings(prev => ({ ...prev, verbosity: value }))
-              }
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="minimal" id="verbosity-minimal" />
-                <Label htmlFor="verbosity-minimal" className="font-normal cursor-pointer">
-                  Minimal - Operations only (hide reasoning)
-                </Label>
+
+                {/* Duration Type Selection */}
+                {chatHistorySettings.includeHistory && (
+                  <>
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">History Duration</Label>
+                      <RadioGroup
+                        value={chatHistorySettings.durationType}
+                        onValueChange={(value: 'time' | 'messages') =>
+                          setChatHistorySettings(prev => ({ ...prev, durationType: value }))
+                        }
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="time" id="time" />
+                          <Label htmlFor="time" className="font-normal cursor-pointer">
+                            Last N minutes
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="messages" id="messages" />
+                          <Label htmlFor="messages" className="font-normal cursor-pointer">
+                            Last N messages
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+
+                    {/* Duration Value Input */}
+                    <div className="space-y-2">
+                      <Label htmlFor="duration-value" className="text-sm font-medium">
+                        {chatHistorySettings.durationType === 'time' ? 'Minutes' : 'Message Count'}
+                      </Label>
+                      <Input
+                        id="duration-value"
+                        type="number"
+                        min="1"
+                        max={chatHistorySettings.durationType === 'time' ? 1440 : 1000}
+                        value={chatHistorySettings.durationValue}
+                        onChange={(e) =>
+                          setChatHistorySettings(prev => ({
+                            ...prev,
+                            durationValue: parseInt(e.target.value) || 1
+                          }))
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {chatHistorySettings.durationType === 'time'
+                          ? 'Include messages from the last N minutes (max 1440 = 24 hours)'
+                          : 'Include the last N reasoning messages (max 1000)'}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="standard" id="verbosity-standard" />
-                <Label htmlFor="verbosity-standard" className="font-normal cursor-pointer">
-                  Standard - Reasoning + Operations
-                </Label>
+              
+              {/* Agent Message Verbosity */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Agent Message Verbosity</Label>
+                <RadioGroup
+                  value={chatHistorySettings.verbosity}
+                  onValueChange={(value: 'minimal' | 'standard' | 'detailed') =>
+                    setChatHistorySettings(prev => ({ ...prev, verbosity: value }))
+                  }
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="minimal" id="verbosity-minimal" />
+                    <Label htmlFor="verbosity-minimal" className="font-normal cursor-pointer">
+                      Minimal - Operations only (hide reasoning)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="standard" id="verbosity-standard" />
+                    <Label htmlFor="verbosity-standard" className="font-normal cursor-pointer">
+                      Standard - Reasoning + Operations
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="detailed" id="verbosity-detailed" />
+                    <Label htmlFor="verbosity-detailed" className="font-normal cursor-pointer">
+                      Detailed - Full JSON response (for debugging)
+                    </Label>
+                  </div>
+                </RadioGroup>
+                <p className="text-xs text-muted-foreground">
+                  Controls how much detail is shown in agent response messages
+                </p>
+                
+                {/* Show Blackboard Entries Toggle */}
+                <div className="flex items-center gap-2 mt-4">
+                  <Checkbox 
+                    id="show-blackboard" 
+                    checked={chatHistorySettings.showBlackboard}
+                    onCheckedChange={(checked) => 
+                      setChatHistorySettings(prev => ({ ...prev, showBlackboard: checked as boolean }))
+                    }
+                  />
+                  <Label htmlFor="show-blackboard" className="text-sm font-normal cursor-pointer">
+                    Show agent blackboard entries (memory/planning notes)
+                  </Label>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="detailed" id="verbosity-detailed" />
-                <Label htmlFor="verbosity-detailed" className="font-normal cursor-pointer">
-                  Detailed - Full JSON response (for debugging)
-                </Label>
+
+              {/* Download Chat History Section */}
+              <div className="space-y-3 pt-4 border-t mt-4">
+                <Label className="text-sm font-medium">Download Chat History</Label>
+                <p className="text-sm text-muted-foreground">
+                  Export the complete chat history including all user messages, agent responses, 
+                  and file operations in their original format for audit and review purposes.
+                </p>
+                <Button 
+                  variant="outline" 
+                  onClick={handleDownloadChatHistory}
+                  disabled={isDownloadingHistory}
+                  className="w-full"
+                >
+                  {isDownloadingHistory ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Downloading...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download Complete History (JSON)
+                    </>
+                  )}
+                </Button>
               </div>
-            </RadioGroup>
-            <p className="text-xs text-muted-foreground">
-              Controls how much detail is shown in agent response messages
-            </p>
+
+              <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+                <Button variant="outline" onClick={() => setIsSettingsOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={() => {
+                  setIsSettingsOpen(false);
+                  toast.success('Chat history settings updated');
+                }}>
+                  Save Settings
+                </Button>
+              </div>
+            </TabsContent>
             
-            {/* Show Blackboard Entries Toggle */}
-            <div className="flex items-center gap-2 mt-4">
-              <Checkbox 
-                id="show-blackboard" 
-                checked={chatHistorySettings.showBlackboard}
-                onCheckedChange={(checked) => 
-                  setChatHistorySettings(prev => ({ ...prev, showBlackboard: checked as boolean }))
-                }
+            <TabsContent value="raw-logs" className="flex-1 overflow-hidden">
+              <RawLLMLogsViewer 
+                projectId={projectId}
+                shareToken={shareToken}
               />
-              <Label htmlFor="show-blackboard" className="text-sm font-normal cursor-pointer">
-                Show agent blackboard entries (memory/planning notes)
-              </Label>
-            </div>
-          </div>
-
-          {/* Download Chat History Section */}
-          <div className="space-y-3 pt-4 border-t">
-            <Label className="text-sm font-medium">Download Chat History</Label>
-            <p className="text-sm text-muted-foreground">
-              Export the complete chat history including all user messages, agent responses, 
-              and file operations in their original format for audit and review purposes.
-            </p>
-            <Button 
-              variant="outline" 
-              onClick={handleDownloadChatHistory}
-              disabled={isDownloadingHistory}
-              className="w-full"
-            >
-              {isDownloadingHistory ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Downloading...
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 h-4 w-4" />
-                  Download Complete History (JSON)
-                </>
-              )}
-            </Button>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={() => setIsSettingsOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => {
-              setIsSettingsOpen(false);
-              toast.success('Chat history settings updated');
-            }}>
-              Save Settings
-            </Button>
-          </div>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
     </div>

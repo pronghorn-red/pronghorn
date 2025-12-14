@@ -827,6 +827,15 @@ Use them to understand context and inform your file operations.` : ''}`;
       iteration++;
       console.log(`\n=== Iteration ${iteration} ===`);
 
+      // Build full input prompt for logging
+      const fullInputPrompt = JSON.stringify({
+        systemPrompt: systemPrompt.slice(0, 5000) + (systemPrompt.length > 5000 ? '...[truncated for log]' : ''),
+        systemPromptFullLength: systemPrompt.length,
+        conversationHistory: conversationHistory,
+        timestamp: new Date().toISOString()
+      }, null, 2);
+      const inputCharCount = systemPrompt.length + conversationHistory.reduce((acc, msg) => acc + msg.content.length, 0);
+
       // Call LLM based on provider
       let llmResponse: any;
 
@@ -906,9 +915,26 @@ Use them to understand context and inform your file operations.` : ''}`;
         });
       }
 
+      // Capture API response status for logging
+      const apiResponseStatus = llmResponse?.status || null;
+
       if (!llmResponse?.ok) {
         const errorText = await llmResponse?.text();
         console.error("LLM API error:", llmResponse?.status, errorText);
+
+        // Log the failed API call
+        await supabase.rpc("insert_agent_llm_log_with_token", {
+          p_session_id: sessionId,
+          p_project_id: projectId,
+          p_token: shareToken,
+          p_iteration: iteration,
+          p_model: selectedModel,
+          p_input_prompt: fullInputPrompt,
+          p_output_raw: errorText,
+          p_was_parse_success: false,
+          p_parse_error_message: `API error: ${llmResponse?.status}`,
+          p_api_response_status: apiResponseStatus,
+        });
 
         if (llmResponse?.status === 429) {
           throw new Error("Rate limit exceeded. Please try again later.");
@@ -923,29 +949,78 @@ Use them to understand context and inform your file operations.` : ''}`;
       const llmData = await llmResponse.json();
       console.log("LLM response received");
 
+      // Extract raw output text BEFORE parsing (for logging)
+      let rawOutputText = "";
+      if (selectedModel.startsWith("gemini")) {
+        rawOutputText = llmData.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(llmData);
+      } else if (selectedModel.startsWith("claude")) {
+        const toolUseBlock = llmData.content?.find((block: any) => block.type === "tool_use");
+        const textBlock = llmData.content?.find((block: any) => block.type === "text");
+        rawOutputText = toolUseBlock 
+          ? JSON.stringify(toolUseBlock.input, null, 2) 
+          : (textBlock?.text || JSON.stringify(llmData.content));
+      } else if (selectedModel.startsWith("grok")) {
+        rawOutputText = llmData.choices?.[0]?.message?.content || JSON.stringify(llmData);
+      }
+
       // Parse LLM response
       let agentResponse: any;
-      if (selectedModel.startsWith("gemini")) {
-        const text = llmData.candidates[0].content.parts[0].text as string;
-        agentResponse = parseAgentResponseText(text);
-      } else if (selectedModel.startsWith("claude")) {
-        // With strict tool use, response comes in tool_use block's input field
-        const toolUseBlock = llmData.content.find((block: any) => block.type === "tool_use");
-        if (toolUseBlock && toolUseBlock.input) {
-          // Tool input is already structured JSON, use directly
-          agentResponse = toolUseBlock.input;
-          console.log("Claude strict tool use response parsed directly");
-        } else {
-          // Fallback: try text content with robust parser
-          const textBlock = llmData.content.find((block: any) => block.type === "text");
-          const text = textBlock?.text || JSON.stringify(llmData.content);
-          console.warn("No tool_use block found, falling back to text parsing");
+      let wasParseSuccess = true;
+      let parseErrorMessage: string | null = null;
+
+      try {
+        if (selectedModel.startsWith("gemini")) {
+          const text = llmData.candidates[0].content.parts[0].text as string;
+          agentResponse = parseAgentResponseText(text);
+        } else if (selectedModel.startsWith("claude")) {
+          // With strict tool use, response comes in tool_use block's input field
+          const toolUseBlock = llmData.content.find((block: any) => block.type === "tool_use");
+          if (toolUseBlock && toolUseBlock.input) {
+            // Tool input is already structured JSON, use directly
+            agentResponse = toolUseBlock.input;
+            console.log("Claude strict tool use response parsed directly");
+          } else {
+            // Fallback: try text content with robust parser
+            const textBlock = llmData.content.find((block: any) => block.type === "text");
+            const text = textBlock?.text || JSON.stringify(llmData.content);
+            console.warn("No tool_use block found, falling back to text parsing");
+            agentResponse = parseAgentResponseText(text);
+          }
+        } else if (selectedModel.startsWith("grok")) {
+          const text = llmData.choices[0].message.content as string;
           agentResponse = parseAgentResponseText(text);
         }
-      } else if (selectedModel.startsWith("grok")) {
-        const text = llmData.choices[0].message.content as string;
-        agentResponse = parseAgentResponseText(text);
+
+        // Check if parsing actually failed (parse_error status)
+        if (agentResponse?.status === "parse_error") {
+          wasParseSuccess = false;
+          parseErrorMessage = "Failed to parse agent response as JSON";
+        }
+      } catch (parseError: any) {
+        wasParseSuccess = false;
+        parseErrorMessage = parseError.message || "Unknown parse error";
+        agentResponse = {
+          reasoning: "Failed to parse agent response as JSON. Raw output preserved.",
+          raw_output: rawOutputText.slice(0, 2000),
+          operations: [],
+          status: "parse_error",
+        };
       }
+
+      // Log the LLM call to agent_llm_logs
+      await supabase.rpc("insert_agent_llm_log_with_token", {
+        p_session_id: sessionId,
+        p_project_id: projectId,
+        p_token: shareToken,
+        p_iteration: iteration,
+        p_model: selectedModel,
+        p_input_prompt: fullInputPrompt,
+        p_output_raw: rawOutputText,
+        p_was_parse_success: wasParseSuccess,
+        p_parse_error_message: parseErrorMessage,
+        p_api_response_status: apiResponseStatus,
+      });
+      console.log(`[LLM LOG] Iteration ${iteration} logged, parse success: ${wasParseSuccess}`);
 
       console.log("Parsed agent response:", agentResponse);
 
