@@ -88,12 +88,12 @@ const License = () => {
           <section className="mt-8">
             <h2 className="text-2xl font-semibold mb-4">Contact</h2>
             <p className="text-muted-foreground leading-relaxed">
-              For questions about the license or the project, please contact:{" "}
+            For questions about the license or the project, please contact:{" "}
               <a
-                href="mailto:ti.deputyminister@gov.ab.ca"
+                href="mailto:ti.pronghorn@gov.ab.ca"
                 className="text-primary hover:underline"
               >
-                ti.deputyminister@gov.ab.ca
+                ti.pronghorn@gov.ab.ca
               </a>
             </p>
           </section>

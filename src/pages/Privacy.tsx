@@ -69,7 +69,7 @@ export default function Privacy() {
             <li>
               <strong>(c) Contact Information:</strong> If you have questions about the collection of your personal 
               information, please contact us at{" "}
-              <a href="mailto:ti.deputyminister@gov.ab.ca">ti.deputyminister@gov.ab.ca</a>.
+              <a href="mailto:ti.pronghorn@gov.ab.ca">ti.pronghorn@gov.ab.ca</a>.
             </li>
             <li>
               <strong>(d) Automated System Use:</strong> The personal information, along with any content you create 
@@ -149,8 +149,8 @@ export default function Privacy() {
           </p>
           <p>
             You may request the deletion of your account and associated data by contacting us at{" "}
-            <a href="mailto:ti.deputyminister@gov.ab.ca">ti.deputyminister@gov.ab.ca</a>. We will evaluate such requests in alignment with
-            POPA requirements and the Records Retention and Disposition Schedule, taking reasonable steps to delete your 
+            <a href="mailto:ti.pronghorn@gov.ab.ca">ti.pronghorn@gov.ab.ca</a>. We will evaluate such requests in alignment with
+            POPA requirements and the Records Retention and Disposition Schedule, taking reasonable steps to delete your
             personal information from our records where permissible, except where retention is required for legal purposes 
             under Alberta law.
           </p>
@@ -159,7 +159,7 @@ export default function Privacy() {
           <h3>Correction of Personal Information</h3>
           <p>
             The Protection of Privacy Act provides the right to request correction of your personal information. Please 
-            contact us at <a href="mailto:ti.deputyminister@gov.ab.ca">ti.deputyminister@gov.ab.ca</a> and we will redirect your request
+            contact us at <a href="mailto:ti.pronghorn@gov.ab.ca">ti.pronghorn@gov.ab.ca</a> and we will redirect your request
             to the office authorized to receive such a request.
           </p>
           <h3>Access to Information</h3>
@@ -178,7 +178,7 @@ export default function Privacy() {
           </p>
           <p>
             <strong>Email:</strong>{" "}
-            <a href="mailto:ti.deputyminister@gov.ab.ca">ti.deputyminister@gov.ab.ca</a>
+            <a href="mailto:ti.pronghorn@gov.ab.ca">ti.pronghorn@gov.ab.ca</a>
           </p>
           <p>
             <strong>Organization:</strong> Government of Alberta, Ministry of Technology and Innovation

@@ -214,7 +214,7 @@ export default function Terms() {
           </p>
           <p>
             <strong>Email:</strong>{" "}
-            <a href="mailto:ti.deputyminister@gov.ab.ca">ti.deputyminister@gov.ab.ca</a>
+            <a href="mailto:ti.pronghorn@gov.ab.ca">ti.pronghorn@gov.ab.ca</a>
           </p>
           <p>
             <strong>Organization:</strong> Government of Alberta, Ministry of Technology and Innovation

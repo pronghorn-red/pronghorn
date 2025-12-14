@@ -21,9 +21,12 @@ import Database from "./pages/project/Database";
 import NotFound from "./pages/NotFound";
 import Artifacts from "./pages/project/Artifacts";
 import Chat from "./pages/project/Chat";
+import { ScrollToTop } from "./components/ScrollToTop";
 
 const App = () => (
-  <Routes>
+  <>
+    <ScrollToTop />
+    <Routes>
     <Route path="/" element={<Landing />} />
     <Route path="/auth" element={<Auth />} />
     <Route path="/dashboard" element={<Dashboard />} />
@@ -63,9 +66,10 @@ const App = () => (
     <Route path="/project/:projectId/database/t/:token" element={<Database />} />
     <Route path="/project/:projectId/deploy/t/:token" element={<Deploy />} />
     
-    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-    <Route path="*" element={<NotFound />} />
-  </Routes>
+      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  </>
 );
 
 export default App;
