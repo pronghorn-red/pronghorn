@@ -17,22 +17,22 @@
       "label": "Vue (Vite)",
       "renderType": "web_service",
       "runtime": "node",
-      "buildCommand": "npm install && npm run build",
-      "runCommand": "npx http-server dist -p $PORT",
+      "buildCommand": "npm install && npm install -g serve && npm run build",
+      "runCommand": "serve -s dist",
       "buildFolder": "dist",
       "runFolder": "/",
-      "description": "Vue app built with Vite, served via http-server"
+      "description": "Vue app built with Vite, served via serve"
     },
     {
       "value": "react_vite",
       "label": "React (Vite)",
       "renderType": "web_service",
       "runtime": "node",
-      "buildCommand": "npm install && npm run build",
-      "runCommand": "npx http-server dist -p $PORT",
+      "buildCommand": "npm install && npm install -g serve && npm run build",
+      "runCommand": "serve -s dist",
       "buildFolder": "dist",
       "runFolder": "/",
-      "description": "React app built with Vite, served via http-server"
+      "description": "React app built with Vite, served via serve"
     },
     {
       "value": "node",
