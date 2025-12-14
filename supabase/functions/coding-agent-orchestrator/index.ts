@@ -949,6 +949,21 @@ Use them to understand context and inform your file operations.` : ''}`;
 
       console.log("Parsed agent response:", agentResponse);
 
+      // Ensure operations is an array, not a string (handles double-encoded JSON)
+      if (agentResponse && typeof agentResponse.operations === 'string') {
+        try {
+          agentResponse.operations = JSON.parse(agentResponse.operations);
+          console.log("Parsed operations from string");
+        } catch (e) {
+          console.warn('Failed to parse operations string:', e);
+          agentResponse.operations = [];
+        }
+      }
+      if (agentResponse && !Array.isArray(agentResponse.operations)) {
+        console.warn('Operations is not an array, defaulting to []:', typeof agentResponse.operations);
+        agentResponse.operations = [];
+      }
+
       // Log agent response to database
       await supabase.rpc("insert_agent_message_with_token", {
         p_session_id: sessionId,
