@@ -803,6 +803,8 @@ Use them to understand context and inform your file operations.` : ''}`;
     let conversationHistory: Array<{ role: string; content: string }> = [];
     let finalStatus = "running";
     let allOperationResults: any[] = [];
+    // Ephemeral context holds full operation results for current iteration only (NOT added to history)
+    let ephemeralContext: any[] = [];
 
     conversationHistory.push({ role: "user", content: `Task: ${taskDescription}` });
 
@@ -839,9 +841,22 @@ Use them to understand context and inform your file operations.` : ''}`;
       // Call LLM based on provider
       let llmResponse: any;
 
+      // Build conversation with ephemeral context injected for this iteration only
+      let conversationForLLM = [...conversationHistory];
+      if (ephemeralContext.length > 0) {
+        // Inject full operation results as ephemeral context (for read_file content, etc.)
+        // This is NOT stored in conversationHistory - only used for this single LLM call
+        conversationForLLM.push({
+          role: "user",
+          content: `[EPHEMERAL CONTEXT - Full operation results from last iteration]\n${JSON.stringify(ephemeralContext, null, 2)}\n[END EPHEMERAL CONTEXT]`,
+        });
+      }
+      // Clear ephemeral context after injection (will be repopulated after this iteration's operations)
+      ephemeralContext = [];
+
       if (selectedModel.startsWith("gemini")) {
         // Gemini API with system instruction
-        const contents = conversationHistory.map((msg) => ({
+        const contents = conversationForLLM.map((msg) => ({
           role: msg.role === "assistant" ? "model" : "user",
           parts: [{ text: msg.content }],
         }));
@@ -865,7 +880,7 @@ Use them to understand context and inform your file operations.` : ''}`;
         // Anthropic API with strict tool use for structured output
         console.log(`Using Claude model ${modelName} with strict tool use enforcement`);
         
-        const messages = conversationHistory.map((msg) => ({
+        const messages = conversationForLLM.map((msg) => ({
           role: msg.role,
           content: msg.content,
         }));
@@ -893,7 +908,7 @@ Use them to understand context and inform your file operations.` : ''}`;
         
         const messages = [
           { role: "system", content: systemPrompt },
-          ...conversationHistory.map((msg) => ({
+          ...conversationForLLM.map((msg) => ({
             role: msg.role,
             content: msg.content,
           })),
@@ -1157,6 +1172,16 @@ Use them to understand context and inform your file operations.` : ''}`;
                 p_query: op.params.query || "",
                 p_token: shareToken,
               });
+              // Strip content from wildcard_search results - agent should use read_file if needed
+              if (result.data && Array.isArray(result.data)) {
+                result.data = result.data.map((item: any) => ({
+                  id: item.id,
+                  path: item.path,
+                  match_count: item.match_count,
+                  matched_terms: item.matched_terms,
+                  is_staged: item.is_staged,
+                }));
+              }
               break;
 
             case "read_file":
@@ -1468,6 +1493,16 @@ Use them to understand context and inform your file operations.` : ''}`;
                 p_repo_id: repoId,
                 p_token: shareToken,
               });
+              // Strip old_content and new_content from staged changes - agent should use read_file if needed
+              if (result.data && Array.isArray(result.data)) {
+                result.data = result.data.map((item: any) => ({
+                  id: item.id,
+                  file_path: item.file_path,
+                  operation_type: item.operation_type,
+                  is_binary: item.is_binary,
+                  created_at: item.created_at,
+                }));
+              }
               console.log(`[AGENT] Retrieved ${result.data?.length || 0} staged changes`);
               break;
 
@@ -1601,16 +1636,72 @@ Use them to understand context and inform your file operations.` : ''}`;
 
       allOperationResults.push(...operationResults);
 
-      // Add operation results to conversation history for next iteration
-      const resultsMessage = `Operation results:\n${JSON.stringify(operationResults, null, 2)}`;
+      // Create summary of operation results for conversation history (without large content)
+      const summarizedResults = operationResults.map((r: any) => {
+        const summary: any = { type: r.type, success: r.success };
+        if (r.error) summary.error = r.error;
+        
+        // Create brief summaries instead of including full data
+        if (r.success && r.data) {
+          switch (r.type) {
+            case "list_files":
+              summary.summary = `Listed ${Array.isArray(r.data) ? r.data.length : 0} files`;
+              break;
+            case "wildcard_search":
+              summary.summary = `Found ${Array.isArray(r.data) ? r.data.length : 0} matching files`;
+              if (Array.isArray(r.data)) {
+                summary.files = r.data.map((f: any) => ({ id: f.id, path: f.path, match_count: f.match_count }));
+              }
+              break;
+            case "read_file":
+              if (Array.isArray(r.data) && r.data[0]) {
+                summary.summary = `Read ${r.data[0].path} (${r.data[0].total_lines || 'unknown'} lines)`;
+              }
+              break;
+            case "get_staged_changes":
+              summary.summary = `${Array.isArray(r.data) ? r.data.length : 0} staged changes`;
+              if (Array.isArray(r.data)) {
+                summary.files = r.data; // Already stripped of content above
+              }
+              break;
+            case "edit_lines":
+              summary.summary = `Edited file, now ${r.data?.total_lines || 'unknown'} lines`;
+              break;
+            case "create_file":
+              summary.summary = `Created file`;
+              break;
+            case "delete_file":
+              summary.summary = `Deleted file`;
+              break;
+            case "move_file":
+              summary.summary = `Moved file`;
+              break;
+            default:
+              summary.summary = `Completed ${r.type}`;
+          }
+        }
+        return summary;
+      });
+
+      // Add ONLY the agent's response to conversation history (reasoning + operations requested)
       conversationHistory.push({
         role: "assistant",
-        content: JSON.stringify(agentResponse),
+        content: JSON.stringify({
+          reasoning: agentResponse.reasoning,
+          operations: agentResponse.operations?.map((op: any) => ({ type: op.type, params_summary: Object.keys(op.params || {}) })),
+          status: agentResponse.status,
+        }),
       });
+      
+      // Add brief operation summaries (NOT full results with content)
       conversationHistory.push({
         role: "user",
-        content: resultsMessage,
+        content: `Operation summaries:\n${JSON.stringify(summarizedResults, null, 2)}`,
       });
+      
+      // Store full operation results for ephemeral injection into next iteration's prompt
+      // This will be used in the system prompt context, NOT added to conversation history
+      ephemeralContext = operationResults;
 
       // Check status to determine if we should continue
       if (agentResponse.status === "completed" || agentResponse.status === "requires_commit") {

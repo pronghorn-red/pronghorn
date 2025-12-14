@@ -304,9 +304,9 @@ export function RawLLMLogsViewer({ projectId, shareToken }: RawLLMLogsViewerProp
                     </TableCell>
                   </TableRow>
                   
-                  <CollapsibleContent asChild>
-                    <TableRow className="bg-muted/30">
-                      <TableCell colSpan={8} className="p-4">
+                  {expandedRows.has(log.id) && (
+                    <tr className="bg-muted/30">
+                      <td colSpan={8} className="p-4">
                         <div className="space-y-4">
                           {/* Parse Error Message */}
                           {!log.was_parse_success && log.parse_error_message && (
@@ -405,9 +405,9 @@ export function RawLLMLogsViewer({ projectId, shareToken }: RawLLMLogsViewerProp
                             )}
                           </div>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  </CollapsibleContent>
+                      </td>
+                    </tr>
+                  )}
                 </Collapsible>
               ))}
             </TableBody>
