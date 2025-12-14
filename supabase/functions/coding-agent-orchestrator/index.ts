@@ -1024,7 +1024,7 @@ Use them to understand context and inform your file operations.` : ''}`;
 
           switch (op.type) {
             case "list_files":
-              result = await supabase.rpc("get_repo_files_with_token", {
+              result = await supabase.rpc("get_repo_file_paths_with_token", {
                 p_repo_id: repoId,
                 p_token: shareToken,
                 p_path_prefix: op.params.path_prefix || null,
