@@ -141,6 +141,9 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     'REBUILD_ON_FILES=true',
     'REBUILD_ON_GIT=false',
     '',
+    '# PUSH_LOCAL_CHANGES: Push local file edits back to Pronghorn staging',
+    'PUSH_LOCAL_CHANGES=true',
+    '',
     '# ===========================================',
     '# GIT CONFIGURATION (only if REBUILD_ON_GIT=true)',
     '# ===========================================',
@@ -202,6 +205,7 @@ function generatePackageJson(deployment: any): object {
       '@supabase/supabase-js': '^2.45.0',
       'dotenv': '^16.3.1',
       'node-fetch': '^3.3.2',
+      'chokidar': '^3.5.3',
     },
   };
 }
@@ -234,6 +238,9 @@ const CONFIG = {
   rebuildOnStaging: process.env.REBUILD_ON_STAGING === 'true',
   rebuildOnFiles: process.env.REBUILD_ON_FILES === 'true',
   rebuildOnGit: process.env.REBUILD_ON_GIT === 'true',
+  
+  // Bidirectional sync
+  pushLocalChanges: process.env.PUSH_LOCAL_CHANGES !== 'false',
   
   // Git config (for REBUILD_ON_GIT)
   githubRepo: process.env.GITHUB_REPO,
@@ -277,6 +284,32 @@ async function initSupabase() {
   const { createClient } = await import('@supabase/supabase-js');
   supabase = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
   console.log('[Pronghorn] Supabase client initialized');
+}
+
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+
+function hashContent(content) {
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    hash = ((hash << 5) - hash) + content.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash;
+}
+
+function isBinaryFile(filePath) {
+  try {
+    const buffer = fs.readFileSync(filePath);
+    const checkLength = Math.min(buffer.length, 8192);
+    for (let i = 0; i < checkLength; i++) {
+      if (buffer[i] === 0) return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 // ============================================
@@ -579,16 +612,22 @@ async function syncStagingToLocal() {
           fs.mkdirSync(dirPath, { recursive: true });
         }
         
-        // Check if file exists and content actually changed before writing
+        // Check if file exists and use hash comparison before writing
         const fileExists = fs.existsSync(fullPath);
-        let existingContent = '';
+        const newContent = staged.new_content || '';
+        const newHash = hashContent(newContent);
+        
+        let shouldWrite = !fileExists;
         if (fileExists) {
-          existingContent = fs.readFileSync(fullPath, 'utf8');
+          const existingContent = fs.readFileSync(fullPath, 'utf8');
+          const existingHash = hashContent(existingContent);
+          shouldWrite = (newHash !== existingHash);
+          if (!shouldWrite) {
+            console.log(\`[Pronghorn] Skip write (hash match): \${staged.file_path}\`);
+          }
         }
         
-        const newContent = staged.new_content || '';
-        // Write if: file doesn't exist OR content changed (handles empty file creation)
-        if (!fileExists || existingContent !== newContent) {
+        if (shouldWrite) {
           fs.writeFileSync(fullPath, newContent, 'utf8');
           console.log(\`[Pronghorn] Written (staged \${staged.operation_type}): \${staged.file_path} [\${newContent.length} bytes]\`);
           
@@ -598,8 +637,6 @@ async function syncStagingToLocal() {
             console.log('[Pronghorn] package.json changed - will run npm install');
             await runNpmInstallInDirs([dirPath]);
           }
-        } else {
-          console.log(\`[Pronghorn] No content change, skipping write: \${staged.file_path}\`);
         }
       }
     }
@@ -872,6 +909,102 @@ async function handleRepoFileChange(payload) {
 }
 
 // ============================================
+// LOCAL FILE WATCHER (for bidirectional sync)
+// ============================================
+
+let localFileWatcher = null;
+
+async function setupLocalFileWatcher() {
+  console.log('[Pronghorn] Setting up local file watcher for bidirectional sync...');
+  
+  const chokidar = require('chokidar');
+  
+  localFileWatcher = chokidar.watch(APP_DIR, {
+    ignored: [
+      '**/node_modules/**',
+      '**/.git/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/.cache/**',
+      '**/coverage/**',
+      '**/*.log',
+    ],
+    persistent: true,
+    ignoreInitial: true,
+    awaitWriteFinish: {
+      stabilityThreshold: 100,
+      pollInterval: 50,
+    },
+  });
+  
+  localFileWatcher.on('add', async (fullPath) => {
+    const relativePath = path.relative(APP_DIR, fullPath).replace(/\\\\/g, '/');
+    if (isBinaryFile(fullPath)) {
+      console.log(\`[Pronghorn] Skip binary file: \${relativePath}\`);
+      return;
+    }
+    const content = fs.readFileSync(fullPath, 'utf8');
+    await pushLocalChangeToCloud(relativePath, 'add', content);
+  });
+  
+  localFileWatcher.on('change', async (fullPath) => {
+    const relativePath = path.relative(APP_DIR, fullPath).replace(/\\\\/g, '/');
+    if (isBinaryFile(fullPath)) {
+      console.log(\`[Pronghorn] Skip binary file: \${relativePath}\`);
+      return;
+    }
+    const content = fs.readFileSync(fullPath, 'utf8');
+    await pushLocalChangeToCloud(relativePath, 'edit', content);
+  });
+  
+  localFileWatcher.on('unlink', async (fullPath) => {
+    const relativePath = path.relative(APP_DIR, fullPath).replace(/\\\\/g, '/');
+    await pushLocalChangeToCloud(relativePath, 'delete', null);
+  });
+  
+  localFileWatcher.on('ready', () => {
+    console.log('[Pronghorn] ✓ Local file watcher ready (bidirectional sync enabled)');
+  });
+  
+  localFileWatcher.on('error', (error) => {
+    console.error('[Pronghorn] File watcher error:', error.message);
+  });
+}
+
+async function pushLocalChangeToCloud(relativePath, operationType, content) {
+  console.log(\`[Pronghorn] Pushing to cloud: \${relativePath} (\${operationType})\`);
+  
+  try {
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch(\`\${CONFIG.supabaseUrl}/functions/v1/staging-operations\`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': \`Bearer \${CONFIG.supabaseAnonKey}\`,
+      },
+      body: JSON.stringify({
+        action: 'stage',
+        repoId: CONFIG.repoId,
+        shareToken: CONFIG.shareToken,
+        filePath: relativePath,
+        operationType: operationType,
+        oldContent: null,
+        newContent: content,
+      }),
+    });
+    
+    const result = await response.json();
+    if (result.success) {
+      console.log(\`[Pronghorn] ✓ Pushed: \${relativePath}\`);
+    } else {
+      console.error(\`[Pronghorn] ✗ Push failed: \${result.error}\`);
+    }
+  } catch (err) {
+    console.error(\`[Pronghorn] Push error: \${err.message}\`);
+  }
+}
+
+// ============================================
 // GIT POLLING (if REBUILD_ON_GIT enabled)
 // ============================================
 
@@ -963,6 +1096,13 @@ async function main() {
     // Setup realtime subscription
     await setupRealtimeSubscription();
     
+    // Setup local file watcher for bidirectional sync
+    if (CONFIG.pushLocalChanges) {
+      await setupLocalFileWatcher();
+    } else {
+      console.log('[Pronghorn] Local → Cloud sync disabled (PUSH_LOCAL_CHANGES=false)');
+    }
+    
     // Start GitHub polling if enabled
     if (CONFIG.rebuildOnGit) {
       setInterval(pollGitHub, 30000); // Poll every 30 seconds
@@ -999,7 +1139,7 @@ main();
 function generateReadme(deployment: any, project: any, repo: any): string {
   return `# ${deployment.environment.toUpperCase()}-${deployment.name} Real-Time Local Development
 
-This package provides **real-time synchronization** with Pronghorn. Files are pulled directly from the database and automatically updated when changes occur.
+This package provides **bidirectional real-time synchronization** with Pronghorn. Files are synced both ways - cloud changes appear locally, and local edits are pushed back to staging.
 
 ## 🚀 Quick Start
 
@@ -1024,13 +1164,14 @@ npm start
 
 Edit the \`.env\` file to configure behavior:
 
-### Rebuild Triggers
+### Sync Settings
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | \`REBUILD_ON_STAGING\` | \`true\` | Sync when files are staged (before commit) |
 | \`REBUILD_ON_FILES\` | \`true\` | Sync when files are committed |
 | \`REBUILD_ON_GIT\` | \`false\` | Poll GitHub for changes (requires PAT) |
+| \`PUSH_LOCAL_CHANGES\` | \`true\` | Push local file edits back to Pronghorn staging |
 
 ### Required Configuration
 
@@ -1043,12 +1184,22 @@ Edit the \`.env\` file to configure behavior:
 
 ## 📁 How It Works
 
+### Cloud → Local (Pull)
 1. **Initial Sync**: Downloads all files from Pronghorn database to \`./app/\` folder
 2. **Real-Time Subscription**: Listens for changes to \`repo_staging\` and \`repo_files\` tables
-3. **Hot Reload**: When changes detected:
+3. **Hash Comparison**: Only writes files when content actually changed (prevents loops)
+4. **Hot Reload**: When changes detected:
    - **Vite/React/Vue**: Files update, HMR automatically refreshes browser
    - **Node.js/Express**: Server restarts automatically
-4. **Error Telemetry**: Errors are captured and sent back to Pronghorn for AI-assisted debugging
+
+### Local → Cloud (Push)
+1. **File Watcher**: Uses chokidar to watch \`./app/\` folder for changes
+2. **Auto-Stage**: Local edits are automatically pushed to Pronghorn staging
+3. **Binary Detection**: Binary files are skipped (only text files synced)
+4. **Loop Prevention**: Hash comparison on cloud→local prevents infinite loops
+
+### Error Telemetry
+Errors are captured and sent back to Pronghorn for AI-assisted debugging.
 
 ## 📊 Project Details
 
@@ -1070,6 +1221,11 @@ Run \`npm install\` in this directory.
 1. Check that \`PRONGHORN_SHARE_TOKEN\` is set in \`.env\`
 2. Ensure \`PRONGHORN_REPO_ID\` is correct
 3. Check console for subscription errors
+
+### Local changes not pushing
+1. Check that \`PUSH_LOCAL_CHANGES=true\` in \`.env\`
+2. Ensure file is not binary (check console for "Skip binary file" messages)
+3. Check console for push errors
 
 ### Port already in use
 Change the \`APP_PORT\` in your \`.env\` file.
