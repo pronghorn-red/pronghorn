@@ -122,48 +122,53 @@ export function ProjectActivityHeatmap({ projectId, shareToken }: ProjectActivit
           </div>
         ) : (
           <div className="space-y-3">
-            {/* Period headers */}
-            <div className="flex items-center gap-1">
-              <div className="w-36 shrink-0" />
-              <div className="flex gap-1 overflow-x-auto pb-1">
-                {activity.periods.map((period, idx) => (
-                  <div
-                    key={period}
-                    className="w-5 h-4 text-[9px] text-muted-foreground text-center shrink-0"
-                    title={formatPeriodLabel(period)}
-                  >
-                    {idx % 2 === 0 ? formatPeriodLabel(period).slice(0, 3) : ""}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Entity rows */}
-            {activeEntities.map((entity) => {
-              const totalCount = entity.data.reduce((sum, d) => sum + d.count, 0);
-              return (
-                <div key={entity.key} className="flex items-center gap-1">
-                  <div
-                    className="w-36 shrink-0 text-xs text-muted-foreground truncate"
-                    title={entity.label}
-                  >
-                    {entity.label}
-                    <span className="ml-1 text-foreground font-medium">({totalCount})</span>
-                  </div>
-                  <div className="flex gap-1 overflow-x-auto">
-                    {entity.data.map((d) => (
+            {/* Single scrollable container for entire grid */}
+            <div className="overflow-x-auto">
+              <div className="min-w-max space-y-1">
+                {/* Period headers */}
+                <div className="flex items-center gap-1">
+                  <div className="w-36 shrink-0" />
+                  <div className="flex gap-1">
+                    {activity.periods.map((period, idx) => (
                       <div
-                        key={d.period}
-                        className={`w-5 h-5 rounded-sm shrink-0 ${getHeatColor(d.count, maxCount)} transition-colors cursor-default`}
-                        title={`${entity.label}: ${d.count} on ${formatPeriodLabel(d.period)}`}
-                      />
+                        key={period}
+                        className="w-5 h-4 text-[9px] text-muted-foreground text-center shrink-0"
+                        title={formatPeriodLabel(period)}
+                      >
+                        {idx % 2 === 0 ? formatPeriodLabel(period).slice(0, 3) : ""}
+                      </div>
                     ))}
                   </div>
                 </div>
-              );
-            })}
 
-            {/* Legend */}
+                {/* Entity rows */}
+                {activeEntities.map((entity) => {
+                  const totalCount = entity.data.reduce((sum, d) => sum + d.count, 0);
+                  return (
+                    <div key={entity.key} className="flex items-center gap-1">
+                      <div
+                        className="w-36 shrink-0 text-xs text-muted-foreground truncate"
+                        title={entity.label}
+                      >
+                        {entity.label}
+                        <span className="ml-1 text-foreground font-medium">({totalCount})</span>
+                      </div>
+                      <div className="flex gap-1">
+                        {entity.data.map((d) => (
+                          <div
+                            key={d.period}
+                            className={`w-5 h-5 rounded-sm shrink-0 ${getHeatColor(d.count, maxCount)} transition-colors cursor-default`}
+                            title={`${entity.label}: ${d.count} on ${formatPeriodLabel(d.period)}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Legend - outside scroll container */}
             <div className="flex items-center gap-2 pt-3 border-t text-xs text-muted-foreground">
               <span>Less</span>
               <div className="flex gap-1">

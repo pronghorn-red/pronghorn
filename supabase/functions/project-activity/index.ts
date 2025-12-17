@@ -55,6 +55,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Fetch project creation date
+    const { data: projectData, error: projectError } = await supabase
+      .from("projects")
+      .select("created_at")
+      .eq("id", projectId)
+      .single();
+
+    if (projectError || !projectData) {
+      console.error("Project fetch error:", projectError);
+      return new Response(JSON.stringify({ error: "Project not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const projectCreatedAt = new Date(projectData.created_at);
+    console.log("Project created at:", projectCreatedAt.toISOString());
+
     // Define granularity SQL
     const granularityMap: Record<string, string> = {
       day: "day",
@@ -83,48 +101,45 @@ Deno.serve(async (req) => {
       { key: "project_deployments", label: "Deployments", table: "project_deployments", dateCol: "created_at" },
     ];
 
-    // Generate periods for the last 12 units (weeks/months/days)
-    const periodCount = granularity === "day" ? 30 : granularity === "month" ? 12 : 12;
+    // Generate periods from project creation to now
     const periods: string[] = [];
     const now = new Date();
     
-    for (let i = periodCount - 1; i >= 0; i--) {
-      const date = new Date(now);
+    // Align start date to period boundary
+    const startDate = new Date(projectCreatedAt);
+    if (truncUnit === "week") {
+      const dayOfWeek = startDate.getDay();
+      startDate.setDate(startDate.getDate() - dayOfWeek);
+    } else if (truncUnit === "month") {
+      startDate.setDate(1);
+    }
+    startDate.setHours(0, 0, 0, 0);
+
+    // Generate all periods from project creation to now
+    const currentDate = new Date(startDate);
+    while (currentDate <= now) {
+      periods.push(currentDate.toISOString().split("T")[0]);
       if (truncUnit === "day") {
-        date.setDate(date.getDate() - i);
+        currentDate.setDate(currentDate.getDate() + 1);
       } else if (truncUnit === "week") {
-        date.setDate(date.getDate() - i * 7);
-      } else if (truncUnit === "month") {
-        date.setMonth(date.getMonth() - i);
-      }
-      
-      // Format based on granularity
-      if (truncUnit === "day") {
-        periods.push(date.toISOString().split("T")[0]);
-      } else if (truncUnit === "week") {
-        // Get start of week (Sunday)
-        const dayOfWeek = date.getDay();
-        date.setDate(date.getDate() - dayOfWeek);
-        periods.push(date.toISOString().split("T")[0]);
+        currentDate.setDate(currentDate.getDate() + 7);
       } else {
-        // Start of month
-        date.setDate(1);
-        periods.push(date.toISOString().split("T")[0]);
+        currentDate.setMonth(currentDate.getMonth() + 1);
       }
     }
 
     // Query all entity counts in parallel
     const entityPromises = entityTables.map(async (entity) => {
-      const query = `
-        SELECT 
-          date_trunc('${truncUnit}', ${entity.dateCol})::date as period,
-          COUNT(*)::int as count
-        FROM ${entity.table}
-        WHERE project_id = '${projectId}'
-          AND ${entity.dateCol} >= NOW() - INTERVAL '${periodCount} ${truncUnit}s'
-        GROUP BY period
-        ORDER BY period
-      `;
+        const query = `
+          SELECT 
+            date_trunc('${truncUnit}', ${entity.dateCol})::date as period,
+            COUNT(*)::int as count
+          FROM ${entity.table}
+          WHERE project_id = '${projectId}'
+            AND ${entity.dateCol} >= '${projectCreatedAt.toISOString()}'
+          GROUP BY period
+          ORDER BY period
+        `;
 
       const { data, error } = await supabase.rpc("exec_sql", { sql: query }).single();
       
