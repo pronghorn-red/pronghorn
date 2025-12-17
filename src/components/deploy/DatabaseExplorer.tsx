@@ -51,12 +51,13 @@ interface SavedQuery {
 }
 
 interface DatabaseExplorerProps {
-  database: any;
+  database?: any;
+  externalConnection?: any;
   shareToken: string | null;
   onBack?: () => void;
 }
 
-export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplorerProps) {
+export function DatabaseExplorer({ database, externalConnection, shareToken, onBack }: DatabaseExplorerProps) {
   const isMobile = useIsMobile();
   const [schemas, setSchemas] = useState<SchemaInfo[]>([]);
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
@@ -88,15 +89,29 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
   const [editingQuery, setEditingQuery] = useState<SavedQuery | null>(null);
   const [pendingSqlToSave, setPendingSqlToSave] = useState("");
 
+  // Determine if we're using a Render database or external connection
+  const isExternal = !!externalConnection;
+  const databaseId = database?.id;
+  const connectionId = externalConnection?.id;
+  const displayName = isExternal ? externalConnection?.name : database?.name;
+
   const invokeManageDatabase = async (action: string, extraBody: any = {}) => {
-    const { data, error } = await supabase.functions.invoke("manage-database", {
-      body: { action, databaseId: database.id, shareToken, ...extraBody },
-    });
+    const body: any = { action, shareToken, ...extraBody };
+    
+    // Use connectionId for external connections, databaseId for Render databases
+    if (isExternal && connectionId) {
+      body.connectionId = connectionId;
+    } else if (databaseId) {
+      body.databaseId = databaseId;
+    }
+    
+    const { data, error } = await supabase.functions.invoke("manage-database", { body });
     if (error || !data?.success) {
       throw new Error(data?.error || error?.message || `Failed to ${action}`);
     }
     return data.data;
   };
+
 
   const initialLoadDone = useRef(false);
 
@@ -112,31 +127,35 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
     } finally {
       setLoadingSchema(false);
     }
-  }, [database.id, shareToken]);
+  }, [databaseId, connectionId, shareToken, isExternal]);
 
   const loadSavedQueries = useCallback(async () => {
+    // Saved queries only work for Render databases (they need database_id)
+    if (isExternal || !databaseId) return;
     try {
       const { data, error } = await supabase.rpc("get_saved_queries_with_token", {
-        p_database_id: database.id,
+        p_database_id: databaseId,
         p_token: shareToken || null,
       });
       if (!error && data) setSavedQueries(data);
     } catch (error) {
       console.error("Failed to load saved queries:", error);
     }
-  }, [database.id, shareToken]);
+  }, [databaseId, shareToken, isExternal]);
 
   const loadMigrations = useCallback(async () => {
+    // Migrations only work for Render databases (they need database_id)
+    if (isExternal || !databaseId) return;
     try {
       const { data, error } = await supabase.rpc("get_migrations_with_token", {
-        p_database_id: database.id,
+        p_database_id: databaseId,
         p_token: shareToken || null,
       });
       if (!error && data) setMigrations(data as Migration[]);
     } catch (error) {
       console.error("Failed to load migrations:", error);
     }
-  }, [database.id, shareToken]);
+  }, [databaseId, shareToken, isExternal]);
 
   useEffect(() => {
     if (!initialLoadDone.current) {
@@ -157,25 +176,27 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
       setQueryResults({ columns: result.columns || [], rows: result.rows || [], executionTime: result.executionTime, totalRows: result.rowCount });
       toast.success(`Query executed: ${result.rowCount} rows`);
       
-      // Auto-capture DDL statements as migrations
-      const ddlStatements = extractDDLStatements(sql);
-      for (const ddl of ddlStatements) {
-        try {
-          await supabase.rpc("insert_migration_with_token", {
-            p_database_id: database.id,
-            p_sql_content: ddl.sql,
-            p_statement_type: ddl.statementType,
-            p_object_type: ddl.objectType,
-            p_token: shareToken || null,
-            p_object_schema: ddl.objectSchema || 'public',
-            p_object_name: ddl.objectName,
-          });
-          toast.success(`Migration captured: ${ddl.statementType} ${ddl.objectType}${ddl.objectName ? ` ${ddl.objectName}` : ''}`);
-        } catch (e) {
-          console.error("Failed to capture migration:", e);
+      // Auto-capture DDL statements as migrations (only for Render databases)
+      if (!isExternal && databaseId) {
+        const ddlStatements = extractDDLStatements(sql);
+        for (const ddl of ddlStatements) {
+          try {
+            await supabase.rpc("insert_migration_with_token", {
+              p_database_id: databaseId,
+              p_sql_content: ddl.sql,
+              p_statement_type: ddl.statementType,
+              p_object_type: ddl.objectType,
+              p_token: shareToken || null,
+              p_object_schema: ddl.objectSchema || 'public',
+              p_object_name: ddl.objectName,
+            });
+            toast.success(`Migration captured: ${ddl.statementType} ${ddl.objectType}${ddl.objectName ? ` ${ddl.objectName}` : ''}`);
+          } catch (e) {
+            console.error("Failed to capture migration:", e);
+          }
         }
+        if (ddlStatements.length > 0) loadMigrations();
       }
-      if (ddlStatements.length > 0) loadMigrations();
       
       silentRefresh();
       if (isMobile) setMobileActiveTab("results");
@@ -299,12 +320,16 @@ export function DatabaseExplorer({ database, shareToken, onBack }: DatabaseExplo
   };
 
   const handleSaveQuery = async (name: string, description: string, sqlContent: string) => {
+    if (isExternal || !databaseId) {
+      toast.error("Saved queries are only available for project databases");
+      return;
+    }
     try {
       if (editingQuery) {
         await supabase.rpc("update_saved_query_with_token", { p_query_id: editingQuery.id, p_token: shareToken || null, p_name: name, p_description: description || null, p_sql_content: sqlContent });
         toast.success("Query updated");
       } else {
-        await supabase.rpc("insert_saved_query_with_token", { p_database_id: database.id, p_name: name, p_sql_content: sqlContent, p_token: shareToken || null, p_description: description || null });
+        await supabase.rpc("insert_saved_query_with_token", { p_database_id: databaseId, p_name: name, p_sql_content: sqlContent, p_token: shareToken || null, p_description: description || null });
         toast.success("Query saved");
       }
       loadSavedQueries();

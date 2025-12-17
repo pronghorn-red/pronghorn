@@ -12,15 +12,19 @@ interface ManageDatabaseRequest {
   action: 'get_schema' | 'execute_sql' | 'get_table_data' | 'get_table_columns' | 'export_table' 
     | 'get_table_definition' | 'get_view_definition' | 'get_function_definition' 
     | 'get_trigger_definition' | 'get_index_definition' | 'get_sequence_info' | 'get_type_definition'
-    | 'get_table_structure';
-  databaseId: string;
+    | 'get_table_structure' | 'test_connection';
+  // Either databaseId (Render) OR connectionId (external) must be provided
+  databaseId?: string;
+  connectionId?: string;
+  // Direct connection string for testing before saving
+  connectionString?: string;
   shareToken?: string;
   // For execute_sql
   sql?: string;
   // For get_table_data and definitions
   schema?: string;
   table?: string;
-  name?: string; // For functions, triggers, indexes, sequences, types
+  name?: string;
   limit?: number;
   offset?: number;
   orderBy?: string;
@@ -39,71 +43,167 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    if (!RENDER_API_KEY) {
-      throw new Error("RENDER_API_KEY must be configured");
-    }
-
     const authHeader = req.headers.get("Authorization");
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: authHeader ? { Authorization: authHeader } : {} },
     });
 
     const body: ManageDatabaseRequest = await req.json();
-    const { action, databaseId, shareToken } = body;
+    const { action, databaseId, connectionId, shareToken } = body;
 
-    console.log(`[manage-database] Action: ${action}, Database ID: ${databaseId}`);
+    console.log(`[manage-database] Action: ${action}, Database ID: ${databaseId}, Connection ID: ${connectionId}`);
 
-    if (!databaseId) {
-      throw new Error("databaseId is required");
+    // Handle test_connection with direct connection string
+    if (action === 'test_connection' && body.connectionString) {
+      console.log("[manage-database] Testing direct connection string");
+      try {
+        const client = new Client(body.connectionString);
+        await client.connect();
+        await client.queryObject("SELECT 1");
+        await client.end();
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return new Response(JSON.stringify({ success: false, error: errorMessage }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
-    // Fetch database record and validate access
-    const { data: database, error: dbError } = await supabase.rpc("get_database_with_token", {
-      p_database_id: databaseId,
-      p_token: shareToken || null,
-    });
+    let connectionString: string;
+    let projectId: string;
+    let role: string;
 
-    if (dbError || !database) {
-      console.error("[manage-database] Database fetch error:", dbError);
-      throw new Error(dbError?.message || "Database not found or access denied");
-    }
+    // Determine connection source: Render database OR external connection
+    if (connectionId) {
+      // External database connection - owner only
+      console.log("[manage-database] Using external connection");
+      
+      // Get connection string via secure RPC (owner only)
+      const { data: connString, error: connError } = await supabase.rpc("get_db_connection_string_with_token", {
+        p_connection_id: connectionId,
+        p_token: shareToken || null,
+      });
 
-    // Get role for permission checking
-    const { data: role, error: roleError } = await supabase.rpc("authorize_project_access", {
-      p_project_id: database.project_id,
-      p_token: shareToken || null,
-    });
+      if (connError || !connString) {
+        console.error("[manage-database] Connection string fetch error:", connError);
+        throw new Error(connError?.message || "Connection not found or access denied");
+      }
 
-    if (roleError) {
-      throw new Error("Access denied");
-    }
+      connectionString = connString;
 
-    // Check if database is available
-    if (!database.render_postgres_id || database.status !== "available") {
-      throw new Error("Database is not available. Status: " + database.status);
-    }
+      // Get connection details for project_id
+      const { data: connDetails, error: detailsError } = await supabase.rpc("get_db_connection_with_token", {
+        p_connection_id: connectionId,
+        p_token: shareToken || null,
+      });
 
-    // Get connection string from Render API
-    const renderHeaders = {
-      "Authorization": `Bearer ${RENDER_API_KEY}`,
-      "Content-Type": "application/json",
-    };
+      if (detailsError || !connDetails || connDetails.length === 0) {
+        throw new Error("Connection details not found");
+      }
 
-    const connResponse = await fetch(
-      `${RENDER_API_URL}/postgres/${database.render_postgres_id}/connection-info`,
-      { method: "GET", headers: renderHeaders }
-    );
+      projectId = connDetails[0].project_id;
+      role = 'owner'; // Only owners can access external connections
 
-    if (!connResponse.ok) {
-      const errorText = await connResponse.text();
-      throw new Error(`Failed to get connection info: ${errorText}`);
-    }
+      // Handle test_connection action
+      if (action === 'test_connection') {
+        try {
+          const client = new Client(connectionString);
+          await client.connect();
+          await client.queryObject("SELECT 1");
+          await client.end();
 
-    const connInfo = await connResponse.json();
-    const connectionString = connInfo.externalConnectionString;
+          // Update connection status
+          await supabase.rpc("update_db_connection_status_with_token", {
+            p_connection_id: connectionId,
+            p_token: shareToken || null,
+            p_status: "connected",
+            p_last_error: null,
+          });
 
-    if (!connectionString) {
-      throw new Error("No external connection string available");
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          
+          // Update connection status
+          await supabase.rpc("update_db_connection_status_with_token", {
+            p_connection_id: connectionId,
+            p_token: shareToken || null,
+            p_status: "failed",
+            p_last_error: errorMessage,
+          });
+
+          return new Response(JSON.stringify({ success: false, error: errorMessage }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+    } else if (databaseId) {
+      // Render database - existing flow
+      if (!RENDER_API_KEY) {
+        throw new Error("RENDER_API_KEY must be configured");
+      }
+
+      // Fetch database record and validate access
+      const { data: database, error: dbError } = await supabase.rpc("get_database_with_token", {
+        p_database_id: databaseId,
+        p_token: shareToken || null,
+      });
+
+      if (dbError || !database) {
+        console.error("[manage-database] Database fetch error:", dbError);
+        throw new Error(dbError?.message || "Database not found or access denied");
+      }
+
+      projectId = database.project_id;
+
+      // Get role for permission checking
+      const { data: roleData, error: roleError } = await supabase.rpc("authorize_project_access", {
+        p_project_id: database.project_id,
+        p_token: shareToken || null,
+      });
+
+      if (roleError) {
+        throw new Error("Access denied");
+      }
+      role = roleData;
+
+      // Check if database is available
+      if (!database.render_postgres_id || database.status !== "available") {
+        throw new Error("Database is not available. Status: " + database.status);
+      }
+
+      // Get connection string from Render API
+      const renderHeaders = {
+        "Authorization": `Bearer ${RENDER_API_KEY}`,
+        "Content-Type": "application/json",
+      };
+
+      const connResponse = await fetch(
+        `${RENDER_API_URL}/postgres/${database.render_postgres_id}/connection-info`,
+        { method: "GET", headers: renderHeaders }
+      );
+
+      if (!connResponse.ok) {
+        const errorText = await connResponse.text();
+        throw new Error(`Failed to get connection info: ${errorText}`);
+      }
+
+      const connInfo = await connResponse.json();
+      connectionString = connInfo.externalConnectionString;
+
+      if (!connectionString) {
+        throw new Error("No external connection string available");
+      }
+    } else {
+      throw new Error("Either databaseId or connectionId is required");
     }
 
     let result: any;
@@ -125,7 +225,7 @@ Deno.serve(async (req) => {
         const destructivePatterns = [
           /^\s*DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|FUNCTION|TRIGGER|SEQUENCE)/i,
           /^\s*TRUNCATE\s+/i,
-          /^\s*DELETE\s+FROM\s+.*(?!WHERE)/i, // DELETE without WHERE
+          /^\s*DELETE\s+FROM\s+.*(?!WHERE)/i,
           /^\s*ALTER\s+TABLE\s+.*\s+DROP\s+/i,
         ];
         
@@ -215,6 +315,9 @@ Deno.serve(async (req) => {
         }
         result = await getTableStructure(connectionString, body.schema, body.table);
         break;
+      case 'test_connection':
+        // Already handled above for connectionId
+        throw new Error("test_connection requires connectionId or connectionString");
       default:
         throw new Error(`Unknown action: ${action}`);
     }

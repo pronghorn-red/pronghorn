@@ -931,6 +931,68 @@ export type Database = {
           },
         ]
       }
+      project_database_connections: {
+        Row: {
+          connection_string: string
+          created_at: string
+          created_by: string | null
+          database_name: string | null
+          description: string | null
+          host: string | null
+          id: string
+          last_connected_at: string | null
+          last_error: string | null
+          name: string
+          port: number | null
+          project_id: string
+          ssl_mode: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          connection_string: string
+          created_at?: string
+          created_by?: string | null
+          database_name?: string | null
+          description?: string | null
+          host?: string | null
+          id?: string
+          last_connected_at?: string | null
+          last_error?: string | null
+          name: string
+          port?: number | null
+          project_id: string
+          ssl_mode?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          connection_string?: string
+          created_at?: string
+          created_by?: string | null
+          database_name?: string | null
+          description?: string | null
+          host?: string | null
+          id?: string
+          last_connected_at?: string | null
+          last_error?: string | null
+          name?: string
+          port?: number | null
+          project_id?: string
+          ssl_mode?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_database_connections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_database_sql: {
         Row: {
           created_at: string
@@ -2382,6 +2444,10 @@ export type Database = {
         Args: { p_database_id: string; p_token?: string }
         Returns: undefined
       }
+      delete_db_connection_with_token: {
+        Args: { p_connection_id: string; p_token: string }
+        Returns: undefined
+      }
       delete_deployment_with_token: {
         Args: { p_deployment_id: string; p_token: string }
         Returns: undefined
@@ -2832,6 +2898,48 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_db_connection_string_with_token: {
+        Args: { p_connection_id: string; p_token?: string }
+        Returns: string
+      }
+      get_db_connection_with_token: {
+        Args: { p_connection_id: string; p_token?: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          database_name: string
+          description: string
+          host: string
+          id: string
+          last_connected_at: string
+          last_error: string
+          name: string
+          port: number
+          project_id: string
+          ssl_mode: string
+          status: string
+          updated_at: string
+        }[]
+      }
+      get_db_connections_with_token: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: {
+          created_at: string
+          created_by: string
+          database_name: string
+          description: string
+          host: string
+          id: string
+          last_connected_at: string
+          last_error: string
+          name: string
+          port: number
+          project_id: string
+          ssl_mode: string
+          status: string
+          updated_at: string
+        }[]
       }
       get_deployment_logs_with_token: {
         Args: { p_deployment_id: string; p_limit?: number; p_token?: string }
@@ -3646,6 +3754,20 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      insert_db_connection_with_token: {
+        Args: {
+          p_connection_string: string
+          p_database_name?: string
+          p_description?: string
+          p_host?: string
+          p_name: string
+          p_port?: number
+          p_project_id: string
+          p_ssl_mode?: string
+          p_token: string
+        }
+        Returns: string
       }
       insert_deployment_log_with_token: {
         Args: {
@@ -4620,6 +4742,29 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_db_connection_status_with_token: {
+        Args: {
+          p_connection_id: string
+          p_last_error?: string
+          p_status: string
+          p_token: string
+        }
+        Returns: undefined
+      }
+      update_db_connection_with_token: {
+        Args: {
+          p_connection_id: string
+          p_connection_string?: string
+          p_database_name?: string
+          p_description?: string
+          p_host?: string
+          p_name?: string
+          p_port?: number
+          p_ssl_mode?: string
+          p_token: string
+        }
+        Returns: undefined
       }
       update_deployment_secrets_with_token: {
         Args: { p_deployment_id: string; p_secrets: Json; p_token: string }
