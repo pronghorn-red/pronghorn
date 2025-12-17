@@ -3080,6 +3080,31 @@ export type Database = {
           role: Database["public"]["Enums"]["project_token_role"]
         }[]
       }
+      get_migrations_by_connection_with_token: {
+        Args: { p_connection_id: string; p_token?: string }
+        Returns: {
+          connection_id: string | null
+          created_at: string
+          database_id: string | null
+          executed_at: string
+          executed_by: string | null
+          id: string
+          name: string | null
+          object_name: string | null
+          object_schema: string | null
+          object_type: string
+          project_id: string
+          sequence_number: number
+          sql_content: string
+          statement_type: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_migrations"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_migrations_with_token:
         | {
             Args: {
@@ -3497,6 +3522,27 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "requirements"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_saved_queries_by_connection_with_token: {
+        Args: { p_connection_id: string; p_token?: string }
+        Returns: {
+          connection_id: string | null
+          created_at: string
+          created_by: string | null
+          database_id: string | null
+          description: string | null
+          id: string
+          name: string
+          project_id: string
+          sql_content: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_database_sql"
           isOneToOne: false
           isSetofReturn: true
         }

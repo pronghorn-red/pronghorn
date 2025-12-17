@@ -40,6 +40,7 @@ interface DatabaseInfo {
   name: string;
   render_postgres_id: string | null;
   status: string;
+  source: 'render' | 'external';
 }
 
 interface SchemaObject {
@@ -123,27 +124,60 @@ export function DatabaseSchemaSelector({
     setLoading(true);
 
     try {
-      // Get project databases
-      const { data: dbData, error } = await supabase.rpc("get_databases_with_token", {
+      // Fetch Render databases
+      const renderDbResult = await supabase.rpc("get_databases_with_token", {
         p_project_id: projectId,
         p_token: shareToken
       });
 
-      if (error) throw error;
+      // Fetch external connections (owner-only, silently fail for non-owners)
+      let externalDbResult: { data: any[] } = { data: [] };
+      try {
+        const result = await supabase.rpc("get_db_connections_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken
+        });
+        if (!result.error) {
+          externalDbResult = { data: result.data || [] };
+        }
+      } catch {
+        // Silently fail for non-owners
+      }
 
-      // Filter to only available databases
-      const availableDbs = (dbData || []).filter(
-        (db: any) => db.status === 'available' && db.render_postgres_id
-      );
+      if (renderDbResult.error) throw renderDbResult.error;
 
-      if (availableDbs.length === 0) {
+      // Filter to only available Render databases
+      const renderDbs: DatabaseInfo[] = (renderDbResult.data || [])
+        .filter((db: any) => db.status === 'available' && db.render_postgres_id)
+        .map((db: any) => ({
+          id: db.id,
+          name: db.name,
+          render_postgres_id: db.render_postgres_id,
+          status: db.status,
+          source: 'render' as const
+        }));
+
+      // Filter to only connected external databases
+      const externalDbs: DatabaseInfo[] = (externalDbResult.data || [])
+        .filter((conn: any) => conn.status === 'connected')
+        .map((conn: any) => ({
+          id: conn.id,
+          name: conn.name,
+          render_postgres_id: null,
+          status: conn.status,
+          source: 'external' as const
+        }));
+
+      const allDbs = [...renderDbs, ...externalDbs];
+
+      if (allDbs.length === 0) {
         setDatabases([]);
         setLoading(false);
         return;
       }
 
       // Initialize databases with loading state
-      const initialDbs: DatabaseSchema[] = availableDbs.map((db: any) => ({
+      const initialDbs: DatabaseSchema[] = allDbs.map((db) => ({
         database: db,
         schemas: [],
         savedQueries: [],
@@ -155,26 +189,59 @@ export function DatabaseSchemaSelector({
 
       // Fetch schemas, saved queries, and migrations for each database
       const updatedDbs = await Promise.all(
-        availableDbs.map(async (db: any) => {
+        allDbs.map(async (db) => {
           try {
-            // Fetch schema, saved queries, and migrations in parallel
-            const [schemaResponse, savedQueriesResult, migrationsResult] = await Promise.all([
-              supabase.functions.invoke("manage-database", {
-                body: {
-                  databaseId: db.id,
-                  shareToken,
-                  action: "get_schema",
-                },
-              }),
-              supabase.rpc("get_saved_queries_with_token", {
-                p_database_id: db.id,
-                p_token: shareToken,
-              }),
-              supabase.rpc("get_migrations_with_token", {
-                p_database_id: db.id,
-                p_token: shareToken,
-              }),
-            ]);
+            const isExternal = db.source === 'external';
+            
+            // Build the manage-database request body based on source
+            const schemaRequestBody = isExternal
+              ? { connectionId: db.id, shareToken, action: "get_schema" }
+              : { databaseId: db.id, shareToken, action: "get_schema" };
+
+            // Fetch schema
+            const schemaResponse = await supabase.functions.invoke("manage-database", {
+              body: schemaRequestBody,
+            });
+
+            // Fetch saved queries
+            let savedQueriesResult: { data: any[] } = { data: [] };
+            try {
+              if (isExternal) {
+                const result = await (supabase.rpc as any)("get_saved_queries_by_connection_with_token", {
+                  p_connection_id: db.id,
+                  p_token: shareToken
+                });
+                savedQueriesResult = { data: result.data || [] };
+              } else {
+                const result = await supabase.rpc("get_saved_queries_with_token", {
+                  p_database_id: db.id,
+                  p_token: shareToken
+                });
+                savedQueriesResult = { data: result.data || [] };
+              }
+            } catch {
+              // Silently fail
+            }
+
+            // Fetch migrations
+            let migrationsResult: { data: any[] } = { data: [] };
+            try {
+              if (isExternal) {
+                const result = await (supabase.rpc as any)("get_migrations_by_connection_with_token", {
+                  p_connection_id: db.id,
+                  p_token: shareToken
+                });
+                migrationsResult = { data: result.data || [] };
+              } else {
+                const result = await supabase.rpc("get_migrations_with_token", {
+                  p_database_id: db.id,
+                  p_token: shareToken
+                });
+                migrationsResult = { data: result.data || [] };
+              }
+            } catch {
+              // Silently fail
+            }
 
             if (schemaResponse.error) throw schemaResponse.error;
 
@@ -634,6 +701,7 @@ export function DatabaseSchemaSelector({
     const { database, schemas, savedQueries, migrations, loading: dbLoading, error } = dbSchema;
     const isExpanded = expandedNodes.has(database.id);
     const selectionState = getFolderSelectionState(database.id);
+    const isExternal = database.source === 'external';
 
     return (
       <div key={database.id}>
@@ -654,8 +722,16 @@ export function DatabaseSchemaSelector({
             className="data-[state=indeterminate]:bg-primary/50"
             disabled={dbLoading || !!error}
           />
-          <Database className="h-4 w-4 text-green-500" />
+          <Database className={cn(
+            "h-4 w-4",
+            isExternal ? "text-purple-500" : "text-green-500"
+          )} />
           <span className="text-sm font-medium truncate">{database.name}</span>
+          {isExternal && (
+            <span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30 px-1.5 py-0.5 rounded">
+              External
+            </span>
+          )}
           {dbLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
           {error && <span className="text-xs text-destructive ml-2">Error</span>}
           <span className="text-xs text-muted-foreground ml-auto opacity-0 group-hover:opacity-100">
@@ -705,7 +781,7 @@ export function DatabaseSchemaSelector({
         <Database className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
         <p className="text-sm text-muted-foreground">No databases available.</p>
         <p className="text-xs text-muted-foreground mt-1">
-          Create a database in the Deploy section to see it here.
+          Create a database or connect an external database in the Database section.
         </p>
       </div>
     );
