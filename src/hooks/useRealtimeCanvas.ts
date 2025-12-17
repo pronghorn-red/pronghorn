@@ -112,17 +112,23 @@ export function useRealtimeCanvas(
                 : node
             ));
           } else if (payload.eventType === 'INSERT' && payload.new) {
-            // Add new node
-            const newNode: Node = {
-              id: payload.new.id,
-              type: "custom",
-              position: payload.new.position as { x: number; y: number },
-              data: {
-                ...(payload.new.data || {}),
-                type: (payload.new.data as any)?.type || payload.new.type,
-              },
-            };
-            setNodes((nds) => [...nds, newNode]);
+            // Add new node (skip if already exists from optimistic update)
+            setNodes((nds) => {
+              if (nds.some(node => node.id === payload.new.id)) {
+                console.log("Node already exists, skipping duplicate INSERT:", payload.new.id);
+                return nds;
+              }
+              const newNode: Node = {
+                id: payload.new.id,
+                type: "custom",
+                position: payload.new.position as { x: number; y: number },
+                data: {
+                  ...(payload.new.data || {}),
+                  type: (payload.new.data as any)?.type || payload.new.type,
+                },
+              };
+              return [...nds, newNode];
+            });
           } else if (payload.eventType === 'DELETE' && payload.old) {
             // Remove deleted node
             setNodes((nds) => nds.filter((node) => node.id !== payload.old.id));
@@ -166,15 +172,22 @@ export function useRealtimeCanvas(
           console.log("Canvas edges change:", payload);
           
           if (payload.eventType === 'INSERT' && payload.new) {
-            const newEdge: Edge = {
-              id: payload.new.id,
-              source: payload.new.source_id,
-              target: payload.new.target_id,
-              label: payload.new.label,
-              type: payload.new.edge_type || 'default',
-              style: payload.new.style || {},
-            };
-            setEdges((eds) => [...eds, newEdge]);
+            // Add new edge (skip if already exists from optimistic update)
+            setEdges((eds) => {
+              if (eds.some(edge => edge.id === payload.new.id)) {
+                console.log("Edge already exists, skipping duplicate INSERT:", payload.new.id);
+                return eds;
+              }
+              const newEdge: Edge = {
+                id: payload.new.id,
+                source: payload.new.source_id,
+                target: payload.new.target_id,
+                label: payload.new.label,
+                type: payload.new.edge_type || 'default',
+                style: payload.new.style || {},
+              };
+              return [...eds, newEdge];
+            });
           } else if (payload.eventType === 'DELETE' && payload.old) {
             setEdges((eds) => eds.filter((edge) => edge.id !== payload.old.id));
           } else if (payload.eventType === 'UPDATE' && payload.new) {
