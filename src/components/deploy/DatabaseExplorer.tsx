@@ -363,7 +363,7 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
     const content = migrations.map(m => `-- Migration ${m.sequence_number}: ${m.name || 'Unnamed'}\n-- Type: ${m.statement_type} ${m.object_type}\n-- Executed: ${new Date(m.executed_at).toISOString()}\n\n${m.sql_content};`).join('\n\n-- ============================================\n\n');
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `migrations_${database.name}.sql`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    const a = document.createElement('a'); a.href = url; a.download = `migrations_${displayName}.sql`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     toast.success(`Downloaded ${migrations.length} migrations`);
   };
 
@@ -439,7 +439,7 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   if (isMobile) {
     return (
       <div className="h-full flex flex-col">
-        <div className="p-2 border-b border-border bg-background flex items-center gap-2">{onBack && <Button variant="ghost" size="icon" onClick={onBack} className="h-8 w-8"><ChevronLeft className="h-4 w-4" /></Button>}<div className="flex items-center gap-2"><Database className="h-4 w-4 text-primary" /><span className="font-semibold text-sm truncate">{database.name}</span></div></div>
+        <div className="p-2 border-b border-border bg-background flex items-center gap-2">{onBack && <Button variant="ghost" size="icon" onClick={onBack} className="h-8 w-8"><ChevronLeft className="h-4 w-4" /></Button>}<div className="flex items-center gap-2"><Database className="h-4 w-4 text-primary" /><span className="font-semibold text-sm truncate">{displayName}</span></div></div>
         <Tabs value={mobileActiveTab} onValueChange={setMobileActiveTab} className="flex-1 flex flex-col min-h-0">
           <TabsList className="w-full h-10 rounded-none border-b grid grid-cols-4"><TabsTrigger value="schema" className="text-xs">Schema</TabsTrigger><TabsTrigger value="query" className="text-xs">Query</TabsTrigger><TabsTrigger value="results" className="text-xs">Results</TabsTrigger><TabsTrigger value="agent" className="text-xs">Agent</TabsTrigger></TabsList>
           <TabsContent value="schema" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "schema" ? "active" : "inactive"}><div className={mobileActiveTab === "schema" ? "h-full" : "hidden"}><SchemaTreePanel /></div></TabsContent>
@@ -455,7 +455,7 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   return (
     <div className="h-full flex flex-col">
       <div className="px-3 py-2 border-b border-border bg-background/95 backdrop-blur flex items-center justify-between">
-        <div className="flex items-center gap-3">{onBack && <Button variant="ghost" size="sm" onClick={onBack} className="h-8"><ChevronLeft className="h-4 w-4 mr-1" />Back</Button>}<div className="flex items-center gap-2"><div className="p-1.5 rounded-md bg-primary/10"><Database className="h-4 w-4 text-primary" /></div><div><h2 className="text-sm font-semibold">{database.name}</h2><p className="text-xs text-muted-foreground">PostgreSQL {database.postgres_version || "16"} • {database.region}</p></div></div></div>
+        <div className="flex items-center gap-3">{onBack && <Button variant="ghost" size="sm" onClick={onBack} className="h-8"><ChevronLeft className="h-4 w-4 mr-1" />Back</Button>}<div className="flex items-center gap-2"><div className="p-1.5 rounded-md bg-primary/10"><Database className="h-4 w-4 text-primary" /></div><div><h2 className="text-sm font-semibold">{displayName}</h2><p className="text-xs text-muted-foreground">{isExternal ? `External PostgreSQL • ${externalConnection?.host || 'Unknown host'}` : `PostgreSQL ${database?.postgres_version || "16"} • ${database?.region || 'Unknown'}`}</p></div></div></div>
         {isAgentPanelCollapsed && <Button variant="outline" size="sm" onClick={() => setIsAgentPanelCollapsed(false)} className="h-8"><Bot className="h-4 w-4 mr-2" />Database Agent</Button>}
       </div>
       <div className="flex-1 min-h-0">
