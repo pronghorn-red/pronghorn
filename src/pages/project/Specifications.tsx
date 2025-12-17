@@ -14,6 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useShareToken } from "@/hooks/useShareToken";
+import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { DownloadOptions } from "@/components/specifications/DownloadOptions";
 import { ProjectSelector, ProjectSelectionResult } from "@/components/project/ProjectSelector";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -48,7 +49,7 @@ interface AgentResult {
 
 export default function Specifications() {
   const { projectId } = useParams();
-  const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const [projectName, setProjectName] = useState<string>("project");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
@@ -150,6 +151,15 @@ export default function Specifications() {
 
     loadData();
   }, [projectId, shareToken, isTokenSet]);
+
+  if (tokenMissing) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <TokenRecoveryMessage />
+      </div>
+    );
+  }
 
   if (shareToken && !isTokenSet) {
     return (

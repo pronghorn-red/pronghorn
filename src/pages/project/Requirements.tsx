@@ -12,12 +12,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useParams } from "react-router-dom";
 import { useRealtimeRequirements } from "@/hooks/useRealtimeRequirements";
 import { useShareToken } from "@/hooks/useShareToken";
+import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function Requirements() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const { user } = useAuth();
   const hasAccessToken = !!shareToken || !!user;
   const { requirements, isLoading, addRequirement, updateRequirement, deleteRequirement, refresh } = useRealtimeRequirements(
@@ -37,6 +38,16 @@ export default function Requirements() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-destructive">Invalid project ID</p>
+      </div>
+    );
+  }
+
+  // Show token recovery message if tokenMissing
+  if (tokenMissing) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <TokenRecoveryMessage />
       </div>
     );
   }

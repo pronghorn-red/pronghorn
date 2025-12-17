@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Database as DatabaseIcon, Plus, RefreshCw, Settings, ChevronLeft, Link } from "lucide-react";
 import { useShareToken } from "@/hooks/useShareToken";
+import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeDatabases } from "@/hooks/useRealtimeDatabases";
 import { useRealtimeExternalDatabases } from "@/hooks/useRealtimeExternalDatabases";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,7 +20,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 const Database = () => {
   const { projectId } = useParams<{ projectId: string }>();
-  const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const isMobile = useIsMobile();
   
   // Project databases (Render)
@@ -94,6 +95,14 @@ const Database = () => {
     setSelectedDatabase(null);
     setSelectedExternalConnection(null);
   };
+
+  if (tokenMissing) {
+    return (
+      <div className="flex h-screen bg-background">
+        <TokenRecoveryMessage />
+      </div>
+    );
+  }
 
   // If a database or external connection is selected for exploration, show the full explorer
   if (selectedDatabase || selectedExternalConnection) {

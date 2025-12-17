@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Key, Plus, Copy, Trash2, Eye, EyeOff } from "lucide-react";
+import { Key, Plus, Copy, Trash2, Eye, EyeOff, Link2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface TokenManagementProps {
@@ -177,13 +177,72 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
     }
   };
 
+  const [showMyToken, setShowMyToken] = useState(false);
+
+  const copyCurrentAccessUrl = () => {
+    if (!shareToken) {
+      toast.error("No access token available");
+      return;
+    }
+    const url = `https://pronghorn.red/project/${projectId}/settings/t/${shareToken}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Access URL copied to clipboard");
+  };
+
   // If error contains "Access denied" or similar, user isn't owner - hide component
   if (error && (error.message?.includes("Access denied") || error.message?.includes("owner"))) {
     return null;
   }
 
   return (
-    <Card>
+    <>
+      {/* Your Current Access URL Card */}
+      {shareToken && (
+        <Card className="mb-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Link2 className="h-4 w-4" />
+              Your Access URL
+            </CardTitle>
+            <CardDescription>
+              This is your personal access URL. The token is hidden in the browser for security but you can copy the full URL here.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Input 
+                readOnly 
+                value={showMyToken 
+                  ? `https://pronghorn.red/project/${projectId}/settings/t/${shareToken}`
+                  : `https://pronghorn.red/project/${projectId}/settings/t/••••••••••••`
+                }
+                className="font-mono text-xs"
+              />
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={() => setShowMyToken(!showMyToken)}
+                title={showMyToken ? "Hide token" : "Show token"}
+              >
+                {showMyToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={copyCurrentAccessUrl}
+                title="Copy full URL"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Bookmark this URL or share it to regain access from another browser session.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -349,5 +408,6 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
         )}
       </CardContent>
     </Card>
+    </>
   );
 }

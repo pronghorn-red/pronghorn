@@ -1,25 +1,24 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { useParams, useSearchParams } from "react-router-dom";
+import { getProjectToken } from "@/lib/tokenCache";
 import type { To } from "react-router-dom";
 
 /**
  * Hook to construct project URLs with share token when needed
  * Uses path-based token pattern: /project/{projectId}/page/t/{token}
  * 
+ * For internal navigation, uses /t/masked to hide the real token
+ * For external sharing, uses the real token from storage
+ * 
  * Returns React Router's To type (object with pathname) for clean navigation
  */
 export function useProjectUrl(projectId?: string) {
   const { user } = useAuth();
-  // Extract token from path params (new pattern) or query params (legacy)
-  const params = useParams<{ token?: string }>();
-  const [searchParams] = useSearchParams();
-  const tokenFromPath = params.token;
-  const tokenFromQuery = searchParams.get("token");
-  const token = tokenFromPath || tokenFromQuery;
+  // Get token from cache (not URL - URL may be masked)
+  const token = projectId ? getProjectToken(projectId) : null;
 
   /**
-   * Build a URL for project navigation
-   * Uses path-based token pattern: /project/{projectId}/page/t/{token}
+   * Build a URL for internal project navigation
+   * Uses /t/masked to hide the real token in the URL bar
    */
   const buildUrl = (path: string): To => {
     if (!projectId) return { pathname: path };
@@ -27,22 +26,24 @@ export function useProjectUrl(projectId?: string) {
     // Base path without trailing slash
     const basePath = `/project/${projectId}${path}`;
     
-    // Append token as path segment if present
+    // Use masked placeholder for internal navigation (token stored in sessionStorage)
     if (token) {
-      return { pathname: `${basePath}/t/${token}` };
+      return { pathname: `${basePath}/t/masked` };
     }
     
     return { pathname: basePath };
   };
 
   /**
-   * Get full URL string for external sharing (with domain)
+   * Get full URL string for external sharing (with domain and REAL token)
+   * This is the URL users should copy to share with others
    */
   const getShareUrl = (path: string, domain: string = "https://pronghorn.red"): string => {
     if (!projectId) return `${domain}${path}`;
     
     const basePath = `/project/${projectId}${path}`;
     
+    // Use REAL token for sharing URLs (so recipients can access)
     if (token) {
       return `${domain}${basePath}/t/${token}`;
     }
@@ -50,9 +51,13 @@ export function useProjectUrl(projectId?: string) {
     return `${domain}${basePath}`;
   };
 
+  /**
+   * Get the token path segment for manual URL construction
+   * Uses masked for internal, returns empty for authenticated users without tokens
+   */
   const getTokenParam = () => {
-    if (user) return "";
-    return token ? `/t/${token}` : "";
+    if (user && !token) return "";
+    return token ? "/t/masked" : "";
   };
 
   return { buildUrl, getShareUrl, token, getTokenParam };

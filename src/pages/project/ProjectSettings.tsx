@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useShareToken } from "@/hooks/useShareToken";
+import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { DeleteProjectDialog } from "@/components/dashboard/DeleteProjectDialog";
@@ -24,7 +25,7 @@ import { Switch } from "@/components/ui/switch";
 
 export default function ProjectSettings() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -214,6 +215,16 @@ export default function ProjectSettings() {
     navigator.clipboard.writeText(window.location.href);
     toast.success("URL copied to clipboard");
   };
+
+  // Show token recovery message if token is missing
+  if (tokenMissing) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <TokenRecoveryMessage />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

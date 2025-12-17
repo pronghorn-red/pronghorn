@@ -7,6 +7,7 @@ import { NodePropertiesPanel } from "@/components/canvas/NodePropertiesPanel";
 import { EdgePropertiesPanel } from "@/components/canvas/EdgePropertiesPanel";
 import { useParams } from "react-router-dom";
 import { useShareToken } from "@/hooks/useShareToken";
+import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeCanvas } from "@/hooks/useRealtimeCanvas";
 import { useRealtimeLayers } from "@/hooks/useRealtimeLayers";
 import { useNodeTypes } from "@/hooks/useNodeTypes";
@@ -45,7 +46,7 @@ const initialEdges: Edge[] = [];
 
 function CanvasFlow() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { token, isTokenSet } = useShareToken(projectId);
+  const { token, isTokenSet, tokenMissing } = useShareToken(projectId);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -931,6 +932,16 @@ function CanvasFlow() {
       description: `Auto-ordered ${updates.length} node${updates.length !== 1 ? 's' : ''} by type`,
     });
   }, [selectedNodesList, visibleNodes, setNodes, saveNode, toast]);
+
+  // Show token recovery message if token is missing
+  if (tokenMissing) {
+    return (
+      <div className="h-screen bg-background flex flex-col overflow-hidden">
+        <PrimaryNav />
+        <TokenRecoveryMessage />
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">

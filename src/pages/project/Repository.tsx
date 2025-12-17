@@ -20,6 +20,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { useShareToken } from "@/hooks/useShareToken";
+import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -34,7 +35,7 @@ interface FileNode {
 
 export default function Repository() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const { user } = useAuth();
   const hasAccessToken = !!shareToken || !!user;
   const { toast } = useToast();
@@ -166,6 +167,15 @@ export default function Repository() {
   }, [selectedRepoId]);
 
   // Early returns AFTER all hooks
+  if (tokenMissing) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <TokenRecoveryMessage />
+      </div>
+    );
+  }
+
   if (!projectId) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">

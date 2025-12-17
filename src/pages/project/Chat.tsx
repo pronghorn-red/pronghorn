@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { useShareToken } from "@/hooks/useShareToken";
+import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeChatSessions, useRealtimeChatMessages, ChatMessage } from "@/hooks/useRealtimeChatSessions";
 import {
   Plus,
@@ -56,7 +57,7 @@ import { Menu } from "lucide-react";
 
 export default function Chat() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const {
     sessions,
     isLoading: sessionsLoading,
@@ -701,6 +702,15 @@ export default function Chat() {
     setEditingSessionId(null);
     setEditingTitle("");
   };
+
+  if (tokenMissing) {
+    return (
+      <div className="h-screen bg-background flex flex-col">
+        <PrimaryNav />
+        <TokenRecoveryMessage />
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-background flex flex-col">

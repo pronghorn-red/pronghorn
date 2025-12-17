@@ -12,6 +12,7 @@ import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { StandardsTreeSelector } from "@/components/standards/StandardsTreeSelector";
 import { TechStackTreeSelector } from "@/components/techstack/TechStackTreeSelector";
 import { useShareToken } from "@/hooks/useShareToken";
+import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRealtimeProjectStandards } from "@/hooks/useRealtimeProjectStandards";
 
@@ -41,7 +42,7 @@ interface TechStack {
 
 export default function Standards() {
   const { projectId } = useParams();
-  const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const { user } = useAuth();
   const hasAccessToken = !!shareToken || !!user;
   const [categories, setCategories] = useState<Category[]>([]);
@@ -201,6 +202,15 @@ export default function Standards() {
       setSaving(false);
     }
   };
+
+  if (tokenMissing) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <TokenRecoveryMessage />
+      </div>
+    );
+  }
 
   if (loading) {
     return (

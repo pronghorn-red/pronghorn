@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useShareToken } from "@/hooks/useShareToken";
+import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeArtifacts } from "@/hooks/useRealtimeArtifacts";
 import { useAuth } from "@/contexts/AuthContext";
 import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown } from "lucide-react";
@@ -49,7 +50,7 @@ import { useQuery } from "@tanstack/react-query";
 
 export default function Artifacts() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const { user } = useAuth();
   const hasAccessToken = !!shareToken || !!user;
   const { artifacts, isLoading, addArtifact, updateArtifact, deleteArtifact, refresh } = useRealtimeArtifacts(
@@ -246,6 +247,15 @@ ${artifact.content}`;
     setEditingArtifact(artifact);
     setEditingTitle(artifact.ai_title || "");
   };
+
+  if (tokenMissing) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PrimaryNav />
+        <TokenRecoveryMessage />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Cloud, Laptop, Server, Plus, RefreshCw } from "lucide-react";
 import { useShareToken } from "@/hooks/useShareToken";
+import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeDeployments } from "@/hooks/useRealtimeDeployments";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
@@ -15,7 +16,7 @@ import TestingLogsViewer from "@/components/deploy/TestingLogsViewer";
 
 const Deploy = () => {
   const { projectId } = useParams<{ projectId: string }>();
-  const { token: shareToken, isTokenSet } = useShareToken(projectId);
+  const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const { deployments, isLoading, refresh, broadcastRefresh } = useRealtimeDeployments(
     projectId,
     shareToken,
@@ -40,6 +41,14 @@ const Deploy = () => {
     refresh();
     broadcastRefresh();
   };
+
+  if (tokenMissing) {
+    return (
+      <div className="flex h-screen bg-background">
+        <TokenRecoveryMessage />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background">

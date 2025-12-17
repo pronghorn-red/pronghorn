@@ -3,6 +3,7 @@ import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { useParams } from "react-router-dom";
 import { useShareToken } from "@/hooks/useShareToken";
+import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,7 +31,7 @@ function isBinaryFile(filename: string): boolean {
 
 export default function Build() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { token: shareToken, isTokenSet } = useShareToken(projectId || null);
+  const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId || null);
   const isMobile = useIsMobile();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<CodeEditorHandle>(null);
@@ -648,6 +649,16 @@ export default function Build() {
     return (
       <div className="flex items-center justify-center h-full">
         <p className="text-muted-foreground">No project selected</p>
+      </div>
+    );
+  }
+
+  // Show token recovery message if token is missing
+  if (tokenMissing) {
+    return (
+      <div className="flex flex-col bg-background h-screen">
+        <PrimaryNav />
+        <TokenRecoveryMessage />
       </div>
     );
   }
