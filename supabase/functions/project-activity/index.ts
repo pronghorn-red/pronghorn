@@ -81,23 +81,33 @@ Deno.serve(async (req) => {
     };
     const truncUnit = granularityMap[granularity] || "week";
 
-    // Define all entity tables to count
+    // Define all entity tables to count (ordered to match sidebar menu)
     const entityTables = [
+      // Artifacts
       { key: "artifacts", label: "Artifacts", table: "artifacts", dateCol: "created_at" },
+      // Chat
+      { key: "chat_sessions", label: "Chat Sessions", table: "chat_sessions", dateCol: "created_at" },
+      { key: "agent_sessions", label: "Agent Sessions", table: "agent_sessions", dateCol: "created_at" },
+      // Requirements
+      { key: "requirements", label: "Requirements", table: "requirements", dateCol: "created_at" },
+      // Standards
+      { key: "project_standards", label: "Standards Linked", table: "project_standards", dateCol: "created_at" },
+      { key: "project_tech_stacks", label: "Tech Stacks Linked", table: "project_tech_stacks", dateCol: "created_at" },
+      // Canvas
       { key: "canvas_nodes", label: "Canvas Nodes", table: "canvas_nodes", dateCol: "created_at" },
       { key: "canvas_edges", label: "Canvas Edges", table: "canvas_edges", dateCol: "created_at" },
       { key: "canvas_layers", label: "Canvas Layers", table: "canvas_layers", dateCol: "created_at" },
-      { key: "requirements", label: "Requirements", table: "requirements", dateCol: "created_at" },
-      { key: "project_standards", label: "Standards Linked", table: "project_standards", dateCol: "created_at" },
-      { key: "project_tech_stacks", label: "Tech Stacks Linked", table: "project_tech_stacks", dateCol: "created_at" },
+      // Specifications
       { key: "project_specifications", label: "Specifications", table: "project_specifications", dateCol: "created_at" },
+      // Repository
       { key: "project_repos", label: "Repositories", table: "project_repos", dateCol: "created_at" },
       { key: "repo_files", label: "Repository Files", table: "repo_files", dateCol: "created_at" },
+      // Build (Commits)
       { key: "repo_commits", label: "Commits", table: "repo_commits", dateCol: "created_at" },
-      { key: "chat_sessions", label: "Chat Sessions", table: "chat_sessions", dateCol: "created_at" },
-      { key: "agent_sessions", label: "Agent Sessions", table: "agent_sessions", dateCol: "created_at" },
+      // Database
       { key: "project_databases", label: "Databases", table: "project_databases", dateCol: "created_at" },
       { key: "project_database_connections", label: "External Connections", table: "project_database_connections", dateCol: "created_at" },
+      // Deploy
       { key: "project_deployments", label: "Deployments", table: "project_deployments", dateCol: "created_at" },
     ];
 
