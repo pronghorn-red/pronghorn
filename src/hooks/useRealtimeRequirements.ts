@@ -71,6 +71,15 @@ export function useRealtimeRequirements(
     }
   };
 
+  // Helper to check if requirement exists in tree
+  const existsInTree = (items: Requirement[], targetId: string): boolean => {
+    for (const item of items) {
+      if (item.id === targetId) return true;
+      if (item.children?.length && existsInTree(item.children, targetId)) return true;
+    }
+    return false;
+  };
+
   useEffect(() => {
     if (!enabled) {
       setIsLoading(false);
@@ -96,6 +105,12 @@ export function useRealtimeRequirements(
           
           if (payload.eventType === "INSERT" && payload.new) {
             setRequirements((prev) => {
+              // Skip if already exists (was added via optimistic update)
+              if (existsInTree(prev, payload.new.id)) {
+                console.log("Requirement already exists, skipping duplicate INSERT:", payload.new.id);
+                return prev;
+              }
+              
               // Add new requirement to correct position in hierarchy
               if (payload.new.parent_id) {
                 // Add as child - recursive update
