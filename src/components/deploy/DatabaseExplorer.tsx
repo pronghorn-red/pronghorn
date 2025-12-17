@@ -130,32 +130,34 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   }, [databaseId, connectionId, shareToken, isExternal]);
 
   const loadSavedQueries = useCallback(async () => {
-    // Saved queries only work for Render databases (they need database_id)
-    if (isExternal || !databaseId) return;
+    // Need either databaseId or connectionId
+    if (!databaseId && !connectionId) return;
     try {
       const { data, error } = await supabase.rpc("get_saved_queries_with_token", {
-        p_database_id: databaseId,
+        p_database_id: databaseId || null,
+        p_connection_id: connectionId || null,
         p_token: shareToken || null,
       });
       if (!error && data) setSavedQueries(data);
     } catch (error) {
       console.error("Failed to load saved queries:", error);
     }
-  }, [databaseId, shareToken, isExternal]);
+  }, [databaseId, connectionId, shareToken]);
 
   const loadMigrations = useCallback(async () => {
-    // Migrations only work for Render databases (they need database_id)
-    if (isExternal || !databaseId) return;
+    // Need either databaseId or connectionId
+    if (!databaseId && !connectionId) return;
     try {
       const { data, error } = await supabase.rpc("get_migrations_with_token", {
-        p_database_id: databaseId,
+        p_database_id: databaseId || null,
+        p_connection_id: connectionId || null,
         p_token: shareToken || null,
       });
       if (!error && data) setMigrations(data as Migration[]);
     } catch (error) {
       console.error("Failed to load migrations:", error);
     }
-  }, [databaseId, shareToken, isExternal]);
+  }, [databaseId, connectionId, shareToken]);
 
   useEffect(() => {
     if (!initialLoadDone.current) {
@@ -176,13 +178,14 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
       setQueryResults({ columns: result.columns || [], rows: result.rows || [], executionTime: result.executionTime, totalRows: result.rowCount });
       toast.success(`Query executed: ${result.rowCount} rows`);
       
-      // Auto-capture DDL statements as migrations (only for Render databases)
-      if (!isExternal && databaseId) {
+      // Auto-capture DDL statements as migrations (for both Render and external databases)
+      if (databaseId || connectionId) {
         const ddlStatements = extractDDLStatements(sql);
         for (const ddl of ddlStatements) {
           try {
             await supabase.rpc("insert_migration_with_token", {
-              p_database_id: databaseId,
+              p_database_id: databaseId || null,
+              p_connection_id: connectionId || null,
               p_sql_content: ddl.sql,
               p_statement_type: ddl.statementType,
               p_object_type: ddl.objectType,
@@ -320,8 +323,8 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   };
 
   const handleSaveQuery = async (name: string, description: string, sqlContent: string) => {
-    if (isExternal || !databaseId) {
-      toast.error("Saved queries are only available for project databases");
+    if (!databaseId && !connectionId) {
+      toast.error("No database selected");
       return;
     }
     try {
@@ -329,7 +332,7 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
         await supabase.rpc("update_saved_query_with_token", { p_query_id: editingQuery.id, p_token: shareToken || null, p_name: name, p_description: description || null, p_sql_content: sqlContent });
         toast.success("Query updated");
       } else {
-        await supabase.rpc("insert_saved_query_with_token", { p_database_id: databaseId, p_name: name, p_sql_content: sqlContent, p_token: shareToken || null, p_description: description || null });
+        await supabase.rpc("insert_saved_query_with_token", { p_database_id: databaseId || null, p_connection_id: connectionId || null, p_name: name, p_sql_content: sqlContent, p_token: shareToken || null, p_description: description || null });
         toast.success("Query saved");
       }
       loadSavedQueries();

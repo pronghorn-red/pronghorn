@@ -995,9 +995,10 @@ export type Database = {
       }
       project_database_sql: {
         Row: {
+          connection_id: string | null
           created_at: string
           created_by: string | null
-          database_id: string
+          database_id: string | null
           description: string | null
           id: string
           name: string
@@ -1006,9 +1007,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          connection_id?: string | null
           created_at?: string
           created_by?: string | null
-          database_id: string
+          database_id?: string | null
           description?: string | null
           id?: string
           name: string
@@ -1017,9 +1019,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          connection_id?: string | null
           created_at?: string
           created_by?: string | null
-          database_id?: string
+          database_id?: string | null
           description?: string | null
           id?: string
           name?: string
@@ -1028,6 +1031,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_database_sql_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "project_database_connections"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_database_sql_database_id_fkey"
             columns: ["database_id"]
@@ -1222,8 +1232,9 @@ export type Database = {
       }
       project_migrations: {
         Row: {
+          connection_id: string | null
           created_at: string
-          database_id: string
+          database_id: string | null
           executed_at: string
           executed_by: string | null
           id: string
@@ -1237,8 +1248,9 @@ export type Database = {
           statement_type: string
         }
         Insert: {
+          connection_id?: string | null
           created_at?: string
-          database_id: string
+          database_id?: string | null
           executed_at?: string
           executed_by?: string | null
           id?: string
@@ -1252,8 +1264,9 @@ export type Database = {
           statement_type: string
         }
         Update: {
+          connection_id?: string | null
           created_at?: string
-          database_id?: string
+          database_id?: string | null
           executed_at?: string
           executed_by?: string | null
           id?: string
@@ -1267,6 +1280,13 @@ export type Database = {
           statement_type?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_migrations_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "project_database_connections"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_migrations_database_id_fkey"
             columns: ["database_id"]
@@ -3060,30 +3080,61 @@ export type Database = {
           role: Database["public"]["Enums"]["project_token_role"]
         }[]
       }
-      get_migrations_with_token: {
-        Args: { p_database_id: string; p_token?: string }
-        Returns: {
-          created_at: string
-          database_id: string
-          executed_at: string
-          executed_by: string | null
-          id: string
-          name: string | null
-          object_name: string | null
-          object_schema: string | null
-          object_type: string
-          project_id: string
-          sequence_number: number
-          sql_content: string
-          statement_type: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "project_migrations"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
+      get_migrations_with_token:
+        | {
+            Args: {
+              p_connection_id?: string
+              p_database_id?: string
+              p_token?: string
+            }
+            Returns: {
+              connection_id: string | null
+              created_at: string
+              database_id: string | null
+              executed_at: string
+              executed_by: string | null
+              id: string
+              name: string | null
+              object_name: string | null
+              object_schema: string | null
+              object_type: string
+              project_id: string
+              sequence_number: number
+              sql_content: string
+              statement_type: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "project_migrations"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
+        | {
+            Args: { p_database_id: string; p_token?: string }
+            Returns: {
+              connection_id: string | null
+              created_at: string
+              database_id: string | null
+              executed_at: string
+              executed_by: string | null
+              id: string
+              name: string | null
+              object_name: string | null
+              object_schema: string | null
+              object_type: string
+              project_id: string
+              sequence_number: number
+              sql_content: string
+              statement_type: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "project_migrations"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
       get_multiple_files_with_token: {
         Args: { p_paths: string[]; p_repo_id: string; p_token?: string }
         Returns: {
@@ -3450,26 +3501,53 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      get_saved_queries_with_token: {
-        Args: { p_database_id: string; p_token?: string }
-        Returns: {
-          created_at: string
-          created_by: string | null
-          database_id: string
-          description: string | null
-          id: string
-          name: string
-          project_id: string
-          sql_content: string
-          updated_at: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "project_database_sql"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
+      get_saved_queries_with_token:
+        | {
+            Args: {
+              p_connection_id?: string
+              p_database_id?: string
+              p_token?: string
+            }
+            Returns: {
+              connection_id: string | null
+              created_at: string
+              created_by: string | null
+              database_id: string | null
+              description: string | null
+              id: string
+              name: string
+              project_id: string
+              sql_content: string
+              updated_at: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "project_database_sql"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
+        | {
+            Args: { p_database_id: string; p_token?: string }
+            Returns: {
+              connection_id: string | null
+              created_at: string
+              created_by: string | null
+              database_id: string | null
+              description: string | null
+              id: string
+              name: string
+              project_id: string
+              sql_content: string
+              updated_at: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "project_database_sql"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
       get_session_context_with_token: {
         Args: { p_session_id: string; p_token: string }
         Returns: {
@@ -3948,39 +4026,76 @@ export type Database = {
               isSetofReturn: false
             }
           }
-      insert_migration_with_token: {
-        Args: {
-          p_database_id: string
-          p_name?: string
-          p_object_name?: string
-          p_object_schema?: string
-          p_object_type: string
-          p_sql_content: string
-          p_statement_type: string
-          p_token?: string
-        }
-        Returns: {
-          created_at: string
-          database_id: string
-          executed_at: string
-          executed_by: string | null
-          id: string
-          name: string | null
-          object_name: string | null
-          object_schema: string | null
-          object_type: string
-          project_id: string
-          sequence_number: number
-          sql_content: string
-          statement_type: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "project_migrations"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      insert_migration_with_token:
+        | {
+            Args: {
+              p_connection_id?: string
+              p_database_id?: string
+              p_name?: string
+              p_object_name?: string
+              p_object_schema?: string
+              p_object_type?: string
+              p_sql_content?: string
+              p_statement_type?: string
+              p_token?: string
+            }
+            Returns: {
+              connection_id: string | null
+              created_at: string
+              database_id: string | null
+              executed_at: string
+              executed_by: string | null
+              id: string
+              name: string | null
+              object_name: string | null
+              object_schema: string | null
+              object_type: string
+              project_id: string
+              sequence_number: number
+              sql_content: string
+              statement_type: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "project_migrations"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_database_id: string
+              p_name?: string
+              p_object_name?: string
+              p_object_schema?: string
+              p_object_type: string
+              p_sql_content: string
+              p_statement_type: string
+              p_token?: string
+            }
+            Returns: {
+              connection_id: string | null
+              created_at: string
+              database_id: string | null
+              executed_at: string
+              executed_by: string | null
+              id: string
+              name: string | null
+              object_name: string | null
+              object_schema: string | null
+              object_type: string
+              project_id: string
+              sequence_number: number
+              sql_content: string
+              statement_type: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "project_migrations"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       insert_project_standard_with_token: {
         Args: { p_project_id: string; p_standard_id: string; p_token: string }
         Returns: {
@@ -4090,32 +4205,62 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      insert_saved_query_with_token: {
-        Args: {
-          p_database_id: string
-          p_description?: string
-          p_name: string
-          p_sql_content: string
-          p_token?: string
-        }
-        Returns: {
-          created_at: string
-          created_by: string | null
-          database_id: string
-          description: string | null
-          id: string
-          name: string
-          project_id: string
-          sql_content: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "project_database_sql"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      insert_saved_query_with_token:
+        | {
+            Args: {
+              p_connection_id?: string
+              p_database_id?: string
+              p_description?: string
+              p_name?: string
+              p_sql_content?: string
+              p_token?: string
+            }
+            Returns: {
+              connection_id: string | null
+              created_at: string
+              created_by: string | null
+              database_id: string | null
+              description: string | null
+              id: string
+              name: string
+              project_id: string
+              sql_content: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "project_database_sql"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_database_id: string
+              p_description?: string
+              p_name: string
+              p_sql_content: string
+              p_token?: string
+            }
+            Returns: {
+              connection_id: string | null
+              created_at: string
+              created_by: string | null
+              database_id: string | null
+              description: string | null
+              id: string
+              name: string
+              project_id: string
+              sql_content: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "project_database_sql"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       insert_specification_with_token: {
         Args: {
           p_agent_id: string
@@ -5074,9 +5219,10 @@ export type Database = {
           p_token?: string
         }
         Returns: {
+          connection_id: string | null
           created_at: string
           created_by: string | null
-          database_id: string
+          database_id: string | null
           description: string | null
           id: string
           name: string
