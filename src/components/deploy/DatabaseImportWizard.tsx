@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChevronLeft, ChevronRight, Upload, Sparkles, Database, FileSpreadsheet, FileJson, Check, Plus, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Upload, Sparkles, Database, FileSpreadsheet, FileJson, Check, Plus, ArrowRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ExcelData } from '@/utils/parseExcel';
 import { ParsedJsonData, getJsonHeaders, getJsonRowsAsArray } from '@/utils/parseJson';
@@ -23,6 +23,7 @@ import SchemaCreator from './import/SchemaCreator';
 import FieldMapper from './import/FieldMapper';
 import SqlReviewPanel from './import/SqlReviewPanel';
 import ImportProgressTracker from './import/ImportProgressTracker';
+import { JsonRelationshipFlow } from './import/JsonRelationshipFlow';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -99,6 +100,7 @@ export default function DatabaseImportWizard({
   // AI mode
   const [aiMode, setAiMode] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   
   // Schema state
   const [action, setAction] = useState<ImportAction>('create_new');
@@ -231,6 +233,7 @@ export default function DatabaseImportWizard({
     setSelectedJsonTable('');
     setAiMode(false);
     setAiLoading(false);
+    setAiExplanation(null);
     setAction('create_new');
     setTargetTable(null);
     setTableName('');
@@ -243,6 +246,90 @@ export default function DatabaseImportWizard({
     setExecutionProgress(null);
     setIsPaused(false);
   }, []);
+
+  // Call AI agent for schema/mapping suggestions
+  const callAiAgent = async () => {
+    if (!aiMode || headers.length === 0) return;
+    
+    setAiLoading(true);
+    setAiExplanation(null);
+    
+    try {
+      const sampleData = {
+        headers,
+        rows: selectedDataRows.slice(0, 100).map(row => 
+          headers.map((_, i) => row[i])
+        ),
+        totalRows: selectedDataRows.length
+      };
+
+      const { data, error } = await supabase.functions.invoke('database-agent-import', {
+        body: {
+          projectId,
+          shareToken,
+          databaseId,
+          connectionId,
+          action: action === 'create_new' ? 'propose_schema' : 'propose_mapping',
+          sampleData,
+          fileType: fileType || 'excel',
+          intent: action,
+          targetTable: action === 'import_existing' ? targetTable : undefined,
+          existingSchema: existingTables.map(t => ({ table_name: t }))
+        }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data.fallbackToManual) {
+        toast.error('AI analysis failed, please use manual mode');
+        setAiMode(false);
+        return;
+      }
+
+      // Apply AI suggestions
+      if (data.columns && action === 'create_new') {
+        const aiTableDef: TableDefinition = {
+          name: data.proposedTableName || tableName,
+          schema,
+          columns: data.columns.map((col: any) => ({
+            name: col.name,
+            type: col.inferredType,
+            nullable: col.nullable,
+            isPrimaryKey: col.isPrimaryKey || false,
+            isUnique: col.isUnique || false
+          })),
+          indexes: (data.indexes || []).map((idx: string, i: number) => ({
+            name: `idx_${tableName}_${i}`,
+            columns: [idx],
+            unique: false
+          }))
+        };
+        setTableDef(aiTableDef);
+        if (data.proposedTableName) setTableName(data.proposedTableName);
+      }
+
+      if (data.columnMappings && action === 'import_existing') {
+        setColumnMappings(data.columnMappings.map((m: any) => ({
+          sourceColumn: m.sourceColumn,
+          targetColumn: m.targetColumn,
+          ignored: m.ignored,
+          castingEnabled: !!m.casting
+        })));
+      }
+
+      if (data.explanation) {
+        setAiExplanation(data.explanation);
+        toast.success('AI analysis complete');
+      }
+    } catch (e: any) {
+      console.error('AI agent error:', e);
+      toast.error(`AI analysis failed: ${e.message}`);
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) resetWizard();
@@ -405,7 +492,23 @@ export default function DatabaseImportWizard({
       
       case 'schema':
         return (
-          <div className="space-y-4 h-[400px] flex flex-col">
+          <div className="space-y-4 h-[450px] flex flex-col overflow-y-auto">
+            {/* Show relationship diagram for multi-table JSON */}
+            {fileType === 'json' && jsonData && jsonData.tables.length > 1 && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Table Relationships</Label>
+                <JsonRelationshipFlow
+                  tables={jsonData.tables.map(t => ({
+                    name: t.name,
+                    columns: getJsonHeaders(t),
+                    parentTable: t.parentTable,
+                    foreignKey: t.foreignKey
+                  }))}
+                  onTableClick={(name) => setSelectedJsonTable(name)}
+                />
+              </div>
+            )}
+            
             {/* Action Toggle */}
             <Tabs value={action} onValueChange={(v) => setAction(v as ImportAction)}>
               <TabsList className="grid w-full grid-cols-2">
@@ -536,12 +639,30 @@ export default function DatabaseImportWizard({
         {/* AI Mode Toggle */}
         <div className="flex items-center justify-between px-2 py-2 bg-muted/30 rounded-lg">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-amber-500" />
+            <Sparkles className={cn("h-4 w-4", aiMode ? "text-amber-500" : "text-muted-foreground")} />
             <Label htmlFor="ai-mode" className="text-sm font-medium">AI-Assisted Mode</Label>
-            <span className="text-xs text-muted-foreground">(Coming soon)</span>
+            {aiLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
           </div>
-          <Switch id="ai-mode" checked={aiMode} onCheckedChange={setAiMode} disabled />
+          <div className="flex items-center gap-2">
+            {aiMode && currentStep === 'schema' && !aiLoading && (
+              <Button variant="outline" size="sm" onClick={callAiAgent}>
+                <Sparkles className="h-3 w-3 mr-1" />
+                Analyze
+              </Button>
+            )}
+            <Switch id="ai-mode" checked={aiMode} onCheckedChange={setAiMode} />
+          </div>
         </div>
+
+        {/* AI Explanation */}
+        {aiExplanation && (
+          <div className="px-2 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+            <div className="flex items-start gap-2">
+              <Sparkles className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-muted-foreground">{aiExplanation}</p>
+            </div>
+          </div>
+        )}
 
         {/* Step Content */}
         <div className="flex-1 overflow-y-auto py-4 min-h-[300px]">
