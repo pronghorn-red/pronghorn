@@ -17,7 +17,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Bot,
-  Columns
+  Columns,
+  FileUp
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ import { SaveQueryDialog } from "./SaveQueryDialog";
 import { TreeItemContextType } from "./DatabaseTreeContextMenu";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { extractDDLStatements } from "@/lib/sqlParser";
+import DatabaseImportWizard from "./DatabaseImportWizard";
 
 interface SchemaInfo {
   name: string;
@@ -88,6 +90,7 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [editingQuery, setEditingQuery] = useState<SavedQuery | null>(null);
   const [pendingSqlToSave, setPendingSqlToSave] = useState("");
+  const [importWizardOpen, setImportWizardOpen] = useState(false);
 
   // Determine if we're using a Render database or external connection
   const isExternal = !!externalConnection;
@@ -442,7 +445,10 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   if (isMobile) {
     return (
       <div className="h-full flex flex-col">
-        <div className="p-2 border-b border-border bg-background flex items-center gap-2">{onBack && <Button variant="ghost" size="icon" onClick={onBack} className="h-8 w-8"><ChevronLeft className="h-4 w-4" /></Button>}<div className="flex items-center gap-2"><Database className="h-4 w-4 text-primary" /><span className="font-semibold text-sm truncate">{displayName}</span></div></div>
+        <div className="p-2 border-b border-border bg-background flex items-center justify-between">
+          <div className="flex items-center gap-2">{onBack && <Button variant="ghost" size="icon" onClick={onBack} className="h-8 w-8"><ChevronLeft className="h-4 w-4" /></Button>}<div className="flex items-center gap-2"><Database className="h-4 w-4 text-primary" /><span className="font-semibold text-sm truncate">{displayName}</span></div></div>
+          <Button variant="ghost" size="icon" onClick={() => setImportWizardOpen(true)} className="h-8 w-8"><FileUp className="h-4 w-4" /></Button>
+        </div>
         <Tabs value={mobileActiveTab} onValueChange={setMobileActiveTab} className="flex-1 flex flex-col min-h-0">
           <TabsList className="w-full h-10 rounded-none border-b grid grid-cols-4"><TabsTrigger value="schema" className="text-xs">Schema</TabsTrigger><TabsTrigger value="query" className="text-xs">Query</TabsTrigger><TabsTrigger value="results" className="text-xs">Results</TabsTrigger><TabsTrigger value="agent" className="text-xs">Agent</TabsTrigger></TabsList>
           <TabsContent value="schema" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "schema" ? "active" : "inactive"}><div className={mobileActiveTab === "schema" ? "h-full" : "hidden"}><SchemaTreePanel /></div></TabsContent>
@@ -451,6 +457,17 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
           <TabsContent value="agent" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "agent" ? "active" : "inactive"}><div className={mobileActiveTab === "agent" ? "h-full" : "hidden"}><AgentPanel /></div></TabsContent>
         </Tabs>
         <SaveQueryDialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen} onSave={handleSaveQuery} sqlContent={pendingSqlToSave} editingQuery={editingQuery} />
+        <DatabaseImportWizard
+          open={importWizardOpen}
+          onOpenChange={setImportWizardOpen}
+          databaseId={databaseId}
+          connectionId={connectionId}
+          projectId={database?.project_id || externalConnection?.project_id || ''}
+          shareToken={shareToken}
+          schema="public"
+          existingTables={schemas.flatMap(s => s.tables)}
+          onImportComplete={() => { loadSchema(); loadMigrations(); }}
+        />
       </div>
     );
   }
@@ -459,7 +476,10 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
     <div className="h-full flex flex-col">
       <div className="px-3 py-2 border-b border-border bg-background/95 backdrop-blur flex items-center justify-between">
         <div className="flex items-center gap-3">{onBack && <Button variant="ghost" size="sm" onClick={onBack} className="h-8"><ChevronLeft className="h-4 w-4 mr-1" />Back</Button>}<div className="flex items-center gap-2"><div className="p-1.5 rounded-md bg-primary/10"><Database className="h-4 w-4 text-primary" /></div><div><h2 className="text-sm font-semibold">{displayName}</h2><p className="text-xs text-muted-foreground">{isExternal ? `External PostgreSQL • ${externalConnection?.host || 'Unknown host'}` : `PostgreSQL ${database?.postgres_version || "16"} • ${database?.region || 'Unknown'}`}</p></div></div></div>
-        {isAgentPanelCollapsed && <Button variant="outline" size="sm" onClick={() => setIsAgentPanelCollapsed(false)} className="h-8"><Bot className="h-4 w-4 mr-2" />Database Agent</Button>}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setImportWizardOpen(true)} className="h-8"><FileUp className="h-4 w-4 mr-2" />Import Data</Button>
+          {isAgentPanelCollapsed && <Button variant="outline" size="sm" onClick={() => setIsAgentPanelCollapsed(false)} className="h-8"><Bot className="h-4 w-4 mr-2" />Database Agent</Button>}
+        </div>
       </div>
       <div className="flex-1 min-h-0">
         <ResizablePanelGroup direction="horizontal">
@@ -470,6 +490,17 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
         </ResizablePanelGroup>
       </div>
       <SaveQueryDialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen} onSave={handleSaveQuery} sqlContent={pendingSqlToSave} editingQuery={editingQuery} />
+      <DatabaseImportWizard
+        open={importWizardOpen}
+        onOpenChange={setImportWizardOpen}
+        databaseId={databaseId}
+        connectionId={connectionId}
+        projectId={database?.project_id || externalConnection?.project_id || ''}
+        shareToken={shareToken}
+        schema="public"
+        existingTables={schemas.flatMap(s => s.tables)}
+        onImportComplete={() => { loadSchema(); loadMigrations(); }}
+      />
     </div>
   );
 }
