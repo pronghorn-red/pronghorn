@@ -92,3 +92,9 @@ verify_jwt = false
 
 [functions.project-activity]
 verify_jwt = false
+
+[functions.database-agent-import]
+verify_jwt = false
+
+[functions.admin-management]
+verify_jwt = false
