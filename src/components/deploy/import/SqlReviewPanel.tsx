@@ -232,6 +232,7 @@ export default function SqlReviewPanel({
                     <div className="px-3 pb-3">
                       <pre className={cn(
                         "p-3 rounded-lg bg-[#1e1e1e] text-[#d4d4d4] text-xs font-mono overflow-x-auto max-h-[300px]",
+                        "whitespace-pre-wrap break-words",
                         isExcluded && "opacity-50"
                       )}>
                         {stmt.sql}

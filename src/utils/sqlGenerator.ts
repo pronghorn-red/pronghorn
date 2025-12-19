@@ -64,6 +64,33 @@ export function sanitizeColumnName(name: string): string {
 }
 
 /**
+ * Check if a string is a MongoDB ObjectId (24-char hex string)
+ */
+function isMongoObjectId(value: any): boolean {
+  if (typeof value !== 'string') return false;
+  return /^[0-9a-f]{24}$/i.test(value);
+}
+
+/**
+ * Check if a string is a valid UUID
+ */
+function isValidUUID(value: any): boolean {
+  if (typeof value !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+/**
+ * Generate a UUID v4
+ */
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+/**
  * Generate CREATE TABLE SQL statement
  */
 export function generateCreateTableSQL(
@@ -347,6 +374,10 @@ export function generateMultiTableImportSQL(
     return getDepth(a.name) - getDepth(b.name);
   });
 
+  // ID mapping: tracks the actual ID used for each row across all tables
+  // Map<tableName, Map<originalId, actualIdUsed>>
+  const idMappingByTable = new Map<string, Map<string, string>>();
+
   // Generate CREATE TABLE for each table
   for (const table of sortedTables) {
     // Check if user has configured this table via SchemaCreator
@@ -441,6 +472,10 @@ export function generateMultiTableImportSQL(
 
   // Generate INSERT statements for each table (in order)
   for (const table of sortedTables) {
+    // Initialize ID mapping for this table
+    const tableIdMap = new Map<string, string>();
+    idMappingByTable.set(table.name, tableIdMap);
+    
     // Get selected rows for this table
     let selectedRows = table.rows;
     if (selectedRowsByTable) {
@@ -452,6 +487,10 @@ export function generateMultiTableImportSQL(
 
     if (selectedRows.length === 0) continue;
 
+    // Get parent table name for resolving _parent_id
+    const parentTableName = parentMap.get(table.name);
+    const parentIdMap = parentTableName ? idMappingByTable.get(parentTableName) : undefined;
+
     // Get columns: include 'id' explicitly using _row_id value, exclude _row_id from column list
     const columnNames = ['id', ...table.columns
       .filter(c => c.name !== '_row_id')
@@ -459,12 +498,41 @@ export function generateMultiTableImportSQL(
 
     // Map rows to values, using _row_id for the 'id' column
     const dataRows = selectedRows.map(row => {
-      return [
-        row['_row_id'], // Use _row_id as the explicit 'id' value
+      const originalId = row['_row_id'];
+      
+      // Determine the actual ID to use for this row
+      let actualId: string;
+      if (isMongoObjectId(originalId)) {
+        // MongoDB ObjectId - generate a new UUID
+        actualId = generateUUID();
+      } else if (isValidUUID(originalId)) {
+        // Already a valid UUID
+        actualId = originalId;
+      } else {
+        // Some other format - generate UUID
+        actualId = generateUUID();
+      }
+      
+      // Store mapping for child tables
+      tableIdMap.set(originalId, actualId);
+      
+      // Build the row data
+      const rowData = [
+        actualId, // Use the actual ID (converted if needed)
         ...table.columns
           .filter(c => c.name !== '_row_id')
-          .map(c => row[c.name] ?? null)
+          .map(c => {
+            // Handle _parent_id - resolve to actual parent ID
+            if (c.name === '_parent_id' && parentIdMap) {
+              const originalParentId = row[c.name];
+              const resolvedParentId = parentIdMap.get(originalParentId);
+              return resolvedParentId || originalParentId; // Fallback to original if not found
+            }
+            return row[c.name] ?? null;
+          })
       ];
+      
+      return rowData;
     });
 
     const batchSize = calculateBatchSize(columnNames.length, dataRows.length);
@@ -506,49 +574,29 @@ export function generateTableDefinitionFromInference(
     usedNames.add('id');
   }
 
-  // Add inferred columns
-  columnInfos.forEach(info => {
-    // Skip internal columns
-    if (info.name.startsWith('_')) return;
-
-    // Handle duplicate column names
-    let finalName = info.name;
+  for (const info of columnInfos) {
+    let sanitized = sanitizeColumnName(info.name);
     
-    // If auto-ID is enabled and column is named 'id', rename it
-    if (addIdColumn && finalName.toLowerCase() === 'id') {
-      finalName = 'original_id';
+    // Handle duplicates
+    let finalName = sanitized;
+    let suffix = 1;
+    while (usedNames.has(finalName)) {
+      finalName = `${sanitized}_${suffix}`;
+      suffix++;
     }
-    
-    // Ensure no duplicate column names
-    if (usedNames.has(finalName.toLowerCase())) {
-      let suffix = 2;
-      while (usedNames.has(`${finalName}_${suffix}`.toLowerCase())) {
-        suffix++;
-      }
-      finalName = `${finalName}_${suffix}`;
-    }
-    usedNames.add(finalName.toLowerCase());
+    usedNames.add(finalName);
 
     columns.push({
       name: finalName,
       type: info.inferredType,
       nullable: info.nullable,
-      isPrimaryKey: !addIdColumn && info.suggestPrimaryKey,
-      isUnique: !info.suggestPrimaryKey && info.uniqueRatio > 0.99
+      isPrimaryKey: false,
+      isUnique: false
     });
-
-    // Add index if suggested
-    if (info.suggestIndex) {
-      indexes.push({
-        name: `idx_${tableName}_${finalName}`,
-        columns: [finalName],
-        unique: false
-      });
-    }
-  });
+  }
 
   return {
-    name: tableName,
+    name: sanitizeTableName(tableName),
     schema,
     columns,
     indexes
@@ -556,26 +604,18 @@ export function generateTableDefinitionFromInference(
 }
 
 /**
- * Calculate optimal batch size based on column count and row count
+ * Calculate optimal batch size for INSERTs
  */
 export function calculateBatchSize(columnCount: number, totalRows: number): number {
-  // Estimate bytes per row (rough estimate: 50 bytes per column average)
-  const estimatedRowSize = columnCount * 50;
+  // PostgreSQL has a limit of ~65535 parameters per query
+  // Each column in each row is a parameter
+  const maxParams = 32767; // Stay safe below the limit
+  const maxRowsPerBatch = Math.floor(maxParams / Math.max(columnCount, 1));
   
-  // Target batch size around 100KB
-  const targetBatchBytes = 100 * 1024;
+  // Also limit to reasonable batch sizes for readability
+  const preferredBatchSize = 100;
   
-  let batchSize = Math.floor(targetBatchBytes / estimatedRowSize);
-  
-  // Clamp between 10 and 100
-  batchSize = Math.max(10, Math.min(100, batchSize));
-  
-  // For very small datasets, use smaller batches
-  if (totalRows < 100) {
-    batchSize = Math.min(batchSize, Math.ceil(totalRows / 5));
-  }
-  
-  return Math.max(10, batchSize);
+  return Math.min(maxRowsPerBatch, preferredBatchSize, totalRows);
 }
 
 /**
@@ -668,6 +708,10 @@ export function generateSmartImportSQL(
     return getDepth(a.name) - getDepth(b.name);
   });
 
+  // ID mapping: tracks the actual ID used for each row across all tables
+  // Map<tableName, Map<originalId, actualIdUsed>>
+  const idMappingByTable = new Map<string, Map<string, string>>();
+
   // Process each table based on its match status
   for (const table of sortedTables) {
     const match = tableMatches.find(m => m.importTable === table.name);
@@ -691,6 +735,14 @@ export function generateSmartImportSQL(
     }
 
     if (selectedRows.length === 0) continue;
+
+    // Initialize ID mapping for this table
+    const tableIdMap = new Map<string, string>();
+    idMappingByTable.set(table.name, tableIdMap);
+
+    // Get parent table's ID mapping for resolving _parent_id
+    const parentTableName = parentMap.get(table.name);
+    const parentIdMap = parentTableName ? idMappingByTable.get(parentTableName) : undefined;
 
     // Handle based on status
     if (status === 'new') {
@@ -781,12 +833,37 @@ export function generateSmartImportSQL(
         .filter(c => c.name !== '_row_id')
         .map(c => c.name)];
 
-      const dataRows = selectedRows.map(row => [
-        row['_row_id'],
-        ...table.columns
-          .filter(c => c.name !== '_row_id')
-          .map(c => row[c.name] ?? null)
-      ]);
+      const dataRows = selectedRows.map(row => {
+        const originalId = row['_row_id'];
+        
+        // Determine the actual ID to use for this row
+        let actualId: string;
+        if (isMongoObjectId(originalId)) {
+          actualId = generateUUID();
+        } else if (isValidUUID(originalId)) {
+          actualId = originalId;
+        } else {
+          actualId = generateUUID();
+        }
+        
+        // Store mapping for child tables
+        tableIdMap.set(originalId, actualId);
+        
+        return [
+          actualId,
+          ...table.columns
+            .filter(c => c.name !== '_row_id')
+            .map(c => {
+              // Handle _parent_id - resolve to actual parent ID
+              if (c.name === '_parent_id' && parentIdMap) {
+                const originalParentId = row[c.name];
+                const resolvedParentId = parentIdMap.get(originalParentId);
+                return resolvedParentId || originalParentId;
+              }
+              return row[c.name] ?? null;
+            })
+        ];
+      });
 
       const batchSize = calculateBatchSize(columnNames.length, dataRows.length);
       const insertStmts = generateInsertBatchSQL(table.name, schema, columnNames, dataRows, batchSize);
@@ -835,19 +912,48 @@ export function generateSmartImportSQL(
 
       // Check if 'id' is already mapped from the import data (e.g., _id or id column)
       const hasIdInMapping = columnMapping.some(m => 
+        m.existingCol.toLowerCase() === 'id' && 
+        (m.importCol === '_id' || m.importCol === 'id' || m.importCol === '_row_id')
+      );
+      
+      // Also check if we have any column that maps to id
+      const hasAnyIdMapping = columnMapping.some(m => 
         m.existingCol.toLowerCase() === 'id'
       );
       
-      // Add 'id' column mapping using _row_id only if not already mapped
+      // Add 'id' column mapping using _row_id only if:
+      // 1. Existing table has an id column
+      // 2. We don't already have any mapping to id
       const existingHasId = existingSchema?.columns.some(c => c.name.toLowerCase() === 'id');
-      const shouldPrependId = existingHasId && !hasIdInMapping;
+      const shouldPrependId = existingHasId && !hasAnyIdMapping;
       
       const columnNames = shouldPrependId 
         ? ['id', ...columnMapping.map(m => m.existingCol)]
         : columnMapping.map(m => m.existingCol);
 
       const dataRows = selectedRows.map(row => {
+        const originalId = row['_row_id'];
+        
+        // Determine the actual ID to use
+        let actualId: string;
+        if (isMongoObjectId(originalId)) {
+          actualId = generateUUID();
+        } else if (isValidUUID(originalId)) {
+          actualId = originalId;
+        } else {
+          actualId = generateUUID();
+        }
+        
+        // Store mapping for child tables
+        tableIdMap.set(originalId, actualId);
+        
         const mapped = columnMapping.map(m => {
+          // Handle _parent_id - resolve to actual parent ID
+          if (m.importCol === '_parent_id' && parentIdMap) {
+            const originalParentId = row[m.importCol];
+            const resolvedParentId = parentIdMap.get(originalParentId);
+            return resolvedParentId || originalParentId;
+          }
           const value = row[m.importCol] ?? null;
           // Apply casting if needed
           if (m.cast && value !== null) {
@@ -855,7 +961,7 @@ export function generateSmartImportSQL(
           }
           return value;
         });
-        return shouldPrependId ? [row['_row_id'], ...mapped] : mapped;
+        return shouldPrependId ? [actualId, ...mapped] : mapped;
       });
 
       const batchSize = calculateBatchSize(columnNames.length, dataRows.length);
@@ -916,8 +1022,31 @@ export function generateSmartImportSQL(
         : columnMapping.map(m => m.existingCol);
 
       const dataRows = selectedRows.map(row => {
-        const mapped = columnMapping.map(m => row[m.importCol] ?? null);
-        return shouldPrependId ? [row['_row_id'], ...mapped] : mapped;
+        const originalId = row['_row_id'];
+        
+        // Determine the actual ID to use
+        let actualId: string;
+        if (isMongoObjectId(originalId)) {
+          actualId = generateUUID();
+        } else if (isValidUUID(originalId)) {
+          actualId = originalId;
+        } else {
+          actualId = generateUUID();
+        }
+        
+        // Store mapping for child tables
+        tableIdMap.set(originalId, actualId);
+        
+        const mapped = columnMapping.map(m => {
+          // Handle _parent_id - resolve to actual parent ID
+          if (m.importCol === '_parent_id' && parentIdMap) {
+            const originalParentId = row[m.importCol];
+            const resolvedParentId = parentIdMap.get(originalParentId);
+            return resolvedParentId || originalParentId;
+          }
+          return row[m.importCol] ?? null;
+        });
+        return shouldPrependId ? [actualId, ...mapped] : mapped;
       });
 
       const batchSize = calculateBatchSize(columnNames.length, dataRows.length);

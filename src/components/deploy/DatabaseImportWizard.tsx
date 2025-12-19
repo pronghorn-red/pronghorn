@@ -715,11 +715,21 @@ export default function DatabaseImportWizard({
     const statementsToExecute = proposedSQL.filter((_, i) => !excludedStatements.has(i));
     if (statementsToExecute.length === 0) return;
     
+    // Calculate total rows for accurate progress tracking
+    const calculateTotalRows = () => {
+      if (fileType === 'json' && jsonData && jsonData.tables.length > 1) {
+        return Array.from(selectedRowsByTable.values()).reduce((sum, set) => sum + set.size, 0);
+      }
+      return selectedDataRows.length;
+    };
+    
+    const totalRows = calculateTotalRows();
+    
     setExecutionProgress({
       currentBatch: 0,
-      totalBatches: proposedSQL.length,
+      totalBatches: statementsToExecute.length,
       rowsCompleted: 0,
-      totalRows: selectedDataRows.length,
+      totalRows,
       currentStatement: '',
       status: 'running',
       errors: [],
@@ -727,14 +737,16 @@ export default function DatabaseImportWizard({
     });
 
     const errors: { row: number; error: string }[] = [];
+    let successfulStatements = 0;
+    let rowsInserted = 0;
     
-    for (let i = 0; i < proposedSQL.length; i++) {
+    for (let i = 0; i < statementsToExecute.length; i++) {
       if (isPaused) {
         setExecutionProgress(prev => prev ? { ...prev, status: 'paused' } : null);
         return;
       }
 
-      const stmt = proposedSQL[i];
+      const stmt = statementsToExecute[i];
       
       setExecutionProgress(prev => prev ? {
         ...prev,
@@ -754,8 +766,12 @@ export default function DatabaseImportWizard({
         const { data, error } = await supabase.functions.invoke('manage-database', { body });
         
         if (error || !data?.success) {
-          errors.push({ row: i, error: data?.error || error?.message || 'Unknown error' });
+          const errorMsg = data?.error || error?.message || 'Unknown error';
+          errors.push({ row: i, error: errorMsg });
+          console.error(`Statement ${i + 1} failed:`, errorMsg);
         } else {
+          successfulStatements++;
+          
           // Capture DDL statements as migrations (same as SQL Query Editor)
           if (databaseId || connectionId) {
             const ddlStatements = extractDDLStatements(stmt.sql);
@@ -778,33 +794,38 @@ export default function DatabaseImportWizard({
             }
           }
           
-          // Track INSERT progress
+          // Track INSERT progress - extract row count from description
           if (stmt.type === 'INSERT') {
-            const match = stmt.description.match(/(\d+)-(\d+)/);
+            const match = stmt.description.match(/rows (\d+)-(\d+) of (\d+)/);
             if (match) {
+              const endRow = parseInt(match[2], 10);
+              rowsInserted = Math.max(rowsInserted, endRow);
               setExecutionProgress(prev => prev ? {
                 ...prev,
-                rowsCompleted: parseInt(match[2], 10)
+                rowsCompleted: rowsInserted
               } : null);
             }
           }
         }
       } catch (e: any) {
         errors.push({ row: i, error: e.message });
+        console.error(`Statement ${i + 1} exception:`, e.message);
       }
     }
 
+    // Final status update
+    const finalStatus = errors.length > 0 ? 'error' : 'completed';
     setExecutionProgress(prev => prev ? {
       ...prev,
-      status: errors.length > 0 ? 'error' : 'completed',
+      status: finalStatus,
       errors,
-      rowsCompleted: selectedDataRows.length
+      rowsCompleted: errors.length === 0 ? totalRows : rowsInserted
     } : null);
 
     if (errors.length === 0) {
-      toast.success('Import completed successfully!');
+      toast.success(`Import completed successfully! ${successfulStatements} statements executed.`);
     } else {
-      toast.error(`Import completed with ${errors.length} error(s)`);
+      toast.error(`Import failed: ${errors.length} of ${statementsToExecute.length} statements failed`);
     }
   };
 
