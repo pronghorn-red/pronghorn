@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { ChevronRight, ChevronDown, Table2, Eye, Zap, Clock, Search, Hash, KeyRound, Type, FolderClosed, Database, FileCode, Bookmark, GitBranch, Download, Copy } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
@@ -57,9 +57,18 @@ interface DatabaseSchemaTreeProps {
   onDeleteMigration?: (migration: Migration) => void;
   onDownloadMigration?: (migration: Migration) => void;
   onDownloadAllMigrations?: () => void;
+  // Delete all handlers
+  onDropAllTables?: (schema: string, tables: string[]) => void;
+  onDropAllViews?: (schema: string, views: string[]) => void;
+  onDropAllFunctions?: (schema: string, functions: string[]) => void;
+  onDropAllTriggers?: (schema: string, triggers: { name: string; table: string }[]) => void;
+  onDropAllIndexes?: (schema: string, indexes: { name: string; table: string }[]) => void;
+  onDropAllSequences?: (schema: string, sequences: string[]) => void;
+  onDropAllTypes?: (schema: string, types: { name: string }[]) => void;
+  onDropAllConstraints?: (schema: string, constraints: { name: string; table: string }[]) => void;
 }
 
-type TreeItemType = 'schema' | 'category' | 'table' | 'view' | 'function' | 'trigger' | 'index' | 'sequence' | 'type' | 'constraint' | 'saved_query' | 'migration';
+type TreeItemType = 'schema' | 'category' | 'table' | 'view' | 'function' | 'trigger' | 'index' | 'sequence' | 'type' | 'constraint' | 'saved_query' | 'migration' | 'category_tables' | 'category_views' | 'category_functions' | 'category_triggers' | 'category_indexes' | 'category_sequences' | 'category_types' | 'category_constraints';
 
 interface TreeItemProps {
   label: string;
@@ -87,8 +96,24 @@ interface TreeItemProps {
     onLoadMigration?: (migration: any) => void;
     onDeleteMigration?: (migration: any) => void;
     onDownloadMigration?: (migration: any) => void;
+    onDropAllTables?: (schema: string, tables: string[]) => void;
+    onDropAllViews?: (schema: string, views: string[]) => void;
+    onDropAllFunctions?: (schema: string, functions: string[]) => void;
+    onDropAllTriggers?: (schema: string, triggers: { name: string; table: string }[]) => void;
+    onDropAllIndexes?: (schema: string, indexes: { name: string; table: string }[]) => void;
+    onDropAllSequences?: (schema: string, sequences: string[]) => void;
+    onDropAllTypes?: (schema: string, types: { name: string }[]) => void;
+    onDropAllConstraints?: (schema: string, constraints: { name: string; table: string }[]) => void;
   };
 }
+
+// Context menu types that support right-click
+const contextMenuTypes: TreeItemContextType[] = [
+  'table', 'view', 'function', 'trigger', 'index', 'sequence', 'type', 'constraint', 
+  'saved_query', 'migration',
+  'category_tables', 'category_views', 'category_functions', 'category_triggers',
+  'category_indexes', 'category_sequences', 'category_types', 'category_constraints'
+];
 
 function TreeItem({ 
   label, 
@@ -158,7 +183,6 @@ function TreeItem({
   );
 
   // Wrap with context menu for items that support it
-  const contextMenuTypes: TreeItemContextType[] = ['table', 'view', 'function', 'trigger', 'index', 'sequence', 'type', 'constraint', 'saved_query', 'migration'];
   const shouldHaveContextMenu = contextMenuTypes.includes(type as TreeItemContextType) && contextMenuProps;
 
   return (
@@ -179,6 +203,14 @@ function TreeItem({
           onLoadMigration={contextMenuProps.onLoadMigration}
           onDeleteMigration={contextMenuProps.onDeleteMigration}
           onDownloadMigration={contextMenuProps.onDownloadMigration}
+          onDropAllTables={contextMenuProps.onDropAllTables}
+          onDropAllViews={contextMenuProps.onDropAllViews}
+          onDropAllFunctions={contextMenuProps.onDropAllFunctions}
+          onDropAllTriggers={contextMenuProps.onDropAllTriggers}
+          onDropAllIndexes={contextMenuProps.onDropAllIndexes}
+          onDropAllSequences={contextMenuProps.onDropAllSequences}
+          onDropAllTypes={contextMenuProps.onDropAllTypes}
+          onDropAllConstraints={contextMenuProps.onDropAllConstraints}
         >
           {itemButton}
         </DatabaseTreeContextMenu>
@@ -209,16 +241,33 @@ export function DatabaseSchemaTree({
   onDeleteMigration,
   onDownloadMigration,
   onDownloadAllMigrations,
+  onDropAllTables,
+  onDropAllViews,
+  onDropAllFunctions,
+  onDropAllTriggers,
+  onDropAllIndexes,
+  onDropAllSequences,
+  onDropAllTypes,
+  onDropAllConstraints,
 }: DatabaseSchemaTreeProps) {
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Track open state for categories - migrations starts CLOSED
-  const [openStates, setOpenStates] = useState<Record<string, boolean>>({
-    'saved_queries': true,
-    'migrations': false,  // Start collapsed
-    'public': true,
-    'public_tables': true,
-  });
+  // Use ref to track initialization and preserve state across re-renders
+  const initializedRef = useRef(false);
+  const [openStates, setOpenStates] = useState<Record<string, boolean>>({});
+
+  // Initialize open states only once
+  useEffect(() => {
+    if (!initializedRef.current && schemas.length > 0) {
+      initializedRef.current = true;
+      setOpenStates({
+        'saved_queries': true,
+        'migrations': false,
+        'public': true,
+        'public_tables': true,
+      });
+    }
+  }, [schemas]);
 
   const toggleOpen = useCallback((key: string, value: boolean) => {
     setOpenStates(prev => ({ ...prev, [key]: value }));
@@ -235,6 +284,14 @@ export function DatabaseSchemaTree({
     onLoadMigration,
     onDeleteMigration,
     onDownloadMigration,
+    onDropAllTables,
+    onDropAllViews,
+    onDropAllFunctions,
+    onDropAllTriggers,
+    onDropAllIndexes,
+    onDropAllSequences,
+    onDropAllTypes,
+    onDropAllConstraints,
   };
 
   const filteredSchemas = useMemo(() => {
@@ -354,7 +411,7 @@ export function DatabaseSchemaTree({
             icon={<GitBranch className="h-4 w-4 text-emerald-500" />}
             level={0}
             count={migrations.length}
-            isOpen={openStates['migrations']}
+            isOpen={openStates['migrations'] ?? false}
             onToggle={(v) => toggleOpen('migrations', v)}
           >
             {migrations.length === 0 ? (
@@ -412,12 +469,15 @@ export function DatabaseSchemaTree({
                 {schema.tables.length > 0 && (
                   <TreeItem
                     label="Tables"
-                    type="category"
+                    type="category_tables"
                     icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                     level={1}
                     count={schema.tables.length}
                     isOpen={openStates[`${schemaKey}_tables`] ?? schema.name === 'public'}
                     onToggle={(v) => toggleOpen(`${schemaKey}_tables`, v)}
+                    schema={schema.name}
+                    extra={{ items: schema.tables }}
+                    contextMenuProps={contextMenuProps}
                   >
                     {schema.tables.map((table) => (
                       <TreeItem
@@ -442,12 +502,15 @@ export function DatabaseSchemaTree({
                 {schema.views.length > 0 && (
                   <TreeItem
                     label="Views"
-                    type="category"
+                    type="category_views"
                     icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                     level={1}
                     count={schema.views.length}
                     isOpen={openStates[`${schemaKey}_views`]}
                     onToggle={(v) => toggleOpen(`${schemaKey}_views`, v)}
+                    schema={schema.name}
+                    extra={{ items: schema.views }}
+                    contextMenuProps={contextMenuProps}
                   >
                     {schema.views.map((view) => (
                       <TreeItem
@@ -472,12 +535,15 @@ export function DatabaseSchemaTree({
                 {schema.functions.length > 0 && (
                   <TreeItem
                     label="Functions"
-                    type="category"
+                    type="category_functions"
                     icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                     level={1}
                     count={schema.functions.length}
                     isOpen={openStates[`${schemaKey}_functions`]}
                     onToggle={(v) => toggleOpen(`${schemaKey}_functions`, v)}
+                    schema={schema.name}
+                    extra={{ items: schema.functions }}
+                    contextMenuProps={contextMenuProps}
                   >
                     {schema.functions.map((func) => (
                       <TreeItem
@@ -502,12 +568,15 @@ export function DatabaseSchemaTree({
                 {schema.triggers.length > 0 && (
                   <TreeItem
                     label="Triggers"
-                    type="category"
+                    type="category_triggers"
                     icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                     level={1}
                     count={schema.triggers.length}
                     isOpen={openStates[`${schemaKey}_triggers`]}
                     onToggle={(v) => toggleOpen(`${schemaKey}_triggers`, v)}
+                    schema={schema.name}
+                    extra={{ items: schema.triggers }}
+                    contextMenuProps={contextMenuProps}
                   >
                     {schema.triggers.map((trigger) => (
                       <TreeItem
@@ -533,12 +602,15 @@ export function DatabaseSchemaTree({
                 {schema.indexes.length > 0 && (
                   <TreeItem
                     label="Indexes"
-                    type="category"
+                    type="category_indexes"
                     icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                     level={1}
                     count={schema.indexes.length}
                     isOpen={openStates[`${schemaKey}_indexes`]}
                     onToggle={(v) => toggleOpen(`${schemaKey}_indexes`, v)}
+                    schema={schema.name}
+                    extra={{ items: schema.indexes }}
+                    contextMenuProps={contextMenuProps}
                   >
                     {schema.indexes.map((index) => (
                       <TreeItem
@@ -564,12 +636,15 @@ export function DatabaseSchemaTree({
                 {schema.sequences.length > 0 && (
                   <TreeItem
                     label="Sequences"
-                    type="category"
+                    type="category_sequences"
                     icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                     level={1}
                     count={schema.sequences.length}
                     isOpen={openStates[`${schemaKey}_sequences`]}
                     onToggle={(v) => toggleOpen(`${schemaKey}_sequences`, v)}
+                    schema={schema.name}
+                    extra={{ items: schema.sequences }}
+                    contextMenuProps={contextMenuProps}
                   >
                     {schema.sequences.map((seq) => (
                       <TreeItem
@@ -594,12 +669,15 @@ export function DatabaseSchemaTree({
                 {schema.types.length > 0 && (
                   <TreeItem
                     label="Types"
-                    type="category"
+                    type="category_types"
                     icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                     level={1}
                     count={schema.types.length}
                     isOpen={openStates[`${schemaKey}_types`]}
                     onToggle={(v) => toggleOpen(`${schemaKey}_types`, v)}
+                    schema={schema.name}
+                    extra={{ items: schema.types }}
+                    contextMenuProps={contextMenuProps}
                   >
                     {schema.types.map((type) => (
                       <TreeItem
@@ -625,12 +703,15 @@ export function DatabaseSchemaTree({
                 {schema.constraints.length > 0 && (
                   <TreeItem
                     label="Constraints"
-                    type="category"
+                    type="category_constraints"
                     icon={<FolderClosed className="h-4 w-4 text-[#858585]" />}
                     level={1}
                     count={schema.constraints.length}
                     isOpen={openStates[`${schemaKey}_constraints`]}
                     onToggle={(v) => toggleOpen(`${schemaKey}_constraints`, v)}
+                    schema={schema.name}
+                    extra={{ items: schema.constraints }}
+                    contextMenuProps={contextMenuProps}
                   >
                     {schema.constraints.map((constraint) => (
                       <TreeItem

@@ -317,11 +317,75 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
 
   const handleDropTable = (schema: string, name: string) => {
     const dropStatement = `DROP TABLE IF EXISTS "${schema}"."${name}" CASCADE;`;
-    // Append to current query on a new line
     setCurrentQuery(prev => prev.trim() ? `${prev.trim()}\n\n${dropStatement}` : dropStatement);
     setActiveTab('query');
     if (isMobile) setMobileActiveTab("query");
     toast.info(`Added DROP TABLE statement for ${schema}.${name}`);
+  };
+
+  // Delete all handlers
+  const handleDropAllTables = (schema: string, tables: string[]) => {
+    const sql = tables.map(t => `DROP TABLE IF EXISTS "${schema}"."${t}" CASCADE;`).join('\n');
+    setCurrentQuery(prev => prev.trim() ? `${prev.trim()}\n\n${sql}` : sql);
+    setActiveTab('query');
+    if (isMobile) setMobileActiveTab("query");
+    toast.info(`Added DROP statements for ${tables.length} tables`);
+  };
+
+  const handleDropAllViews = (schema: string, views: string[]) => {
+    const sql = views.map(v => `DROP VIEW IF EXISTS "${schema}"."${v}" CASCADE;`).join('\n');
+    setCurrentQuery(prev => prev.trim() ? `${prev.trim()}\n\n${sql}` : sql);
+    setActiveTab('query');
+    if (isMobile) setMobileActiveTab("query");
+    toast.info(`Added DROP statements for ${views.length} views`);
+  };
+
+  const handleDropAllFunctions = (schema: string, functions: string[]) => {
+    const sql = functions.map(f => `DROP FUNCTION IF EXISTS "${schema}"."${f}" CASCADE;`).join('\n');
+    setCurrentQuery(prev => prev.trim() ? `${prev.trim()}\n\n${sql}` : sql);
+    setActiveTab('query');
+    if (isMobile) setMobileActiveTab("query");
+    toast.info(`Added DROP statements for ${functions.length} functions`);
+  };
+
+  const handleDropAllTriggers = (schema: string, triggers: { name: string; table: string }[]) => {
+    const sql = triggers.map(t => `DROP TRIGGER IF EXISTS "${t.name}" ON "${schema}"."${t.table}";`).join('\n');
+    setCurrentQuery(prev => prev.trim() ? `${prev.trim()}\n\n${sql}` : sql);
+    setActiveTab('query');
+    if (isMobile) setMobileActiveTab("query");
+    toast.info(`Added DROP statements for ${triggers.length} triggers`);
+  };
+
+  const handleDropAllIndexes = (schema: string, indexes: { name: string; table: string }[]) => {
+    const sql = indexes.map(i => `DROP INDEX IF EXISTS "${schema}"."${i.name}";`).join('\n');
+    setCurrentQuery(prev => prev.trim() ? `${prev.trim()}\n\n${sql}` : sql);
+    setActiveTab('query');
+    if (isMobile) setMobileActiveTab("query");
+    toast.info(`Added DROP statements for ${indexes.length} indexes`);
+  };
+
+  const handleDropAllSequences = (schema: string, sequences: string[]) => {
+    const sql = sequences.map(s => `DROP SEQUENCE IF EXISTS "${schema}"."${s}";`).join('\n');
+    setCurrentQuery(prev => prev.trim() ? `${prev.trim()}\n\n${sql}` : sql);
+    setActiveTab('query');
+    if (isMobile) setMobileActiveTab("query");
+    toast.info(`Added DROP statements for ${sequences.length} sequences`);
+  };
+
+  const handleDropAllTypes = (schema: string, types: { name: string }[]) => {
+    const sql = types.map(t => `DROP TYPE IF EXISTS "${schema}"."${t.name}" CASCADE;`).join('\n');
+    setCurrentQuery(prev => prev.trim() ? `${prev.trim()}\n\n${sql}` : sql);
+    setActiveTab('query');
+    if (isMobile) setMobileActiveTab("query");
+    toast.info(`Added DROP statements for ${types.length} types`);
+  };
+
+  const handleDropAllConstraints = (schema: string, constraints: { name: string; table: string }[]) => {
+    const sql = constraints.map(c => `ALTER TABLE "${schema}"."${c.table}" DROP CONSTRAINT IF EXISTS "${c.name}";`).join('\n');
+    setCurrentQuery(prev => prev.trim() ? `${prev.trim()}\n\n${sql}` : sql);
+    setActiveTab('query');
+    if (isMobile) setMobileActiveTab("query");
+    toast.info(`Added DROP statements for ${constraints.length} constraints`);
   };
 
   const handleLoadQuery = (query: SavedQuery) => { setCurrentQuery(query.sql_content); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); };
@@ -417,7 +481,7 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
         {schemaError ? (
           <div className="flex flex-col items-center justify-center h-full p-4 text-center"><AlertCircle className="h-8 w-8 text-destructive mb-2" /><p className="text-sm text-destructive">{schemaError}</p><Button variant="outline" size="sm" onClick={() => loadSchema()} className="mt-4">Retry</Button></div>
         ) : (
-          <DatabaseSchemaTree schemas={schemas} savedQueries={savedQueries} migrations={migrations} loading={loadingSchema} onTableSelect={handleTableSelect} onViewSelect={(s, v) => { setCurrentQuery(`SELECT * FROM "${s}"."${v}" LIMIT 100;`); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); }} onItemClick={(t, s, n, e) => { if (t === 'table') handleTableSelect(s, n); }} onShowFirst100={handleShowFirst100} onViewStructure={handleViewStructure} onGetDefinition={handleGetDefinition} onDropTable={handleDropTable} onLoadQuery={handleLoadQuery} onEditQuery={handleEditQuery} onDeleteQuery={handleDeleteQuery} onLoadMigration={handleLoadMigration} onDeleteMigration={handleDeleteMigration} onDownloadMigration={handleDownloadMigration} onDownloadAllMigrations={handleDownloadAllMigrations} />
+          <DatabaseSchemaTree schemas={schemas} savedQueries={savedQueries} migrations={migrations} loading={loadingSchema} onTableSelect={handleTableSelect} onViewSelect={(s, v) => { setCurrentQuery(`SELECT * FROM "${s}"."${v}" LIMIT 100;`); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); }} onItemClick={(t, s, n, e) => { if (t === 'table') handleTableSelect(s, n); }} onShowFirst100={handleShowFirst100} onViewStructure={handleViewStructure} onGetDefinition={handleGetDefinition} onDropTable={handleDropTable} onLoadQuery={handleLoadQuery} onEditQuery={handleEditQuery} onDeleteQuery={handleDeleteQuery} onLoadMigration={handleLoadMigration} onDeleteMigration={handleDeleteMigration} onDownloadMigration={handleDownloadMigration} onDownloadAllMigrations={handleDownloadAllMigrations} onDropAllTables={handleDropAllTables} onDropAllViews={handleDropAllViews} onDropAllFunctions={handleDropAllFunctions} onDropAllTriggers={handleDropAllTriggers} onDropAllIndexes={handleDropAllIndexes} onDropAllSequences={handleDropAllSequences} onDropAllTypes={handleDropAllTypes} onDropAllConstraints={handleDropAllConstraints} />
         )}
       </div>
     </div>

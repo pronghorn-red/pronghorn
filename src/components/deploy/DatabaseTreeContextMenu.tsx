@@ -28,7 +28,15 @@ export type TreeItemContextType =
   | 'type' 
   | 'constraint'
   | 'saved_query'
-  | 'migration';
+  | 'migration'
+  | 'category_tables'
+  | 'category_views'
+  | 'category_functions'
+  | 'category_triggers'
+  | 'category_indexes'
+  | 'category_sequences'
+  | 'category_types'
+  | 'category_constraints';
 
 interface DatabaseTreeContextMenuProps {
   type: TreeItemContextType;
@@ -47,6 +55,15 @@ interface DatabaseTreeContextMenuProps {
   onLoadMigration?: (migration: any) => void;
   onDeleteMigration?: (migration: any) => void;
   onDownloadMigration?: (migration: any) => void;
+  // Delete all handlers
+  onDropAllTables?: (schema: string, tables: string[]) => void;
+  onDropAllViews?: (schema: string, views: string[]) => void;
+  onDropAllFunctions?: (schema: string, functions: string[]) => void;
+  onDropAllTriggers?: (schema: string, triggers: { name: string; table: string }[]) => void;
+  onDropAllIndexes?: (schema: string, indexes: { name: string; table: string }[]) => void;
+  onDropAllSequences?: (schema: string, sequences: string[]) => void;
+  onDropAllTypes?: (schema: string, types: { name: string }[]) => void;
+  onDropAllConstraints?: (schema: string, constraints: { name: string; table: string }[]) => void;
 }
 
 export function DatabaseTreeContextMenu({
@@ -66,6 +83,14 @@ export function DatabaseTreeContextMenu({
   onLoadMigration,
   onDeleteMigration,
   onDownloadMigration,
+  onDropAllTables,
+  onDropAllViews,
+  onDropAllFunctions,
+  onDropAllTriggers,
+  onDropAllIndexes,
+  onDropAllSequences,
+  onDropAllTypes,
+  onDropAllConstraints,
 }: DatabaseTreeContextMenuProps) {
   const handleCopyName = () => {
     const fullName = schema ? `"${schema}"."${name}"` : name;
@@ -264,6 +289,94 @@ export function DatabaseTreeContextMenu({
               Delete Migration
             </ContextMenuItem>
           </>
+        )}
+
+        {/* Category: Tables - Delete All */}
+        {type === 'category_tables' && extra?.items?.length > 0 && (
+          <ContextMenuItem 
+            onClick={() => onDropAllTables?.(schema, extra.items)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Drop All Tables ({extra.items.length})
+          </ContextMenuItem>
+        )}
+
+        {/* Category: Views - Delete All */}
+        {type === 'category_views' && extra?.items?.length > 0 && (
+          <ContextMenuItem 
+            onClick={() => onDropAllViews?.(schema, extra.items)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Drop All Views ({extra.items.length})
+          </ContextMenuItem>
+        )}
+
+        {/* Category: Functions - Delete All */}
+        {type === 'category_functions' && extra?.items?.length > 0 && (
+          <ContextMenuItem 
+            onClick={() => onDropAllFunctions?.(schema, extra.items)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Drop All Functions ({extra.items.length})
+          </ContextMenuItem>
+        )}
+
+        {/* Category: Triggers - Delete All */}
+        {type === 'category_triggers' && extra?.items?.length > 0 && (
+          <ContextMenuItem 
+            onClick={() => onDropAllTriggers?.(schema, extra.items)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Drop All Triggers ({extra.items.length})
+          </ContextMenuItem>
+        )}
+
+        {/* Category: Indexes - Delete All */}
+        {type === 'category_indexes' && extra?.items?.length > 0 && (
+          <ContextMenuItem 
+            onClick={() => onDropAllIndexes?.(schema, extra.items)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Drop All Indexes ({extra.items.length})
+          </ContextMenuItem>
+        )}
+
+        {/* Category: Sequences - Delete All */}
+        {type === 'category_sequences' && extra?.items?.length > 0 && (
+          <ContextMenuItem 
+            onClick={() => onDropAllSequences?.(schema, extra.items)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Drop All Sequences ({extra.items.length})
+          </ContextMenuItem>
+        )}
+
+        {/* Category: Types - Delete All */}
+        {type === 'category_types' && extra?.items?.length > 0 && (
+          <ContextMenuItem 
+            onClick={() => onDropAllTypes?.(schema, extra.items)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Drop All Types ({extra.items.length})
+          </ContextMenuItem>
+        )}
+
+        {/* Category: Constraints - Delete All */}
+        {type === 'category_constraints' && extra?.items?.length > 0 && (
+          <ContextMenuItem 
+            onClick={() => onDropAllConstraints?.(schema, extra.items)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Drop All Constraints ({extra.items.length})
+          </ContextMenuItem>
         )}
       </ContextMenuContent>
     </ContextMenu>
