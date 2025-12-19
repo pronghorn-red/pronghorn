@@ -177,6 +177,13 @@ export default function DatabaseImportWizard({
     }
   }, [dataRows]);
 
+  // Auto-select first JSON table for multi-table JSON
+  useEffect(() => {
+    if (fileType === 'json' && jsonData && jsonData.tables.length > 0 && !selectedJsonTable) {
+      setSelectedJsonTable(jsonData.tables[0].name);
+    }
+  }, [fileType, jsonData, selectedJsonTable]);
+
   const goBack = () => {
     if (canGoBack) {
       setCurrentStep(STEPS[currentStepIndex - 1].key);
