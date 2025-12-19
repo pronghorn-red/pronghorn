@@ -1133,23 +1133,24 @@ Use them to understand context and inform your file operations.` : ''}`;
       const nonEditOps: any[] = [];
 
       for (const op of operations) {
-        // Handle malformed operations: convert params_summary to params for parameterless ops
-        if (op && !op.params && (op as any).params_summary !== undefined) {
+        // Handle malformed operations: convert _param_keys/params_summary to params for parameterless ops
+        const hasMalformedParams = op && !op.params && ((op as any)._param_keys !== undefined || (op as any).params_summary !== undefined);
+        if (hasMalformedParams) {
           const parameterlessOps = ['list_files', 'get_staged_changes', 'discard_all_staged'];
           if (parameterlessOps.includes(op.type)) {
-            console.log(`[AGENT] Converting params_summary to params for parameterless operation: ${op.type}`);
+            console.log(`[AGENT] Converting malformed params to params for parameterless operation: ${op.type}`);
             op.params = {} as any;
             if (op.type === 'list_files') {
               op.params.path_prefix = null;
             }
           } else {
-            console.warn(`[AGENT] Cannot infer params from params_summary for operation: ${op.type}`);
+            console.warn(`[AGENT] Cannot infer params from _param_keys/params_summary for operation: ${op.type}`);
           }
         }
         
         // Skip invalid operations without params entirely - do NOT add to processing list
         if (!op || !op.params) {
-          console.warn(`[AGENT] Skipping invalid operation (missing params):`, JSON.stringify({ type: op?.type, has_params_summary: !!(op as any)?.params_summary }));
+          console.warn(`[AGENT] Skipping invalid operation (missing params):`, JSON.stringify({ type: op?.type, has_malformed_params: hasMalformedParams }));
           continue;
         }
         if (op.type === 'edit_lines') {
@@ -1904,7 +1905,7 @@ Use them to understand context and inform your file operations.` : ''}`;
         role: "assistant",
         content: JSON.stringify({
           reasoning: agentResponse.reasoning,
-          operations: agentResponse.operations?.map((op: any) => ({ type: op.type, params_summary: Object.keys(op.params || {}) })),
+          operations: agentResponse.operations?.map((op: any) => ({ type: op.type, _param_keys: Object.keys(op.params || {}) })),
           status: agentResponse.status,
         }),
       });
