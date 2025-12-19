@@ -30,6 +30,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Database,
 } from "lucide-react";
 import {
   Dialog,
@@ -204,6 +205,22 @@ export default function Landing() {
         ]
       }
     },
+    { 
+      icon: Database, 
+      label: "Database", 
+      description: "Manage, explore & import data", 
+      phase: "ship",
+      hasAgent: true,
+      aiDetails: {
+        title: "AI-Powered Database Management",
+        capabilities: [
+          "Provision PostgreSQL databases with one click",
+          "Connect to external PostgreSQL instances",
+          "Import Excel, CSV, JSON with AI schema inference",
+          "SQL query editor with Monaco and saved queries"
+        ]
+      }
+    },
   ];
 
   const canvasAgents = [
@@ -262,6 +279,13 @@ export default function Landing() {
         "Share any project with a link—no login required. Real-time sync means everyone sees changes instantly. Start anonymous, claim your projects when ready.",
       color: "bg-cyan-100 text-cyan-600",
     },
+    {
+      icon: Database,
+      title: "Database Explorer & Import",
+      description:
+        "Provision or connect PostgreSQL databases, browse schemas, execute SQL queries, and import data from Excel, CSV, or JSON with AI-powered schema inference.",
+      color: "bg-indigo-100 text-indigo-600",
+    },
   ];
 
   const benefits = [
@@ -271,6 +295,7 @@ export default function Landing() {
     "Built-in code editor with GitHub sync",
     "Multi-model AI support (Gemini, Claude, Grok)",
     "13+ specification templates for any audience",
+    "Database provisioning with AI-powered data import",
   ];
 
   return (
@@ -444,7 +469,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">
-              Your 10-Step Journey
+              Your 11-Step Journey
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               From initial idea to deployed application—a complete workflow powered by AI at every step

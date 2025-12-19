@@ -16,6 +16,7 @@ A standards-first, agentic AI platform that transforms unstructured requirements
 
 - [Overview](#overview)
 - [Core Features](#core-features)
+- [Database Management](#database-management)
 - [Technology Stack](#technology-stack)
 - [Project Structure](#project-structure)
 - [Authentication System](#authentication-system)
@@ -90,6 +91,68 @@ No-login-required sharing:
 
 ---
 
+## Database Management
+
+Pronghorn provides full PostgreSQL database lifecycle management with AI-powered data import.
+
+### 🗄️ Provision & Connect
+
+| Feature | Description |
+|---------|-------------|
+| **One-Click Provisioning** | Create PostgreSQL databases via Render.com with automatic configuration |
+| **External Connections** | Connect to any PostgreSQL instance with secure connection string storage |
+| **SSL Configuration** | Support for `require`, `prefer`, `disable` SSL modes |
+| **Status Tracking** | Real-time database status (pending, creating, available, error, suspended) |
+| **Connection Testing** | Verify connectivity before saving external connections |
+
+### 🔍 Schema Explorer
+
+Browse and manage your database structure:
+- **Tables** - View columns, types, constraints, and indexes
+- **Views** - Materialized and standard views
+- **Functions** - PostgreSQL functions and procedures
+- **Triggers** - Database triggers with timing and events
+- **Indexes** - B-tree, hash, GIN, GiST indexes
+- **Sequences** - Auto-increment sequences
+- **Types** - Custom PostgreSQL types
+
+### 📝 SQL Query Editor
+
+Full-featured Monaco-powered SQL editor:
+- **VS Code Engine** - Syntax highlighting, auto-complete
+- **Query Execution** - Run queries with timing and result pagination
+- **Saved Queries** - Store frequently used queries per database
+- **Query History** - Access recent queries with keyboard shortcuts
+- **Result Export** - Export data as JSON, CSV, or SQL INSERT statements
+- **Destructive Query Warnings** - Visual indicators for DROP, DELETE, TRUNCATE
+
+### 📥 Data Import Wizard
+
+Multi-step wizard for importing data from files:
+
+| Step | Description |
+|------|-------------|
+| **1. Upload** | Drag-and-drop Excel (.xlsx, .xls), CSV, or JSON files |
+| **2. Preview** | View parsed data with automatic sheet/table detection |
+| **3. Schema** | AI-inferred or manual schema with type casting |
+| **4. Review** | SQL preview with batched INSERT statements |
+| **5. Execute** | Progress tracking with pause/resume capability |
+
+**AI Schema Inference:**
+- Automatic type detection (TEXT, INTEGER, BIGINT, NUMERIC, BOOLEAN, DATE, TIMESTAMP, JSONB)
+- Primary key recommendations
+- Index suggestions for common patterns
+- Foreign key relationship detection (JSON files)
+
+### 📋 Migration Tracking
+
+Automatic DDL statement history:
+- **CREATE** - Tables, views, functions, indexes
+- **ALTER** - Column additions, type changes, constraints
+- **DROP** - Tracked for audit trail
+- **Object Metadata** - Schema, name, type for each migration
+- **Execution Log** - Timestamp, user, and full SQL content
+
 ## Technology Stack
 
 ### Frontend
@@ -141,6 +204,17 @@ pronghorn/
 │   │   │   ├── UnifiedAgentInterface.tsx
 │   │   │   ├── AgentProgressMonitor.tsx
 │   │   │   ├── StagingPanel.tsx
+│   │   │   └── ...
+│   │   ├── deploy/                # Database & deployment components
+│   │   │   ├── DatabaseExplorer.tsx      # Schema browser & SQL editor
+│   │   │   ├── DatabaseImportWizard.tsx  # Multi-step data import
+│   │   │   ├── SqlQueryEditor.tsx        # Monaco SQL editor
+│   │   │   ├── ConnectDatabaseDialog.tsx # External DB connections
+│   │   │   ├── import/                   # Import wizard sub-components
+│   │   │   │   ├── FileUploader.tsx
+│   │   │   │   ├── ExcelDataGrid.tsx
+│   │   │   │   ├── SchemaCreator.tsx
+│   │   │   │   └── SqlReviewPanel.tsx
 │   │   │   └── ...
 │   │   ├── repository/            # File tree, editor, Git integration
 │   │   │   ├── FileTree.tsx
@@ -544,6 +618,13 @@ Pronghorn includes 25+ Deno edge functions for server-side operations.
 | `render-service` | Render.com service management |
 | `generate-local-package` | Local development package |
 
+#### Database Management
+| Function | Purpose |
+|----------|---------|
+| `manage-database` | Schema browsing, SQL execution, data export |
+| `render-database` | Render.com PostgreSQL provisioning |
+| `database-agent-import` | AI-powered schema inference for imports |
+
 #### Media
 | Function | Purpose |
 |----------|---------|
@@ -719,8 +800,19 @@ For edge functions, the following secrets are configured in Supabase:
 | `ANTHROPIC_API_KEY` | Anthropic Claude API access |
 | `GROK_API_KEY` | xAI Grok API access |
 | `GITHUB_PAT` | Default repository operations |
-| `RENDER_API_KEY` | Render.com deployments |
+| `RENDER_API_KEY` | Render.com deployments & databases |
 | `RENDER_OWNER_ID` | Render.com account ID |
+
+### Database Tables
+
+Key tables for database management:
+
+| Table | Purpose |
+|-------|---------|
+| `project_databases` | Render.com hosted PostgreSQL instances |
+| `project_database_connections` | External database connections |
+| `project_database_sql` | Saved SQL queries per database |
+| `project_migrations` | DDL migration history tracking |
 
 ---
 
