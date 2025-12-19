@@ -727,7 +727,7 @@ export default function DatabaseImportWizard({
             
             {/* Show full SchemaCreator for selected table in multi-table mode */}
             {isMultiTableJson && selectedJsonTable && (
-              <div className="flex-1 min-h-0 overflow-auto">
+              <div className="flex-1 min-h-0 overflow-auto border rounded-lg p-4">
                 <SchemaCreator
                   key={selectedJsonTable}
                   headers={headers.filter(h => h !== '_row_id')}

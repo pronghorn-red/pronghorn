@@ -216,7 +216,7 @@ export default function SchemaCreator({
   const renamedColumnsCount = columns.filter(c => c.wasRenamed).length;
 
   return (
-    <div className="flex flex-col h-full gap-4">
+    <div className="flex flex-col gap-4">
       {/* Table Name */}
       <div className="space-y-2">
         <Label>Table Name</Label>
