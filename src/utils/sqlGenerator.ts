@@ -316,7 +316,8 @@ export function generateMultiTableImportSQL(
   tables: JsonTable[],
   relationships: ForeignKeyRelationship[],
   schema: string = 'public',
-  selectedRowsByTable?: Map<string, Set<number>>
+  selectedRowsByTable?: Map<string, Set<number>>,
+  tableDefsMap?: Map<string, TableDefinition>
 ): SQLStatement[] {
   const statements: SQLStatement[] = [];
   let sequence = 0;
@@ -344,62 +345,94 @@ export function generateMultiTableImportSQL(
 
   // Generate CREATE TABLE for each table
   for (const table of sortedTables) {
-    const columns: ColumnDefinition[] = [];
+    // Check if user has configured this table via SchemaCreator
+    const userTableDef = tableDefsMap?.get(table.name);
     
-    // Add UUID primary key
-    columns.push({
-      name: 'id',
-      type: 'UUID',
-      nullable: false,
-      isPrimaryKey: true,
-      isUnique: true,
-      defaultValue: 'gen_random_uuid()'
-    });
-
-    // Add columns from JSON data
-    for (const col of table.columns) {
-      // Skip internal _row_id column
-      if (col.name === '_row_id') continue;
+    if (userTableDef) {
+      // Use user-configured table definition, but ensure FK columns are preserved
+      const tableDef: TableDefinition = {
+        ...userTableDef,
+        schema,
+        columns: userTableDef.columns.map(col => {
+          // Ensure _parent_id is always UUID with proper FK reference
+          if (col.name === '_parent_id') {
+            const parentTable = parentMap.get(table.name);
+            return {
+              ...col,
+              type: 'UUID' as PostgresType,
+              nullable: false,
+              references: parentTable ? {
+                table: sanitizeTableName(parentTable),
+                column: 'id'
+              } : undefined
+            };
+          }
+          return col;
+        })
+      };
       
-      // Handle _parent_id as a UUID FK
-      if (col.name === '_parent_id') {
-        const parentTable = parentMap.get(table.name);
+      const createStmt = generateCreateTableSQL(tableDef);
+      createStmt.sequence = sequence++;
+      statements.push(createStmt);
+    } else {
+      // Auto-generate table definition from JSON structure
+      const columns: ColumnDefinition[] = [];
+      
+      // Add UUID primary key
+      columns.push({
+        name: 'id',
+        type: 'UUID',
+        nullable: false,
+        isPrimaryKey: true,
+        isUnique: true,
+        defaultValue: 'gen_random_uuid()'
+      });
+
+      // Add columns from JSON data
+      for (const col of table.columns) {
+        // Skip internal _row_id column
+        if (col.name === '_row_id') continue;
+        
+        // Handle _parent_id as a UUID FK
+        if (col.name === '_parent_id') {
+          const parentTable = parentMap.get(table.name);
+          columns.push({
+            name: '_parent_id',
+            type: 'UUID',
+            nullable: false,
+            isPrimaryKey: false,
+            isUnique: false,
+            references: parentTable ? {
+              table: sanitizeTableName(parentTable),
+              column: 'id'
+            } : undefined
+          });
+          continue;
+        }
+
+        // Infer type from sample values
+        const inferredType = inferTypeFromValues(col.sampleValues);
+        
         columns.push({
-          name: '_parent_id',
-          type: 'UUID',
-          nullable: false,
+          name: col.name,
+          type: inferredType,
+          nullable: true,
           isPrimaryKey: false,
-          isUnique: false,
-          references: parentTable ? {
-            table: sanitizeTableName(parentTable),
-            column: 'id'
-          } : undefined
+          isUnique: false
         });
-        continue;
       }
 
-      // Infer type from sample values
-      const inferredType = inferTypeFromValues(col.sampleValues);
-      
-      columns.push({
-        name: col.name,
-        type: inferredType,
-        nullable: true,
-        isPrimaryKey: false,
-        isUnique: false
-      });
+      const tableDef: TableDefinition = {
+        name: table.name,
+        schema,
+        columns,
+        indexes: []
+      };
+
+      const createStmt = generateCreateTableSQL(tableDef);
+      createStmt.sequence = sequence++;
+      statements.push(createStmt);
     }
-
-    const tableDef: TableDefinition = {
-      name: table.name,
-      schema,
-      columns,
-      indexes: []
-    };
-
-    const createStmt = generateCreateTableSQL(tableDef);
-    createStmt.sequence = sequence++;
-    statements.push(createStmt);
   }
 
   // Generate INSERT statements for each table (in order)

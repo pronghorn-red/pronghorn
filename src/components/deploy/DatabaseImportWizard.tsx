@@ -114,9 +114,17 @@ export default function DatabaseImportWizard({
   const [targetColumns, setTargetColumns] = useState<TableColumn[]>([]);
   const [enableCasting, setEnableCasting] = useState(true);
   
+  // Per-table definitions for multi-table JSON import
+  const [tableDefsMap, setTableDefsMap] = useState<Map<string, TableDefinition>>(new Map());
+  
   // Memoized callback for SchemaCreator to prevent re-renders
   const handleTableDefChange = useCallback((def: TableDefinition) => {
     setTableDef(def);
+  }, []);
+  
+  // Memoized callback for multi-table SchemaCreator
+  const handleMultiTableDefChange = useCallback((tableName: string, def: TableDefinition) => {
+    setTableDefsMap(prev => new Map(prev).set(tableName, def));
   }, []);
   
   // SQL state
@@ -182,12 +190,13 @@ export default function DatabaseImportWizard({
       // Generate SQL when moving to review step
       if (nextStep === 'review') {
         if (fileType === 'json' && jsonData && jsonData.tables.length > 1) {
-          // Multi-table JSON import
+          // Multi-table JSON import - pass user-configured table definitions
           const statements = generateMultiTableImportSQL(
             jsonData.tables,
             jsonData.relationships,
             schema,
-            selectedRowsByTable
+            selectedRowsByTable,
+            tableDefsMap
           );
           setProposedSQL(statements);
           setSqlReviewed(false);
@@ -709,42 +718,18 @@ export default function DatabaseImportWizard({
               </Tabs>
             )}
             
-            {/* Show schema preview for selected table in multi-table mode */}
-            {isMultiTableJson && (
-              <div className="flex-1 border rounded-lg p-4 overflow-auto min-h-[200px]">
-                <Label className="text-sm font-medium mb-2 block">
-                  Schema Preview: {selectedJsonTable}
-                </Label>
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium">Column</th>
-                      <th className="px-3 py-2 text-left font-medium">Type</th>
-                      <th className="px-3 py-2 text-left font-medium">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b bg-primary/5">
-                      <td className="px-3 py-2 font-mono">id</td>
-                      <td className="px-3 py-2 font-mono text-xs">UUID</td>
-                      <td className="px-3 py-2 text-muted-foreground text-xs">Primary Key (auto-generated)</td>
-                    </tr>
-                    {headers.filter(h => h !== '_row_id').map((header, idx) => {
-                      const isForeignKey = header === '_parent_id' || header.endsWith('_parent_id');
-                      return (
-                        <tr key={idx} className="border-b">
-                          <td className="px-3 py-2 font-mono">{header}</td>
-                          <td className="px-3 py-2 font-mono text-xs">
-                            {isForeignKey ? 'UUID' : 'TEXT'}
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground text-xs">
-                            {isForeignKey && 'Foreign Key'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            {/* Show full SchemaCreator for selected table in multi-table mode */}
+            {isMultiTableJson && selectedJsonTable && (
+              <div className="flex-1 min-h-0 overflow-auto">
+                <SchemaCreator
+                  key={selectedJsonTable}
+                  headers={headers.filter(h => h !== '_row_id')}
+                  sampleData={memoizedSampleData}
+                  tableName={selectedJsonTable}
+                  onTableNameChange={() => {}} // Table names are fixed from JSON structure
+                  onTableDefChange={(def) => handleMultiTableDefChange(selectedJsonTable, def)}
+                  schema={schema}
+                />
               </div>
             )}
           </div>
