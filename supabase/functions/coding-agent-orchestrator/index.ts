@@ -1255,55 +1255,67 @@ Use them to understand context and inform your file operations.` : ''}`;
               break;
 
             case "read_file":
-              // Session registry lookup: if path is provided and matches a session-created file, use that ID
-              let readFileId = op.params.file_id;
+              // PATH-FIRST RESOLUTION: Resolve file ID upfront before any RPC calls
               const readPath = op.params.path;
+              let readFileId = op.params.file_id;
+              let resolvedReadPath: string | null = null;
               
+              // 1. Try path in session registry first
               if (readPath && sessionFileRegistry.has(readPath)) {
-                const registeredFile = sessionFileRegistry.get(readPath)!;
-                readFileId = registeredFile.staging_id;
-                console.log(`[SESSION] Using session-registered ID for read_file ${readPath}: ${readFileId}`);
+                const entry = sessionFileRegistry.get(readPath)!;
+                readFileId = entry.staging_id;
+                resolvedReadPath = entry.path;
+                console.log(`[SESSION] read_file: Found ${readPath} in session registry with ID ${readFileId}`);
               }
               
+              // 2. Try path in staging (if not found in registry)
+              if (!resolvedReadPath && readPath) {
+                const { data: stagedCheck } = await supabase.rpc("get_staged_changes_with_token", {
+                  p_repo_id: repoId,
+                  p_token: shareToken,
+                });
+                const matchedStaged = stagedCheck?.find((s: any) => s.file_path === readPath);
+                if (matchedStaged) {
+                  readFileId = matchedStaged.id;
+                  resolvedReadPath = matchedStaged.file_path;
+                  console.log(`[SESSION] read_file: Found ${readPath} in staging with ID ${readFileId}`);
+                }
+              }
+              
+              // 3. Try path in repo_files (committed files)
+              if (!resolvedReadPath && readPath) {
+                const { data: repoFiles } = await supabase.rpc("get_repo_file_paths_with_token", {
+                  p_repo_id: repoId,
+                  p_token: shareToken,
+                  p_path_prefix: null,
+                });
+                const matchedFile = repoFiles?.find((f: any) => f.path === readPath);
+                if (matchedFile) {
+                  readFileId = matchedFile.id;
+                  resolvedReadPath = matchedFile.path;
+                  console.log(`[SESSION] read_file: Found ${readPath} in repo_files with ID ${readFileId}`);
+                }
+              }
+              
+              // 4. If we still don't have an ID, fail with helpful error
+              if (!readFileId) {
+                throw new Error(`File not found: ${readPath || 'no path or file_id provided'}`);
+              }
+              
+              // Now make the RPC call with resolved ID
               result = await supabase.rpc("get_file_content_with_token", {
                 p_file_id: readFileId,
                 p_token: shareToken,
               });
-
-              // Fallback: If file_id fails and we have a path, try path-based lookup in staging
-              if (result.error?.code === 'P0001' && result.error?.message?.includes('File not found')) {
-                const lookupPath = readPath || op.params.file_id; // file_id might actually be a path
-                console.log(`[SESSION] read_file failed with ID ${readFileId}, attempting path-based recovery for: ${lookupPath}`);
-                
-                const { data: stagedFiles } = await supabase.rpc("get_staged_changes_with_token", {
-                  p_repo_id: repoId,
-                  p_token: shareToken,
+              
+              // Update registry if resolution worked (for future lookups)
+              if (!result.error && result.data?.[0] && resolvedReadPath) {
+                sessionFileRegistry.set(resolvedReadPath, {
+                  staging_id: readFileId,
+                  path: resolvedReadPath,
+                  content: result.data[0].content,
+                  created_at: new Date(),
                 });
-                
-                const matchedStaged = stagedFiles?.find((s: any) => 
-                  s.file_path === lookupPath || s.id === readFileId
-                );
-                
-                if (matchedStaged) {
-                  console.log(`[SESSION] Found file in staging: ${matchedStaged.file_path} with ID ${matchedStaged.id}`);
-                  
-                  // Retry with the correct staging ID
-                  result = await supabase.rpc("get_file_content_with_token", {
-                    p_file_id: matchedStaged.id,
-                    p_token: shareToken,
-                  });
-                  
-                  // Update registry with fresh ID
-                  if (!result.error) {
-                    sessionFileRegistry.set(matchedStaged.file_path, {
-                      staging_id: matchedStaged.id,
-                      path: matchedStaged.file_path,
-                      content: result.data?.[0]?.content || '',
-                      created_at: new Date(),
-                    });
-                    console.log(`[SESSION] Updated registry for ${matchedStaged.file_path} with fresh ID: ${matchedStaged.id}`);
-                  }
-                }
               }
 
               // Add line numbers to content for LLM clarity
@@ -1319,18 +1331,55 @@ Use them to understand context and inform your file operations.` : ''}`;
               break;
 
             case "edit_lines":
-              // Session registry lookup: if path is provided and matches a session-created file, use that ID
-              let editFileId = op.params.file_id;
+              // PATH-FIRST RESOLUTION: Resolve file ID upfront before any RPC calls
               const editPath = op.params.path;
+              let editFileId = op.params.file_id;
+              let resolvedEditPath: string | null = null;
               
+              // 1. Try path in session registry first
               if (editPath && sessionFileRegistry.has(editPath)) {
-                const registeredFile = sessionFileRegistry.get(editPath)!;
-                editFileId = registeredFile.staging_id;
-                console.log(`[SESSION] Using session-registered ID for edit_lines ${editPath}: ${editFileId}`);
+                const entry = sessionFileRegistry.get(editPath)!;
+                editFileId = entry.staging_id;
+                resolvedEditPath = entry.path;
+                console.log(`[SESSION] edit_lines: Found ${editPath} in session registry with ID ${editFileId}`);
+              }
+              
+              // 2. Try path in staging (if not found in registry)
+              if (!resolvedEditPath && editPath) {
+                const { data: stagedCheck } = await supabase.rpc("get_staged_changes_with_token", {
+                  p_repo_id: repoId,
+                  p_token: shareToken,
+                });
+                const matchedStaged = stagedCheck?.find((s: any) => s.file_path === editPath);
+                if (matchedStaged) {
+                  editFileId = matchedStaged.id;
+                  resolvedEditPath = matchedStaged.file_path;
+                  console.log(`[SESSION] edit_lines: Found ${editPath} in staging with ID ${editFileId}`);
+                }
+              }
+              
+              // 3. Try path in repo_files (committed files)
+              if (!resolvedEditPath && editPath) {
+                const { data: repoFiles } = await supabase.rpc("get_repo_file_paths_with_token", {
+                  p_repo_id: repoId,
+                  p_token: shareToken,
+                  p_path_prefix: null,
+                });
+                const matchedFile = repoFiles?.find((f: any) => f.path === editPath);
+                if (matchedFile) {
+                  editFileId = matchedFile.id;
+                  resolvedEditPath = matchedFile.path;
+                  console.log(`[SESSION] edit_lines: Found ${editPath} in repo_files with ID ${editFileId}`);
+                }
+              }
+              
+              // 4. If we still don't have an ID, fail with helpful error
+              if (!editFileId) {
+                throw new Error(`File not found: ${editPath || 'no path or file_id provided'}`);
               }
               
               // Read file using function that checks both repo_files and repo_staging
-              console.log(`[AGENT] edit_lines: Reading file ${editFileId}`);
+              console.log(`[AGENT] edit_lines: Reading file ${editFileId} (resolved from path: ${resolvedEditPath || editPath || 'N/A'})`);
               let fileData: any[] | null = null;
               let readError: any = null;
               
@@ -1341,53 +1390,15 @@ Use them to understand context and inform your file operations.` : ''}`;
               fileData = readResult.data;
               readError = readResult.error;
 
-              // Fallback: If file_id fails and we have a path, try path-based lookup in staging
-              if ((readError?.code === 'P0001' && readError?.message?.includes('File not found')) || (!fileData || fileData.length === 0)) {
-                const lookupPath = editPath || editFileId;
-                console.log(`[SESSION] edit_lines: ID ${editFileId} failed, attempting path-based recovery for: ${lookupPath}`);
-                
-                const { data: stagedFiles } = await supabase.rpc("get_staged_changes_with_token", {
-                  p_repo_id: repoId,
-                  p_token: shareToken,
-                });
-                
-                const matchedStaged = stagedFiles?.find((s: any) => 
-                  s.file_path === lookupPath || s.id === editFileId
-                );
-                
-                if (matchedStaged) {
-                  console.log(`[SESSION] Found file in staging: ${matchedStaged.file_path} with ID ${matchedStaged.id}`);
-                  
-                  // Retry with the correct staging ID
-                  const retryResult = await supabase.rpc("get_file_content_with_token", {
-                    p_file_id: matchedStaged.id,
-                    p_token: shareToken,
-                  });
-                  fileData = retryResult.data;
-                  readError = retryResult.error;
-                  
-                  // Update registry with fresh ID
-                  if (!retryResult.error && fileData && fileData.length > 0) {
-                    sessionFileRegistry.set(matchedStaged.file_path, {
-                      staging_id: matchedStaged.id,
-                      path: matchedStaged.file_path,
-                      content: fileData[0]?.content || '',
-                      created_at: new Date(),
-                    });
-                    console.log(`[SESSION] Updated registry for ${matchedStaged.file_path} with fresh ID: ${matchedStaged.id}`);
-                  }
-                }
-              }
-
               if (readError) {
                 console.error(`[AGENT] edit_lines: Read error:`, readError);
-                throw new Error(`Failed to read file ${editFileId}: ${readError.message}`);
+                throw new Error(`Failed to read file ${editPath || editFileId}: ${readError.message}`);
               }
 
               if (!fileData || fileData.length === 0) {
-                console.error(`[AGENT] edit_lines: File not found: ${editFileId}`);
+                console.error(`[AGENT] edit_lines: File not found: ${editPath || editFileId}`);
                 throw new Error(
-                  `File not found: ${editFileId}. Cannot edit. The file may not exist or may have been deleted.`,
+                  `File not found: ${editPath || editFileId}. Cannot edit. The file may not exist or may have been deleted.`,
                 );
               }
 
