@@ -44,20 +44,67 @@ export async function parseExcelFile(file: File): Promise<ExcelData> {
             try {
               if (cell.value !== null && cell.value !== undefined) {
                 if (typeof cell.value === 'object') {
-                  if ('richText' in cell.value) {
-                    value = cell.value.richText.map((rt: any) => rt.text).join('');
-                  } else if ('text' in cell.value) {
-                    value = String(cell.value.text);
-                  } else if ('result' in cell.value) {
-                    value = String(cell.value.result);
-                  } else if ('error' in cell.value) {
-                    // Handle error values in cells
+                  const cellValue = cell.value as any;
+                  
+                  // Rich text - concatenate all text parts
+                  if ('richText' in cellValue && Array.isArray(cellValue.richText)) {
+                    value = cellValue.richText.map((rt: any) => rt.text).join('');
+                  }
+                  // Hyperlink - get the text, not the hyperlink object
+                  else if ('text' in cellValue && typeof cellValue.text === 'string') {
+                    value = cellValue.text;
+                  }
+                  // Formula cell - get the calculated result, NOT the formula itself
+                  else if ('formula' in cellValue || 'sharedFormula' in cellValue) {
+                    if ('result' in cellValue && cellValue.result !== undefined && cellValue.result !== null) {
+                      // Handle error results from formulas
+                      if (typeof cellValue.result === 'object' && cellValue.result !== null) {
+                        if ('error' in cellValue.result) {
+                          value = '#ERROR';
+                        } else {
+                          // Try to extract a meaningful value from the result object
+                          value = '';
+                        }
+                      } else {
+                        // Normal formula result - number, string, boolean
+                        value = String(cellValue.result);
+                      }
+                    } else {
+                      // Formula without calculated result - leave empty rather than show formula
+                      value = '';
+                    }
+                  }
+                  // Error value in cell
+                  else if ('error' in cellValue) {
                     value = '#ERROR';
-                  } else {
-                    // Handle other object types safely
-                    try {
-                      value = String(cell.value);
-                    } catch {
+                  }
+                  // Date object
+                  else if (cellValue instanceof Date) {
+                    value = cellValue.toISOString();
+                  }
+                  // Check for 'result' property (another formula format)
+                  else if ('result' in cellValue && cellValue.result !== undefined) {
+                    if (typeof cellValue.result === 'object' && cellValue.result !== null) {
+                      value = '';
+                    } else {
+                      value = String(cellValue.result);
+                    }
+                  }
+                  // Unknown object - avoid [object Object]
+                  else {
+                    // Try common value extraction patterns
+                    if ('value' in cellValue && typeof cellValue.value !== 'object') {
+                      value = String(cellValue.value);
+                    } else if ('valueOf' in cellValue && typeof cellValue.valueOf === 'function') {
+                      const v = cellValue.valueOf();
+                      if (typeof v !== 'object') {
+                        value = String(v);
+                      } else {
+                        console.warn(`Unhandled cell object at row ${rowNumber}, col ${colNumber}:`, Object.keys(cellValue));
+                        value = '';
+                      }
+                    } else {
+                      console.warn(`Unknown cell object at row ${rowNumber}, col ${colNumber}:`, Object.keys(cellValue));
                       value = '';
                     }
                   }

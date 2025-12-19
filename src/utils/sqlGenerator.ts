@@ -177,6 +177,7 @@ export function generateInsertBatchSQL(
   const sanitizedTable = sanitizeTableName(tableName);
   const fullTableName = schema ? `"${schema}"."${sanitizedTable}"` : `"${sanitizedTable}"`;
   const columnList = columns.map(c => `"${sanitizeColumnName(c)}"`).join(', ');
+  const expectedColumnCount = columns.length;
   
   const statements: SQLStatement[] = [];
   const totalBatches = Math.ceil(rows.length / batchSize);
@@ -185,8 +186,22 @@ export function generateInsertBatchSQL(
     const batch = rows.slice(i, i + batchSize);
     const batchNum = Math.floor(i / batchSize) + 1;
     
-    const valueRows = batch.map(row => {
-      const values = row.map(val => formatSQLValue(val));
+    const valueRows = batch.map((row, rowIdx) => {
+      // Normalize row to exact column count to prevent "VALUES lists must all be the same length"
+      const normalizedRow = [...row];
+      
+      // Pad with nulls if row is shorter than expected
+      while (normalizedRow.length < expectedColumnCount) {
+        normalizedRow.push(null);
+      }
+      
+      // Truncate if row is longer (shouldn't happen, but be safe)
+      if (normalizedRow.length > expectedColumnCount) {
+        console.warn(`Row ${i + rowIdx + 1} has ${row.length} values but expected ${expectedColumnCount}. Truncating.`);
+        normalizedRow.length = expectedColumnCount;
+      }
+      
+      const values = normalizedRow.map(val => formatSQLValue(val));
       return `(${values.join(', ')})`;
     });
 

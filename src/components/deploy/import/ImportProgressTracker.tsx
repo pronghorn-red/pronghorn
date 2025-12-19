@@ -2,7 +2,6 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { 
   Loader2, 
@@ -12,18 +11,27 @@ import {
   Play, 
   Square, 
   Download,
-  AlertTriangle
+  AlertTriangle,
+  RotateCcw,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface ExecutionProgress {
+export interface ExecutionError {
+  row: number;
+  error: string;
+  sql?: string;
+  description?: string;
+}
+
+export interface ExecutionProgress {
   currentBatch: number;
   totalBatches: number;
   rowsCompleted: number;
   totalRows: number;
   currentStatement: string;
   status: 'running' | 'paused' | 'completed' | 'error';
-  errors: { row: number; error: string }[];
+  errors: ExecutionError[];
   startTime?: number;
 }
 
@@ -33,6 +41,7 @@ interface ImportProgressTrackerProps {
   onResume: () => void;
   onCancel: () => void;
   onRetryFailed?: () => void;
+  onReExecute?: () => void;
 }
 
 export default function ImportProgressTracker({
@@ -40,7 +49,8 @@ export default function ImportProgressTracker({
   onPause,
   onResume,
   onCancel,
-  onRetryFailed
+  onRetryFailed,
+  onReExecute
 }: ImportProgressTrackerProps) {
   const percentComplete = progress.totalRows > 0 
     ? Math.round((progress.rowsCompleted / progress.totalRows) * 100) 
@@ -69,8 +79,10 @@ export default function ImportProgressTracker({
     if (progress.errors.length === 0) return;
     
     const content = progress.errors.map(e => 
-      `Row ${e.row}: ${e.error}`
-    ).join('\n');
+      `=== Statement ${e.row + 1}: ${e.description || 'Unknown'} ===\n` +
+      `Error: ${e.error}\n` +
+      `SQL:\n${e.sql || 'N/A'}\n`
+    ).join('\n---\n\n');
     
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -84,6 +96,8 @@ export default function ImportProgressTracker({
     
     toast.success('Error log downloaded');
   };
+
+  const showReExecuteButtons = (progress.status === 'error' || progress.status === 'completed') && progress.errors.length > 0;
 
   return (
     <div className="flex flex-col h-full gap-6">
@@ -140,6 +154,22 @@ export default function ImportProgressTracker({
                 <Square className="h-4 w-4 mr-1" />
                 Cancel
               </Button>
+            </>
+          )}
+          {showReExecuteButtons && (
+            <>
+              {onReExecute && (
+                <Button variant="default" size="sm" onClick={onReExecute}>
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  Re-Execute All
+                </Button>
+              )}
+              {onRetryFailed && (
+                <Button variant="outline" size="sm" onClick={onRetryFailed}>
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Retry Failed Only
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -202,17 +232,10 @@ export default function ImportProgressTracker({
                 {progress.errors.length} error(s)
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              {onRetryFailed && progress.status === 'completed' && (
-                <Button variant="outline" size="sm" onClick={onRetryFailed}>
-                  Retry Failed Rows
-                </Button>
-              )}
-              <Button variant="outline" size="sm" onClick={downloadErrorLog}>
-                <Download className="h-4 w-4 mr-1" />
-                Download Error Log
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" onClick={downloadErrorLog}>
+              <Download className="h-4 w-4 mr-1" />
+              Download Error Log
+            </Button>
           </div>
           
           <div className="border rounded-lg overflow-hidden">
@@ -220,14 +243,18 @@ export default function ImportProgressTracker({
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-muted/80">
                   <tr>
-                    <th className="px-3 py-2 text-left font-medium w-20">Row</th>
+                    <th className="px-3 py-2 text-left font-medium w-20">Statement</th>
+                    <th className="px-3 py-2 text-left font-medium w-48">Description</th>
                     <th className="px-3 py-2 text-left font-medium">Error</th>
                   </tr>
                 </thead>
                 <tbody>
                   {progress.errors.map((err, idx) => (
-                    <tr key={idx} className="border-t">
-                      <td className="px-3 py-2 font-mono text-xs">{err.row}</td>
+                    <tr key={idx} className="border-t hover:bg-muted/30">
+                      <td className="px-3 py-2 font-mono text-xs">{err.row + 1}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-48" title={err.description}>
+                        {err.description || '-'}
+                      </td>
                       <td className="px-3 py-2 text-destructive text-xs">{err.error}</td>
                     </tr>
                   ))}
