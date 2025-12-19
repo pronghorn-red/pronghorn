@@ -628,10 +628,10 @@ export default function DatabaseImportWizard({
         const isMultiTableJson = fileType === 'json' && jsonData && jsonData.tables.length > 1;
         
         return (
-          <div className="space-y-4 h-full flex flex-col overflow-y-auto">
+          <div className="h-full flex flex-col gap-4">
             {/* Show relationship diagram for multi-table JSON */}
             {isMultiTableJson && (
-              <div className="space-y-2">
+              <div className="space-y-2 shrink-0">
                 <Label className="text-sm font-medium">Table Relationships (click to select)</Label>
                 <JsonRelationshipFlow
                   tables={jsonData.tables.map(t => ({
@@ -648,7 +648,7 @@ export default function DatabaseImportWizard({
             
             {/* Table selector for multi-table JSON */}
             {isMultiTableJson && (
-              <div className="space-y-2">
+              <div className="space-y-2 shrink-0">
                 <Label className="text-sm font-medium">Select Table to Configure</Label>
                 <Select value={selectedJsonTable} onValueChange={setSelectedJsonTable}>
                   <SelectTrigger>
@@ -670,8 +670,8 @@ export default function DatabaseImportWizard({
             
             {/* Action Toggle - hide for multi-table JSON since we auto-create */}
             {!isMultiTableJson && (
-              <Tabs value={action} onValueChange={(v) => setAction(v as ImportAction)}>
-                <TabsList className="grid w-full grid-cols-2">
+              <Tabs value={action} onValueChange={(v) => setAction(v as ImportAction)} className="flex-1 flex flex-col min-h-0">
+                <TabsList className="grid w-full grid-cols-2 shrink-0">
                   <TabsTrigger value="create_new" className="gap-2">
                     <Plus className="h-4 w-4" />
                     Create New Table
@@ -682,7 +682,7 @@ export default function DatabaseImportWizard({
                   </TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="create_new" className="flex-1 mt-4">
+                <TabsContent value="create_new" className="flex-1 mt-4 min-h-0 overflow-auto">
                   <SchemaCreator
                     headers={headers}
                     sampleData={memoizedSampleData}
@@ -693,7 +693,7 @@ export default function DatabaseImportWizard({
                   />
                 </TabsContent>
                 
-                <TabsContent value="import_existing" className="flex-1 mt-4">
+                <TabsContent value="import_existing" className="flex-1 mt-4 min-h-0 overflow-auto">
                   <FieldMapper
                     sourceHeaders={headers}
                     targetTables={existingTables}
@@ -711,7 +711,7 @@ export default function DatabaseImportWizard({
             
             {/* Show schema preview for selected table in multi-table mode */}
             {isMultiTableJson && (
-              <div className="flex-1 border rounded-lg p-4 overflow-auto">
+              <div className="flex-1 border rounded-lg p-4 overflow-auto min-h-0">
                 <Label className="text-sm font-medium mb-2 block">
                   Schema Preview: {selectedJsonTable}
                 </Label>
