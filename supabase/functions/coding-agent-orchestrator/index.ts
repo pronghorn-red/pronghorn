@@ -1900,12 +1900,28 @@ Use them to understand context and inform your file operations.` : ''}`;
         return summary;
       });
 
-      // Add ONLY the agent's response to conversation history (reasoning + operations requested)
+      // Add ONLY the agent's response to conversation history (reasoning + operations with truncated params)
       conversationHistory.push({
         role: "assistant",
         content: JSON.stringify({
           reasoning: agentResponse.reasoning,
-          operations: agentResponse.operations?.map((op: any) => ({ type: op.type, _param_keys: Object.keys(op.params || {}) })),
+          operations: agentResponse.operations?.map((op: any) => {
+            // Truncate params to prevent bloat but preserve correct format
+            const truncatedParams: any = {};
+            for (const [key, value] of Object.entries(op.params || {})) {
+              if (key === 'content' || key === 'new_content') {
+                // Aggressively truncate content fields (full content is in ephemeral context)
+                truncatedParams[key] = typeof value === 'string' && value.length > 50 
+                  ? `[${value.length} chars]` 
+                  : value;
+              } else if (typeof value === 'string' && value.length > 100) {
+                truncatedParams[key] = value.substring(0, 100) + '...';
+              } else {
+                truncatedParams[key] = value;
+              }
+            }
+            return { type: op.type, params: truncatedParams };
+          }),
           status: agentResponse.status,
         }),
       });
