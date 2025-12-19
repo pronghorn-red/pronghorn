@@ -952,7 +952,8 @@ export default function DatabaseImportWizard({
                   </TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="designer" className="flex-1 mt-4 min-h-0 flex flex-col">
+                {/* Use hidden/block instead of conditional rendering to preserve state */}
+                <div className={cn("flex-1 mt-4 min-h-0 flex flex-col", schemaSubTab !== 'designer' && 'hidden')}>
                   {/* Table selector */}
                   <div className="flex items-center gap-4 shrink-0 mb-4">
                     <Label className="text-sm font-medium whitespace-nowrap">Configure Table:</Label>
@@ -987,9 +988,9 @@ export default function DatabaseImportWizard({
                       />
                     </div>
                   )}
-                </TabsContent>
+                </div>
                 
-                <TabsContent value="erd" className="flex-1 mt-4 min-h-0">
+                <div className={cn("flex-1 mt-4 min-h-0 flex flex-col", schemaSubTab !== 'erd' && 'hidden')}>
                   <DatabaseErdView
                     existingTables={existingSchemas}
                     importTables={jsonData.tables}
@@ -999,17 +1000,16 @@ export default function DatabaseImportWizard({
                       setSelectedJsonTable(name);
                       setSchemaSubTab('designer');
                     }}
-                    height={500}
                   />
-                </TabsContent>
+                </div>
                 
-                <TabsContent value="conflicts" className="flex-1 mt-4 min-h-0 overflow-auto">
+                <div className={cn("flex-1 mt-4 min-h-0 overflow-auto", schemaSubTab !== 'conflicts' && 'hidden')}>
                   <ConflictResolutionPanel
                     matches={tableMatches}
                     onTableResolutionChange={handleTableResolutionChange}
                     onConflictResolutionChange={handleConflictResolutionChange}
                   />
-                </TabsContent>
+                </div>
               </Tabs>
             ) : (
               /* Non-multi-table: show action toggle */

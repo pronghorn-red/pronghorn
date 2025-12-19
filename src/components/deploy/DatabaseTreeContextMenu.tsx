@@ -40,6 +40,7 @@ interface DatabaseTreeContextMenuProps {
   onViewStructure?: (schema: string, name: string) => void;
   onCopyName?: (name: string) => void;
   onGetDefinition?: (type: TreeItemContextType, schema: string, name: string, extra?: any) => void;
+  onDropTable?: (schema: string, name: string) => void;
   onLoadQuery?: (query: any) => void;
   onEditQuery?: (query: any) => void;
   onDeleteQuery?: (query: any) => void;
@@ -58,6 +59,7 @@ export function DatabaseTreeContextMenu({
   onViewStructure,
   onCopyName,
   onGetDefinition,
+  onDropTable,
   onLoadQuery,
   onEditQuery,
   onDeleteQuery,
@@ -101,6 +103,14 @@ export function DatabaseTreeContextMenu({
             <ContextMenuItem onClick={handleCopyName}>
               <Copy className="h-4 w-4 mr-2" />
               Copy Table Name
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem 
+              onClick={() => onDropTable?.(schema, name)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Drop Table
             </ContextMenuItem>
           </>
         )}

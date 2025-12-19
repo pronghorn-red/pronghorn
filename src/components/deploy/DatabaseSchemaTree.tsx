@@ -49,6 +49,7 @@ interface DatabaseSchemaTreeProps {
   onShowFirst100?: (schema: string, name: string) => void;
   onViewStructure?: (schema: string, name: string) => void;
   onGetDefinition?: (type: TreeItemContextType, schema: string, name: string, extra?: any) => void;
+  onDropTable?: (schema: string, name: string) => void;
   onLoadQuery?: (query: SavedQuery) => void;
   onEditQuery?: (query: SavedQuery) => void;
   onDeleteQuery?: (query: SavedQuery) => void;
@@ -79,6 +80,7 @@ interface TreeItemProps {
     onShowFirst100?: (schema: string, name: string) => void;
     onViewStructure?: (schema: string, name: string) => void;
     onGetDefinition?: (type: TreeItemContextType, schema: string, name: string, extra?: any) => void;
+    onDropTable?: (schema: string, name: string) => void;
     onLoadQuery?: (query: any) => void;
     onEditQuery?: (query: any) => void;
     onDeleteQuery?: (query: any) => void;
@@ -170,6 +172,7 @@ function TreeItem({
           onShowFirst100={contextMenuProps.onShowFirst100}
           onViewStructure={contextMenuProps.onViewStructure}
           onGetDefinition={contextMenuProps.onGetDefinition}
+          onDropTable={contextMenuProps.onDropTable}
           onLoadQuery={contextMenuProps.onLoadQuery}
           onEditQuery={contextMenuProps.onEditQuery}
           onDeleteQuery={contextMenuProps.onDeleteQuery}
@@ -198,6 +201,7 @@ export function DatabaseSchemaTree({
   onShowFirst100,
   onViewStructure,
   onGetDefinition,
+  onDropTable,
   onLoadQuery,
   onEditQuery,
   onDeleteQuery,
@@ -224,6 +228,7 @@ export function DatabaseSchemaTree({
     onShowFirst100,
     onViewStructure,
     onGetDefinition,
+    onDropTable,
     onLoadQuery,
     onEditQuery,
     onDeleteQuery,

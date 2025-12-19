@@ -315,6 +315,15 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
     }
   };
 
+  const handleDropTable = (schema: string, name: string) => {
+    const dropStatement = `DROP TABLE IF EXISTS "${schema}"."${name}" CASCADE;`;
+    // Append to current query on a new line
+    setCurrentQuery(prev => prev.trim() ? `${prev.trim()}\n\n${dropStatement}` : dropStatement);
+    setActiveTab('query');
+    if (isMobile) setMobileActiveTab("query");
+    toast.info(`Added DROP TABLE statement for ${schema}.${name}`);
+  };
+
   const handleLoadQuery = (query: SavedQuery) => { setCurrentQuery(query.sql_content); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); };
   const handleEditQuery = (query: SavedQuery) => { setEditingQuery(query); setSaveDialogOpen(true); };
   const handleDeleteQuery = async (query: SavedQuery) => {
@@ -408,7 +417,7 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
         {schemaError ? (
           <div className="flex flex-col items-center justify-center h-full p-4 text-center"><AlertCircle className="h-8 w-8 text-destructive mb-2" /><p className="text-sm text-destructive">{schemaError}</p><Button variant="outline" size="sm" onClick={() => loadSchema()} className="mt-4">Retry</Button></div>
         ) : (
-          <DatabaseSchemaTree schemas={schemas} savedQueries={savedQueries} migrations={migrations} loading={loadingSchema} onTableSelect={handleTableSelect} onViewSelect={(s, v) => { setCurrentQuery(`SELECT * FROM "${s}"."${v}" LIMIT 100;`); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); }} onItemClick={(t, s, n, e) => { if (t === 'table') handleTableSelect(s, n); }} onShowFirst100={handleShowFirst100} onViewStructure={handleViewStructure} onGetDefinition={handleGetDefinition} onLoadQuery={handleLoadQuery} onEditQuery={handleEditQuery} onDeleteQuery={handleDeleteQuery} onLoadMigration={handleLoadMigration} onDeleteMigration={handleDeleteMigration} onDownloadMigration={handleDownloadMigration} onDownloadAllMigrations={handleDownloadAllMigrations} />
+          <DatabaseSchemaTree schemas={schemas} savedQueries={savedQueries} migrations={migrations} loading={loadingSchema} onTableSelect={handleTableSelect} onViewSelect={(s, v) => { setCurrentQuery(`SELECT * FROM "${s}"."${v}" LIMIT 100;`); setActiveTab('query'); if (isMobile) setMobileActiveTab("query"); }} onItemClick={(t, s, n, e) => { if (t === 'table') handleTableSelect(s, n); }} onShowFirst100={handleShowFirst100} onViewStructure={handleViewStructure} onGetDefinition={handleGetDefinition} onDropTable={handleDropTable} onLoadQuery={handleLoadQuery} onEditQuery={handleEditQuery} onDeleteQuery={handleDeleteQuery} onLoadMigration={handleLoadMigration} onDeleteMigration={handleDeleteMigration} onDownloadMigration={handleDownloadMigration} onDownloadAllMigrations={handleDownloadAllMigrations} />
         )}
       </div>
     </div>

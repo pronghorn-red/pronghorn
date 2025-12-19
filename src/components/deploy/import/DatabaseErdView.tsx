@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef, useState } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -9,15 +9,22 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   Handle,
+  useReactFlow,
+  ReactFlowProvider,
+  getNodesBounds,
+  getViewportForBounds,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { TableProperties, Key, Plus, ArrowDownToLine, AlertTriangle, Minus, LayoutGrid } from 'lucide-react';
+import { toPng, toSvg } from 'html-to-image';
+import { TableProperties, Key, Plus, ArrowDownToLine, AlertTriangle, Minus, LayoutGrid, Download, Camera, Image } from 'lucide-react';
 import { ForeignKeyRelationship, JsonTable, getJsonHeaders } from '@/utils/parseJson';
 import { TableMatchResult, ExistingTableSchema } from '@/utils/tableMatching';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 
 interface DatabaseErdViewProps {
   existingTables: ExistingTableSchema[];
@@ -26,7 +33,7 @@ interface DatabaseErdViewProps {
   tableMatches: TableMatchResult[];
   onTableClick?: (tableName: string, isImport: boolean) => void;
   showLegend?: boolean;
-  height?: number;
+  className?: string;
 }
 
 type NodeStatus = 'new' | 'insert' | 'conflict' | 'unaffected';
@@ -88,11 +95,11 @@ const TableNode = ({ data }: { data: TableNodeData }) => {
       "relative px-3 py-2 rounded-lg border-2 shadow-md min-w-[160px] max-w-[220px]",
       getNodeStyles(data.status)
     )}>
-      {/* Target handle at top for incoming edges */}
+      {/* Target handle on left for incoming edges */}
       {data.hasParent && (
         <Handle
           type="target"
-          position={Position.Top}
+          position={Position.Left}
           className="!w-3 !h-3 !bg-primary !border-2 !border-background"
         />
       )}
@@ -144,11 +151,11 @@ const TableNode = ({ data }: { data: TableNodeData }) => {
         </div>
       )}
       
-      {/* Source handle at bottom for outgoing edges */}
+      {/* Source handle on right for outgoing edges */}
       {data.hasChildren && (
         <Handle
           type="source"
-          position={Position.Bottom}
+          position={Position.Right}
           className="!w-3 !h-3 !bg-primary !border-2 !border-background"
         />
       )}
@@ -245,8 +252,9 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
   tableMatches,
   onTableClick,
   showLegend = true,
-  height = 400,
+  className,
 }) => {
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
   // Track user-modified positions
   const userPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const isInitializedRef = useRef(false);
@@ -327,8 +335,8 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
           hasChildren: hasChildrenSet.has(table.name.toLowerCase()),
           hasParent: hasParentSet.has(table.name.toLowerCase()),
         },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
         draggable: true,
       });
     });
@@ -368,8 +376,8 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
           hasChildren: false,
           hasParent: false,
         },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
         draggable: true,
       });
       
@@ -476,14 +484,14 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
 
   if (importTables.length === 0 && existingTables.length === 0) {
     return (
-      <div className="flex items-center justify-center text-muted-foreground" style={{ height }}>
+      <div className={cn("flex items-center justify-center text-muted-foreground h-full", className)}>
         No tables to display
       </div>
     );
   }
 
   return (
-    <div className="w-full border rounded-lg bg-background relative" style={{ height }}>
+    <div ref={reactFlowWrapper} className={cn("w-full h-full border rounded-lg bg-background relative", className)}>
       {showLegend && (
         <div className="absolute top-2 left-2 z-10 flex gap-2 flex-wrap p-2 bg-background/90 rounded-lg border shadow-sm">
           <div className="flex items-center gap-1 text-xs">
