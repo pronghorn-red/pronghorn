@@ -960,7 +960,6 @@ export default function DatabaseImportWizard({
                   onConflictResolutionChange={handleConflictResolutionChange}
                 />
               </div>
-              </div>
             )}
             
             {/* Action Toggle - hide for multi-table JSON since we auto-create */}
