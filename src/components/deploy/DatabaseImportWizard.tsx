@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Upload, Database, FileSpreadsheet, FileJson, Check, Plus, ArrowRight, AlertTriangle, GitBranch } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Upload, Database, FileSpreadsheet, FileJson, Check, Plus, ArrowRight, AlertTriangle, GitBranch, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ExcelData } from '@/utils/parseExcel';
 import { 
@@ -30,6 +30,14 @@ import {
   generateMultiTableImportSQL
 } from '@/utils/sqlGenerator';
 import { extractDDLStatements } from '@/lib/sqlParser';
+import { 
+  ExistingTableSchema, 
+  TableMatchResult, 
+  matchTables, 
+  updateMatchResolution, 
+  updateConflictResolution,
+  getMatchingSummary 
+} from '@/utils/tableMatching';
 import FileUploader from './import/FileUploader';
 import ExcelDataGrid from './import/ExcelDataGrid';
 import JsonDataViewer from './import/JsonDataViewer';
@@ -39,6 +47,8 @@ import SqlReviewPanel from './import/SqlReviewPanel';
 import ImportProgressTracker from './import/ImportProgressTracker';
 import { JsonRelationshipFlow } from './import/JsonRelationshipFlow';
 import JsonNormalizationSelector from './import/JsonNormalizationSelector';
+import { DatabaseErdView } from './import/DatabaseErdView';
+import { ConflictResolutionPanel } from './import/ConflictResolutionPanel';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -139,6 +149,12 @@ export default function DatabaseImportWizard({
   // Per-table definitions for multi-table JSON import
   const [tableDefsMap, setTableDefsMap] = useState<Map<string, TableDefinition>>(new Map());
   
+  // Smart table matching state
+  const [existingSchemas, setExistingSchemas] = useState<ExistingTableSchema[]>([]);
+  const [loadingSchema, setLoadingSchema] = useState(false);
+  const [tableMatches, setTableMatches] = useState<TableMatchResult[]>([]);
+  const [erdExpanded, setErdExpanded] = useState(false);
+  
   // Memoized callback for SchemaCreator to prevent re-renders
   const handleTableDefChange = useCallback((def: TableDefinition) => {
     setTableDef(def);
@@ -147,6 +163,16 @@ export default function DatabaseImportWizard({
   // Memoized callback for multi-table SchemaCreator
   const handleMultiTableDefChange = useCallback((tableName: string, def: TableDefinition) => {
     setTableDefsMap(prev => new Map(prev).set(tableName, def));
+  }, []);
+  
+  // Handle table match resolution changes
+  const handleTableResolutionChange = useCallback((tableName: string, newStatus: 'new' | 'insert' | 'skip') => {
+    setTableMatches(prev => updateMatchResolution(prev, tableName, newStatus));
+  }, []);
+  
+  // Handle column conflict resolution changes
+  const handleConflictResolutionChange = useCallback((tableName: string, columnName: string, resolution: 'skip' | 'cast' | 'alter' | 'block') => {
+    setTableMatches(prev => updateConflictResolution(prev, tableName, columnName, resolution));
   }, []);
   
   // SQL state
@@ -205,6 +231,79 @@ export default function DatabaseImportWizard({
       setSelectedJsonTable(jsonData.tables[0].name);
     }
   }, [fileType, jsonData, selectedJsonTable]);
+  
+  // Fetch database schema when wizard opens
+  useEffect(() => {
+    const loadDatabaseSchema = async () => {
+      if (!open || (!databaseId && !connectionId)) return;
+      
+      setLoadingSchema(true);
+      try {
+        const body: any = { 
+          action: 'get_schema', 
+          shareToken,
+        };
+        if (databaseId) body.databaseId = databaseId;
+        if (connectionId) body.connectionId = connectionId;
+        
+        const { data, error } = await supabase.functions.invoke('manage-database', { body });
+        
+        if (!error && data?.success && data.data?.schemas) {
+          const publicSchema = data.data.schemas.find((s: any) => s.name === schema);
+          if (publicSchema?.tables) {
+            // Fetch columns for each table
+            const tablesWithColumns: ExistingTableSchema[] = await Promise.all(
+              publicSchema.tables.map(async (tableName: string) => {
+                try {
+                  const colBody: any = { 
+                    action: 'get_table_columns', 
+                    shareToken,
+                    schema,
+                    table: tableName
+                  };
+                  if (databaseId) colBody.databaseId = databaseId;
+                  if (connectionId) colBody.connectionId = connectionId;
+                  
+                  const { data: colData } = await supabase.functions.invoke('manage-database', { body: colBody });
+                  
+                  if (colData?.success && colData.data?.columns) {
+                    return {
+                      name: tableName,
+                      columns: colData.data.columns.map((c: any) => ({
+                        name: c.name || c.column_name,
+                        type: c.type || c.data_type,
+                        nullable: c.nullable ?? c.is_nullable === 'YES'
+                      }))
+                    };
+                  }
+                } catch (e) {
+                  console.error(`Failed to load columns for ${tableName}:`, e);
+                }
+                return { name: tableName, columns: [] };
+              })
+            );
+            setExistingSchemas(tablesWithColumns);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load database schema:', e);
+      } finally {
+        setLoadingSchema(false);
+      }
+    };
+    
+    loadDatabaseSchema();
+  }, [open, databaseId, connectionId, shareToken, schema]);
+  
+  // Run table matching when JSON data changes and we have existing schemas
+  useEffect(() => {
+    if (jsonData && jsonData.tables.length > 0 && existingSchemas.length > 0) {
+      const matches = matchTables(jsonData.tables, existingSchemas);
+      setTableMatches(matches);
+    } else {
+      setTableMatches([]);
+    }
+  }, [jsonData, existingSchemas]);
 
   const goBack = () => {
     if (canGoBack) {
@@ -758,9 +857,40 @@ export default function DatabaseImportWizard({
       case 'schema':
         // For multi-table JSON, show all tables
         const isMultiTableJson = fileType === 'json' && jsonData && jsonData.tables.length > 1;
+        const matchSummary = tableMatches.length > 0 ? getMatchingSummary(tableMatches) : null;
         
         return (
           <div className="h-full flex flex-col gap-4">
+            {/* Loading indicator for schema fetch */}
+            {loadingSchema && (
+              <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/50">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm text-muted-foreground">Loading database schema...</span>
+              </div>
+            )}
+            
+            {/* Match summary for multi-table JSON */}
+            {isMultiTableJson && matchSummary && !loadingSchema && (
+              <div className="flex items-center gap-4 p-3 border rounded-lg bg-muted/30 shrink-0">
+                <span className="text-sm font-medium">Import Summary:</span>
+                {matchSummary.newTables > 0 && (
+                  <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-600 dark:text-green-400">
+                    {matchSummary.newTables} new
+                  </span>
+                )}
+                {matchSummary.insertTables > 0 && (
+                  <span className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-600 dark:text-blue-400">
+                    {matchSummary.insertTables} insert
+                  </span>
+                )}
+                {matchSummary.conflictTables > 0 && (
+                  <span className="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                    {matchSummary.conflictTables} conflicts
+                  </span>
+                )}
+              </div>
+            )}
+            
             {/* Table selector for multi-table JSON */}
             {isMultiTableJson && (
               <div className="flex items-center gap-4 shrink-0">
@@ -770,22 +900,23 @@ export default function DatabaseImportWizard({
                     <SelectValue placeholder="Select a table" />
                   </SelectTrigger>
                   <SelectContent>
-                    {jsonData.tables.map(t => (
-                      <SelectItem key={t.name} value={t.name}>
-                        {t.name} ({t.rows.length} rows)
-                      </SelectItem>
-                    ))}
+                    {jsonData.tables.map(t => {
+                      const match = tableMatches.find(m => m.importTable === t.name);
+                      return (
+                        <SelectItem key={t.name} value={t.name}>
+                          {t.name} ({t.rows.length} rows)
+                          {match && match.matchType !== 'new' && ` → ${match.existingTable}`}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
-                <span className="text-xs text-muted-foreground">
-                  All {jsonData.tables.length} tables will be created with relationships
-                </span>
               </div>
             )}
             
             {/* Show full SchemaCreator for selected table in multi-table mode - ABOVE the diagram */}
             {isMultiTableJson && selectedJsonTable && (
-              <div className="flex-1 min-h-[300px] overflow-auto border rounded-lg p-4">
+              <div className="flex-1 min-h-[200px] overflow-auto border rounded-lg p-4">
                 <SchemaCreator
                   key={selectedJsonTable}
                   headers={headers.filter(h => h !== '_row_id')}
@@ -798,20 +929,37 @@ export default function DatabaseImportWizard({
               </div>
             )}
             
-            {/* Show relationship diagram for multi-table JSON - below SchemaCreator */}
+            {/* Enhanced ERD View with full database schema */}
             {isMultiTableJson && (
-              <div className="space-y-2 shrink-0 h-[180px]">
-                <Label className="text-sm font-medium">Table Relationships (click to select)</Label>
-                <JsonRelationshipFlow
-                  tables={jsonData.tables.map(t => ({
-                    name: t.name,
-                    columns: getJsonHeaders(t),
-                    parentTable: t.parentTable,
-                    foreignKey: t.foreignKey
-                  }))}
+              <div className="space-y-2 shrink-0">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Database Schema & Import Preview</Label>
+                  <Button variant="ghost" size="sm" onClick={() => setErdExpanded(!erdExpanded)}>
+                    {erdExpanded ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                    {erdExpanded ? 'Collapse' : 'Expand'}
+                  </Button>
+                </div>
+                <DatabaseErdView
+                  existingTables={existingSchemas}
+                  importTables={jsonData.tables}
                   relationships={jsonData.relationships}
+                  tableMatches={tableMatches}
                   onTableClick={(name) => setSelectedJsonTable(name)}
+                  height={erdExpanded ? 500 : 280}
                 />
+              </div>
+            )}
+            
+            {/* Conflict Resolution Panel */}
+            {isMultiTableJson && tableMatches.some(m => m.matchType !== 'new') && (
+              <div className="space-y-2 shrink-0">
+                <Label className="text-sm font-medium">Table Matching & Conflicts</Label>
+                <ConflictResolutionPanel
+                  matches={tableMatches}
+                  onTableResolutionChange={handleTableResolutionChange}
+                  onConflictResolutionChange={handleConflictResolutionChange}
+                />
+              </div>
               </div>
             )}
             
