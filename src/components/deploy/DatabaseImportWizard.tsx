@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, ChevronRight, Upload, Database, FileSpreadsheet, FileJson, Check, Plus, ArrowRight, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ExcelData } from '@/utils/parseExcel';
@@ -288,8 +289,16 @@ export default function DatabaseImportWizard({
       case 'upload':
         return excelData !== null || jsonData !== null;
       case 'clean':
+        if (fileType === 'json' && jsonData && jsonData.tables.length > 1) {
+          // Multi-table: check if any table has selected rows
+          return Array.from(selectedRowsByTable.values()).some(set => set.size > 0);
+        }
         return selectedRows.size > 0 || selectedDataRows.length > 0;
       case 'schema':
+        if (fileType === 'json' && jsonData && jsonData.tables.length > 1) {
+          // Multi-table JSON always can proceed (auto-creates tables)
+          return true;
+        }
         return action === 'create_new' 
           ? tableName.trim().length > 0 && tableDef !== null
           : targetTable !== null && columnMappings.some(m => !m.ignored && m.targetColumn);
@@ -300,7 +309,7 @@ export default function DatabaseImportWizard({
       default:
         return false;
     }
-  }, [currentStep, excelData, jsonData, selectedRows, selectedDataRows, action, tableName, tableDef, targetTable, columnMappings, sqlReviewed, proposedSQL, executionProgress]);
+  }, [currentStep, excelData, jsonData, fileType, selectedRows, selectedDataRows, selectedRowsByTable, action, tableName, tableDef, targetTable, columnMappings, sqlReviewed, proposedSQL, executionProgress]);
 
   const handleFileUploaded = useCallback((
     type: 'excel' | 'csv' | 'json',
@@ -316,6 +325,13 @@ export default function DatabaseImportWizard({
       if (jsonParsed.tables.length > 0) {
         setSelectedJsonTable(jsonParsed.tables[0].name);
         setTableName(jsonParsed.tables[0].name);
+        
+        // Initialize selectedRowsByTable with all rows selected for each table
+        const initialSelection = new Map<string, Set<number>>();
+        jsonParsed.tables.forEach(table => {
+          initialSelection.set(table.name, new Set(table.rows.map((_, i) => i)));
+        });
+        setSelectedRowsByTable(initialSelection);
       }
     } else {
       const excelParsed = data as ExcelData;
@@ -608,12 +624,15 @@ export default function DatabaseImportWizard({
         );
       
       case 'schema':
+        // For multi-table JSON, show all tables
+        const isMultiTableJson = fileType === 'json' && jsonData && jsonData.tables.length > 1;
+        
         return (
           <div className="space-y-4 h-[450px] flex flex-col overflow-y-auto">
             {/* Show relationship diagram for multi-table JSON */}
-            {fileType === 'json' && jsonData && jsonData.tables.length > 1 && (
+            {isMultiTableJson && (
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Table Relationships</Label>
+                <Label className="text-sm font-medium">Table Relationships (click to select)</Label>
                 <JsonRelationshipFlow
                   tables={jsonData.tables.map(t => ({
                     name: t.name,
@@ -627,44 +646,107 @@ export default function DatabaseImportWizard({
               </div>
             )}
             
-            {/* Action Toggle */}
-            <Tabs value={action} onValueChange={(v) => setAction(v as ImportAction)}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="create_new" className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Create New Table
-                </TabsTrigger>
-                <TabsTrigger value="import_existing" className="gap-2" disabled={existingTables.length === 0}>
-                  <ArrowRight className="h-4 w-4" />
-                  Import to Existing
-                </TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="create_new" className="flex-1 mt-4">
-                <SchemaCreator
-                  headers={headers}
-                  sampleData={memoizedSampleData}
-                  tableName={tableName}
-                  onTableNameChange={setTableName}
-                  onTableDefChange={handleTableDefChange}
-                  schema={schema}
-                />
-              </TabsContent>
-              
-              <TabsContent value="import_existing" className="flex-1 mt-4">
-                <FieldMapper
-                  sourceHeaders={headers}
-                  targetTables={existingTables}
-                  selectedTable={targetTable || ''}
-                  onTableChange={setTargetTable}
-                  targetColumns={targetColumns}
-                  mappings={columnMappings}
-                  onMappingsChange={setColumnMappings}
-                  enableCasting={enableCasting}
-                  onEnableCastingChange={setEnableCasting}
-                />
-              </TabsContent>
-            </Tabs>
+            {/* Table selector for multi-table JSON */}
+            {isMultiTableJson && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Select Table to Configure</Label>
+                <Select value={selectedJsonTable} onValueChange={setSelectedJsonTable}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a table" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jsonData.tables.map(t => (
+                      <SelectItem key={t.name} value={t.name}>
+                        {t.name} ({t.rows.length} rows)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  All {jsonData.tables.length} tables will be created with their relationships. Select a table above to preview its schema.
+                </p>
+              </div>
+            )}
+            
+            {/* Action Toggle - hide for multi-table JSON since we auto-create */}
+            {!isMultiTableJson && (
+              <Tabs value={action} onValueChange={(v) => setAction(v as ImportAction)}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="create_new" className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Create New Table
+                  </TabsTrigger>
+                  <TabsTrigger value="import_existing" className="gap-2" disabled={existingTables.length === 0}>
+                    <ArrowRight className="h-4 w-4" />
+                    Import to Existing
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="create_new" className="flex-1 mt-4">
+                  <SchemaCreator
+                    headers={headers}
+                    sampleData={memoizedSampleData}
+                    tableName={tableName}
+                    onTableNameChange={setTableName}
+                    onTableDefChange={handleTableDefChange}
+                    schema={schema}
+                  />
+                </TabsContent>
+                
+                <TabsContent value="import_existing" className="flex-1 mt-4">
+                  <FieldMapper
+                    sourceHeaders={headers}
+                    targetTables={existingTables}
+                    selectedTable={targetTable || ''}
+                    onTableChange={setTargetTable}
+                    targetColumns={targetColumns}
+                    mappings={columnMappings}
+                    onMappingsChange={setColumnMappings}
+                    enableCasting={enableCasting}
+                    onEnableCastingChange={setEnableCasting}
+                  />
+                </TabsContent>
+              </Tabs>
+            )}
+            
+            {/* Show schema preview for selected table in multi-table mode */}
+            {isMultiTableJson && (
+              <div className="flex-1 border rounded-lg p-4 overflow-auto">
+                <Label className="text-sm font-medium mb-2 block">
+                  Schema Preview: {selectedJsonTable}
+                </Label>
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">Column</th>
+                      <th className="px-3 py-2 text-left font-medium">Type</th>
+                      <th className="px-3 py-2 text-left font-medium">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b bg-primary/5">
+                      <td className="px-3 py-2 font-mono">id</td>
+                      <td className="px-3 py-2 font-mono text-xs">UUID</td>
+                      <td className="px-3 py-2 text-muted-foreground text-xs">Primary Key (auto-generated)</td>
+                    </tr>
+                    {headers.filter(h => h !== '_row_id').map((header, idx) => {
+                      const isForeignKey = header === '_parent_id' || header.endsWith('_parent_id');
+                      return (
+                        <tr key={idx} className="border-b">
+                          <td className="px-3 py-2 font-mono">{header}</td>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            {isForeignKey ? 'UUID' : 'TEXT'}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground text-xs">
+                            {isForeignKey && 'Foreign Key'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         );
       
@@ -682,6 +764,11 @@ export default function DatabaseImportWizard({
         );
       
       case 'execute':
+        // Calculate total rows for multi-table JSON
+        const totalRowsToImport = fileType === 'json' && jsonData && jsonData.tables.length > 1
+          ? Array.from(selectedRowsByTable.values()).reduce((sum, set) => sum + set.size, 0)
+          : selectedDataRows.length;
+        
         return (
           <div className="h-[400px]">
             {executionProgress ? (
@@ -699,7 +786,8 @@ export default function DatabaseImportWizard({
                 <Database className="h-16 w-16 text-muted-foreground" />
                 <h3 className="text-lg font-semibold">Ready to Import</h3>
                 <p className="text-sm text-muted-foreground text-center max-w-md">
-                  {proposedSQL.length} SQL statements will be executed to import {selectedDataRows.length} rows.
+                  {proposedSQL.length} SQL statements will be executed to import {totalRowsToImport} rows
+                  {fileType === 'json' && jsonData && jsonData.tables.length > 1 && ` across ${jsonData.tables.length} tables`}.
                 </p>
                 <Button onClick={executeImport} size="lg">
                   Start Import
@@ -745,7 +833,17 @@ export default function DatabaseImportWizard({
               if (canNavigate) {
                 // If navigating forward to review, generate SQL
                 if (step.key === 'review' && index > currentStepIndex) {
-                  if (action === 'create_new' && tableDef) {
+                  if (fileType === 'json' && jsonData && jsonData.tables.length > 1) {
+                    // Multi-table JSON import
+                    const statements = generateMultiTableImportSQL(
+                      jsonData.tables,
+                      jsonData.relationships,
+                      schema,
+                      selectedRowsByTable
+                    );
+                    setProposedSQL(statements);
+                    setSqlReviewed(false);
+                  } else if (action === 'create_new' && tableDef) {
                     const batchSize = calculateBatchSize(tableDef.columns.length, selectedDataRows.length);
                     const statements = generateFullImportSQL(tableDef, selectedDataRows, batchSize);
                     setProposedSQL(statements);

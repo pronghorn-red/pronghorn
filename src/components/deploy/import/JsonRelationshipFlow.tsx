@@ -8,9 +8,10 @@ import ReactFlow, {
   Position,
   useNodesState,
   useEdgesState,
+  Handle,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { TableProperties } from 'lucide-react';
+import { TableProperties, Key } from 'lucide-react';
 import { ForeignKeyRelationship } from '@/utils/parseJson';
 
 interface TableInfo {
@@ -26,16 +27,26 @@ interface JsonRelationshipFlowProps {
   onTableClick?: (tableName: string) => void;
 }
 
-const TableNode = ({ data }: { data: { label: string; columns: string[]; isRoot: boolean } }) => {
+const TableNode = ({ data }: { data: { label: string; columns: string[]; isRoot: boolean; hasChildren: boolean; hasParent: boolean } }) => {
   return (
-    <div className={`px-4 py-3 rounded-lg border-2 shadow-md min-w-[180px] ${
+    <div className={`relative px-4 py-3 rounded-lg border-2 shadow-md min-w-[180px] ${
       data.isRoot 
         ? 'bg-primary/10 border-primary' 
         : 'bg-card border-border'
     }`}>
+      {/* Target handle at top for incoming edges */}
+      {data.hasParent && (
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="!w-3 !h-3 !bg-primary !border-2 !border-background"
+        />
+      )}
+      
       <div className="flex items-center gap-2 mb-2 pb-2 border-b border-border">
         <TableProperties className="h-4 w-4 text-primary" />
         <span className="font-semibold text-sm">{data.label}</span>
+        {data.isRoot && <Key className="h-3 w-3 text-amber-500" />}
       </div>
       <div className="space-y-1">
         {data.columns.slice(0, 6).map((col, i) => (
@@ -50,6 +61,15 @@ const TableNode = ({ data }: { data: { label: string; columns: string[]; isRoot:
           </div>
         )}
       </div>
+      
+      {/* Source handle at bottom for outgoing edges */}
+      {data.hasChildren && (
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="!w-3 !h-3 !bg-primary !border-2 !border-background"
+        />
+      )}
     </div>
   );
 };
@@ -120,6 +140,15 @@ export const JsonRelationshipFlow: React.FC<JsonRelationshipFlowProps> = ({
       }
     });
     
+    // Build sets for parent/child relationships
+    const hasChildrenSet = new Set<string>();
+    const hasParentSet = new Set<string>();
+    
+    parentChildMap.forEach((parentName, childName) => {
+      hasChildrenSet.add(parentName);
+      hasParentSet.add(childName);
+    });
+    
     // Position nodes based on their level
     nodesByLevel.forEach((tableNames, level) => {
       const totalWidth = (tableNames.length - 1) * levelWidth;
@@ -137,6 +166,8 @@ export const JsonRelationshipFlow: React.FC<JsonRelationshipFlowProps> = ({
             label: tableName,
             columns: table.columns,
             isRoot: level === 0,
+            hasChildren: hasChildrenSet.has(tableName),
+            hasParent: hasParentSet.has(tableName),
           },
           sourcePosition: Position.Bottom,
           targetPosition: Position.Top,
