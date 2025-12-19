@@ -17,7 +17,7 @@ import { TableMatchResult, ExistingTableSchema } from '@/utils/tableMatching';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 
 interface DatabaseErdViewProps {
   existingTables: ExistingTableSchema[];
@@ -507,22 +507,24 @@ export const DatabaseErdView: React.FC<DatabaseErdViewProps> = ({
       
       {/* Reset Layout Button */}
       <div className="absolute top-2 right-2 z-10">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleResetLayout}
-              className="h-8 px-2 bg-background/90"
-            >
-              <LayoutGrid className="h-4 w-4 mr-1" />
-              Reset Layout
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Reset to automatic tree layout</p>
-          </TooltipContent>
-        </Tooltip>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResetLayout}
+                className="h-8 px-2 bg-background/90"
+              >
+                <LayoutGrid className="h-4 w-4 mr-1" />
+                Reset Layout
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Reset to automatic tree layout</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
       
       <ReactFlow

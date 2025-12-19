@@ -105,7 +105,7 @@ export default function SchemaCreator({
         name: sanitizedName,
         originalName: header,
         type: info.inferredType,
-        nullable: info.nullable,
+        nullable: true, // Default all columns to nullable (except keys)
         isPrimaryKey: false, // Don't auto-set PK, let user decide
         isUnique: false, // Don't auto-detect uniqueness - let user enable manually
         hasIndex: info.suggestIndex,
