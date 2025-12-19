@@ -711,7 +711,7 @@ export default function DatabaseImportWizard({
             
             {/* Show schema preview for selected table in multi-table mode */}
             {isMultiTableJson && (
-              <div className="flex-1 border rounded-lg p-4 overflow-auto min-h-0">
+              <div className="flex-1 border rounded-lg p-4 overflow-auto min-h-[200px]">
                 <Label className="text-sm font-medium mb-2 block">
                   Schema Preview: {selectedJsonTable}
                 </Label>
