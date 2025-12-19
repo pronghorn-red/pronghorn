@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Check, X, ArrowRight, Plus, Ban } from 'lucide-react';
+import { AlertTriangle, Check, X, ArrowRight, Plus, Ban, Wrench } from 'lucide-react';
 import { TableMatchResult, ColumnConflict } from '@/utils/tableMatching';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import {
 
 interface ConflictResolutionPanelProps {
   matches: TableMatchResult[];
-  onTableResolutionChange: (tableName: string, newStatus: 'new' | 'insert' | 'skip') => void;
+  onTableResolutionChange: (tableName: string, newStatus: 'new' | 'insert' | 'augment' | 'skip') => void;
   onConflictResolutionChange: (tableName: string, columnName: string, resolution: 'skip' | 'cast' | 'alter' | 'block') => void;
 }
 
@@ -40,9 +40,9 @@ export const ConflictResolutionPanel: React.FC<ConflictResolutionPanelProps> = (
   }
 
   return (
-    <div className="space-y-4">
+    <div className="h-full flex flex-col">
       {/* Summary header */}
-      <div className="flex items-center gap-2 p-3 border rounded-lg bg-amber-500/10 border-amber-500/30">
+      <div className="flex items-center gap-2 p-3 border rounded-lg bg-amber-500/10 border-amber-500/30 shrink-0">
         <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
         <div className="text-sm">
           <span className="font-medium">
@@ -56,7 +56,7 @@ export const ConflictResolutionPanel: React.FC<ConflictResolutionPanelProps> = (
         </div>
       </div>
       
-      <ScrollArea className="h-[300px]">
+      <ScrollArea className="flex-1 mt-4">
         <Accordion type="multiple" className="space-y-2">
           {tablesWithMatches.map((match) => (
             <AccordionItem
@@ -72,6 +72,7 @@ export const ConflictResolutionPanel: React.FC<ConflictResolutionPanelProps> = (
                       "text-xs",
                       match.status === 'conflict' && "border-amber-500 text-amber-600 dark:text-amber-400",
                       match.status === 'insert' && "border-blue-500 text-blue-600 dark:text-blue-400",
+                      match.status === 'augment' && "border-purple-500 text-purple-600 dark:text-purple-400",
                       match.status === 'new' && "border-green-500 text-green-600 dark:text-green-400",
                       match.status === 'skip' && "border-muted-foreground text-muted-foreground"
                     )}
@@ -101,8 +102,8 @@ export const ConflictResolutionPanel: React.FC<ConflictResolutionPanelProps> = (
                     <Label className="text-xs font-medium text-muted-foreground">Table Action</Label>
                     <RadioGroup
                       value={match.status === 'conflict' ? 'insert' : match.status}
-                      onValueChange={(value) => onTableResolutionChange(match.importTable, value as 'new' | 'insert' | 'skip')}
-                      className="flex flex-wrap gap-4"
+                      onValueChange={(value) => onTableResolutionChange(match.importTable, value as 'new' | 'insert' | 'augment' | 'skip')}
+                      className="grid grid-cols-2 gap-2"
                     >
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="new" id={`${match.importTable}-new`} />
@@ -119,6 +120,13 @@ export const ConflictResolutionPanel: React.FC<ConflictResolutionPanelProps> = (
                         </Label>
                       </div>
                       <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="augment" id={`${match.importTable}-augment`} />
+                        <Label htmlFor={`${match.importTable}-augment`} className="text-sm cursor-pointer">
+                          <Wrench className="h-3 w-3 inline mr-1" />
+                          Augment table
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
                         <RadioGroupItem value="skip" id={`${match.importTable}-skip`} />
                         <Label htmlFor={`${match.importTable}-skip`} className="text-sm cursor-pointer">
                           <Ban className="h-3 w-3 inline mr-1" />
@@ -126,6 +134,13 @@ export const ConflictResolutionPanel: React.FC<ConflictResolutionPanelProps> = (
                         </Label>
                       </div>
                     </RadioGroup>
+                    
+                    {/* Help text for augment */}
+                    {match.status === 'augment' && match.missingColumns.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Will add {match.missingColumns.length} new column(s) to the existing table.
+                      </p>
+                    )}
                   </div>
                   
                   {/* Column conflicts */}
@@ -181,7 +196,9 @@ export const ConflictResolutionPanel: React.FC<ConflictResolutionPanelProps> = (
                   {/* Missing columns info */}
                   {match.missingColumns.length > 0 && match.status !== 'new' && match.status !== 'skip' && (
                     <div className="space-y-1">
-                      <Label className="text-xs font-medium text-muted-foreground">New Columns (will be added)</Label>
+                      <Label className="text-xs font-medium text-muted-foreground">
+                        {match.status === 'augment' ? 'Columns to Add' : 'New Columns (will be added with augment)'}
+                      </Label>
                       <div className="flex flex-wrap gap-1">
                         {match.missingColumns.map((col) => (
                           <Badge key={col} variant="secondary" className="text-xs">
