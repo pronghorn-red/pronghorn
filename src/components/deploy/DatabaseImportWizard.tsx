@@ -737,9 +737,42 @@ export default function DatabaseImportWizard({
       startTime: Date.now()
     });
 
-    const errors: { row: number; error: string }[] = [];
+    const errors: { row: number; error: string; sql?: string; description?: string }[] = [];
     let successfulStatements = 0;
     let rowsInserted = 0;
+    
+    // Helper to extract real error from various response formats
+    const extractRealError = (data: any, error: any, rawMessage?: string): string => {
+      // First check if data has an error field
+      if (data?.error) {
+        return data.error;
+      }
+      
+      // Try to parse error message that contains JSON (e.g., "Edge Function returned 400: Error, {...}")
+      if (rawMessage) {
+        const jsonMatch = rawMessage.match(/\{.*\}/);
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.error) return parsed.error;
+          } catch { /* ignore parsing failure */ }
+        }
+      }
+      
+      // Check error.message for embedded JSON
+      if (error?.message) {
+        const jsonMatch = error.message.match(/\{.*\}/);
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.error) return parsed.error;
+          } catch { /* ignore parsing failure */ }
+        }
+        return error.message;
+      }
+      
+      return 'Unknown error';
+    };
     
     for (let i = 0; i < statementsToExecute.length; i++) {
       if (isPaused) {
@@ -767,9 +800,14 @@ export default function DatabaseImportWizard({
         const { data, error } = await supabase.functions.invoke('manage-database', { body });
         
         if (error || !data?.success) {
-          const errorMsg = data?.error || error?.message || 'Unknown error';
-          errors.push({ row: i, error: errorMsg });
-          console.error(`Statement ${i + 1} failed:`, errorMsg);
+          const errorMsg = extractRealError(data, error);
+          errors.push({ 
+            row: i, 
+            error: errorMsg,
+            sql: stmt.sql,
+            description: stmt.description
+          });
+          console.error(`Statement ${i + 1} failed:`, errorMsg, '\nSQL:', stmt.sql);
         } else {
           successfulStatements++;
           
@@ -809,8 +847,14 @@ export default function DatabaseImportWizard({
           }
         }
       } catch (e: any) {
-        errors.push({ row: i, error: e.message });
-        console.error(`Statement ${i + 1} exception:`, e.message);
+        const errorMsg = extractRealError(null, null, e.message);
+        errors.push({ 
+          row: i, 
+          error: errorMsg,
+          sql: stmt.sql,
+          description: stmt.description
+        });
+        console.error(`Statement ${i + 1} exception:`, errorMsg, '\nSQL:', stmt.sql);
       }
     }
 
@@ -828,6 +872,45 @@ export default function DatabaseImportWizard({
     } else {
       toast.error(`Import failed: ${errors.length} of ${statementsToExecute.length} statements failed`);
     }
+  };
+
+  // Re-execute all statements from scratch
+  const handleReExecute = () => {
+    setExecutionProgress(null);
+    setIsPaused(false);
+    executeImport();
+  };
+
+  // Retry only failed statements
+  const handleRetryFailed = () => {
+    if (!executionProgress) return;
+    
+    // Get indices of failed statements (in the filtered list)
+    const failedIndices = new Set(executionProgress.errors.map(e => e.row));
+    
+    // We need to find the original indices in proposedSQL
+    const statementsToExecute = proposedSQL.filter((_, i) => !excludedStatements.has(i));
+    
+    // Mark successful statements as excluded
+    const newExcluded = new Set(excludedStatements);
+    let filteredIdx = 0;
+    proposedSQL.forEach((_, originalIdx) => {
+      if (!excludedStatements.has(originalIdx)) {
+        // This statement was executed
+        if (!failedIndices.has(filteredIdx)) {
+          // It succeeded, so exclude it from next run
+          newExcluded.add(originalIdx);
+        }
+        filteredIdx++;
+      }
+    });
+    
+    setExcludedStatements(newExcluded);
+    setExecutionProgress(null);
+    setIsPaused(false);
+    
+    // Need to trigger re-execution after state update
+    setTimeout(() => executeImport(), 0);
   };
 
   const renderStepContent = () => {
@@ -1089,6 +1172,8 @@ export default function DatabaseImportWizard({
                   setIsPaused(true);
                   setExecutionProgress(prev => prev ? { ...prev, status: 'error' } : null);
                 }}
+                onReExecute={handleReExecute}
+                onRetryFailed={handleRetryFailed}
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-4">
