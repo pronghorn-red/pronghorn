@@ -221,9 +221,12 @@ export function generateInsertBatchSQL(
 
 /**
  * Format a value for SQL insertion
+ * IMPORTANT: Empty strings are treated as NULL to prevent PostgreSQL casting errors
  */
 function formatSQLValue(value: any): string {
-  if (value === null || value === undefined) {
+  // Treat null, undefined, AND empty strings as NULL
+  // Empty strings cause "invalid input syntax for type X" errors in PostgreSQL
+  if (value === null || value === undefined || value === '') {
     return 'NULL';
   }
 
@@ -246,8 +249,14 @@ function formatSQLValue(value: any): string {
     return `'${escapeSQLString(JSON.stringify(value))}'::jsonb`;
   }
 
+  // For string values, check if it's whitespace-only (treat as NULL for numeric columns)
+  const strValue = String(value);
+  if (strValue.trim() === '') {
+    return 'NULL';
+  }
+
   // String value - escape single quotes
-  return `'${escapeSQLString(String(value))}'`;
+  return `'${escapeSQLString(strValue)}'`;
 }
 
 /**

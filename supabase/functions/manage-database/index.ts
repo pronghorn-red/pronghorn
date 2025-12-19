@@ -557,16 +557,16 @@ async function executeSqlBatch(
       }
     }
     
+    // Flatten error info for easier client parsing
     return {
       success: !hasError,
       results,
       completedCount: results.filter(r => r.success).length,
       totalCount: statements.length,
-      error: hasError ? {
-        message: errorMessage,
-        statementIndex: errorIndex,
-        statementDescription: statements[errorIndex]?.description
-      } : undefined
+      // Top-level error message for easy extraction
+      error: hasError ? errorMessage : undefined,
+      failedIndex: hasError ? errorIndex : undefined,
+      failedStatement: hasError ? statements[errorIndex]?.description : undefined
     };
     
   } catch (error: unknown) {

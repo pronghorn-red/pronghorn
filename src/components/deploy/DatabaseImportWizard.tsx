@@ -716,6 +716,74 @@ export default function DatabaseImportWizard({
     }
   }, [action, targetTable, databaseId, connectionId, shareToken]);
 
+  // Helper to extract real error from various response formats
+  const extractRealError = (data: any, error: any, rawMessage?: string): string => {
+    // 1. Check response data for error field
+    if (data?.error) {
+      return data.error;
+    }
+    
+    // 2. Check for batch execution results
+    if (data?.results && Array.isArray(data.results)) {
+      const failed = data.results.find((r: any) => !r.success);
+      if (failed?.error) return failed.error;
+    }
+    
+    // 3. Check error object directly
+    if (error) {
+      // Supabase client may put response body in error.context
+      if (error.context?.error) return error.context.error;
+      
+      // Try to extract JSON from error message (e.g., "Edge Function returned 400: {...}")
+      const errorStr = error.message || String(error);
+      
+      // Match JSON object containing "error" field
+      const jsonMatch = errorStr.match(/\{[^{}]*"error"\s*:\s*"[^"]+"/);
+      if (jsonMatch) {
+        try {
+          // Extract full JSON object
+          const startIdx = errorStr.indexOf('{');
+          let braceCount = 0;
+          let endIdx = startIdx;
+          for (let i = startIdx; i < errorStr.length; i++) {
+            if (errorStr[i] === '{') braceCount++;
+            if (errorStr[i] === '}') braceCount--;
+            if (braceCount === 0) {
+              endIdx = i + 1;
+              break;
+            }
+          }
+          const parsed = JSON.parse(errorStr.substring(startIdx, endIdx));
+          if (parsed.error) return parsed.error;
+        } catch { /* Continue */ }
+      }
+      
+      // Remove generic prefix and return remaining message
+      const cleanedMsg = errorStr
+        .replace(/^Edge Function returned (?:a non-2xx|4\d\d|\d+) status code:?\s*/i, '')
+        .replace(/^Error,?\s*/i, '')
+        .trim();
+      
+      if (cleanedMsg && cleanedMsg !== errorStr) return cleanedMsg;
+      return errorStr;
+    }
+    
+    // 4. Parse raw message
+    if (rawMessage) {
+      // Try to extract error from JSON in message
+      const match = rawMessage.match(/"error"\s*:\s*"([^"]+)"/);
+      if (match) return match[1];
+      
+      // Clean up the message
+      return rawMessage
+        .replace(/^Edge Function returned.*?:\s*/i, '')
+        .replace(/^Error,?\s*/i, '')
+        .trim() || rawMessage;
+    }
+    
+    return 'Unknown error';
+  };
+
   // Execute import
   const executeImport = async () => {
     // Filter out excluded statements
@@ -743,42 +811,113 @@ export default function DatabaseImportWizard({
       startTime: Date.now()
     });
 
+    // Check if we should use batch execution for true transaction support
+    const hasTransactionStatements = statementsToExecute.some(s => 
+      s.type === 'BEGIN_TRANSACTION' || s.type === 'COMMIT_TRANSACTION'
+    );
+    
+    // Use batch execution when:
+    // 1. Transaction statements are present (for CREATE TABLE + INSERT rollback), OR
+    // 2. rollbackOnFailure is true
+    if (hasTransactionStatements || rollbackOnFailure) {
+      // Filter out BEGIN/COMMIT statements - the edge function handles them
+      const batchStatements = statementsToExecute
+        .filter(s => s.type !== 'BEGIN_TRANSACTION' && s.type !== 'COMMIT_TRANSACTION')
+        .map(s => ({ sql: s.sql, description: s.description }));
+      
+      setExecutionProgress(prev => prev ? {
+        ...prev,
+        currentStatement: 'Executing all statements in transaction...',
+        currentBatch: 1
+      } : null);
+      
+      const body: any = { 
+        action: 'execute_sql_batch', 
+        shareToken,
+        statements: batchStatements,
+        wrapInTransaction: true
+      };
+      if (databaseId) body.databaseId = databaseId;
+      if (connectionId) body.connectionId = connectionId;
+      
+      try {
+        const { data, error } = await supabase.functions.invoke('manage-database', { body });
+        
+        if (error || !data?.success) {
+          const errorMsg = extractRealError(data, error);
+          
+          // Find which statement failed from data.results
+          const failedResult = data?.results?.find((r: any) => !r.success);
+          const failedIndex = failedResult?.index ?? 0;
+          const failedDescription = failedResult?.description || batchStatements[failedIndex]?.description || 'Unknown statement';
+          
+          setExecutionProgress(prev => prev ? {
+            ...prev,
+            status: 'error',
+            currentStatement: failedDescription,
+            errors: [{
+              row: failedIndex,
+              error: failedResult?.error || errorMsg,
+              sql: failedResult?.sql || batchStatements[failedIndex]?.sql,
+              description: failedDescription
+            }]
+          } : null);
+          
+          toast.error(`Import failed and rolled back: ${failedResult?.error || errorMsg}`);
+          return;
+        }
+        
+        // All succeeded - capture migrations for DDL statements
+        for (const result of data.results || []) {
+          if (result.success && (databaseId || connectionId)) {
+            const ddlStatements = extractDDLStatements(result.sql);
+            for (const ddl of ddlStatements) {
+              try {
+                await supabase.rpc("insert_migration_with_token", {
+                  p_database_id: databaseId || null,
+                  p_connection_id: connectionId || null,
+                  p_sql_content: ddl.sql,
+                  p_statement_type: ddl.statementType,
+                  p_object_type: ddl.objectType,
+                  p_token: shareToken || null,
+                  p_object_schema: ddl.objectSchema || schema,
+                  p_object_name: ddl.objectName,
+                });
+              } catch (e) {
+                console.error("Failed to capture migration:", e);
+              }
+            }
+          }
+        }
+        
+        setExecutionProgress(prev => prev ? {
+          ...prev,
+          status: 'completed',
+          rowsCompleted: totalRows,
+          currentBatch: batchStatements.length,
+          totalBatches: batchStatements.length,
+          errors: []
+        } : null);
+        
+        toast.success(`Import completed successfully! ${batchStatements.length} statements executed in transaction.`);
+        return;
+        
+      } catch (e: any) {
+        const errorMsg = extractRealError(null, null, e.message);
+        setExecutionProgress(prev => prev ? {
+          ...prev,
+          status: 'error',
+          errors: [{ row: 0, error: errorMsg }]
+        } : null);
+        toast.error(`Import failed: ${errorMsg}`);
+        return;
+      }
+    }
+    
+    // Individual execution mode (no transaction/rollback)
     const errors: { row: number; error: string; sql?: string; description?: string }[] = [];
     let successfulStatements = 0;
     let rowsInserted = 0;
-    
-    // Helper to extract real error from various response formats
-    const extractRealError = (data: any, error: any, rawMessage?: string): string => {
-      // First check if data has an error field
-      if (data?.error) {
-        return data.error;
-      }
-      
-      // Try to parse error message that contains JSON (e.g., "Edge Function returned 400: Error, {...}")
-      if (rawMessage) {
-        const jsonMatch = rawMessage.match(/\{.*\}/);
-        if (jsonMatch) {
-          try {
-            const parsed = JSON.parse(jsonMatch[0]);
-            if (parsed.error) return parsed.error;
-          } catch { /* ignore parsing failure */ }
-        }
-      }
-      
-      // Check error.message for embedded JSON
-      if (error?.message) {
-        const jsonMatch = error.message.match(/\{.*\}/);
-        if (jsonMatch) {
-          try {
-            const parsed = JSON.parse(jsonMatch[0]);
-            if (parsed.error) return parsed.error;
-          } catch { /* ignore parsing failure */ }
-        }
-        return error.message;
-      }
-      
-      return 'Unknown error';
-    };
     
     for (let i = 0; i < statementsToExecute.length; i++) {
       if (isPaused) {
@@ -1289,7 +1428,7 @@ export default function DatabaseImportWizard({
                     setSqlReviewed(false);
                   } else if (action === 'create_new' && tableDef) {
                     const batchSize = calculateBatchSize(tableDef.columns.length, selectedDataRows.length);
-                    const statements = generateFullImportSQL(tableDef, selectedDataRows, batchSize);
+                    const statements = generateFullImportSQL(tableDef, selectedDataRows, batchSize, { wrapInTransaction: rollbackOnFailure });
                     setProposedSQL(statements);
                     setSqlReviewed(false);
                   } else if (action === 'import_existing' && targetTable && columnMappings.length > 0) {
