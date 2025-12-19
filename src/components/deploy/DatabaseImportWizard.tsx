@@ -1112,14 +1112,29 @@ export default function DatabaseImportWizard({
                 // If navigating forward to review, generate SQL
                 if (step.key === 'review' && index > currentStepIndex) {
                   if (fileType === 'json' && jsonData && jsonData.tables.length > 1) {
-                    // Multi-table JSON import
-                    const statements = generateMultiTableImportSQL(
-                      jsonData.tables,
-                      jsonData.relationships,
-                      schema,
-                      selectedRowsByTable
-                    );
-                    setProposedSQL(statements);
+                    // Multi-table JSON import - use smart import if we have matches
+                    if (tableMatches.length > 0 && existingSchemas.length > 0) {
+                      const statements = generateSmartImportSQL(
+                        jsonData.tables,
+                        jsonData.relationships,
+                        tableMatches,
+                        existingSchemas,
+                        schema,
+                        selectedRowsByTable,
+                        tableDefsMap
+                      );
+                      setProposedSQL(statements);
+                    } else {
+                      // Fallback to regular multi-table import
+                      const statements = generateMultiTableImportSQL(
+                        jsonData.tables,
+                        jsonData.relationships,
+                        schema,
+                        selectedRowsByTable,
+                        tableDefsMap
+                      );
+                      setProposedSQL(statements);
+                    }
                     setSqlReviewed(false);
                   } else if (action === 'create_new' && tableDef) {
                     const batchSize = calculateBatchSize(tableDef.columns.length, selectedDataRows.length);
