@@ -9,6 +9,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { TableProperties } from 'lucide-react';
+import { ForeignKeyRelationship } from '@/utils/parseJson';
 
 interface TableInfo {
   name: string;
@@ -19,6 +20,7 @@ interface TableInfo {
 
 interface JsonRelationshipFlowProps {
   tables: TableInfo[];
+  relationships?: ForeignKeyRelationship[];
   onTableClick?: (tableName: string) => void;
 }
 
@@ -56,92 +58,108 @@ const nodeTypes = {
 
 export const JsonRelationshipFlow: React.FC<JsonRelationshipFlowProps> = ({
   tables,
+  relationships = [],
   onTableClick,
 }) => {
   const { nodes, edges } = useMemo(() => {
     const nodeList: Node[] = [];
     const edgeList: Edge[] = [];
     
-    // Find root tables (no parent)
-    const rootTables = tables.filter(t => !t.parentTable);
-    const childTables = tables.filter(t => t.parentTable);
+    // Build parent-child relationships from both sources
+    const parentChildMap = new Map<string, string>();
     
-    // Position nodes in a hierarchical layout
-    const levelWidth = 280;
-    const levelHeight = 150;
-    
-    // Position root tables
-    rootTables.forEach((table, index) => {
-      nodeList.push({
-        id: table.name,
-        type: 'tableNode',
-        position: { x: index * levelWidth, y: 0 },
-        data: {
-          label: table.name,
-          columns: table.columns,
-          isRoot: true,
-        },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-      });
-    });
-    
-    // Group children by parent
-    const childrenByParent: Record<string, TableInfo[]> = {};
-    childTables.forEach(table => {
+    // From table.parentTable property
+    tables.forEach(table => {
       if (table.parentTable) {
-        if (!childrenByParent[table.parentTable]) {
-          childrenByParent[table.parentTable] = [];
-        }
-        childrenByParent[table.parentTable].push(table);
+        parentChildMap.set(table.name, table.parentTable);
       }
     });
     
-    // Position child tables and create edges
-    let currentY = levelHeight;
-    Object.entries(childrenByParent).forEach(([parentName, children]) => {
-      const parentNode = nodeList.find(n => n.id === parentName);
-      const parentX = parentNode?.position.x || 0;
+    // From relationships array
+    relationships.forEach(rel => {
+      parentChildMap.set(rel.childTable, rel.parentTable);
+    });
+    
+    // Find root tables (no parent)
+    const rootTables = tables.filter(t => !parentChildMap.has(t.name));
+    const childTables = tables.filter(t => parentChildMap.has(t.name));
+    
+    // Position nodes in a hierarchical layout
+    const levelWidth = 280;
+    const levelHeight = 180;
+    
+    // Track node positions by level
+    const nodesByLevel: Map<number, string[]> = new Map();
+    const nodeLevels: Map<string, number> = new Map();
+    
+    // Assign levels using BFS
+    const assignLevel = (tableName: string, level: number) => {
+      if (nodeLevels.has(tableName)) return;
+      nodeLevels.set(tableName, level);
       
-      children.forEach((table, index) => {
-        const offsetX = (index - (children.length - 1) / 2) * levelWidth;
+      if (!nodesByLevel.has(level)) {
+        nodesByLevel.set(level, []);
+      }
+      nodesByLevel.get(level)!.push(tableName);
+      
+      // Find children
+      tables.forEach(t => {
+        if (parentChildMap.get(t.name) === tableName) {
+          assignLevel(t.name, level + 1);
+        }
+      });
+    };
+    
+    rootTables.forEach(t => assignLevel(t.name, 0));
+    
+    // Position nodes based on their level
+    nodesByLevel.forEach((tableNames, level) => {
+      const totalWidth = (tableNames.length - 1) * levelWidth;
+      const startX = -totalWidth / 2;
+      
+      tableNames.forEach((tableName, index) => {
+        const table = tables.find(t => t.name === tableName);
+        if (!table) return;
         
         nodeList.push({
-          id: table.name,
+          id: tableName,
           type: 'tableNode',
-          position: { x: parentX + offsetX, y: currentY },
+          position: { x: startX + index * levelWidth, y: level * levelHeight },
           data: {
-            label: table.name,
+            label: tableName,
             columns: table.columns,
-            isRoot: false,
+            isRoot: level === 0,
           },
           sourcePosition: Position.Bottom,
           targetPosition: Position.Top,
         });
-        
-        // Create edge from parent to child
-        edgeList.push({
-          id: `${parentName}-${table.name}`,
-          source: parentName,
-          target: table.name,
-          type: 'smoothstep',
-          animated: true,
-          label: table.foreignKey ? `FK: ${table.foreignKey}` : '1:N',
-          labelStyle: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' },
-          labelBgStyle: { fill: 'hsl(var(--background))' },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: 'hsl(var(--primary))',
-          },
-          style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
-        });
       });
+    });
+    
+    // Create edges
+    parentChildMap.forEach((parentName, childName) => {
+      const rel = relationships.find(r => r.childTable === childName && r.parentTable === parentName);
+      const fkLabel = rel ? `FK: ${rel.childColumn}` : '1:N';
       
-      currentY += levelHeight;
+      edgeList.push({
+        id: `${parentName}-${childName}`,
+        source: parentName,
+        target: childName,
+        type: 'smoothstep',
+        animated: true,
+        label: fkLabel,
+        labelStyle: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' },
+        labelBgStyle: { fill: 'hsl(var(--background))' },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: 'hsl(var(--primary))',
+        },
+        style: { stroke: 'hsl(var(--primary))', strokeWidth: 2 },
+      });
     });
     
     return { nodes: nodeList, edges: edgeList };
-  }, [tables]);
+  }, [tables, relationships]);
 
   if (tables.length === 0) {
     return (

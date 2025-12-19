@@ -58,10 +58,25 @@ function getTableNameFromFile(fileName: string): string {
     .toLowerCase();
 }
 
+// Global row ID counter per table
+let globalRowCounters: Map<string, number> = new Map();
+
+function getNextRowId(tableName: string): number {
+  const current = globalRowCounters.get(tableName) || 0;
+  const next = current + 1;
+  globalRowCounters.set(tableName, next);
+  return next;
+}
+
+function resetRowCounters(): void {
+  globalRowCounters = new Map();
+}
+
 /**
  * Parse JSON data and normalize into table structures
  */
 export function parseJsonData(data: any, tableName: string = 'imported_data'): ParsedJsonData {
+  resetRowCounters();
   const rootType = getRootType(data);
   
   if (rootType === 'primitive') {
@@ -79,23 +94,260 @@ export function parseJsonData(data: any, tableName: string = 'imported_data'): P
   if (rootType === 'array') {
     // Array of objects - most common case
     if (data.length > 0 && typeof data[0] === 'object' && data[0] !== null) {
-      const result = normalizeArrayOfObjects(data, tableName, tables, relationships);
-      tables.push(result.mainTable);
+      processArrayOfObjects(data, tableName, tables, relationships, null, null);
+    } else if (data.length > 0) {
+      // Array of primitives
+      processPrimitiveArray(data, tableName, tables, relationships, null, null);
     }
   } else if (rootType === 'object') {
-    // Single object or object with nested arrays
-    const result = normalizeObject(data, tableName, tables, relationships);
-    if (result) {
-      tables.push(result);
-    }
+    // Single object - check if it's a wrapper object
+    processRootObject(data, tableName, tables, relationships);
   }
 
   return {
     tables,
     rootType,
-    totalRows: rootType === 'array' ? data.length : 1,
+    totalRows: tables.length > 0 ? tables[0].rows.length : 0,
     relationships
   };
+}
+
+/**
+ * Process a root object that may contain nested structures
+ */
+function processRootObject(
+  data: Record<string, any>,
+  tableName: string,
+  tables: JsonTable[],
+  relationships: ForeignKeyRelationship[]
+): void {
+  const keys = Object.keys(data);
+  
+  // Check if this is a wrapper object with a single key containing an object/array
+  if (keys.length === 1) {
+    const key = keys[0];
+    const value = data[key];
+    const childTableName = sanitizeColumnName(key);
+    
+    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
+      // Single key with array of objects - use the key as the table name
+      processArrayOfObjects(value, childTableName, tables, relationships, null, null);
+      return;
+    } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      // Single key with nested object - descend into it
+      processRootObject(value, childTableName, tables, relationships);
+      return;
+    }
+  }
+  
+  // Process as a regular object
+  processObject(data, tableName, tables, relationships, null, null);
+}
+
+/**
+ * Process a single object, extracting scalar values and processing nested arrays/objects
+ */
+function processObject(
+  data: Record<string, any>,
+  tableName: string,
+  tables: JsonTable[],
+  relationships: ForeignKeyRelationship[],
+  parentTable: string | null,
+  parentRowId: number | null
+): number {
+  const row: Record<string, any> = {};
+  const rowId = getNextRowId(tableName);
+  row['_row_id'] = rowId;
+  
+  if (parentTable && parentRowId !== null) {
+    row['_parent_id'] = parentRowId;
+  }
+  
+  const nestedArrays: { key: string; value: any[] }[] = [];
+  const nestedObjects: { key: string; value: Record<string, any> }[] = [];
+  
+  // First pass: separate scalar values from nested structures
+  for (const [key, value] of Object.entries(data)) {
+    const sanitizedKey = sanitizeColumnName(key);
+    
+    if (Array.isArray(value)) {
+      if (value.length > 0) {
+        nestedArrays.push({ key: sanitizedKey, value });
+      }
+    } else if (value !== null && typeof value === 'object') {
+      // Check if nested object has arrays (making it a separate entity)
+      if (hasNestedArrays(value)) {
+        nestedObjects.push({ key: sanitizedKey, value });
+      } else {
+        // Flatten simple nested objects
+        flattenObject(value, sanitizedKey, row);
+      }
+    } else {
+      row[sanitizedKey] = value;
+    }
+  }
+  
+  // Add or update the table
+  let table = tables.find(t => t.name === tableName);
+  if (!table) {
+    table = {
+      name: tableName,
+      columns: [],
+      rows: [],
+      parentTable: parentTable || undefined,
+      foreignKey: parentTable ? '_parent_id' : undefined
+    };
+    tables.push(table);
+    
+    if (parentTable) {
+      relationships.push({
+        parentTable,
+        childTable: tableName,
+        parentColumn: '_row_id',
+        childColumn: '_parent_id'
+      });
+    }
+  }
+  
+  // Update columns based on this row
+  for (const [key, value] of Object.entries(row)) {
+    if (key === '_row_id' || key === '_parent_id') continue;
+    
+    let column = table.columns.find(c => c.name === key);
+    if (!column) {
+      column = {
+        name: key,
+        path: key,
+        sampleValues: [],
+        isNested: key.includes('_'),
+        isArray: false
+      };
+      table.columns.push(column);
+    }
+    if (column.sampleValues.length < 5) {
+      column.sampleValues.push(value);
+    }
+  }
+  
+  table.rows.push(row);
+  
+  // Process nested objects that have their own structure
+  for (const { key, value } of nestedObjects) {
+    processObject(value, key, tables, relationships, tableName, rowId);
+  }
+  
+  // Process nested arrays
+  for (const { key, value } of nestedArrays) {
+    const childTableName = key;
+    
+    if (typeof value[0] === 'object' && value[0] !== null) {
+      // Array of objects
+      processArrayOfObjects(value, childTableName, tables, relationships, tableName, rowId);
+    } else {
+      // Array of primitives (like skills: ["Python", "React"])
+      processPrimitiveArray(value, childTableName, tables, relationships, tableName, rowId);
+    }
+  }
+  
+  return rowId;
+}
+
+/**
+ * Process an array of objects
+ */
+function processArrayOfObjects(
+  data: any[],
+  tableName: string,
+  tables: JsonTable[],
+  relationships: ForeignKeyRelationship[],
+  parentTable: string | null,
+  parentRowId: number | null
+): void {
+  for (const item of data) {
+    if (item !== null && typeof item === 'object') {
+      processObject(item, tableName, tables, relationships, parentTable, parentRowId);
+    }
+  }
+}
+
+/**
+ * Process an array of primitive values into a junction table
+ */
+function processPrimitiveArray(
+  data: any[],
+  tableName: string,
+  tables: JsonTable[],
+  relationships: ForeignKeyRelationship[],
+  parentTable: string | null,
+  parentRowId: number | null
+): void {
+  let table = tables.find(t => t.name === tableName);
+  
+  if (!table) {
+    table = {
+      name: tableName,
+      columns: [
+        { name: 'value', path: 'value', sampleValues: [], isNested: false, isArray: false }
+      ],
+      rows: [],
+      parentTable: parentTable || undefined,
+      foreignKey: parentTable ? '_parent_id' : undefined
+    };
+    tables.push(table);
+    
+    if (parentTable) {
+      // Add _parent_id column
+      table.columns.push({
+        name: '_parent_id',
+        path: '_parent_id',
+        sampleValues: [],
+        isNested: false,
+        isArray: false
+      });
+      
+      relationships.push({
+        parentTable,
+        childTable: tableName,
+        parentColumn: '_row_id',
+        childColumn: '_parent_id'
+      });
+    }
+  }
+  
+  // Add rows for each primitive value
+  for (const value of data) {
+    const row: Record<string, any> = {
+      _row_id: getNextRowId(tableName),
+      value
+    };
+    if (parentRowId !== null) {
+      row['_parent_id'] = parentRowId;
+    }
+    table.rows.push(row);
+    
+    // Update sample values
+    const valueCol = table.columns.find(c => c.name === 'value');
+    if (valueCol && valueCol.sampleValues.length < 5) {
+      valueCol.sampleValues.push(value);
+    }
+  }
+}
+
+/**
+ * Check if an object contains any nested arrays (at any depth)
+ */
+function hasNestedArrays(obj: Record<string, any>): boolean {
+  for (const value of Object.values(obj)) {
+    if (Array.isArray(value)) {
+      return true;
+    }
+    if (value !== null && typeof value === 'object') {
+      if (hasNestedArrays(value)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -108,191 +360,18 @@ function getRootType(data: any): 'object' | 'array' | 'primitive' {
 }
 
 /**
- * Normalize an array of objects into a table structure
- */
-function normalizeArrayOfObjects(
-  data: any[],
-  tableName: string,
-  allTables: JsonTable[],
-  relationships: ForeignKeyRelationship[]
-): { mainTable: JsonTable } {
-  const columns: JsonColumn[] = [];
-  const rows: Record<string, any>[] = [];
-  const nestedArrays: Map<string, any[][]> = new Map();
-
-  // Collect all unique keys across all objects
-  const allKeys = new Set<string>();
-  data.forEach(item => {
-    if (item && typeof item === 'object') {
-      Object.keys(item).forEach(key => allKeys.add(key));
-    }
-  });
-
-  // Process each row
-  data.forEach((item, rowIndex) => {
-    if (!item || typeof item !== 'object') return;
-    
-    const row: Record<string, any> = { _row_id: rowIndex + 1 };
-    
-    Object.entries(item).forEach(([key, value]) => {
-      const sanitizedKey = sanitizeColumnName(key);
-      
-      if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
-        // Nested array of objects - will become a child table
-        if (!nestedArrays.has(sanitizedKey)) {
-          nestedArrays.set(sanitizedKey, []);
-        }
-        nestedArrays.get(sanitizedKey)!.push(
-          value.map(v => ({ ...v, _parent_id: rowIndex + 1 }))
-        );
-      } else if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-        // Nested object - flatten with prefix
-        flattenObject(value, sanitizedKey, row);
-      } else {
-        row[sanitizedKey] = value;
-      }
-    });
-    
-    rows.push(row);
-  });
-
-  // Build columns from the first few rows
-  const sampleSize = Math.min(100, rows.length);
-  const columnMap = new Map<string, any[]>();
-  
-  rows.slice(0, sampleSize).forEach(row => {
-    Object.entries(row).forEach(([key, value]) => {
-      if (key === '_row_id') return;
-      if (!columnMap.has(key)) {
-        columnMap.set(key, []);
-      }
-      columnMap.get(key)!.push(value);
-    });
-  });
-
-  columnMap.forEach((sampleValues, name) => {
-    columns.push({
-      name,
-      path: name,
-      sampleValues,
-      isNested: name.includes('_'),
-      isArray: false
-    });
-  });
-
-  // Process nested arrays as child tables
-  nestedArrays.forEach((nestedData, childTableName) => {
-    const flattenedData = nestedData.flat();
-    if (flattenedData.length > 0) {
-      const childResult = normalizeArrayOfObjects(
-        flattenedData,
-        `${tableName}_${childTableName}`,
-        allTables,
-        relationships
-      );
-      allTables.push(childResult.mainTable);
-      
-      relationships.push({
-        parentTable: tableName,
-        childTable: `${tableName}_${childTableName}`,
-        parentColumn: '_row_id',
-        childColumn: '_parent_id'
-      });
-    }
-  });
-
-  return {
-    mainTable: {
-      name: tableName,
-      columns,
-      rows
-    }
-  };
-}
-
-/**
- * Normalize a single object into a table structure
- */
-function normalizeObject(
-  data: Record<string, any>,
-  tableName: string,
-  allTables: JsonTable[],
-  relationships: ForeignKeyRelationship[]
-): JsonTable | null {
-  // Check if this object has arrays that should become separate tables
-  const arrayKeys: string[] = [];
-  const scalarKeys: string[] = [];
-  
-  Object.entries(data).forEach(([key, value]) => {
-    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
-      arrayKeys.push(key);
-    } else {
-      scalarKeys.push(key);
-    }
-  });
-
-  // If there are array properties, process them as child tables
-  if (arrayKeys.length > 0) {
-    arrayKeys.forEach(key => {
-      const childResult = normalizeArrayOfObjects(
-        data[key],
-        sanitizeColumnName(key),
-        allTables,
-        relationships
-      );
-      allTables.push(childResult.mainTable);
-    });
-  }
-
-  // Create main table with scalar values
-  if (scalarKeys.length > 0) {
-    const row: Record<string, any> = { _row_id: 1 };
-    const columns: JsonColumn[] = [];
-    
-    scalarKeys.forEach(key => {
-      const sanitizedKey = sanitizeColumnName(key);
-      const value = data[key];
-      
-      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-        flattenObject(value, sanitizedKey, row);
-      } else {
-        row[sanitizedKey] = value;
-      }
-    });
-
-    Object.entries(row).forEach(([name, value]) => {
-      if (name === '_row_id') return;
-      columns.push({
-        name,
-        path: name,
-        sampleValues: [value],
-        isNested: name.includes('_'),
-        isArray: false
-      });
-    });
-
-    return {
-      name: tableName,
-      columns,
-      rows: [row]
-    };
-  }
-
-  return null;
-}
-
-/**
  * Flatten a nested object with key prefix
  */
 function flattenObject(obj: Record<string, any>, prefix: string, target: Record<string, any>): void {
-  Object.entries(obj).forEach(([key, value]) => {
+  for (const [key, value] of Object.entries(obj)) {
     const newKey = `${prefix}_${sanitizeColumnName(key)}`;
     if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
       flattenObject(value, newKey, target);
-    } else {
+    } else if (!Array.isArray(value)) {
       target[newKey] = value;
     }
-  });
+    // Skip arrays - they're handled separately
+  }
 }
 
 /**

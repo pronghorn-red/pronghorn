@@ -609,6 +609,7 @@ export default function DatabaseImportWizard({
                     parentTable: t.parentTable,
                     foreignKey: t.foreignKey
                   }))}
+                  relationships={jsonData.relationships}
                   onTableClick={(name) => setSelectedJsonTable(name)}
                 />
               </div>
