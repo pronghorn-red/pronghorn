@@ -347,7 +347,7 @@ serve(async (req) => {
       file_operations: {
         list_files: {
           description:
-            "List all files with metadata (id, path, updated_at). MUST be called FIRST to load file structure.",
+            "List all files with metadata (id, path, updated_at). MUST be called FIRST to load file structure. For session-created files, IDs are kept current.",
         },
         wildcard_search: {
           description:
@@ -355,11 +355,11 @@ serve(async (req) => {
         },
         search: { description: "Search file paths and content by single keyword" },
         read_file: {
-          description: "Read complete content of a single file. Returns content WITH LINE NUMBERS prefixed as <<N>>.",
+          description: "Read complete content of a single file. Returns content WITH LINE NUMBERS prefixed as <<N>>. Can use file_id OR path parameter. For newly created files, prefer using path.",
         },
         edit_lines: {
           description:
-            "Edit specific line range in a file and stage the change. Use line numbers from <<N>> prefix in read_file output.",
+            "Edit specific line range in a file and stage the change. Use line numbers from <<N>> prefix in read_file output. Can use file_id OR path parameter. For newly created files, prefer using path.",
         },
         create_file: { description: "Create new file and stage as add operation" },
         delete_file: { description: "Delete file and stage as delete operation" },
@@ -805,6 +805,17 @@ Use them to understand context and inform your file operations.` : ''}`;
     let allOperationResults: any[] = [];
     // Ephemeral context holds full operation results for current iteration only (NOT added to history)
     let ephemeralContext: any[] = [];
+    
+    // Session file registry: tracks files created/modified during this session
+    // Maps file path -> { staging_id, path, content, created_at }
+    // This prevents stale file_id issues when agent tries to read/edit newly created files
+    const sessionFileRegistry = new Map<string, { 
+      staging_id: string; 
+      path: string; 
+      content: string;
+      created_at: Date;
+    }>();
+    console.log("[SESSION] Initialized sessionFileRegistry for tracking session-created files");
 
     conversationHistory.push({ role: "user", content: `Task: ${taskDescription}` });
 
@@ -1155,6 +1166,21 @@ Use them to understand context and inform your file operations.` : ''}`;
                 p_token: shareToken,
                 p_path_prefix: op.params.path_prefix || null,
               });
+              
+              // Merge session registry to ensure current staging IDs for session-created files
+              if (result.data && Array.isArray(result.data)) {
+                for (const [filePath, info] of sessionFileRegistry) {
+                  const existingIdx = result.data.findIndex((f: any) => f.path === filePath);
+                  if (existingIdx >= 0) {
+                    // Update with session's known ID (most recent)
+                    console.log(`[SESSION] Updating list_files result for ${filePath} with session-tracked ID: ${info.staging_id}`);
+                    result.data[existingIdx].id = info.staging_id;
+                    result.data[existingIdx].is_staged = true;
+                    result.data[existingIdx].operation_type = 'add';
+                    result.data[existingIdx].session_tracked = true;
+                  }
+                }
+              }
               break;
 
             case "search":
@@ -1184,10 +1210,56 @@ Use them to understand context and inform your file operations.` : ''}`;
               break;
 
             case "read_file":
+              // Session registry lookup: if path is provided and matches a session-created file, use that ID
+              let readFileId = op.params.file_id;
+              const readPath = op.params.path;
+              
+              if (readPath && sessionFileRegistry.has(readPath)) {
+                const registeredFile = sessionFileRegistry.get(readPath)!;
+                readFileId = registeredFile.staging_id;
+                console.log(`[SESSION] Using session-registered ID for read_file ${readPath}: ${readFileId}`);
+              }
+              
               result = await supabase.rpc("get_file_content_with_token", {
-                p_file_id: op.params.file_id,
+                p_file_id: readFileId,
                 p_token: shareToken,
               });
+
+              // Fallback: If file_id fails and we have a path, try path-based lookup in staging
+              if (result.error?.code === 'P0001' && result.error?.message?.includes('File not found')) {
+                const lookupPath = readPath || op.params.file_id; // file_id might actually be a path
+                console.log(`[SESSION] read_file failed with ID ${readFileId}, attempting path-based recovery for: ${lookupPath}`);
+                
+                const { data: stagedFiles } = await supabase.rpc("get_staged_changes_with_token", {
+                  p_repo_id: repoId,
+                  p_token: shareToken,
+                });
+                
+                const matchedStaged = stagedFiles?.find((s: any) => 
+                  s.file_path === lookupPath || s.id === readFileId
+                );
+                
+                if (matchedStaged) {
+                  console.log(`[SESSION] Found file in staging: ${matchedStaged.file_path} with ID ${matchedStaged.id}`);
+                  
+                  // Retry with the correct staging ID
+                  result = await supabase.rpc("get_file_content_with_token", {
+                    p_file_id: matchedStaged.id,
+                    p_token: shareToken,
+                  });
+                  
+                  // Update registry with fresh ID
+                  if (!result.error) {
+                    sessionFileRegistry.set(matchedStaged.file_path, {
+                      staging_id: matchedStaged.id,
+                      path: matchedStaged.file_path,
+                      content: result.data?.[0]?.content || '',
+                      created_at: new Date(),
+                    });
+                    console.log(`[SESSION] Updated registry for ${matchedStaged.file_path} with fresh ID: ${matchedStaged.id}`);
+                  }
+                }
+              }
 
               // Add line numbers to content for LLM clarity
               if (result.data?.[0]?.content) {
@@ -1202,22 +1274,75 @@ Use them to understand context and inform your file operations.` : ''}`;
               break;
 
             case "edit_lines":
+              // Session registry lookup: if path is provided and matches a session-created file, use that ID
+              let editFileId = op.params.file_id;
+              const editPath = op.params.path;
+              
+              if (editPath && sessionFileRegistry.has(editPath)) {
+                const registeredFile = sessionFileRegistry.get(editPath)!;
+                editFileId = registeredFile.staging_id;
+                console.log(`[SESSION] Using session-registered ID for edit_lines ${editPath}: ${editFileId}`);
+              }
+              
               // Read file using function that checks both repo_files and repo_staging
-              console.log(`[AGENT] edit_lines: Reading file ${op.params.file_id}`);
-              const { data: fileData, error: readError } = await supabase.rpc("get_file_content_with_token", {
-                p_file_id: op.params.file_id,
+              console.log(`[AGENT] edit_lines: Reading file ${editFileId}`);
+              let fileData: any[] | null = null;
+              let readError: any = null;
+              
+              const readResult = await supabase.rpc("get_file_content_with_token", {
+                p_file_id: editFileId,
                 p_token: shareToken,
               });
+              fileData = readResult.data;
+              readError = readResult.error;
+
+              // Fallback: If file_id fails and we have a path, try path-based lookup in staging
+              if ((readError?.code === 'P0001' && readError?.message?.includes('File not found')) || (!fileData || fileData.length === 0)) {
+                const lookupPath = editPath || editFileId;
+                console.log(`[SESSION] edit_lines: ID ${editFileId} failed, attempting path-based recovery for: ${lookupPath}`);
+                
+                const { data: stagedFiles } = await supabase.rpc("get_staged_changes_with_token", {
+                  p_repo_id: repoId,
+                  p_token: shareToken,
+                });
+                
+                const matchedStaged = stagedFiles?.find((s: any) => 
+                  s.file_path === lookupPath || s.id === editFileId
+                );
+                
+                if (matchedStaged) {
+                  console.log(`[SESSION] Found file in staging: ${matchedStaged.file_path} with ID ${matchedStaged.id}`);
+                  
+                  // Retry with the correct staging ID
+                  const retryResult = await supabase.rpc("get_file_content_with_token", {
+                    p_file_id: matchedStaged.id,
+                    p_token: shareToken,
+                  });
+                  fileData = retryResult.data;
+                  readError = retryResult.error;
+                  
+                  // Update registry with fresh ID
+                  if (!retryResult.error && fileData && fileData.length > 0) {
+                    sessionFileRegistry.set(matchedStaged.file_path, {
+                      staging_id: matchedStaged.id,
+                      path: matchedStaged.file_path,
+                      content: fileData[0]?.content || '',
+                      created_at: new Date(),
+                    });
+                    console.log(`[SESSION] Updated registry for ${matchedStaged.file_path} with fresh ID: ${matchedStaged.id}`);
+                  }
+                }
+              }
 
               if (readError) {
                 console.error(`[AGENT] edit_lines: Read error:`, readError);
-                throw new Error(`Failed to read file ${op.params.file_id}: ${readError.message}`);
+                throw new Error(`Failed to read file ${editFileId}: ${readError.message}`);
               }
 
               if (!fileData || fileData.length === 0) {
-                console.error(`[AGENT] edit_lines: File not found: ${op.params.file_id}`);
+                console.error(`[AGENT] edit_lines: File not found: ${editFileId}`);
                 throw new Error(
-                  `File not found: ${op.params.file_id}. Cannot edit. The file may not exist or may have been deleted.`,
+                  `File not found: ${editFileId}. Cannot edit. The file may not exist or may have been deleted.`,
                 );
               }
 
@@ -1343,11 +1468,23 @@ Use them to understand context and inform your file operations.` : ''}`;
                   operation_type: "edit",
                   file_path: fileData[0].path,
                 });
+                
+                // Update session registry with new staging ID and content after edit
+                if (result.data?.id) {
+                  sessionFileRegistry.set(fileData[0].path, {
+                    staging_id: result.data.id,
+                    path: fileData[0].path,
+                    content: finalContent,
+                    created_at: new Date(),
+                  });
+                  console.log(`[SESSION] Updated registry for ${fileData[0].path} after edit with ID: ${result.data.id}`);
+                }
 
                 // CRITICAL: Re-read the file after edit to verify the change was applied correctly
-                // This helps the agent see the actual current state for subsequent operations
+                // Use the new staging ID from the result for verification
+                const verifyFileId = result.data?.id || editFileId;
                 const { data: verifyData, error: verifyError } = await supabase.rpc("get_file_content_with_token", {
-                  p_file_id: op.params.file_id,
+                  p_file_id: verifyFileId,
                   p_token: shareToken,
                 });
 
@@ -1402,6 +1539,22 @@ Use them to understand context and inform your file operations.` : ''}`;
                 p_old_content: "", // Empty string for new files, not NULL
                 p_new_content: op.params.content,
               });
+              
+              // Register newly created file in session registry for future operations
+              if (result.data?.id) {
+                sessionFileRegistry.set(op.params.path, {
+                  staging_id: result.data.id,
+                  path: op.params.path,
+                  content: op.params.content,
+                  created_at: new Date(),
+                });
+                console.log(`[SESSION] Registered new file ${op.params.path} with staging ID: ${result.data.id}`);
+                
+                // Return the staging ID to the agent for reference
+                result.data.file_id = result.data.id;
+                result.data.path = op.params.path;
+                result.data.session_tracked = true;
+              }
               break;
 
             case "delete_file":
@@ -1430,6 +1583,11 @@ Use them to understand context and inform your file operations.` : ''}`;
                     p_file_path: newlyCreated.file_path,
                     p_token: shareToken,
                   });
+                  // Remove from session registry
+                  if (sessionFileRegistry.has(newlyCreated.file_path)) {
+                    sessionFileRegistry.delete(newlyCreated.file_path);
+                    console.log(`[SESSION] Removed ${newlyCreated.file_path} from registry after delete`);
+                  }
                   console.log(`[AGENT] Unstaged newly created file: ${newlyCreated.file_path}`);
                 } else {
                   // Stage the delete for a committed file
@@ -1466,13 +1624,25 @@ Use them to understand context and inform your file operations.` : ''}`;
                 );
 
                 if (newlyCreated) {
+                  const oldPath = moveFileData[0].path;
                   // For staged "add" files, just update the staging record's file_path
                   result = await supabase.rpc("update_staged_file_path_with_token", {
                     p_staging_id: newlyCreated.id,
                     p_new_path: op.params.new_path,
                     p_token: shareToken,
                   });
-                  console.log(`[AGENT] Moved staged file from ${moveFileData[0].path} to ${op.params.new_path}`);
+                  
+                  // Update session registry with new path
+                  if (sessionFileRegistry.has(oldPath)) {
+                    const existingEntry = sessionFileRegistry.get(oldPath)!;
+                    sessionFileRegistry.delete(oldPath);
+                    sessionFileRegistry.set(op.params.new_path, {
+                      ...existingEntry,
+                      path: op.params.new_path,
+                    });
+                    console.log(`[SESSION] Updated registry: ${oldPath} -> ${op.params.new_path}`);
+                  }
+                  console.log(`[AGENT] Moved staged file from ${oldPath} to ${op.params.new_path}`);
                 } else {
                   // For committed files, use the existing move logic
                   result = await supabase.rpc("move_file_with_token", {
@@ -1511,6 +1681,11 @@ Use them to understand context and inform your file operations.` : ''}`;
                 p_file_path: op.params.file_path,
                 p_token: shareToken,
               });
+              // Remove from session registry
+              if (sessionFileRegistry.has(op.params.file_path)) {
+                sessionFileRegistry.delete(op.params.file_path);
+                console.log(`[SESSION] Removed ${op.params.file_path} from registry after unstage`);
+              }
               filesChanged = true;
               console.log(`[AGENT] Unstaged file: ${op.params.file_path}`);
               break;
@@ -1520,6 +1695,9 @@ Use them to understand context and inform your file operations.` : ''}`;
                 p_repo_id: repoId,
                 p_token: shareToken,
               });
+              // Clear session registry since all staged changes are discarded
+              sessionFileRegistry.clear();
+              console.log(`[SESSION] Cleared registry after discard_all_staged`);
               filesChanged = true;
               console.log(`[AGENT] Discarded all staged changes, count: ${result.data || 0}`);
               break;
