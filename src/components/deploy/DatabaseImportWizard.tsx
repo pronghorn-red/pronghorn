@@ -14,7 +14,9 @@ import {
   NormalizationStrategy, 
   NormalizationOptions,
   JsonStructureNode,
+  SchemaStatistics,
   analyzeJsonStructure,
+  analyzeSchemaStatistics,
   parseJsonData as parseJsonDataWithOptions
 } from '@/utils/parseJson';
 import { ColumnTypeInfo, CastingRule, inferColumnType } from '@/utils/typeInference';
@@ -118,6 +120,7 @@ export default function DatabaseImportWizard({
   const [normalizationStrategy, setNormalizationStrategy] = useState<NormalizationStrategy>('partial');
   const [customTablePaths, setCustomTablePaths] = useState<Set<string>>(new Set());
   const [jsonStructure, setJsonStructure] = useState<JsonStructureNode[]>([]);
+  const [schemaStats, setSchemaStats] = useState<SchemaStatistics | null>(null);
   
   // AI mode
   const [aiMode, setAiMode] = useState(false);
@@ -398,6 +401,9 @@ export default function DatabaseImportWizard({
         // Analyze structure for normalization selector
         const structure = analyzeJsonStructure(rawData);
         setJsonStructure(structure);
+        // Analyze schema statistics for heterogeneous documents
+        const stats = analyzeSchemaStatistics(rawData);
+        setSchemaStats(stats);
       }
       
       if (jsonParsed.tables.length > 0) {
@@ -417,6 +423,7 @@ export default function DatabaseImportWizard({
       setJsonData(null);
       setRawJsonData(null);
       setJsonStructure([]);
+      setSchemaStats(null);
       if (excelParsed.sheets.length > 0) {
         setSelectedSheet(excelParsed.sheets[0].name);
         setHeaderRow(excelParsed.sheets[0].headerRowIndex);
@@ -439,6 +446,7 @@ export default function DatabaseImportWizard({
     setNormalizationStrategy('partial');
     setCustomTablePaths(new Set());
     setJsonStructure([]);
+    setSchemaStats(null);
     setAiMode(false);
     setAiLoading(false);
     setAiExplanation(null);
@@ -713,6 +721,7 @@ export default function DatabaseImportWizard({
               onStrategyChange={setNormalizationStrategy}
               customPaths={customTablePaths}
               onCustomPathsChange={setCustomTablePaths}
+              schemaStats={schemaStats || undefined}
             />
           </div>
         );

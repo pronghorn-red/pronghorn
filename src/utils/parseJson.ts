@@ -54,6 +54,22 @@ export interface JsonStructureNode {
   depth: number;
 }
 
+// Schema statistics types for heterogeneous JSON documents
+export interface FieldStats {
+  occurrences: number;           // How many documents have this field
+  percentPresent: number;        // Percentage of documents (0-100)
+  types: Set<string>;            // All observed types
+  hasTypeConflict: boolean;      // True if multiple types found
+  sampleValues: any[];           // Sample values (max 3)
+}
+
+export interface SchemaStatistics {
+  totalDocuments: number;
+  uniqueFields: number;
+  fieldStats: Map<string, FieldStats>;
+  typeConflicts: string[];       // List of field names with type conflicts
+}
+
 /**
  * Analyze JSON structure to build a tree of potential tables
  * Used for the normalization selector UI
@@ -118,6 +134,110 @@ export function analyzeJsonStructure(data: any, path: string = '', depth: number
   }
   
   return nodes;
+}
+
+/**
+ * Analyze schema statistics across multiple JSON documents
+ * Handles heterogeneous documents with varying fields
+ */
+export function analyzeSchemaStatistics(data: any): SchemaStatistics {
+  const fieldStats = new Map<string, FieldStats>();
+  let totalDocuments = 0;
+  
+  // Get array of documents to analyze
+  const documents: any[] = Array.isArray(data) ? data : [data];
+  totalDocuments = documents.length;
+  
+  // Skip if no valid object documents
+  const validDocs = documents.filter(d => d !== null && typeof d === 'object' && !Array.isArray(d));
+  if (validDocs.length === 0) {
+    return {
+      totalDocuments: 0,
+      uniqueFields: 0,
+      fieldStats: new Map(),
+      typeConflicts: []
+    };
+  }
+  
+  totalDocuments = validDocs.length;
+  
+  // First pass: collect all fields and their types from all documents
+  const collectFields = (obj: any, prefix: string = '') => {
+    if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return;
+    
+    for (const [key, value] of Object.entries(obj)) {
+      if (key === '_id' || key === '__v' || key.startsWith('$')) continue;
+      
+      const fieldPath = prefix ? `${prefix}.${key}` : key;
+      const valueType = getValueType(value);
+      
+      let stats = fieldStats.get(fieldPath);
+      if (!stats) {
+        stats = {
+          occurrences: 0,
+          percentPresent: 0,
+          types: new Set(),
+          hasTypeConflict: false,
+          sampleValues: []
+        };
+        fieldStats.set(fieldPath, stats);
+      }
+      
+      stats.occurrences++;
+      stats.types.add(valueType);
+      
+      // Collect sample values (up to 3)
+      if (stats.sampleValues.length < 3 && value !== null && value !== undefined) {
+        const sampleVal = typeof value === 'object' 
+          ? (Array.isArray(value) ? `[${value.length} items]` : '{...}')
+          : value;
+        if (!stats.sampleValues.includes(sampleVal)) {
+          stats.sampleValues.push(sampleVal);
+        }
+      }
+      
+      // Recurse into nested objects (but not arrays)
+      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        collectFields(value, fieldPath);
+      }
+    }
+  };
+  
+  // Analyze each document
+  for (const doc of validDocs) {
+    collectFields(doc);
+  }
+  
+  // Calculate percentages and detect type conflicts
+  const typeConflicts: string[] = [];
+  for (const [fieldPath, stats] of fieldStats) {
+    stats.percentPresent = Math.round((stats.occurrences / totalDocuments) * 100);
+    stats.hasTypeConflict = stats.types.size > 1;
+    if (stats.hasTypeConflict) {
+      typeConflicts.push(fieldPath);
+    }
+  }
+  
+  return {
+    totalDocuments,
+    uniqueFields: fieldStats.size,
+    fieldStats,
+    typeConflicts
+  };
+}
+
+/**
+ * Get a human-readable type for a value
+ */
+function getValueType(value: any): string {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (Array.isArray(value)) return 'array';
+  if (typeof value === 'object') return 'object';
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? 'integer' : 'number';
+  }
+  return typeof value; // 'string', 'boolean', etc.
 }
 
 /**

@@ -104,11 +104,12 @@ export default function FileUploader({
       
       // Try to detect if it's JSON
       if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        const rawData = JSON.parse(trimmed);
         const data = parseJsonString(trimmed, 'pasted_data');
         if (data.tables.length === 0) {
           throw new Error('No valid data found in pasted JSON');
         }
-        onFileUploaded('json', data);
+        onFileUploaded('json', data, rawData, 'pasted_data');
         setFileName('pasted_data.json');
         toast.success(`Loaded ${data.tables.length} table(s) from pasted JSON`);
       } else {

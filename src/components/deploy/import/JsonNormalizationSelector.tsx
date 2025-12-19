@@ -4,10 +4,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronRight, Table2, Braces, List, Minus, ChevronDown } from 'lucide-react';
+import { ChevronRight, Table2, Braces, List, Minus, ChevronDown, FileText, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { NormalizationStrategy, JsonStructureNode } from '@/utils/parseJson';
+import { NormalizationStrategy, JsonStructureNode, SchemaStatistics } from '@/utils/parseJson';
 
 interface JsonNormalizationSelectorProps {
   structure: JsonStructureNode[];
@@ -15,6 +14,7 @@ interface JsonNormalizationSelectorProps {
   onStrategyChange: (strategy: NormalizationStrategy) => void;
   customPaths: Set<string>;
   onCustomPathsChange: (paths: Set<string>) => void;
+  schemaStats?: SchemaStatistics;
 }
 
 export default function JsonNormalizationSelector({
@@ -22,7 +22,8 @@ export default function JsonNormalizationSelector({
   strategy,
   onStrategyChange,
   customPaths,
-  onCustomPathsChange
+  onCustomPathsChange,
+  schemaStats
 }: JsonNormalizationSelectorProps) {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
@@ -284,6 +285,56 @@ export default function JsonNormalizationSelector({
 
   return (
     <div className="space-y-6">
+      {/* Schema Statistics Summary */}
+      {schemaStats && schemaStats.totalDocuments > 0 && (
+        <div className="p-4 rounded-lg bg-muted/30 border border-border space-y-3">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" />
+            <span className="font-semibold text-sm">Schema Analysis</span>
+          </div>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div className="flex flex-col">
+              <span className="text-2xl font-bold text-primary">{schemaStats.totalDocuments}</span>
+              <span className="text-muted-foreground">document{schemaStats.totalDocuments !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-2xl font-bold text-primary">{schemaStats.uniqueFields}</span>
+              <span className="text-muted-foreground">unique field{schemaStats.uniqueFields !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="flex flex-col">
+              {schemaStats.typeConflicts.length > 0 ? (
+                <>
+                  <span className="text-2xl font-bold text-amber-500">{schemaStats.typeConflicts.length}</span>
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3 text-amber-500" />
+                    type conflict{schemaStats.typeConflicts.length !== 1 ? 's' : ''}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-2xl font-bold text-green-500">0</span>
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3 text-green-500" />
+                    type conflicts
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+          {schemaStats.typeConflicts.length > 0 && (
+            <div className="pt-2 border-t border-border">
+              <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <span>
+                  Some fields have mixed types across documents: {schemaStats.typeConflicts.slice(0, 3).join(', ')}
+                  {schemaStats.typeConflicts.length > 3 && ` and ${schemaStats.typeConflicts.length - 3} more`}
+                </span>
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Strategy Selection */}
       <div className="space-y-3">
         <Label className="text-base font-semibold">Normalization Strategy</Label>
