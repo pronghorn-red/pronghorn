@@ -267,8 +267,9 @@ export default function SchemaCreator({
       )}
 
       {/* Column Configuration */}
-      <div className="flex-1 border rounded-lg min-h-0 overflow-auto">
-        <table className="min-w-max text-sm">
+      <div className="flex-1 w-full border rounded-lg min-h-0 overflow-auto">
+        <div className="w-full overflow-x-auto">
+        <table className="min-w-full text-sm">
           <thead className="sticky top-0 bg-muted/80 backdrop-blur z-10">
             <tr>
               <th className="px-3 py-2 border-b text-left font-medium min-w-[180px] bg-muted/80">Column Name</th>
@@ -406,6 +407,7 @@ export default function SchemaCreator({
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Summary */}

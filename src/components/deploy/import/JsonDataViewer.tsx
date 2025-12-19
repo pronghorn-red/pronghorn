@@ -2,7 +2,7 @@ import React, { useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { ParsedJsonData, JsonTable, getJsonHeaders, getJsonRowsAsArray } from '@/utils/parseJson';
@@ -173,7 +173,8 @@ export default function JsonDataViewer({
 
       {/* Data Grid */}
       <div className="flex-1 border rounded-lg overflow-hidden bg-background min-h-0">
-        <ScrollArea className="h-full">
+        <ScrollArea className="h-full w-full">
+          <div className="min-w-max">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-muted/80 backdrop-blur z-10">
               <tr>
@@ -250,6 +251,8 @@ export default function JsonDataViewer({
               No data in this table
             </div>
           )}
+          </div>
+          <ScrollBar orientation="horizontal" />
         </ScrollArea>
       </div>
     </div>

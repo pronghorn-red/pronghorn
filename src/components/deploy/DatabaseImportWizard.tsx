@@ -371,14 +371,15 @@ export default function DatabaseImportWizard({
               jsonData.relationships,
               schema,
               selectedRowsByTable,
-              tableDefsMap
+              tableDefsMap,
+              { wrapInTransaction: rollbackOnFailure }
             );
             setProposedSQL(statements);
           }
           setSqlReviewed(false);
         } else if (action === 'create_new' && tableDef) {
           const batchSize = calculateBatchSize(tableDef.columns.length, selectedDataRows.length);
-          const statements = generateFullImportSQL(tableDef, selectedDataRows, batchSize);
+          const statements = generateFullImportSQL(tableDef, selectedDataRows, batchSize, { wrapInTransaction: rollbackOnFailure });
           setProposedSQL(statements);
           setSqlReviewed(false);
         } else if (action === 'import_existing' && targetTable && columnMappings.length > 0) {

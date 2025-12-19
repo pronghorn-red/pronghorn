@@ -248,10 +248,21 @@ function escapeSQLString(str: string): string {
 export function generateFullImportSQL(
   tableDef: TableDefinition,
   rows: any[][],
-  batchSize: number = 50
+  batchSize: number = 50,
+  options: SmartImportOptions = { wrapInTransaction: true }
 ): SQLStatement[] {
   const statements: SQLStatement[] = [];
   let sequence = 0;
+
+  // Add transaction begin if requested
+  if (options.wrapInTransaction) {
+    statements.push({
+      type: 'BEGIN_TRANSACTION',
+      sql: 'BEGIN;',
+      description: 'Start transaction (rollback all on any failure)',
+      sequence: sequence++
+    });
+  }
 
   // Create table
   const createTable = generateCreateTableSQL(tableDef);
@@ -306,6 +317,16 @@ export function generateFullImportSQL(
     statements.push(stmt);
   });
 
+  // Add transaction commit if requested
+  if (options.wrapInTransaction) {
+    statements.push({
+      type: 'COMMIT_TRANSACTION',
+      sql: 'COMMIT;',
+      description: 'Commit transaction',
+      sequence: sequence++
+    });
+  }
+
   return statements;
 }
 
@@ -348,10 +369,21 @@ export function generateMultiTableImportSQL(
   relationships: ForeignKeyRelationship[],
   schema: string = 'public',
   selectedRowsByTable?: Map<string, Set<number>>,
-  tableDefsMap?: Map<string, TableDefinition>
+  tableDefsMap?: Map<string, TableDefinition>,
+  options: SmartImportOptions = { wrapInTransaction: true }
 ): SQLStatement[] {
   const statements: SQLStatement[] = [];
   let sequence = 0;
+
+  // Add transaction begin if requested
+  if (options.wrapInTransaction) {
+    statements.push({
+      type: 'BEGIN_TRANSACTION',
+      sql: 'BEGIN;',
+      description: 'Start transaction (rollback all on any failure)',
+      sequence: sequence++
+    });
+  }
 
   // Build parent-child map
   const parentMap = new Map<string, string>();
@@ -541,6 +573,16 @@ export function generateMultiTableImportSQL(
     insertStmts.forEach(stmt => {
       stmt.sequence = sequence++;
       statements.push(stmt);
+    });
+  }
+
+  // Add transaction commit if requested
+  if (options.wrapInTransaction) {
+    statements.push({
+      type: 'COMMIT_TRANSACTION',
+      sql: 'COMMIT;',
+      description: 'Commit transaction',
+      sequence: sequence++
     });
   }
 
