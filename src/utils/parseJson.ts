@@ -31,21 +31,117 @@ export interface ForeignKeyRelationship {
   childColumn: string;
 }
 
+// Normalization strategy types
+export type NormalizationStrategy = 'partial' | 'full' | 'custom';
+
+export interface NormalizationOptions {
+  strategy: NormalizationStrategy;
+  // For 'custom' strategy - paths to normalize into separate tables
+  customTablePaths?: Set<string>;
+}
+
+// JSON structure analysis types
+export interface JsonStructureNode {
+  path: string;
+  key: string;
+  type: 'object' | 'array';
+  hasNestedArrays: boolean;
+  fieldCount: number;
+  sampleKeys?: string[];  // For objects - first 5 keys
+  itemType?: 'object' | 'primitive';  // For arrays - type of items
+  itemCount?: number;  // For arrays - number of items
+  children?: JsonStructureNode[];
+  depth: number;
+}
+
+/**
+ * Analyze JSON structure to build a tree of potential tables
+ * Used for the normalization selector UI
+ */
+export function analyzeJsonStructure(data: any, path: string = '', depth: number = 0): JsonStructureNode[] {
+  const nodes: JsonStructureNode[] = [];
+  
+  // If root is an array, analyze the first item
+  if (Array.isArray(data)) {
+    if (data.length > 0 && typeof data[0] === 'object' && data[0] !== null) {
+      return analyzeJsonStructure(data[0], path, depth);
+    }
+    return [];
+  }
+  
+  if (typeof data !== 'object' || data === null) {
+    return [];
+  }
+  
+  for (const [key, value] of Object.entries(data)) {
+    // Skip MongoDB-style fields
+    if (key === '_id' || key === '__v') continue;
+    
+    const nodePath = path ? `${path}.${key}` : key;
+    
+    if (Array.isArray(value)) {
+      const itemType = value.length > 0 && typeof value[0] === 'object' && value[0] !== null 
+        ? 'object' 
+        : 'primitive';
+      
+      const node: JsonStructureNode = {
+        path: nodePath,
+        key,
+        type: 'array',
+        hasNestedArrays: true,
+        fieldCount: itemType === 'object' && value[0] ? Object.keys(value[0]).length : 1,
+        itemType,
+        itemCount: value.length,
+        depth,
+        children: itemType === 'object' && value.length > 0
+          ? analyzeJsonStructure(value[0], nodePath, depth + 1)
+          : undefined
+      };
+      nodes.push(node);
+    } else if (typeof value === 'object' && value !== null) {
+      const keys = Object.keys(value).filter(k => k !== '_id' && k !== '__v' && !k.startsWith('$'));
+      const node: JsonStructureNode = {
+        path: nodePath,
+        key,
+        type: 'object',
+        hasNestedArrays: hasNestedArrays(value),
+        fieldCount: keys.length,
+        sampleKeys: keys.slice(0, 5),
+        depth,
+        children: analyzeJsonStructure(value, nodePath, depth + 1)
+      };
+      // Only add objects that have fields
+      if (keys.length > 0) {
+        nodes.push(node);
+      }
+    }
+  }
+  
+  return nodes;
+}
+
 /**
  * Parse a JSON file and extract structured data
  */
-export async function parseJsonFile(file: File): Promise<ParsedJsonData> {
+export async function parseJsonFile(
+  file: File, 
+  options: NormalizationOptions = { strategy: 'partial' }
+): Promise<ParsedJsonData> {
   const text = await file.text();
   const data = JSON.parse(text);
-  return parseJsonData(data, getTableNameFromFile(file.name));
+  return parseJsonData(data, getTableNameFromFile(file.name), options);
 }
 
 /**
  * Parse a JSON string directly (for pasted data)
  */
-export function parseJsonString(text: string, tableName: string = 'pasted_data'): ParsedJsonData {
+export function parseJsonString(
+  text: string, 
+  tableName: string = 'pasted_data',
+  options: NormalizationOptions = { strategy: 'partial' }
+): ParsedJsonData {
   const data = JSON.parse(text);
-  return parseJsonData(data, tableName);
+  return parseJsonData(data, tableName, options);
 }
 
 /**
@@ -72,7 +168,11 @@ function generateUUID(): string {
 /**
  * Parse JSON data and normalize into table structures
  */
-export function parseJsonData(data: any, tableName: string = 'imported_data'): ParsedJsonData {
+export function parseJsonData(
+  data: any, 
+  tableName: string = 'imported_data',
+  options: NormalizationOptions = { strategy: 'partial' }
+): ParsedJsonData {
   const rootType = getRootType(data);
   
   if (rootType === 'primitive') {
@@ -90,14 +190,14 @@ export function parseJsonData(data: any, tableName: string = 'imported_data'): P
   if (rootType === 'array') {
     // Array of objects - most common case
     if (data.length > 0 && typeof data[0] === 'object' && data[0] !== null) {
-      processArrayOfObjects(data, tableName, tables, relationships, null, null);
+      processArrayOfObjects(data, tableName, tables, relationships, null, null, options, '');
     } else if (data.length > 0) {
       // Array of primitives
       processPrimitiveArray(data, tableName, tables, relationships, null, null);
     }
   } else if (rootType === 'object') {
     // Single object - check if it's a wrapper object
-    processRootObject(data, tableName, tables, relationships);
+    processRootObject(data, tableName, tables, relationships, options);
   }
 
   // Calculate totalRows as sum of all table rows
@@ -118,7 +218,8 @@ function processRootObject(
   data: Record<string, any>,
   tableName: string,
   tables: JsonTable[],
-  relationships: ForeignKeyRelationship[]
+  relationships: ForeignKeyRelationship[],
+  options: NormalizationOptions
 ): void {
   const keys = Object.keys(data);
   
@@ -130,17 +231,40 @@ function processRootObject(
     
     if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
       // Single key with array of objects - use the key as the table name
-      processArrayOfObjects(value, childTableName, tables, relationships, null, null);
+      processArrayOfObjects(value, childTableName, tables, relationships, null, null, options, '');
       return;
     } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
       // Single key with nested object - descend into it
-      processRootObject(value, childTableName, tables, relationships);
+      processRootObject(value, childTableName, tables, relationships, options);
       return;
     }
   }
   
   // Process as a regular object
-  processObject(data, tableName, tables, relationships, null, null);
+  processObject(data, tableName, tables, relationships, null, null, options, '');
+}
+
+/**
+ * Determine if a nested object should become a separate table based on normalization strategy
+ */
+function shouldNormalizeObject(
+  value: Record<string, any>,
+  currentPath: string,
+  options: NormalizationOptions
+): boolean {
+  switch (options.strategy) {
+    case 'full':
+      // All objects become separate tables
+      return true;
+    case 'partial':
+      // Only objects with nested arrays become separate tables (original behavior)
+      return hasNestedArrays(value);
+    case 'custom':
+      // Check if this path is in the custom paths set
+      return options.customTablePaths?.has(currentPath) ?? false;
+    default:
+      return hasNestedArrays(value);
+  }
 }
 
 /**
@@ -152,7 +276,9 @@ function processObject(
   tables: JsonTable[],
   relationships: ForeignKeyRelationship[],
   parentTable: string | null,
-  parentRowId: string | null
+  parentRowId: string | null,
+  options: NormalizationOptions,
+  currentPath: string
 ): string {
   const row: Record<string, any> = {};
   const rowId = generateUUID();
@@ -162,21 +288,22 @@ function processObject(
     row['_parent_id'] = parentRowId;
   }
   
-  const nestedArrays: { key: string; value: any[] }[] = [];
-  const nestedObjects: { key: string; value: Record<string, any> }[] = [];
+  const nestedArrays: { key: string; value: any[]; path: string }[] = [];
+  const nestedObjects: { key: string; value: Record<string, any>; path: string }[] = [];
   
   // First pass: separate scalar values from nested structures
   for (const [key, value] of Object.entries(data)) {
     const sanitizedKey = sanitizeColumnName(key);
+    const fullPath = currentPath ? `${currentPath}.${key}` : key;
     
     if (Array.isArray(value)) {
       if (value.length > 0) {
-        nestedArrays.push({ key: sanitizedKey, value });
+        nestedArrays.push({ key: sanitizedKey, value, path: fullPath });
       }
     } else if (value !== null && typeof value === 'object') {
-      // Check if nested object has arrays (making it a separate entity)
-      if (hasNestedArrays(value)) {
-        nestedObjects.push({ key: sanitizedKey, value });
+      // Check if nested object should be normalized based on strategy
+      if (shouldNormalizeObject(value, fullPath, options)) {
+        nestedObjects.push({ key: sanitizedKey, value, path: fullPath });
       } else {
         // Flatten simple nested objects
         flattenObject(value, sanitizedKey, row);
@@ -232,17 +359,17 @@ function processObject(
   table.rows.push(row);
   
   // Process nested objects that have their own structure
-  for (const { key, value } of nestedObjects) {
-    processObject(value, key, tables, relationships, tableName, rowId);
+  for (const { key, value, path } of nestedObjects) {
+    processObject(value, key, tables, relationships, tableName, rowId, options, path);
   }
   
   // Process nested arrays
-  for (const { key, value } of nestedArrays) {
+  for (const { key, value, path } of nestedArrays) {
     const childTableName = key;
     
     if (typeof value[0] === 'object' && value[0] !== null) {
       // Array of objects
-      processArrayOfObjects(value, childTableName, tables, relationships, tableName, rowId);
+      processArrayOfObjects(value, childTableName, tables, relationships, tableName, rowId, options, path);
     } else {
       // Array of primitives (like skills: ["Python", "React"])
       processPrimitiveArray(value, childTableName, tables, relationships, tableName, rowId);
@@ -261,11 +388,13 @@ function processArrayOfObjects(
   tables: JsonTable[],
   relationships: ForeignKeyRelationship[],
   parentTable: string | null,
-  parentRowId: string | null
+  parentRowId: string | null,
+  options: NormalizationOptions,
+  currentPath: string
 ): void {
   for (const item of data) {
     if (item !== null && typeof item === 'object') {
-      processObject(item, tableName, tables, relationships, parentTable, parentRowId);
+      processObject(item, tableName, tables, relationships, parentTable, parentRowId, options, currentPath);
     }
   }
 }

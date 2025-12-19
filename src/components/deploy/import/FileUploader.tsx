@@ -11,7 +11,9 @@ import { toast } from 'sonner';
 interface FileUploaderProps {
   onFileUploaded: (
     type: 'excel' | 'csv' | 'json',
-    data: ExcelData | ParsedJsonData
+    data: ExcelData | ParsedJsonData,
+    rawData?: any,
+    fileName?: string
   ) => void;
   accept?: string;
   maxSizeMB?: number;
@@ -47,11 +49,14 @@ export default function FileUploader({
     
     try {
       if (extension === 'json') {
+        const text = await file.text();
+        const rawData = JSON.parse(text);
         const data = await parseJsonFile(file);
         if (data.tables.length === 0) {
           throw new Error('No valid data found in JSON file');
         }
-        onFileUploaded('json', data);
+        const tableName = file.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+        onFileUploaded('json', data, rawData, tableName);
         toast.success(`Loaded ${data.tables.length} table(s) from JSON`);
       } else if (extension === 'xlsx' || extension === 'xls') {
         const data = await parseExcelFile(file);

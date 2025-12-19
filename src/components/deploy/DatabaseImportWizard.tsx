@@ -4,10 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Upload, Database, FileSpreadsheet, FileJson, Check, Plus, ArrowRight, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Upload, Database, FileSpreadsheet, FileJson, Check, Plus, ArrowRight, AlertTriangle, GitBranch } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ExcelData } from '@/utils/parseExcel';
-import { ParsedJsonData, getJsonHeaders, getJsonRowsAsArray } from '@/utils/parseJson';
+import { 
+  ParsedJsonData, 
+  getJsonHeaders, 
+  getJsonRowsAsArray, 
+  NormalizationStrategy, 
+  NormalizationOptions,
+  JsonStructureNode,
+  analyzeJsonStructure,
+  parseJsonData as parseJsonDataWithOptions
+} from '@/utils/parseJson';
 import { ColumnTypeInfo, CastingRule, inferColumnType } from '@/utils/typeInference';
 import { 
   SQLStatement, 
@@ -27,10 +36,11 @@ import FieldMapper from './import/FieldMapper';
 import SqlReviewPanel from './import/SqlReviewPanel';
 import ImportProgressTracker from './import/ImportProgressTracker';
 import { JsonRelationshipFlow } from './import/JsonRelationshipFlow';
+import JsonNormalizationSelector from './import/JsonNormalizationSelector';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-type WizardStep = 'upload' | 'clean' | 'schema' | 'review' | 'execute';
+type WizardStep = 'upload' | 'normalize' | 'clean' | 'schema' | 'review' | 'execute';
 type ImportAction = 'create_new' | 'import_existing';
 
 interface ColumnMapping {
@@ -72,6 +82,7 @@ interface DatabaseImportWizardProps {
 
 const STEPS: { key: WizardStep; label: string; icon: React.ReactNode }[] = [
   { key: 'upload', label: 'Upload', icon: <Upload className="h-4 w-4" /> },
+  { key: 'normalize', label: 'Structure', icon: <GitBranch className="h-4 w-4" /> },
   { key: 'clean', label: 'Preview', icon: <FileSpreadsheet className="h-4 w-4" /> },
   { key: 'schema', label: 'Schema', icon: <Database className="h-4 w-4" /> },
   { key: 'review', label: 'Review', icon: <FileJson className="h-4 w-4" /> },
@@ -95,11 +106,18 @@ export default function DatabaseImportWizard({
   const [fileType, setFileType] = useState<'excel' | 'csv' | 'json' | null>(null);
   const [excelData, setExcelData] = useState<ExcelData | null>(null);
   const [jsonData, setJsonData] = useState<ParsedJsonData | null>(null);
+  const [rawJsonData, setRawJsonData] = useState<any>(null); // Store raw JSON for re-parsing
+  const [rawJsonFileName, setRawJsonFileName] = useState<string>('imported_data');
   const [selectedSheet, setSelectedSheet] = useState<string>('');
   const [headerRow, setHeaderRow] = useState<number>(0);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [selectedRowsByTable, setSelectedRowsByTable] = useState<Map<string, Set<number>>>(new Map());
   const [selectedJsonTable, setSelectedJsonTable] = useState<string>('');
+  
+  // Normalization state
+  const [normalizationStrategy, setNormalizationStrategy] = useState<NormalizationStrategy>('partial');
+  const [customTablePaths, setCustomTablePaths] = useState<Set<string>>(new Set());
+  const [jsonStructure, setJsonStructure] = useState<JsonStructureNode[]>([]);
   
   // AI mode
   const [aiMode, setAiMode] = useState(false);
@@ -194,6 +212,34 @@ export default function DatabaseImportWizard({
   const goNext = () => {
     if (currentStepIndex < STEPS.length - 1) {
       const nextStep = STEPS[currentStepIndex + 1].key;
+      
+      // Skip normalize step for non-JSON files
+      if (nextStep === 'normalize' && fileType !== 'json') {
+        setCurrentStep('clean');
+        return;
+      }
+      
+      // Re-parse JSON with selected normalization options when moving from normalize to clean
+      if (currentStep === 'normalize' && nextStep === 'clean' && rawJsonData) {
+        const options: NormalizationOptions = {
+          strategy: normalizationStrategy,
+          customTablePaths: normalizationStrategy === 'custom' ? customTablePaths : undefined
+        };
+        const reparsed = parseJsonDataWithOptions(rawJsonData, rawJsonFileName, options);
+        setJsonData(reparsed);
+        
+        // Reset selections for new table structure
+        if (reparsed.tables.length > 0) {
+          setSelectedJsonTable(reparsed.tables[0].name);
+          setTableName(reparsed.tables[0].name);
+          
+          const initialSelection = new Map<string, Set<number>>();
+          reparsed.tables.forEach(table => {
+            initialSelection.set(table.name, new Set(table.rows.map((_, i) => i)));
+          });
+          setSelectedRowsByTable(initialSelection);
+        }
+      }
       
       // Generate SQL when moving to review step
       if (nextStep === 'review') {
@@ -305,6 +351,9 @@ export default function DatabaseImportWizard({
     switch (currentStep) {
       case 'upload':
         return excelData !== null || jsonData !== null;
+      case 'normalize':
+        // Always can proceed from normalize step - user has made their choice
+        return fileType === 'json' && jsonStructure.length >= 0;
       case 'clean':
         if (fileType === 'json' && jsonData && jsonData.tables.length > 1) {
           // Multi-table: check if any table has selected rows
@@ -326,11 +375,13 @@ export default function DatabaseImportWizard({
       default:
         return false;
     }
-  }, [currentStep, excelData, jsonData, fileType, selectedRows, selectedDataRows, selectedRowsByTable, action, tableName, tableDef, targetTable, columnMappings, sqlReviewed, proposedSQL, executionProgress]);
+  }, [currentStep, excelData, jsonData, fileType, jsonStructure, selectedRows, selectedDataRows, selectedRowsByTable, action, tableName, tableDef, targetTable, columnMappings, sqlReviewed, proposedSQL, executionProgress]);
 
   const handleFileUploaded = useCallback((
     type: 'excel' | 'csv' | 'json',
-    data: ExcelData | ParsedJsonData
+    data: ExcelData | ParsedJsonData,
+    rawData?: any,
+    fileName?: string
   ) => {
     setFileType(type);
     setSelectedRows(new Set());
@@ -339,6 +390,16 @@ export default function DatabaseImportWizard({
       const jsonParsed = data as ParsedJsonData;
       setJsonData(jsonParsed);
       setExcelData(null);
+      
+      // Store raw JSON for re-parsing with different normalization options
+      if (rawData) {
+        setRawJsonData(rawData);
+        setRawJsonFileName(fileName || 'imported_data');
+        // Analyze structure for normalization selector
+        const structure = analyzeJsonStructure(rawData);
+        setJsonStructure(structure);
+      }
+      
       if (jsonParsed.tables.length > 0) {
         setSelectedJsonTable(jsonParsed.tables[0].name);
         setTableName(jsonParsed.tables[0].name);
@@ -354,6 +415,8 @@ export default function DatabaseImportWizard({
       const excelParsed = data as ExcelData;
       setExcelData(excelParsed);
       setJsonData(null);
+      setRawJsonData(null);
+      setJsonStructure([]);
       if (excelParsed.sheets.length > 0) {
         setSelectedSheet(excelParsed.sheets[0].name);
         setHeaderRow(excelParsed.sheets[0].headerRowIndex);
@@ -367,10 +430,15 @@ export default function DatabaseImportWizard({
     setFileType(null);
     setExcelData(null);
     setJsonData(null);
+    setRawJsonData(null);
+    setRawJsonFileName('imported_data');
     setSelectedSheet('');
     setHeaderRow(0);
     setSelectedRows(new Set());
     setSelectedJsonTable('');
+    setNormalizationStrategy('partial');
+    setCustomTablePaths(new Set());
+    setJsonStructure([]);
     setAiMode(false);
     setAiLoading(false);
     setAiExplanation(null);
@@ -632,6 +700,20 @@ export default function DatabaseImportWizard({
                 </div>
               </div>
             )}
+          </div>
+        );
+      
+      case 'normalize':
+        // Only shown for JSON files
+        return (
+          <div className="h-full overflow-auto">
+            <JsonNormalizationSelector
+              structure={jsonStructure}
+              strategy={normalizationStrategy}
+              onStrategyChange={setNormalizationStrategy}
+              customPaths={customTablePaths}
+              onCustomPathsChange={setCustomTablePaths}
+            />
           </div>
         );
       
