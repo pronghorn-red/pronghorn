@@ -234,7 +234,6 @@ function getClaudeResponseTool() {
                   new_path: { type: "string", description: "New file path (for move_file)" },
                   file_path: { type: "string", description: "File path to unstage (for unstage_file)" },
                 },
-                additionalProperties: false,
               },
             },
             required: ["type", "params"],
