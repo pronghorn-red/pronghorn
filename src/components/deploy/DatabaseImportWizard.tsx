@@ -645,9 +645,46 @@ export default function DatabaseImportWizard({
         
         return (
           <div className="h-full flex flex-col gap-4">
-            {/* Show relationship diagram for multi-table JSON */}
+            {/* Table selector for multi-table JSON */}
             {isMultiTableJson && (
-              <div className="space-y-2 shrink-0">
+              <div className="flex items-center gap-4 shrink-0">
+                <Label className="text-sm font-medium whitespace-nowrap">Configure Table:</Label>
+                <Select value={selectedJsonTable} onValueChange={setSelectedJsonTable}>
+                  <SelectTrigger className="w-[250px]">
+                    <SelectValue placeholder="Select a table" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jsonData.tables.map(t => (
+                      <SelectItem key={t.name} value={t.name}>
+                        {t.name} ({t.rows.length} rows)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-muted-foreground">
+                  All {jsonData.tables.length} tables will be created with relationships
+                </span>
+              </div>
+            )}
+            
+            {/* Show full SchemaCreator for selected table in multi-table mode - ABOVE the diagram */}
+            {isMultiTableJson && selectedJsonTable && (
+              <div className="flex-1 min-h-[300px] overflow-auto border rounded-lg p-4">
+                <SchemaCreator
+                  key={selectedJsonTable}
+                  headers={headers.filter(h => h !== '_row_id')}
+                  sampleData={memoizedSampleData}
+                  tableName={selectedJsonTable}
+                  onTableNameChange={() => {}} // Table names are fixed from JSON structure
+                  onTableDefChange={(def) => handleMultiTableDefChange(selectedJsonTable, def)}
+                  schema={schema}
+                />
+              </div>
+            )}
+            
+            {/* Show relationship diagram for multi-table JSON - below SchemaCreator */}
+            {isMultiTableJson && (
+              <div className="space-y-2 shrink-0 h-[180px]">
                 <Label className="text-sm font-medium">Table Relationships (click to select)</Label>
                 <JsonRelationshipFlow
                   tables={jsonData.tables.map(t => ({
@@ -659,28 +696,6 @@ export default function DatabaseImportWizard({
                   relationships={jsonData.relationships}
                   onTableClick={(name) => setSelectedJsonTable(name)}
                 />
-              </div>
-            )}
-            
-            {/* Table selector for multi-table JSON */}
-            {isMultiTableJson && (
-              <div className="space-y-2 shrink-0">
-                <Label className="text-sm font-medium">Select Table to Configure</Label>
-                <Select value={selectedJsonTable} onValueChange={setSelectedJsonTable}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a table" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {jsonData.tables.map(t => (
-                      <SelectItem key={t.name} value={t.name}>
-                        {t.name} ({t.rows.length} rows)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  All {jsonData.tables.length} tables will be created with their relationships. Select a table above to preview its schema.
-                </p>
               </div>
             )}
             
@@ -723,21 +738,6 @@ export default function DatabaseImportWizard({
                   />
                 </TabsContent>
               </Tabs>
-            )}
-            
-            {/* Show full SchemaCreator for selected table in multi-table mode */}
-            {isMultiTableJson && selectedJsonTable && (
-              <div className="flex-1 min-h-0 overflow-auto border rounded-lg p-4">
-                <SchemaCreator
-                  key={selectedJsonTable}
-                  headers={headers.filter(h => h !== '_row_id')}
-                  sampleData={memoizedSampleData}
-                  tableName={selectedJsonTable}
-                  onTableNameChange={() => {}} // Table names are fixed from JSON structure
-                  onTableDefChange={(def) => handleMultiTableDefChange(selectedJsonTable, def)}
-                  schema={schema}
-                />
-              </div>
             )}
           </div>
         );
