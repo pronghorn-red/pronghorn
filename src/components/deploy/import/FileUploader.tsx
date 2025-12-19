@@ -287,9 +287,9 @@ export default function FileUploader({
           </div>
         </TabsContent>
 
-        <TabsContent value="paste" className="mt-4 space-y-4">
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
+        <TabsContent value="paste" className="mt-4 flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col min-h-0 space-y-2">
+            <p className="text-sm text-muted-foreground shrink-0">
               Paste CSV or JSON data directly. For CSV, include the header row.
             </p>
             <Textarea
@@ -304,7 +304,7 @@ Jane,jane@example.com,25
 
 JSON example:
 [{"name": "John", "email": "john@example.com"}, {"name": "Jane", "email": "jane@example.com"}]`}
-              className="min-h-[200px] font-mono text-sm"
+              className="flex-1 min-h-[300px] font-mono text-sm resize-none"
               disabled={isLoading}
             />
             {error && (

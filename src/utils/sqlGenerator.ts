@@ -589,3 +589,345 @@ export function generateDropTableSQL(tableName: string, schema: string): SQLStat
     tableName: sanitizedTable
   };
 }
+
+/**
+ * Generate ALTER TABLE ADD COLUMN statements
+ */
+export function generateAlterTableAddColumnsSQL(
+  tableName: string,
+  schema: string,
+  columns: { name: string; type: string; nullable?: boolean }[]
+): SQLStatement[] {
+  const sanitizedTable = sanitizeTableName(tableName);
+  const fullTableName = schema ? `"${schema}"."${sanitizedTable}"` : `"${sanitizedTable}"`;
+  
+  return columns.map((col, i) => {
+    const nullability = col.nullable === false ? ' NOT NULL' : '';
+    const sql = `ALTER TABLE ${fullTableName} ADD COLUMN IF NOT EXISTS "${sanitizeColumnName(col.name)}" ${col.type}${nullability};`;
+    
+    return {
+      type: 'ALTER_TABLE' as const,
+      sql,
+      description: `Add column ${col.name} to ${sanitizedTable}`,
+      sequence: i,
+      tableName: sanitizedTable
+    };
+  });
+}
+
+import { TableMatchResult, ExistingTableSchema } from './tableMatching';
+
+/**
+ * Generate smart import SQL that respects table match decisions
+ * Handles: new (CREATE+INSERT), insert (INSERT only), augment (ALTER+INSERT), skip (nothing)
+ */
+export function generateSmartImportSQL(
+  tables: JsonTable[],
+  relationships: ForeignKeyRelationship[],
+  tableMatches: TableMatchResult[],
+  existingSchemas: ExistingTableSchema[],
+  schema: string = 'public',
+  selectedRowsByTable?: Map<string, Set<number>>,
+  tableDefsMap?: Map<string, TableDefinition>
+): SQLStatement[] {
+  const statements: SQLStatement[] = [];
+  let sequence = 0;
+
+  // Build parent-child map for FK ordering
+  const parentMap = new Map<string, string>();
+  relationships.forEach(rel => {
+    parentMap.set(rel.childTable, rel.parentTable);
+  });
+
+  // Sort tables: parents first, then children
+  const sortedTables = [...tables].sort((a, b) => {
+    const getDepth = (tableName: string): number => {
+      let depth = 0;
+      let current = tableName;
+      while (parentMap.has(current)) {
+        depth++;
+        current = parentMap.get(current)!;
+      }
+      return depth;
+    };
+    return getDepth(a.name) - getDepth(b.name);
+  });
+
+  // Process each table based on its match status
+  for (const table of sortedTables) {
+    const match = tableMatches.find(m => m.importTable === table.name);
+    const status = match?.status || 'new';
+    
+    // Skip tables marked as skip
+    if (status === 'skip') continue;
+
+    const existingTable = match?.existingTable;
+    const existingSchema = existingTable 
+      ? existingSchemas.find(s => s.name === existingTable)
+      : undefined;
+
+    // Get selected rows for this table
+    let selectedRows = table.rows;
+    if (selectedRowsByTable) {
+      const selection = selectedRowsByTable.get(table.name);
+      if (selection && selection.size > 0) {
+        selectedRows = table.rows.filter((_, idx) => selection.has(idx));
+      }
+    }
+
+    if (selectedRows.length === 0) continue;
+
+    // Handle based on status
+    if (status === 'new') {
+      // CREATE TABLE + INSERT
+      const userTableDef = tableDefsMap?.get(table.name);
+      
+      if (userTableDef) {
+        const tableDef: TableDefinition = {
+          ...userTableDef,
+          schema,
+          columns: userTableDef.columns.map(col => {
+            if (col.name === '_parent_id') {
+              const parentTable = parentMap.get(table.name);
+              return {
+                ...col,
+                type: 'UUID' as PostgresType,
+                nullable: false,
+                references: parentTable ? {
+                  table: sanitizeTableName(parentTable),
+                  column: 'id'
+                } : undefined
+              };
+            }
+            return col;
+          })
+        };
+        
+        const createStmt = generateCreateTableSQL(tableDef);
+        createStmt.sequence = sequence++;
+        statements.push(createStmt);
+      } else {
+        // Auto-generate table definition
+        const columns: ColumnDefinition[] = [];
+        
+        columns.push({
+          name: 'id',
+          type: 'UUID',
+          nullable: false,
+          isPrimaryKey: true,
+          isUnique: true,
+          defaultValue: 'gen_random_uuid()'
+        });
+
+        for (const col of table.columns) {
+          if (col.name === '_row_id') continue;
+          
+          if (col.name === '_parent_id') {
+            const parentTable = parentMap.get(table.name);
+            columns.push({
+              name: '_parent_id',
+              type: 'UUID',
+              nullable: false,
+              isPrimaryKey: false,
+              isUnique: false,
+              references: parentTable ? {
+                table: sanitizeTableName(parentTable),
+                column: 'id'
+              } : undefined
+            });
+            continue;
+          }
+
+          const inferredType = inferTypeFromValuesLocal(col.sampleValues);
+          
+          columns.push({
+            name: col.name,
+            type: inferredType,
+            nullable: true,
+            isPrimaryKey: false,
+            isUnique: false
+          });
+        }
+
+        const tableDef: TableDefinition = {
+          name: table.name,
+          schema,
+          columns,
+          indexes: []
+        };
+
+        const createStmt = generateCreateTableSQL(tableDef);
+        createStmt.sequence = sequence++;
+        statements.push(createStmt);
+      }
+
+      // Generate INSERTs for new table
+      const columnNames = ['id', ...table.columns
+        .filter(c => c.name !== '_row_id')
+        .map(c => c.name)];
+
+      const dataRows = selectedRows.map(row => [
+        row['_row_id'],
+        ...table.columns
+          .filter(c => c.name !== '_row_id')
+          .map(c => row[c.name] ?? null)
+      ]);
+
+      const batchSize = calculateBatchSize(columnNames.length, dataRows.length);
+      const insertStmts = generateInsertBatchSQL(table.name, schema, columnNames, dataRows, batchSize);
+      
+      insertStmts.forEach(stmt => {
+        stmt.sequence = sequence++;
+        statements.push(stmt);
+      });
+    } else if (status === 'insert' || status === 'conflict') {
+      // INSERT only - use existing table structure
+      // Map import columns to existing columns
+      const targetTableName = existingTable || table.name;
+      
+      // Build column mapping from matches
+      const columnMapping: { importCol: string; existingCol: string; cast?: string }[] = [];
+      
+      if (match && existingSchema) {
+        for (const colMatch of match.columnMatches) {
+          if (colMatch.existingColumn) {
+            // Check for conflicts
+            const conflict = match.conflicts.find(c => c.column === colMatch.importColumn);
+            if (conflict) {
+              if (conflict.resolution === 'skip') continue;
+              if (conflict.resolution === 'block') continue;
+              // cast or alter - proceed with mapping
+              columnMapping.push({
+                importCol: colMatch.importColumn,
+                existingCol: colMatch.existingColumn,
+                cast: conflict.resolution === 'cast' ? colMatch.existingType : undefined
+              });
+            } else {
+              columnMapping.push({
+                importCol: colMatch.importColumn,
+                existingCol: colMatch.existingColumn
+              });
+            }
+          }
+        }
+      } else {
+        // No match info - use column names directly
+        for (const col of table.columns) {
+          if (col.name === '_row_id') continue;
+          columnMapping.push({ importCol: col.name, existingCol: col.name });
+        }
+      }
+
+      // Add 'id' column mapping using _row_id
+      const existingHasId = existingSchema?.columns.some(c => c.name.toLowerCase() === 'id');
+      
+      const columnNames = existingHasId 
+        ? ['id', ...columnMapping.map(m => m.existingCol)]
+        : columnMapping.map(m => m.existingCol);
+
+      const dataRows = selectedRows.map(row => {
+        const mapped = columnMapping.map(m => {
+          const value = row[m.importCol] ?? null;
+          // Apply casting if needed
+          if (m.cast && value !== null) {
+            return value; // Value will be cast by PostgreSQL
+          }
+          return value;
+        });
+        return existingHasId ? [row['_row_id'], ...mapped] : mapped;
+      });
+
+      const batchSize = calculateBatchSize(columnNames.length, dataRows.length);
+      const insertStmts = generateInsertBatchSQL(targetTableName, schema, columnNames, dataRows, batchSize);
+      
+      insertStmts.forEach(stmt => {
+        stmt.sequence = sequence++;
+        statements.push(stmt);
+      });
+    } else if (status === 'augment') {
+      // ALTER TABLE to add missing columns, then INSERT
+      const targetTableName = existingTable || table.name;
+      
+      // Add missing columns first
+      if (match && match.missingColumns.length > 0) {
+        const columnsToAdd = match.missingColumns.map(colName => {
+          const importCol = table.columns.find(c => c.name === colName);
+          const inferredType = importCol ? inferTypeFromValuesLocal(importCol.sampleValues) : 'TEXT';
+          return { name: colName, type: inferredType, nullable: true };
+        });
+        
+        const alterStmts = generateAlterTableAddColumnsSQL(targetTableName, schema, columnsToAdd);
+        alterStmts.forEach(stmt => {
+          stmt.sequence = sequence++;
+          statements.push(stmt);
+        });
+      }
+
+      // Now insert data using all columns (existing + new)
+      const columnMapping: { importCol: string; existingCol: string }[] = [];
+      
+      if (match) {
+        for (const colMatch of match.columnMatches) {
+          if (colMatch.existingColumn) {
+            const conflict = match.conflicts.find(c => c.column === colMatch.importColumn);
+            if (conflict && (conflict.resolution === 'skip' || conflict.resolution === 'block')) continue;
+            columnMapping.push({
+              importCol: colMatch.importColumn,
+              existingCol: colMatch.existingColumn
+            });
+          }
+        }
+        // Add missing columns (newly added)
+        for (const missingCol of match.missingColumns) {
+          columnMapping.push({ importCol: missingCol, existingCol: missingCol });
+        }
+      }
+
+      const existingHasId = existingSchema?.columns.some(c => c.name.toLowerCase() === 'id');
+      
+      const columnNames = existingHasId 
+        ? ['id', ...columnMapping.map(m => m.existingCol)]
+        : columnMapping.map(m => m.existingCol);
+
+      const dataRows = selectedRows.map(row => {
+        const mapped = columnMapping.map(m => row[m.importCol] ?? null);
+        return existingHasId ? [row['_row_id'], ...mapped] : mapped;
+      });
+
+      const batchSize = calculateBatchSize(columnNames.length, dataRows.length);
+      const insertStmts = generateInsertBatchSQL(targetTableName, schema, columnNames, dataRows, batchSize);
+      
+      insertStmts.forEach(stmt => {
+        stmt.sequence = sequence++;
+        statements.push(stmt);
+      });
+    }
+  }
+
+  return statements;
+}
+
+// Local helper to infer type from values (copy to avoid circular import)
+function inferTypeFromValuesLocal(values: any[]): PostgresType {
+  const nonNullValues = values.filter(v => v !== null && v !== undefined);
+  if (nonNullValues.length === 0) return 'TEXT';
+  
+  const sample = nonNullValues[0];
+  
+  if (typeof sample === 'boolean') return 'BOOLEAN';
+  if (typeof sample === 'number') {
+    if (Number.isInteger(sample)) return 'INTEGER';
+    return 'NUMERIC';
+  }
+  if (typeof sample === 'string') {
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sample)) {
+      return 'UUID';
+    }
+    if (!isNaN(Date.parse(sample)) && sample.length > 8) {
+      return 'TIMESTAMP WITH TIME ZONE';
+    }
+    return 'TEXT';
+  }
+  
+  return 'TEXT';
+}

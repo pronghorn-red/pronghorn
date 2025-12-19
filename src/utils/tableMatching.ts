@@ -38,7 +38,7 @@ export interface TableMatchResult {
   conflicts: ColumnConflict[];
   missingColumns: string[];  // Columns in import but not in existing
   extraColumns: string[];    // Columns in existing but not in import
-  status: 'new' | 'insert' | 'conflict' | 'skip';
+  status: 'new' | 'insert' | 'augment' | 'conflict' | 'skip';
 }
 
 // Normalize type names for comparison
@@ -73,7 +73,7 @@ function normalizeType(type: string): string {
 }
 
 // Check if types are compatible for insertion
-function areTypesCompatible(importType: string, existingType: string): boolean {
+export function areTypesCompatible(importType: string, existingType: string): boolean {
   const normImport = normalizeType(importType);
   const normExisting = normalizeType(existingType);
   
@@ -90,6 +90,13 @@ function areTypesCompatible(importType: string, existingType: string): boolean {
   
   // JSON can accept text
   if (normExisting === 'json' && normImport === 'text') return true;
+  
+  // UUID can accept TEXT if values are UUID-formatted
+  // TEXT values will be validated/cast at insert time
+  if (normExisting === 'uuid' && normImport === 'text') return true;
+  
+  // Integer can accept text (will be cast)
+  if (normExisting === 'integer' && normImport === 'text') return true;
   
   return false;
 }
@@ -317,12 +324,14 @@ export function matchTables(
 export function getMatchingSummary(matches: TableMatchResult[]): {
   newTables: number;
   insertTables: number;
+  augmentTables: number;
   conflictTables: number;
   skipTables: number;
 } {
   return {
     newTables: matches.filter(m => m.status === 'new').length,
     insertTables: matches.filter(m => m.status === 'insert').length,
+    augmentTables: matches.filter(m => m.status === 'augment').length,
     conflictTables: matches.filter(m => m.status === 'conflict').length,
     skipTables: matches.filter(m => m.status === 'skip').length
   };
@@ -334,7 +343,7 @@ export function getMatchingSummary(matches: TableMatchResult[]): {
 export function updateMatchResolution(
   matches: TableMatchResult[],
   tableName: string,
-  newStatus: 'new' | 'insert' | 'conflict' | 'skip'
+  newStatus: 'new' | 'insert' | 'augment' | 'conflict' | 'skip'
 ): TableMatchResult[] {
   return matches.map(m => 
     m.importTable === tableName ? { ...m, status: newStatus } : m

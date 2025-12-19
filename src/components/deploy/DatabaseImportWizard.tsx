@@ -27,7 +27,8 @@ import {
   generateTableDefinitionFromInference,
   calculateBatchSize,
   generateInsertBatchSQL,
-  generateMultiTableImportSQL
+  generateMultiTableImportSQL,
+  generateSmartImportSQL
 } from '@/utils/sqlGenerator';
 import { extractDDLStatements } from '@/lib/sqlParser';
 import { 
@@ -154,6 +155,7 @@ export default function DatabaseImportWizard({
   const [loadingSchema, setLoadingSchema] = useState(false);
   const [tableMatches, setTableMatches] = useState<TableMatchResult[]>([]);
   const [erdExpanded, setErdExpanded] = useState(false);
+  const [schemaSubTab, setSchemaSubTab] = useState<'designer' | 'erd' | 'conflicts'>('designer');
   
   // Memoized callback for SchemaCreator to prevent re-renders
   const handleTableDefChange = useCallback((def: TableDefinition) => {
@@ -166,7 +168,7 @@ export default function DatabaseImportWizard({
   }, []);
   
   // Handle table match resolution changes
-  const handleTableResolutionChange = useCallback((tableName: string, newStatus: 'new' | 'insert' | 'skip') => {
+  const handleTableResolutionChange = useCallback((tableName: string, newStatus: 'new' | 'insert' | 'augment' | 'skip') => {
     setTableMatches(prev => updateMatchResolution(prev, tableName, newStatus));
   }, []);
   
@@ -346,15 +348,29 @@ export default function DatabaseImportWizard({
       // Generate SQL when moving to review step
       if (nextStep === 'review') {
         if (fileType === 'json' && jsonData && jsonData.tables.length > 1) {
-          // Multi-table JSON import - pass user-configured table definitions
-          const statements = generateMultiTableImportSQL(
-            jsonData.tables,
-            jsonData.relationships,
-            schema,
-            selectedRowsByTable,
-            tableDefsMap
-          );
-          setProposedSQL(statements);
+          // Multi-table JSON import - use smart import if we have matches
+          if (tableMatches.length > 0 && existingSchemas.length > 0) {
+            const statements = generateSmartImportSQL(
+              jsonData.tables,
+              jsonData.relationships,
+              tableMatches,
+              existingSchemas,
+              schema,
+              selectedRowsByTable,
+              tableDefsMap
+            );
+            setProposedSQL(statements);
+          } else {
+            // Fallback to regular multi-table import
+            const statements = generateMultiTableImportSQL(
+              jsonData.tables,
+              jsonData.relationships,
+              schema,
+              selectedRowsByTable,
+              tableDefsMap
+            );
+            setProposedSQL(statements);
+          }
           setSqlReviewed(false);
         } else if (action === 'create_new' && tableDef) {
           const batchSize = calculateBatchSize(tableDef.columns.length, selectedDataRows.length);
@@ -860,10 +876,10 @@ export default function DatabaseImportWizard({
         const matchSummary = tableMatches.length > 0 ? getMatchingSummary(tableMatches) : null;
         
         return (
-          <div className="h-full flex flex-col gap-4">
+          <div className="h-full flex flex-col">
             {/* Loading indicator for schema fetch */}
             {loadingSchema && (
-              <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/50 shrink-0 mb-4">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm text-muted-foreground">Loading database schema...</span>
               </div>
@@ -871,7 +887,7 @@ export default function DatabaseImportWizard({
             
             {/* Match summary for multi-table JSON */}
             {isMultiTableJson && matchSummary && !loadingSchema && (
-              <div className="flex items-center gap-4 p-3 border rounded-lg bg-muted/30 shrink-0">
+              <div className="flex items-center gap-4 p-3 border rounded-lg bg-muted/30 shrink-0 mb-4">
                 <span className="text-sm font-medium">Import Summary:</span>
                 {matchSummary.newTables > 0 && (
                   <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-600 dark:text-green-400">
@@ -883,6 +899,11 @@ export default function DatabaseImportWizard({
                     {matchSummary.insertTables} insert
                   </span>
                 )}
+                {matchSummary.augmentTables > 0 && (
+                  <span className="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-600 dark:text-purple-400">
+                    {matchSummary.augmentTables} augment
+                  </span>
+                )}
                 {matchSummary.conflictTables > 0 && (
                   <span className="text-xs px-2 py-1 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400">
                     {matchSummary.conflictTables} conflicts
@@ -891,79 +912,81 @@ export default function DatabaseImportWizard({
               </div>
             )}
             
-            {/* Table selector for multi-table JSON */}
-            {isMultiTableJson && (
-              <div className="flex items-center gap-4 shrink-0">
-                <Label className="text-sm font-medium whitespace-nowrap">Configure Table:</Label>
-                <Select value={selectedJsonTable} onValueChange={setSelectedJsonTable}>
-                  <SelectTrigger className="w-[250px]">
-                    <SelectValue placeholder="Select a table" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {jsonData.tables.map(t => {
-                      const match = tableMatches.find(m => m.importTable === t.name);
-                      return (
-                        <SelectItem key={t.name} value={t.name}>
-                          {t.name} ({t.rows.length} rows)
-                          {match && match.matchType !== 'new' && ` → ${match.existingTable}`}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            
-            {/* Show full SchemaCreator for selected table in multi-table mode - ABOVE the diagram */}
-            {isMultiTableJson && selectedJsonTable && (
-              <div className="flex-1 min-h-[200px] overflow-auto border rounded-lg p-4">
-                <SchemaCreator
-                  key={selectedJsonTable}
-                  headers={headers.filter(h => h !== '_row_id')}
-                  sampleData={memoizedSampleData}
-                  tableName={selectedJsonTable}
-                  onTableNameChange={() => {}} // Table names are fixed from JSON structure
-                  onTableDefChange={(def) => handleMultiTableDefChange(selectedJsonTable, def)}
-                  schema={schema}
-                />
-              </div>
-            )}
-            
-            {/* Enhanced ERD View with full database schema */}
-            {isMultiTableJson && (
-              <div className="space-y-2 shrink-0">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Database Schema & Import Preview</Label>
-                  <Button variant="ghost" size="sm" onClick={() => setErdExpanded(!erdExpanded)}>
-                    {erdExpanded ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                    {erdExpanded ? 'Collapse' : 'Expand'}
-                  </Button>
-                </div>
-                <DatabaseErdView
-                  existingTables={existingSchemas}
-                  importTables={jsonData.tables}
-                  relationships={jsonData.relationships}
-                  tableMatches={tableMatches}
-                  onTableClick={(name) => setSelectedJsonTable(name)}
-                  height={erdExpanded ? 500 : 280}
-                />
-              </div>
-            )}
-            
-            {/* Conflict Resolution Panel */}
-            {isMultiTableJson && tableMatches.some(m => m.matchType !== 'new') && (
-              <div className="space-y-2 shrink-0">
-                <Label className="text-sm font-medium">Table Matching & Conflicts</Label>
-                <ConflictResolutionPanel
-                  matches={tableMatches}
-                  onTableResolutionChange={handleTableResolutionChange}
-                  onConflictResolutionChange={handleConflictResolutionChange}
-                />
-              </div>
-            )}
-            
-            {/* Action Toggle - hide for multi-table JSON since we auto-create */}
-            {!isMultiTableJson && (
+            {/* Sub-tabs for multi-table JSON to give each section full height */}
+            {isMultiTableJson ? (
+              <Tabs value={schemaSubTab} onValueChange={(v) => setSchemaSubTab(v as any)} className="flex-1 flex flex-col min-h-0">
+                <TabsList className="grid w-full grid-cols-3 shrink-0">
+                  <TabsTrigger value="designer">Schema Designer</TabsTrigger>
+                  <TabsTrigger value="erd">Database ERD</TabsTrigger>
+                  <TabsTrigger value="conflicts">
+                    Matching & Conflicts
+                    {tableMatches.some(m => m.conflicts.length > 0) && (
+                      <span className="ml-1 text-amber-500">•</span>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="designer" className="flex-1 mt-4 min-h-0 flex flex-col">
+                  {/* Table selector */}
+                  <div className="flex items-center gap-4 shrink-0 mb-4">
+                    <Label className="text-sm font-medium whitespace-nowrap">Configure Table:</Label>
+                    <Select value={selectedJsonTable} onValueChange={setSelectedJsonTable}>
+                      <SelectTrigger className="w-[300px]">
+                        <SelectValue placeholder="Select a table" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {jsonData.tables.map(t => {
+                          const match = tableMatches.find(m => m.importTable === t.name);
+                          return (
+                            <SelectItem key={t.name} value={t.name}>
+                              {t.name} ({t.rows.length} rows)
+                              {match && match.matchType !== 'new' && ` → ${match.existingTable}`}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {selectedJsonTable && (
+                    <div className="flex-1 min-h-0 overflow-auto border rounded-lg p-4">
+                      <SchemaCreator
+                        key={selectedJsonTable}
+                        headers={headers.filter(h => h !== '_row_id')}
+                        sampleData={memoizedSampleData}
+                        tableName={selectedJsonTable}
+                        onTableNameChange={() => {}}
+                        onTableDefChange={(def) => handleMultiTableDefChange(selectedJsonTable, def)}
+                        schema={schema}
+                      />
+                    </div>
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="erd" className="flex-1 mt-4 min-h-0">
+                  <DatabaseErdView
+                    existingTables={existingSchemas}
+                    importTables={jsonData.tables}
+                    relationships={jsonData.relationships}
+                    tableMatches={tableMatches}
+                    onTableClick={(name) => {
+                      setSelectedJsonTable(name);
+                      setSchemaSubTab('designer');
+                    }}
+                    height={500}
+                  />
+                </TabsContent>
+                
+                <TabsContent value="conflicts" className="flex-1 mt-4 min-h-0 overflow-auto">
+                  <ConflictResolutionPanel
+                    matches={tableMatches}
+                    onTableResolutionChange={handleTableResolutionChange}
+                    onConflictResolutionChange={handleConflictResolutionChange}
+                  />
+                </TabsContent>
+              </Tabs>
+            ) : (
+              /* Non-multi-table: show action toggle */
               <Tabs value={action} onValueChange={(v) => setAction(v as ImportAction)} className="flex-1 flex flex-col min-h-0">
                 <TabsList className="grid w-full grid-cols-2 shrink-0">
                   <TabsTrigger value="create_new" className="gap-2">
