@@ -243,30 +243,99 @@ export function ArtifactCollaborator({
     }
   }, [collaborationId, shareToken, onMerged, onBack]);
 
-  // Handle chat message send
+  // Handle chat message send with streaming
   const handleSendMessage = useCallback(async (content: string) => {
-    if (!collaborationId) return;
+    if (!collaborationId || !projectId) return;
     
-    // Add user message
+    // Add user message locally first
     await sendMessage('user', content);
     
-    // TODO: Stream AI response
-    // For now, just add a placeholder
     setIsStreaming(true);
     setStreamingContent('');
     
     try {
-      // This would call the collaboration-agent-orchestrator
-      // For now, simulate a response
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setStreamingContent('I understand you want to collaborate on this artifact. The collaboration agent is being implemented. For now, you can edit the document directly.');
-      
-      await sendMessage('assistant', 'I understand you want to collaborate on this artifact. The collaboration agent is being implemented. For now, you can edit the document directly.');
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL || 'https://obkzdksfayygnrzdqoam.supabase.co'}/functions/v1/collaboration-agent-orchestrator`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ia3pka3NmYXl5Z25yemRxb2FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTA4MzcsImV4cCI6MjA3ODk4NjgzN30.xOKphCiEilzPTo9EGHNJqAJfruM_bijI9PN3BQBF-z8'}`,
+          },
+          body: JSON.stringify({
+            collaborationId,
+            projectId,
+            userMessage: content,
+            shareToken: shareToken || null,
+            maxIterations: 10,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Agent error: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let lastMessage = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (!data) continue;
+
+            try {
+              const event = JSON.parse(data);
+              
+              if (event.type === 'reasoning') {
+                setStreamingContent(event.reasoning);
+              } else if (event.type === 'edit') {
+                // Reload content when edit is made
+                const { data: updatedCollab } = await supabase.rpc(
+                  'get_artifact_collaboration_with_token',
+                  { p_collaboration_id: collaborationId, p_token: shareToken }
+                );
+                if (updatedCollab?.current_content) {
+                  setLocalContent(updatedCollab.current_content);
+                }
+                toast.success(`Edit applied: ${event.narrative}`);
+              } else if (event.type === 'done') {
+                lastMessage = event.message || 'Changes completed.';
+              } else if (event.type === 'error') {
+                throw new Error(event.message);
+              }
+            } catch (e) {
+              console.error('Error parsing SSE event:', e);
+            }
+          }
+        }
+      }
+
+      // The assistant message is already saved by the edge function
+      if (lastMessage) {
+        setStreamingContent('');
+      }
+    } catch (error) {
+      console.error('Error with collaboration agent:', error);
+      toast.error('Failed to get AI response');
+      // Add error message
+      await sendMessage('assistant', 'Sorry, I encountered an error processing your request. Please try again.');
     } finally {
       setIsStreaming(false);
       setStreamingContent('');
     }
-  }, [collaborationId, sendMessage]);
+  }, [collaborationId, projectId, shareToken, sendMessage]);
 
   const latestVersion = history.length > 0 
     ? Math.max(...history.map(h => h.version_number))
