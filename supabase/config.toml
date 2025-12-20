@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.admin-management]
 verify_jwt = false
+
+[functions.ingest-artifacts]
+verify_jwt = false
