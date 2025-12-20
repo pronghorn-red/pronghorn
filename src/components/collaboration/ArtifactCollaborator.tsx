@@ -300,6 +300,8 @@ export function ArtifactCollaborator({
         'User'
       );
       setHasUnsavedChanges(false);
+      // Refresh history to reflect the saved version
+      await refreshHistory();
     }
     
     // DO NOT call sendMessage here - the edge function inserts the user message
@@ -449,25 +451,20 @@ export function ArtifactCollaborator({
     created_at: h.created_at,
   })), [history]);
   
-  // Get previous version's content for diff view
+  // Get previous version's content for diff view - compare current content against previous version
   const previousVersionContent = useMemo(() => {
-    if (historyEntries.length < 2) return null;
-    // Sort to get the version before current
+    if (historyEntries.length === 0) return null;
+    
+    // Sort by version descending to get latest first
     const sortedHistory = [...historyEntries].sort((a, b) => b.version_number - a.version_number);
-    // Get the second latest version (previous)
-    const previousEntry = sortedHistory.find(h => h.version_number === latestVersion - 1);
-    return previousEntry?.full_content_snapshot || null;
-  }, [historyEntries, latestVersion]);
-
-  // Get the full content snapshot from history entries for diff
-  const getFullContentFromHistory = useMemo(() => {
-    const entryMap = new Map<number, string | null>();
-    for (const entry of historyEntries) {
-      if (entry.full_content_snapshot) {
-        entryMap.set(entry.version_number, entry.full_content_snapshot);
-      }
+    
+    // If we have at least 2 versions, get the second-to-last snapshot
+    if (sortedHistory.length >= 2) {
+      // The previous version is the second entry (index 1)
+      return sortedHistory[1]?.full_content_snapshot || null;
     }
-    return entryMap;
+    
+    return null;
   }, [historyEntries]);
 
   // Early return for loading state - AFTER all hooks
@@ -544,7 +541,7 @@ export function ArtifactCollaborator({
             <div className="flex flex-col h-full">
               <CollaborationEditor
                 content={localContent}
-                previousContent={getFullContentFromHistory.get(latestVersion - 1) || previousVersionContent}
+                previousContent={previousVersionContent}
                 isMarkdown={isMarkdown}
                 onChange={handleContentChange}
                 onSave={handleSave}
@@ -653,7 +650,7 @@ export function ArtifactCollaborator({
           <div className="flex flex-col h-full">
             <CollaborationEditor
               content={localContent}
-              previousContent={getFullContentFromHistory.get(latestVersion - 1) || previousVersionContent}
+              previousContent={previousVersionContent}
               isMarkdown={isMarkdown}
               onChange={handleContentChange}
               onSave={handleSave}

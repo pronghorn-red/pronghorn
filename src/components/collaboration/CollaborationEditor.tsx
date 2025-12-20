@@ -65,8 +65,8 @@ export function CollaborationEditor({
     }
   }, [onSave, hasUnsavedChanges]);
 
-  // Check if we have diff content
-  const hasDiffContent = previousContent !== null && previousContent !== undefined && previousContent !== content;
+  // Check if we have diff content - enable if we have a previous version to compare against
+  const hasDiffContent = previousContent !== null && previousContent !== undefined;
 
   return (
     <div className="flex flex-col h-full" onKeyDown={handleKeyDown}>
