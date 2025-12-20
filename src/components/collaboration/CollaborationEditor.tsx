@@ -123,9 +123,9 @@ export function CollaborationEditor({
       </div>
 
       {/* Editor Content */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {viewMode === 'rendered' ? (
-          <ScrollArea className="h-full">
+          <ScrollArea className="h-full max-h-full">
             <div 
               className="p-4 prose prose-sm dark:prose-invert max-w-none cursor-pointer
                          [&_p]:mb-4 [&_p]:whitespace-pre-wrap
