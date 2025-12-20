@@ -351,12 +351,56 @@ export function ArtifactCollaborator({
     }
   }, [collaborationId, projectId, shareToken, sendMessage]);
 
-  const latestVersion = history.length > 0 
-    ? Math.max(...history.map(h => h.version_number))
-    : 0;
+  const latestVersion = useMemo(() => 
+    history.length > 0 ? Math.max(...history.map(h => h.version_number)) : 0,
+    [history]
+  );
 
   const currentVersion = viewingVersion || latestVersion;
 
+  // Map messages to the expected format - must be before any early returns
+  const chatMessages: CollaborationMessage[] = useMemo(() => messages.map(m => ({
+    id: m.id,
+    role: m.role as 'user' | 'assistant',
+    content: m.content,
+    created_at: m.created_at,
+    metadata: m.metadata,
+  })), [messages]);
+  
+  // Map blackboard to the expected format
+  const blackboardEntries: BlackboardEntry[] = useMemo(() => blackboard.map(b => ({
+    id: b.id,
+    entry_type: b.entry_type,
+    content: b.content,
+    created_at: b.created_at,
+  })), [blackboard]);
+
+  // Map history to the expected format
+  const historyEntries: HistoryEntry[] = useMemo(() => history.map(h => ({
+    id: h.id,
+    version_number: h.version_number,
+    actor_type: h.actor_type as 'human' | 'agent',
+    actor_identifier: h.actor_identifier,
+    operation_type: h.operation_type as 'edit' | 'insert' | 'delete',
+    start_line: h.start_line,
+    end_line: h.end_line,
+    old_content: h.old_content,
+    new_content: h.new_content,
+    narrative: h.narrative,
+    created_at: h.created_at,
+  })), [history]);
+  
+  // Calculate highlighted lines (diff between current and previous version)
+  const highlightedLines = useMemo(() => {
+    if (historyEntries.length === 0) return [];
+    const latestEntry = historyEntries.find(h => h.version_number === latestVersion);
+    if (latestEntry && latestEntry.start_line && latestEntry.end_line) {
+      return [{ start: latestEntry.start_line, end: latestEntry.end_line }];
+    }
+    return [];
+  }, [historyEntries, latestVersion]);
+
+  // Early return for loading state - AFTER all hooks
   if (isCreatingCollab || isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -369,48 +413,6 @@ export function ArtifactCollaborator({
       </div>
     );
   }
-
-  // Map messages to the expected format
-  const chatMessages: CollaborationMessage[] = messages.map(m => ({
-    id: m.id,
-    role: m.role as 'user' | 'assistant',
-    content: m.content,
-    created_at: m.created_at,
-    metadata: m.metadata,
-  }));
-  
-  // Map blackboard to the expected format
-  const blackboardEntries: BlackboardEntry[] = blackboard.map(b => ({
-    id: b.id,
-    entry_type: b.entry_type,
-    content: b.content,
-    created_at: b.created_at,
-  }));
-
-  // Map history to the expected format
-  const historyEntries: HistoryEntry[] = history.map(h => ({
-    id: h.id,
-    version_number: h.version_number,
-    actor_type: h.actor_type as 'human' | 'agent',
-    actor_identifier: h.actor_identifier,
-    operation_type: h.operation_type as 'edit' | 'insert' | 'delete',
-    start_line: h.start_line,
-    end_line: h.end_line,
-    old_content: h.old_content,
-    new_content: h.new_content,
-    narrative: h.narrative,
-    created_at: h.created_at,
-  }));
-  
-  // Calculate highlighted lines (diff between current and previous version)
-  const highlightedLines = useMemo(() => {
-    if (historyEntries.length === 0) return [];
-    const latestEntry = historyEntries.find(h => h.version_number === latestVersion);
-    if (latestEntry && latestEntry.start_line && latestEntry.end_line) {
-      return [{ start: latestEntry.start_line, end: latestEntry.end_line }];
-    }
-    return [];
-  }, [historyEntries, latestVersion]);
 
   // Mobile layout
   if (isMobile) {
