@@ -72,7 +72,7 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const { collaborationId, projectId, userMessage, shareToken, maxIterations = 10, currentContent: clientContent } = 
+    const { collaborationId, projectId, userMessage, shareToken, maxIterations = 25, currentContent: clientContent } = 
       await req.json() as CollaborationRequest;
 
     console.log(`Starting collaboration agent for collab ${collaborationId}`);
@@ -170,6 +170,26 @@ RULES:
 
 Current document content will be provided with line numbers as <<N>>.
 
+PERSISTENCE RULES (CRITICAL - FOLLOW STRICTLY):
+- Do NOT set status to 'completed' until ALL user requirements are FULLY satisfied
+- If user asks for N items (e.g., "10 chapters", "5 sections"), you MUST COUNT them explicitly
+- Keep working until you have EXACTLY what was requested - partial completion is NOT acceptable
+- If you've made progress but aren't done, set status to 'in_progress' with a clear progress update
+- It's better to use MORE iterations than to complete prematurely
+- NEVER give up - if the task requires many iterations, keep going
+
+SELF-REFLECTION (REQUIRED before marking completed):
+1. Re-read the entire document using read_artifact
+2. COUNT and verify ALL requested elements are present (e.g., "I count 10 chapters: 1, 2, 3...")
+3. Check quality of each addition/change
+4. Only THEN set status to 'completed' if EVERYTHING is verified
+5. If count doesn't match request, set status to 'in_progress' and continue
+
+PROGRESS TRACKING:
+- After each edit, note what's done and what remains in your blackboard_entry
+- Example: "Completed 3/10 chapters. Remaining: chapters 4-10. Next: writing chapter 4."
+- Continue iterating until your count matches the user's exact request
+
 RECENT EDIT HISTORY:
 ${historyContext || "No edits yet"}
 
@@ -206,8 +226,8 @@ Start your response with { and end with }.`;
       }
     );
 
-    // Iteration loop
-    const MAX_ITERATIONS = Math.min(maxIterations, 20);
+    // Iteration loop - allow more iterations for complex tasks
+    const MAX_ITERATIONS = Math.min(maxIterations, 30);
     let iteration = 0;
     let conversationHistory: Array<{ role: string; content: string }> = [];
     let finalStatus = "in_progress";
@@ -381,7 +401,8 @@ Start your response with { and end with }.`;
                   version: newVersion, 
                   startLine: start_line, 
                   endLine: end_line,
-                  narrative 
+                  narrative,
+                  content: currentContent  // Send actual new content to prevent stale data
                 });
               }
             }

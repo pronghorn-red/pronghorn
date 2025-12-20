@@ -81,6 +81,9 @@ export function ArtifactCollaborator({
   
   // View version state
   const [viewingVersion, setViewingVersion] = useState<number | null>(null);
+  
+  // Track when agent is editing to prevent sync from overwriting content
+  const isAgentEditingRef = useRef<boolean>(false);
 
   const {
     collaboration,
@@ -176,6 +179,11 @@ export function ArtifactCollaborator({
   
   useEffect(() => {
     if (collaboration?.current_content && !hasUnsavedChanges) {
+      // Skip sync if agent is currently editing - we get content from SSE events
+      if (isAgentEditingRef.current) {
+        return;
+      }
+      
       // Skip sync if we just saved - our content is already correct
       if (justSavedRef.current) {
         // Only clear the flag once the DB content matches what we saved
@@ -412,6 +420,7 @@ export function ArtifactCollaborator({
     
     setIsStreaming(true);
     setStreamingContent('');
+    isAgentEditingRef.current = true; // Block sync during agent streaming
     
     try {
       const response = await fetch(
@@ -427,7 +436,7 @@ export function ArtifactCollaborator({
             projectId,
             userMessage: content,
             shareToken: shareToken || null,
-            maxIterations: 10,
+            maxIterations: 25, // Increased for complex tasks
             currentContent: localContent, // Send the current editor content
           }),
         }
@@ -462,15 +471,13 @@ export function ArtifactCollaborator({
               if (event.type === 'reasoning') {
                 setStreamingContent(event.reasoning);
               } else if (event.type === 'edit') {
-                // Reload content when edit is made
-                const { data: updatedCollab } = await supabase.rpc(
-                  'get_artifact_collaboration_with_token',
-                  { p_collaboration_id: collaborationId, p_token: shareToken }
-                );
-                if (updatedCollab?.current_content) {
-                  setLocalContent(updatedCollab.current_content);
+                // Use content directly from SSE event - no DB fetch needed
+                if (event.content) {
+                  setLocalContent(event.content);
                   setHasUnsavedChanges(false);
                 }
+                // Refresh history to update version slider (but not content)
+                await refreshHistory();
                 toast.success(`Edit applied: ${event.narrative}`);
               } else if (event.type === 'done') {
                 lastMessage = event.message || 'Changes completed.';
@@ -503,6 +510,7 @@ export function ArtifactCollaborator({
       setIsStreaming(false);
       setStreamingContent('');
       setOptimisticMessages([]); // Clear any remaining optimistic messages
+      isAgentEditingRef.current = false; // Re-enable sync after agent is done
     }
   }, [collaborationId, projectId, shareToken, sendMessage, hasUnsavedChanges, localContent, collaboration?.current_content, artifact.content, insertEdit, refreshMessages, refreshHistory]);
 
