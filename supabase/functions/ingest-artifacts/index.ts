@@ -295,7 +295,7 @@ function getExtensionFromContentType(contentType: string): string {
 }
 
 function getDocumentationHtml(): string {
-  const endpoint = "https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/ingest-artifacts";
+  const endpoint = "https://api.pronghorn.red/functions/v1/ingest-artifacts";
   
   return `<!DOCTYPE html>
 <html lang="en">
