@@ -1288,43 +1288,69 @@ async function fetchAndWriteArtifacts() {
       return;
     }
     
-    if (!artifacts || artifacts.length === 0) {
-      console.log('[Pronghorn] No artifacts found');
-      return;
-    }
-    
     // Create artifacts subfolder
     const artifactsDir = path.join(PROJECT_DIR, 'artifacts');
     if (!fs.existsSync(artifactsDir)) {
       fs.mkdirSync(artifactsDir, { recursive: true });
     }
     
-    // Write index
-    const indexPath = path.join(artifactsDir, 'index.json');
-    fs.writeFileSync(indexPath, JSON.stringify(artifacts.map(a => ({
-      id: a.id,
-      title: a.ai_title || 'Untitled',
-      summary: a.ai_summary,
-      source_type: a.source_type,
-      created_at: a.created_at,
-    })), null, 2), 'utf8');
+    // Get existing files in artifacts dir to detect deletions
+    const existingFiles = new Set();
+    try {
+      const files = fs.readdirSync(artifactsDir);
+      files.forEach(f => existingFiles.add(f));
+    } catch (e) {
+      // Directory might not exist yet
+    }
     
-    // Write each artifact as markdown
-    artifacts.forEach((artifact, idx) => {
-      const title = artifact.ai_title || \`artifact-\${idx + 1}\`;
-      const safeName = title.replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 50);
-      const mdPath = path.join(artifactsDir, \`\${safeName}.md\`);
+    const writtenFiles = new Set(['index.json']);
+    
+    if (!artifacts || artifacts.length === 0) {
+      console.log('[Pronghorn] No artifacts found, cleaning up directory');
+      // Write empty index
+      fs.writeFileSync(path.join(artifactsDir, 'index.json'), '[]', 'utf8');
+    } else {
+      // Write index
+      const indexPath = path.join(artifactsDir, 'index.json');
+      fs.writeFileSync(indexPath, JSON.stringify(artifacts.map(a => ({
+        id: a.id,
+        title: a.ai_title || 'Untitled',
+        summary: a.ai_summary,
+        source_type: a.source_type,
+        created_at: a.created_at,
+      })), null, 2), 'utf8');
       
-      let content = \`# \${title}\\n\\n\`;
-      if (artifact.ai_summary) {
-        content += \`> \${artifact.ai_summary}\\n\\n\`;
+      // Write each artifact as markdown with ID-based filename for stability
+      artifacts.forEach((artifact) => {
+        const title = artifact.ai_title || 'Untitled';
+        const filename = \`\${artifact.id.slice(0, 8)}.md\`;
+        const mdPath = path.join(artifactsDir, filename);
+        writtenFiles.add(filename);
+        
+        let content = \`# \${title}\\n\\n\`;
+        if (artifact.ai_summary) {
+          content += \`> \${artifact.ai_summary}\\n\\n\`;
+        }
+        content += artifact.content || '';
+        
+        fs.writeFileSync(mdPath, content, 'utf8');
+      });
+      
+      console.log(\`[Pronghorn] Synced \${artifacts.length} artifacts\`);
+    }
+    
+    // Clean up deleted artifacts
+    existingFiles.forEach(file => {
+      if (!writtenFiles.has(file)) {
+        const filePath = path.join(artifactsDir, file);
+        try {
+          fs.unlinkSync(filePath);
+          console.log(\`[Pronghorn] Removed deleted artifact: \${file}\`);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
       }
-      content += artifact.content || '';
-      
-      fs.writeFileSync(mdPath, content, 'utf8');
     });
-    
-    console.log(\`[Pronghorn] Synced \${artifacts.length} artifacts\`);
   } catch (err) {
     console.error('[Pronghorn] Artifacts sync error:', err.message);
   }
@@ -1333,9 +1359,12 @@ async function fetchAndWriteArtifacts() {
 async function fetchAndWriteSpecifications() {
   console.log('[Pronghorn] Syncing specifications...');
   try {
-    const { data: specs, error } = await supabase.rpc('get_specifications_with_token', {
+    // Use correct RPC function name: get_project_specifications_with_token
+    const { data: specs, error } = await supabase.rpc('get_project_specifications_with_token', {
       p_project_id: CONFIG.projectId,
       p_token: CONFIG.shareToken || null,
+      p_agent_id: null,
+      p_latest_only: false,
     });
     
     if (error) {
@@ -1369,6 +1398,92 @@ async function fetchAndWriteSpecifications() {
   }
 }
 
+async function fetchAndWriteChats() {
+  console.log('[Pronghorn] Syncing chat sessions...');
+  try {
+    const { data: sessions, error } = await supabase.rpc('get_chat_sessions_with_token', {
+      p_project_id: CONFIG.projectId,
+      p_token: CONFIG.shareToken || null,
+    });
+    
+    if (error) {
+      console.error('[Pronghorn] Chat sessions error:', error.message);
+      return;
+    }
+    
+    // Create chats subfolder
+    const chatsDir = path.join(PROJECT_DIR, 'chats');
+    if (!fs.existsSync(chatsDir)) {
+      fs.mkdirSync(chatsDir, { recursive: true });
+    }
+    
+    // Get existing files to detect deletions
+    const existingFiles = new Set();
+    try {
+      const files = fs.readdirSync(chatsDir);
+      files.forEach(f => existingFiles.add(f));
+    } catch (e) {
+      // Directory might not exist yet
+    }
+    
+    const writtenFiles = new Set(['index.json']);
+    
+    if (!sessions || sessions.length === 0) {
+      console.log('[Pronghorn] No chat sessions found');
+      fs.writeFileSync(path.join(chatsDir, 'index.json'), '[]', 'utf8');
+    } else {
+      // Write index
+      fs.writeFileSync(path.join(chatsDir, 'index.json'), JSON.stringify(sessions.map(s => ({
+        id: s.id,
+        title: s.ai_title || s.title || 'Untitled Chat',
+        summary: s.ai_summary,
+        created_at: s.created_at,
+        updated_at: s.updated_at,
+      })), null, 2), 'utf8');
+      
+      // Write each session's messages
+      for (const session of sessions) {
+        const filename = \`\${session.id.slice(0, 8)}.json\`;
+        writtenFiles.add(filename);
+        
+        const { data: messages } = await supabase.rpc('get_chat_messages_with_token', {
+          p_chat_session_id: session.id,
+          p_token: CONFIG.shareToken || null,
+        });
+        
+        const sessionData = {
+          id: session.id,
+          title: session.ai_title || session.title || 'Untitled Chat',
+          summary: session.ai_summary,
+          messages: (messages || []).map(m => ({
+            role: m.role,
+            content: m.content,
+            created_at: m.created_at,
+          })),
+        };
+        
+        fs.writeFileSync(path.join(chatsDir, filename), JSON.stringify(sessionData, null, 2), 'utf8');
+      }
+      
+      console.log(\`[Pronghorn] Synced \${sessions.length} chat sessions\`);
+    }
+    
+    // Clean up deleted chats
+    existingFiles.forEach(file => {
+      if (!writtenFiles.has(file)) {
+        try {
+          fs.unlinkSync(path.join(chatsDir, file));
+          console.log(\`[Pronghorn] Removed deleted chat: \${file}\`);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+    });
+  } catch (err) {
+    console.error('[Pronghorn] Chat sessions sync error:', err.message);
+  }
+}
+
 async function syncAllProjectData() {
   console.log('[Pronghorn] ========== SYNCING PROJECT DATA ==========');
   await ensureProjectDir();
@@ -1377,6 +1492,7 @@ async function syncAllProjectData() {
     fetchAndWriteCanvas(),
     fetchAndWriteArtifacts(),
     fetchAndWriteSpecifications(),
+    fetchAndWriteChats(),
   ]);
   console.log('[Pronghorn] ========== PROJECT DATA SYNC COMPLETE ==========');
 }
@@ -1455,6 +1571,20 @@ async function setupProjectDataSubscription() {
       }
     });
   channels.push(specificationsChannel);
+  
+  // Subscribe to chat sessions channel - matches frontend's useRealtimeChatSessions
+  const chatSessionsChannel = supabase
+    .channel(\`chat-sessions-\${CONFIG.projectId}\`)
+    .on('broadcast', { event: 'chat_session_refresh' }, async (payload) => {
+      console.log('[Pronghorn] Chat sessions refresh broadcast received:', payload);
+      await fetchAndWriteChats();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Pronghorn] ✓ Listening for chat sessions broadcast');
+      }
+    });
+  channels.push(chatSessionsChannel);
   
   console.log('[Pronghorn] All project data broadcast channels set up');
   return channels;
