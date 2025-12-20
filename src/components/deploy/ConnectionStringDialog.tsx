@@ -73,7 +73,7 @@ export function ConnectionStringDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] max-h-[80vh] overflow-hidden flex flex-col p-0">
+      <DialogContent className="sm:max-w-[550px] h-[95vh] sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Database className="h-5 w-5 shrink-0" />
