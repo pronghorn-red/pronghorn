@@ -481,6 +481,8 @@ export function ArtifactCollaborator({
                 toast.success(`Edit applied: ${event.narrative}`);
               } else if (event.type === 'done') {
                 lastMessage = event.message || 'Changes completed.';
+                // Ensure hasUnsavedChanges is cleared when agent completes
+                setHasUnsavedChanges(false);
               } else if (event.type === 'error') {
                 throw new Error(event.message);
               }
@@ -497,6 +499,9 @@ export function ArtifactCollaborator({
       
       // Reset viewing version so slider follows latest after agent saves
       setViewingVersion(null);
+      
+      // Ensure merge button is enabled after agent completes
+      setHasUnsavedChanges(false);
       
       if (lastMessage) {
         setStreamingContent('');
