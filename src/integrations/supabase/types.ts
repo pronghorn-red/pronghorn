@@ -311,6 +311,202 @@ export type Database = {
           },
         ]
       }
+      artifact_collaboration_blackboard: {
+        Row: {
+          collaboration_id: string
+          content: string
+          created_at: string
+          entry_type: string
+          id: string
+          metadata: Json | null
+        }
+        Insert: {
+          collaboration_id: string
+          content: string
+          created_at?: string
+          entry_type: string
+          id?: string
+          metadata?: Json | null
+        }
+        Update: {
+          collaboration_id?: string
+          content?: string
+          created_at?: string
+          entry_type?: string
+          id?: string
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "artifact_collaboration_blackboard_collaboration_id_fkey"
+            columns: ["collaboration_id"]
+            isOneToOne: false
+            referencedRelation: "artifact_collaborations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      artifact_collaboration_history: {
+        Row: {
+          actor_identifier: string | null
+          actor_type: string
+          collaboration_id: string
+          created_at: string
+          end_line: number
+          full_content_snapshot: string | null
+          id: string
+          narrative: string | null
+          new_content: string | null
+          old_content: string | null
+          operation_type: string
+          start_line: number
+          version_number: number
+        }
+        Insert: {
+          actor_identifier?: string | null
+          actor_type: string
+          collaboration_id: string
+          created_at?: string
+          end_line: number
+          full_content_snapshot?: string | null
+          id?: string
+          narrative?: string | null
+          new_content?: string | null
+          old_content?: string | null
+          operation_type: string
+          start_line: number
+          version_number: number
+        }
+        Update: {
+          actor_identifier?: string | null
+          actor_type?: string
+          collaboration_id?: string
+          created_at?: string
+          end_line?: number
+          full_content_snapshot?: string | null
+          id?: string
+          narrative?: string | null
+          new_content?: string | null
+          old_content?: string | null
+          operation_type?: string
+          start_line?: number
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "artifact_collaboration_history_collaboration_id_fkey"
+            columns: ["collaboration_id"]
+            isOneToOne: false
+            referencedRelation: "artifact_collaborations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      artifact_collaboration_messages: {
+        Row: {
+          collaboration_id: string
+          content: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          role: string
+          token_id: string | null
+        }
+        Insert: {
+          collaboration_id: string
+          content: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          role: string
+          token_id?: string | null
+        }
+        Update: {
+          collaboration_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          role?: string
+          token_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "artifact_collaboration_messages_collaboration_id_fkey"
+            columns: ["collaboration_id"]
+            isOneToOne: false
+            referencedRelation: "artifact_collaborations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "artifact_collaboration_messages_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "project_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      artifact_collaborations: {
+        Row: {
+          artifact_id: string
+          base_content: string
+          created_at: string
+          created_by: string | null
+          current_content: string
+          id: string
+          merged_at: string | null
+          merged_to_artifact: boolean | null
+          project_id: string
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          artifact_id: string
+          base_content: string
+          created_at?: string
+          created_by?: string | null
+          current_content: string
+          id?: string
+          merged_at?: string | null
+          merged_to_artifact?: boolean | null
+          project_id: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          artifact_id?: string
+          base_content?: string
+          created_at?: string
+          created_by?: string | null
+          current_content?: string
+          id?: string
+          merged_at?: string | null
+          merged_to_artifact?: boolean | null
+          project_id?: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "artifact_collaborations_artifact_id_fkey"
+            columns: ["artifact_id"]
+            isOneToOne: false
+            referencedRelation: "artifacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "artifact_collaborations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       artifacts: {
         Row: {
           ai_summary: string | null
@@ -2360,6 +2556,34 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_artifact_collaboration_with_token: {
+        Args: {
+          p_artifact_id: string
+          p_project_id: string
+          p_title?: string
+          p_token: string
+        }
+        Returns: {
+          artifact_id: string
+          base_content: string
+          created_at: string
+          created_by: string | null
+          current_content: string
+          id: string
+          merged_at: string | null
+          merged_to_artifact: boolean | null
+          project_id: string
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifact_collaborations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_file_with_token: {
         Args: {
           p_content?: string
@@ -2439,6 +2663,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      delete_artifact_collaboration_with_token: {
+        Args: { p_collaboration_id: string; p_token: string }
+        Returns: undefined
       }
       delete_artifact_with_token: {
         Args: { p_id: string; p_token: string }
@@ -2665,6 +2893,57 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_artifact_collaboration_with_token: {
+        Args: { p_collaboration_id: string; p_token: string }
+        Returns: {
+          artifact_id: string
+          base_content: string
+          created_at: string
+          created_by: string | null
+          current_content: string
+          id: string
+          merged_at: string | null
+          merged_to_artifact: boolean | null
+          project_id: string
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifact_collaborations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_artifact_collaborations_with_token: {
+        Args: {
+          p_artifact_id?: string
+          p_project_id: string
+          p_status?: string
+          p_token: string
+        }
+        Returns: {
+          artifact_id: string
+          base_content: string
+          created_at: string
+          created_by: string | null
+          current_content: string
+          id: string
+          merged_at: string | null
+          merged_to_artifact: boolean | null
+          project_id: string
+          status: string
+          title: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "artifact_collaborations"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_artifacts_with_token: {
         Args: { p_project_id: string; p_search_term?: string; p_token?: string }
         Returns: {
@@ -2825,6 +3104,84 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "chat_sessions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_collaboration_blackboard_with_token: {
+        Args: {
+          p_collaboration_id: string
+          p_entry_type?: string
+          p_limit?: number
+          p_token: string
+        }
+        Returns: {
+          collaboration_id: string
+          content: string
+          created_at: string
+          entry_type: string
+          id: string
+          metadata: Json | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "artifact_collaboration_blackboard"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_collaboration_history_with_token: {
+        Args: {
+          p_collaboration_id: string
+          p_from_version?: number
+          p_to_version?: number
+          p_token: string
+        }
+        Returns: {
+          actor_identifier: string | null
+          actor_type: string
+          collaboration_id: string
+          created_at: string
+          end_line: number
+          full_content_snapshot: string | null
+          id: string
+          narrative: string | null
+          new_content: string | null
+          old_content: string | null
+          operation_type: string
+          start_line: number
+          version_number: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "artifact_collaboration_history"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_collaboration_latest_version_with_token: {
+        Args: { p_collaboration_id: string; p_token: string }
+        Returns: number
+      }
+      get_collaboration_messages_with_token: {
+        Args: {
+          p_collaboration_id: string
+          p_limit?: number
+          p_offset?: number
+          p_token: string
+        }
+        Returns: {
+          collaboration_id: string
+          content: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          role: string
+          token_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "artifact_collaboration_messages"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -3209,6 +3566,10 @@ export type Database = {
           repo_id: string
           updated_at: string
         }[]
+      }
+      get_project_id_from_collaboration: {
+        Args: { p_collaboration_id: string }
+        Returns: string
       }
       get_project_id_from_file: { Args: { p_file_id: string }; Returns: string }
       get_project_id_from_repo: { Args: { p_repo_id: string }; Returns: string }
@@ -3838,6 +4199,89 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      insert_collaboration_blackboard_with_token: {
+        Args: {
+          p_collaboration_id: string
+          p_content: string
+          p_entry_type: string
+          p_metadata?: Json
+          p_token: string
+        }
+        Returns: {
+          collaboration_id: string
+          content: string
+          created_at: string
+          entry_type: string
+          id: string
+          metadata: Json | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifact_collaboration_blackboard"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_collaboration_edit_with_token: {
+        Args: {
+          p_actor_identifier: string
+          p_actor_type: string
+          p_collaboration_id: string
+          p_end_line: number
+          p_narrative: string
+          p_new_content: string
+          p_new_full_content: string
+          p_old_content: string
+          p_operation_type: string
+          p_start_line: number
+          p_token: string
+        }
+        Returns: {
+          actor_identifier: string | null
+          actor_type: string
+          collaboration_id: string
+          created_at: string
+          end_line: number
+          full_content_snapshot: string | null
+          id: string
+          narrative: string | null
+          new_content: string | null
+          old_content: string | null
+          operation_type: string
+          start_line: number
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifact_collaboration_history"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_collaboration_message_with_token: {
+        Args: {
+          p_collaboration_id: string
+          p_content: string
+          p_metadata?: Json
+          p_role: string
+          p_token: string
+        }
+        Returns: {
+          collaboration_id: string
+          content: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          role: string
+          token_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifact_collaboration_messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       insert_database_with_token: {
         Args: {
           p_database_internal_name?: string
@@ -4451,6 +4895,28 @@ export type Database = {
         }
         Returns: number
       }
+      merge_collaboration_to_artifact_with_token: {
+        Args: { p_collaboration_id: string; p_token: string }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          image_url: string | null
+          project_id: string
+          source_id: string | null
+          source_type: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       move_file_with_token: {
         Args: { p_file_id: string; p_new_path: string; p_token: string }
         Returns: {
@@ -4556,6 +5022,35 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "project_testing_logs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      restore_collaboration_version_with_token: {
+        Args: {
+          p_actor_identifier?: string
+          p_collaboration_id: string
+          p_token: string
+          p_version_number: number
+        }
+        Returns: {
+          actor_identifier: string | null
+          actor_type: string
+          collaboration_id: string
+          created_at: string
+          end_line: number
+          full_content_snapshot: string | null
+          id: string
+          narrative: string | null
+          new_content: string | null
+          old_content: string | null
+          operation_type: string
+          start_line: number
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifact_collaboration_history"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -4836,6 +5331,35 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "agent_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_artifact_collaboration_with_token: {
+        Args: {
+          p_collaboration_id: string
+          p_current_content?: string
+          p_status?: string
+          p_title?: string
+          p_token: string
+        }
+        Returns: {
+          artifact_id: string
+          base_content: string
+          created_at: string
+          created_by: string | null
+          current_content: string
+          id: string
+          merged_at: string | null
+          merged_to_artifact: boolean | null
+          project_id: string
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifact_collaborations"
           isOneToOne: true
           isSetofReturn: false
         }
