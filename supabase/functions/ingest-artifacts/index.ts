@@ -67,9 +67,14 @@ Deno.serve(async (req) => {
     token = req.headers.get("x-share-token");
 
     if (req.method === "GET") {
-      // Return documentation page
-      return new Response(getDocumentationHtml(), {
-        headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" }
+      // Return documentation page as rendered HTML
+      const htmlContent = getDocumentationHtml();
+      return new Response(htmlContent, {
+        status: 200,
+        headers: new Headers({
+          "Content-Type": "text/html; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+        }),
       });
     } else if (req.method === "POST") {
       // Handle POST request - multi-item payload
