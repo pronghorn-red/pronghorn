@@ -385,6 +385,7 @@ function generatePackageJson(deployment: any): object {
       'dotenv': '^16.3.1',
       'node-fetch': '^3.3.2',
       'chokidar': '^3.5.3',
+      'ws': '^8.18.3',
     },
     engines: {
       node: '>=18.0.0'
@@ -469,8 +470,14 @@ const STAGING_DEBOUNCE_MS = 150;
 
 async function initSupabase() {
   const { createClient } = await import('@supabase/supabase-js');
-  supabase = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
-  console.log('[Pronghorn] Supabase client initialized');
+  const { WebSocket } = await import('ws');
+  
+  supabase = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, {
+    realtime: {
+      transport: WebSocket,
+    },
+  });
+  console.log('[Pronghorn] Supabase client initialized with WebSocket support');
 }
 
 // ============================================
