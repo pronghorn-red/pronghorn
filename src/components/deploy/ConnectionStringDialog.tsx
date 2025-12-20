@@ -8,7 +8,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Copy, Check, Eye, EyeOff, Database } from "lucide-react";
 import { toast } from "sonner";
 
@@ -74,15 +73,15 @@ export function ConnectionStringDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] max-h-[85vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-2">
+      <DialogContent className="sm:max-w-[550px] max-h-[80vh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Database className="h-5 w-5 shrink-0" />
             <span className="truncate">Connection: {databaseName}</span>
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-6 pb-6">
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
           <div className="space-y-4 py-2">
             {/* Password */}
             <div className="space-y-2">
@@ -207,7 +206,7 @@ export function ConnectionStringDialog({
               </p>
             </div>
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
