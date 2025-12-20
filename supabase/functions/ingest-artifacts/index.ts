@@ -220,6 +220,7 @@ Deno.serve(async (req) => {
           p_token: token,
           p_content: item.title ? `# ${item.title}\n\n${artifactContent}` : artifactContent,
           p_source_type: "webhook",
+          p_source_id: null,  // Explicitly pass null to resolve function overload ambiguity
           p_image_url: imageUrl
         });
 
