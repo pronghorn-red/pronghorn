@@ -69,7 +69,7 @@ export function CollaborationEditor({
   const hasDiffContent = previousContent !== null && previousContent !== undefined;
 
   return (
-    <div className="flex flex-col h-full" onKeyDown={handleKeyDown}>
+    <div className="flex flex-col flex-1 min-h-0" onKeyDown={handleKeyDown}>
       {/* Toolbar */}
       <div className="flex items-center justify-between p-2 border-b bg-muted/30">
         <div className="flex items-center gap-2">
