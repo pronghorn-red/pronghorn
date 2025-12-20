@@ -150,36 +150,35 @@ export function CollaborationChat({
             return (
               <div
                 key={message.id}
-                className={`flex gap-3 ${
+                className={`flex gap-2 min-w-0 ${
                   message.role === 'user' ? 'justify-end' : 'justify-start'
                 }`}
               >
                 {message.role === 'assistant' && (
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Bot className="h-4 w-4 text-primary" />
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Bot className="h-3 w-3 text-primary" />
                   </div>
                 )}
                 <div
-                  className={`rounded-lg px-3 py-2 text-sm break-words overflow-hidden ${
+                  className={`rounded-lg px-2 py-1.5 text-sm min-w-0 max-w-full overflow-hidden ${
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted'
                   }`}
-                  style={{ maxWidth: '90%', minWidth: '60px', wordBreak: 'break-word' }}
                 >
                   {message.role === 'assistant' ? (
-                    <div className="prose prose-sm dark:prose-invert max-w-none break-words [&_pre]:overflow-x-auto [&_pre]:max-w-full">
+                    <div className="text-sm break-words overflow-hidden [&_p]:m-0 [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_pre]:text-xs [&_code]:text-xs [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {message.content}
                       </ReactMarkdown>
                     </div>
                   ) : (
-                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <p className="whitespace-pre-wrap break-words m-0">{message.content}</p>
                   )}
                 </div>
                 {message.role === 'user' && (
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
-                    <User className="h-4 w-4 text-secondary-foreground" />
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-secondary flex items-center justify-center">
+                    <User className="h-3 w-3 text-secondary-foreground" />
                   </div>
                 )}
               </div>
