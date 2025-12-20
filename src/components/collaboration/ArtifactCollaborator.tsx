@@ -85,7 +85,7 @@ export function ArtifactCollaborator({
     restoreToVersion,
     addBlackboardEntry,
     refresh,
-  } = useRealtimeCollaboration(collaborationId || undefined, shareToken, !!collaborationId);
+  } = useRealtimeCollaboration(collaborationId, shareToken, !!collaborationId);
 
   // Detect if content is markdown
   const isMarkdown = artifact.content.trim().startsWith('#') || 
