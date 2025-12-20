@@ -1502,34 +1502,174 @@ async function fetchAndWriteChats() {
   }
 }
 
+async function fetchAndWriteProjectSettings() {
+  console.log('[Pronghorn] Syncing project settings...');
+  try {
+    const { data, error } = await supabase.rpc('get_project_with_token', {
+      p_project_id: CONFIG.projectId,
+      p_token: CONFIG.shareToken || null,
+    });
+    
+    if (error) {
+      console.error('[Pronghorn] Project settings error:', error.message);
+      return;
+    }
+    
+    // Create settings subfolder
+    const settingsDir = path.join(PROJECT_DIR, 'settings');
+    if (!fs.existsSync(settingsDir)) {
+      fs.mkdirSync(settingsDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(path.join(settingsDir, 'project.json'), JSON.stringify(data, null, 2), 'utf8');
+    console.log('[Pronghorn] Synced project settings');
+  } catch (err) {
+    console.error('[Pronghorn] Project settings sync error:', err.message);
+  }
+}
+
+async function fetchAndWriteRepositories() {
+  console.log('[Pronghorn] Syncing repositories...');
+  try {
+    const { data, error } = await supabase.rpc('get_project_repos_with_token', {
+      p_project_id: CONFIG.projectId,
+      p_token: CONFIG.shareToken || null,
+    });
+    
+    if (error) {
+      console.error('[Pronghorn] Repositories error:', error.message);
+      return;
+    }
+    
+    // Create repositories subfolder
+    const reposDir = path.join(PROJECT_DIR, 'repositories');
+    if (!fs.existsSync(reposDir)) {
+      fs.mkdirSync(reposDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(path.join(reposDir, 'repos.json'), JSON.stringify(data || [], null, 2), 'utf8');
+    console.log(\`[Pronghorn] Synced \${(data || []).length} repositories\`);
+  } catch (err) {
+    console.error('[Pronghorn] Repositories sync error:', err.message);
+  }
+}
+
+async function fetchAndWriteDatabases() {
+  console.log('[Pronghorn] Syncing databases...');
+  try {
+    const { data, error } = await supabase.rpc('get_databases_with_token', {
+      p_project_id: CONFIG.projectId,
+      p_token: CONFIG.shareToken || null,
+    });
+    
+    if (error) {
+      console.error('[Pronghorn] Databases error:', error.message);
+      return;
+    }
+    
+    // Create databases subfolder
+    const dbDir = path.join(PROJECT_DIR, 'databases');
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(path.join(dbDir, 'databases.json'), JSON.stringify(data || [], null, 2), 'utf8');
+    console.log(\`[Pronghorn] Synced \${(data || []).length} databases\`);
+  } catch (err) {
+    console.error('[Pronghorn] Databases sync error:', err.message);
+  }
+}
+
+async function fetchAndWriteDeployments() {
+  console.log('[Pronghorn] Syncing deployments...');
+  try {
+    const { data, error } = await supabase.rpc('get_deployments_with_token', {
+      p_project_id: CONFIG.projectId,
+      p_token: CONFIG.shareToken || null,
+    });
+    
+    if (error) {
+      console.error('[Pronghorn] Deployments error:', error.message);
+      return;
+    }
+    
+    // Create deployments subfolder
+    const deploysDir = path.join(PROJECT_DIR, 'deployments');
+    if (!fs.existsSync(deploysDir)) {
+      fs.mkdirSync(deploysDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(path.join(deploysDir, 'deployments.json'), JSON.stringify(data || [], null, 2), 'utf8');
+    console.log(\`[Pronghorn] Synced \${(data || []).length} deployments\`);
+  } catch (err) {
+    console.error('[Pronghorn] Deployments sync error:', err.message);
+  }
+}
+
 async function syncAllProjectData() {
   console.log('[Pronghorn] ========== SYNCING PROJECT DATA ==========');
   await ensureProjectDir();
   await Promise.all([
+    fetchAndWriteProjectSettings(),
     fetchAndWriteRequirements(),
     fetchAndWriteCanvas(),
     fetchAndWriteArtifacts(),
     fetchAndWriteSpecifications(),
     fetchAndWriteChats(),
+    fetchAndWriteRepositories(),
+    fetchAndWriteDatabases(),
+    fetchAndWriteDeployments(),
   ]);
   console.log('[Pronghorn] ========== PROJECT DATA SYNC COMPLETE ==========');
 }
 
 async function setupProjectDataSubscription() {
-  console.log('[Pronghorn] Setting up project data realtime subscriptions via broadcast events...');
+  console.log('[Pronghorn] Setting up project data realtime subscriptions (broadcast + postgres_changes fallback)...');
   
   const channels = [];
+  
+  // Subscribe to project settings channel
+  const projectChannel = supabase
+    .channel(\`project-\${CONFIG.projectId}\`)
+    .on('broadcast', { event: 'project_refresh' }, async () => {
+      console.log('[Pronghorn] Project refresh broadcast received');
+      await fetchAndWriteProjectSettings();
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'projects',
+      filter: \`id=eq.\${CONFIG.projectId}\`,
+    }, async () => {
+      console.log('[Pronghorn] Project postgres_changes received');
+      await fetchAndWriteProjectSettings();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Pronghorn] ✓ Listening for project settings');
+      }
+    });
+  channels.push(projectChannel);
   
   // Subscribe to requirements channel - matches frontend's useRealtimeRequirements
   const requirementsChannel = supabase
     .channel(\`requirements-\${CONFIG.projectId}\`)
-    .on('broadcast', { event: 'requirements_refresh' }, async (payload) => {
-      console.log('[Pronghorn] Requirements refresh broadcast received:', payload);
+    .on('broadcast', { event: 'requirements_refresh' }, async () => {
+      console.log('[Pronghorn] Requirements refresh broadcast received');
+      await fetchAndWriteRequirements();
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'requirements',
+      filter: \`project_id=eq.\${CONFIG.projectId}\`,
+    }, async () => {
+      console.log('[Pronghorn] Requirements postgres_changes received');
       await fetchAndWriteRequirements();
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log('[Pronghorn] ✓ Listening for requirements broadcast');
+        console.log('[Pronghorn] ✓ Listening for requirements');
       }
     });
   channels.push(requirementsChannel);
@@ -1537,13 +1677,22 @@ async function setupProjectDataSubscription() {
   // Subscribe to canvas nodes channel - matches frontend's useRealtimeCanvas
   const canvasNodesChannel = supabase
     .channel(\`canvas-nodes-\${CONFIG.projectId}\`)
-    .on('broadcast', { event: 'canvas_refresh' }, async (payload) => {
-      console.log('[Pronghorn] Canvas nodes refresh broadcast received:', payload);
+    .on('broadcast', { event: 'canvas_refresh' }, async () => {
+      console.log('[Pronghorn] Canvas nodes refresh broadcast received');
+      await fetchAndWriteCanvas();
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'canvas_nodes',
+      filter: \`project_id=eq.\${CONFIG.projectId}\`,
+    }, async () => {
+      console.log('[Pronghorn] Canvas nodes postgres_changes received');
       await fetchAndWriteCanvas();
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log('[Pronghorn] ✓ Listening for canvas nodes broadcast');
+        console.log('[Pronghorn] ✓ Listening for canvas nodes');
       }
     });
   channels.push(canvasNodesChannel);
@@ -1551,13 +1700,22 @@ async function setupProjectDataSubscription() {
   // Subscribe to canvas edges channel - matches frontend's useRealtimeCanvas
   const canvasEdgesChannel = supabase
     .channel(\`canvas-edges-\${CONFIG.projectId}\`)
-    .on('broadcast', { event: 'canvas_refresh' }, async (payload) => {
-      console.log('[Pronghorn] Canvas edges refresh broadcast received:', payload);
+    .on('broadcast', { event: 'canvas_refresh' }, async () => {
+      console.log('[Pronghorn] Canvas edges refresh broadcast received');
+      await fetchAndWriteCanvas();
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'canvas_edges',
+      filter: \`project_id=eq.\${CONFIG.projectId}\`,
+    }, async () => {
+      console.log('[Pronghorn] Canvas edges postgres_changes received');
       await fetchAndWriteCanvas();
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log('[Pronghorn] ✓ Listening for canvas edges broadcast');
+        console.log('[Pronghorn] ✓ Listening for canvas edges');
       }
     });
   channels.push(canvasEdgesChannel);
@@ -1565,13 +1723,22 @@ async function setupProjectDataSubscription() {
   // Subscribe to artifacts channel - matches frontend's useRealtimeArtifacts
   const artifactsChannel = supabase
     .channel(\`artifacts-\${CONFIG.projectId}\`)
-    .on('broadcast', { event: 'artifact_refresh' }, async (payload) => {
-      console.log('[Pronghorn] Artifacts refresh broadcast received:', payload);
+    .on('broadcast', { event: 'artifact_refresh' }, async () => {
+      console.log('[Pronghorn] Artifacts refresh broadcast received');
+      await fetchAndWriteArtifacts();
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'artifacts',
+      filter: \`project_id=eq.\${CONFIG.projectId}\`,
+    }, async () => {
+      console.log('[Pronghorn] Artifacts postgres_changes received');
       await fetchAndWriteArtifacts();
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log('[Pronghorn] ✓ Listening for artifacts broadcast');
+        console.log('[Pronghorn] ✓ Listening for artifacts');
       }
     });
   channels.push(artifactsChannel);
@@ -1579,13 +1746,22 @@ async function setupProjectDataSubscription() {
   // Subscribe to specifications channel - matches frontend's useRealtimeSpecifications
   const specificationsChannel = supabase
     .channel(\`specifications-\${CONFIG.projectId}\`)
-    .on('broadcast', { event: 'specification_refresh' }, async (payload) => {
-      console.log('[Pronghorn] Specifications refresh broadcast received:', payload);
+    .on('broadcast', { event: 'specification_refresh' }, async () => {
+      console.log('[Pronghorn] Specifications refresh broadcast received');
+      await fetchAndWriteSpecifications();
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'project_specifications',
+      filter: \`project_id=eq.\${CONFIG.projectId}\`,
+    }, async () => {
+      console.log('[Pronghorn] Specifications postgres_changes received');
       await fetchAndWriteSpecifications();
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log('[Pronghorn] ✓ Listening for specifications broadcast');
+        console.log('[Pronghorn] ✓ Listening for specifications');
       }
     });
   channels.push(specificationsChannel);
@@ -1593,18 +1769,96 @@ async function setupProjectDataSubscription() {
   // Subscribe to chat sessions channel - matches frontend's useRealtimeChatSessions
   const chatSessionsChannel = supabase
     .channel(\`chat-sessions-\${CONFIG.projectId}\`)
-    .on('broadcast', { event: 'chat_session_refresh' }, async (payload) => {
-      console.log('[Pronghorn] Chat sessions refresh broadcast received:', payload);
+    .on('broadcast', { event: 'chat_session_refresh' }, async () => {
+      console.log('[Pronghorn] Chat sessions refresh broadcast received');
+      await fetchAndWriteChats();
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'chat_sessions',
+      filter: \`project_id=eq.\${CONFIG.projectId}\`,
+    }, async () => {
+      console.log('[Pronghorn] Chat sessions postgres_changes received');
       await fetchAndWriteChats();
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log('[Pronghorn] ✓ Listening for chat sessions broadcast');
+        console.log('[Pronghorn] ✓ Listening for chat sessions');
       }
     });
   channels.push(chatSessionsChannel);
   
-  console.log('[Pronghorn] All project data broadcast channels set up');
+  // Subscribe to repositories channel
+  const reposChannel = supabase
+    .channel(\`project_repos-\${CONFIG.projectId}\`)
+    .on('broadcast', { event: 'repos_refresh' }, async () => {
+      console.log('[Pronghorn] Repositories refresh broadcast received');
+      await fetchAndWriteRepositories();
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'project_repos',
+      filter: \`project_id=eq.\${CONFIG.projectId}\`,
+    }, async () => {
+      console.log('[Pronghorn] Repositories postgres_changes received');
+      await fetchAndWriteRepositories();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Pronghorn] ✓ Listening for repositories');
+      }
+    });
+  channels.push(reposChannel);
+  
+  // Subscribe to databases channel
+  const databasesChannel = supabase
+    .channel(\`databases-\${CONFIG.projectId}\`)
+    .on('broadcast', { event: 'database_refresh' }, async () => {
+      console.log('[Pronghorn] Databases refresh broadcast received');
+      await fetchAndWriteDatabases();
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'project_databases',
+      filter: \`project_id=eq.\${CONFIG.projectId}\`,
+    }, async () => {
+      console.log('[Pronghorn] Databases postgres_changes received');
+      await fetchAndWriteDatabases();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Pronghorn] ✓ Listening for databases');
+      }
+    });
+  channels.push(databasesChannel);
+  
+  // Subscribe to deployments channel
+  const deploymentsChannel = supabase
+    .channel(\`deployments-\${CONFIG.projectId}\`)
+    .on('broadcast', { event: 'deployment_refresh' }, async () => {
+      console.log('[Pronghorn] Deployments refresh broadcast received');
+      await fetchAndWriteDeployments();
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'project_deployments',
+      filter: \`project_id=eq.\${CONFIG.projectId}\`,
+    }, async () => {
+      console.log('[Pronghorn] Deployments postgres_changes received');
+      await fetchAndWriteDeployments();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Pronghorn] ✓ Listening for deployments');
+      }
+    });
+  channels.push(deploymentsChannel);
+  
+  console.log('[Pronghorn] All project data channels set up (broadcast + postgres_changes)');
   return channels;
 }
 
@@ -1779,12 +2033,16 @@ INSTALL_COMMAND=npm install
 
 ### Project Data Export (Enabled by Default)
 When \`SYNC_PROJECT_DATA=true\`:
-1. Exports requirements to \`./project/requirements/\` folder
-2. Exports canvas nodes/edges to \`./project/canvas/\` folder
-3. Exports artifacts to \`./project/artifacts/\` folder
-4. Exports specifications to \`./project/specifications/\` folder
-5. Exports chat sessions to \`./project/chats/\` folder
-6. Real-time sync: updates when project data changes in Pronghorn
+1. Exports project settings to \`./project/settings/\` folder
+2. Exports requirements to \`./project/requirements/\` folder
+3. Exports canvas nodes/edges to \`./project/canvas/\` folder
+4. Exports artifacts to \`./project/artifacts/\` folder
+5. Exports specifications to \`./project/specifications/\` folder
+6. Exports chat sessions to \`./project/chats/\` folder
+7. Exports repositories to \`./project/repositories/\` folder
+8. Exports databases to \`./project/databases/\` folder
+9. Exports deployments to \`./project/deployments/\` folder
+10. Real-time sync: updates when project data changes in Pronghorn
 
 ## 📊 Project Details
 

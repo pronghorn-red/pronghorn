@@ -202,7 +202,8 @@ export const useRealtimeChatSessions = (
 export const useRealtimeChatMessages = (
   chatSessionId: string | undefined,
   shareToken: string | null,
-  enabled: boolean = true
+  enabled: boolean = true,
+  projectId?: string // Optional projectId for broadcasting session-level refresh
 ) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -288,12 +289,21 @@ export const useRealtimeChatMessages = (
         );
       }
 
-      // Broadcast refresh event for real-time sync
+      // Broadcast refresh event for real-time sync (message-level)
       await supabase.channel(`chat-messages-${chatSessionId}`).send({
         type: 'broadcast',
         event: 'chat_message_refresh',
         payload: {}
       });
+
+      // Also broadcast to session-level channel for local runner sync
+      if (projectId) {
+        await supabase.channel(`chat-sessions-${projectId}`).send({
+          type: 'broadcast',
+          event: 'chat_session_refresh',
+          payload: { action: 'message_added', sessionId: chatSessionId }
+        });
+      }
 
       return data;
     } catch (error) {
