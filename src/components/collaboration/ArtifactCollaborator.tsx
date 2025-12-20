@@ -71,6 +71,14 @@ export function ArtifactCollaborator({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   
+  // Optimistic messages for immediate UI feedback
+  const [optimisticMessages, setOptimisticMessages] = useState<Array<{
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    created_at: string;
+  }>>([]);
+  
   // View version state
   const [viewingVersion, setViewingVersion] = useState<number | null>(null);
 
@@ -261,8 +269,40 @@ export function ArtifactCollaborator({
   const handleSendMessage = useCallback(async (content: string) => {
     if (!collaborationId || !projectId) return;
     
-    // Add user message locally first
-    await sendMessage('user', content);
+    // Add optimistic user message immediately for instant feedback
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticMsg = {
+      id: optimisticId,
+      role: 'user' as const,
+      content,
+      created_at: new Date().toISOString(),
+    };
+    setOptimisticMessages(prev => [...prev, optimisticMsg]);
+    
+    // If there are unsaved changes, save them first so the agent sees the current content
+    if (hasUnsavedChanges && localContent !== collaboration?.current_content) {
+      const currentContent = collaboration?.current_content || artifact.content;
+      const lines = localContent.split('\n');
+      
+      await insertEdit(
+        'edit',
+        1,
+        lines.length,
+        currentContent,
+        localContent,
+        localContent,
+        'User edit before agent request',
+        'human',
+        'User'
+      );
+      setHasUnsavedChanges(false);
+    }
+    
+    // Send user message to database (async, don't await for UI responsiveness)
+    sendMessage('user', content).then(() => {
+      // Remove from optimistic after real message is persisted
+      setOptimisticMessages(prev => prev.filter(m => m.id !== optimisticId));
+    });
     
     setIsStreaming(true);
     setStreamingContent('');
@@ -282,6 +322,7 @@ export function ArtifactCollaborator({
             userMessage: content,
             shareToken: shareToken || null,
             maxIterations: 10,
+            currentContent: localContent, // Send the current editor content
           }),
         }
       );
@@ -322,6 +363,7 @@ export function ArtifactCollaborator({
                 );
                 if (updatedCollab?.current_content) {
                   setLocalContent(updatedCollab.current_content);
+                  setHasUnsavedChanges(false);
                 }
                 toast.success(`Edit applied: ${event.narrative}`);
               } else if (event.type === 'done') {
@@ -336,7 +378,9 @@ export function ArtifactCollaborator({
         }
       }
 
-      // The assistant message is already saved by the edge function
+      // Refresh all data after agent completes to get messages/blackboard/history
+      await refresh();
+      
       if (lastMessage) {
         setStreamingContent('');
       }
@@ -348,8 +392,9 @@ export function ArtifactCollaborator({
     } finally {
       setIsStreaming(false);
       setStreamingContent('');
+      setOptimisticMessages([]); // Clear any remaining optimistic messages
     }
-  }, [collaborationId, projectId, shareToken, sendMessage]);
+  }, [collaborationId, projectId, shareToken, sendMessage, hasUnsavedChanges, localContent, collaboration?.current_content, artifact.content, insertEdit, refresh]);
 
   const latestVersion = useMemo(() => 
     history.length > 0 ? Math.max(...history.map(h => h.version_number)) : 0,
@@ -358,14 +403,25 @@ export function ArtifactCollaborator({
 
   const currentVersion = viewingVersion || latestVersion;
 
-  // Map messages to the expected format - must be before any early returns
-  const chatMessages: CollaborationMessage[] = useMemo(() => messages.map(m => ({
-    id: m.id,
-    role: m.role as 'user' | 'assistant',
-    content: m.content,
-    created_at: m.created_at,
-    metadata: m.metadata,
-  })), [messages]);
+  // Map messages to the expected format - include optimistic messages
+  const chatMessages: CollaborationMessage[] = useMemo(() => {
+    const dbMessages = messages.map(m => ({
+      id: m.id,
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+      created_at: m.created_at,
+      metadata: m.metadata,
+    }));
+    
+    // Add optimistic messages that aren't yet in the database
+    const optimisticToShow = optimisticMessages.filter(
+      opt => !dbMessages.some(db => db.content === opt.content && db.role === opt.role)
+    );
+    
+    return [...dbMessages, ...optimisticToShow].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+  }, [messages, optimisticMessages]);
   
   // Map blackboard to the expected format
   const blackboardEntries: BlackboardEntry[] = useMemo(() => blackboard.map(b => ({

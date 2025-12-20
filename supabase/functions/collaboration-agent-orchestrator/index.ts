@@ -12,6 +12,7 @@ interface CollaborationRequest {
   userMessage: string;
   shareToken: string;
   maxIterations?: number;
+  currentContent?: string; // Editor content passed from client
 }
 
 function parseAgentResponse(rawText: string): any {
@@ -71,7 +72,7 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const { collaborationId, projectId, userMessage, shareToken, maxIterations = 10 } = 
+    const { collaborationId, projectId, userMessage, shareToken, maxIterations = 10, currentContent: clientContent } = 
       await req.json() as CollaborationRequest;
 
     console.log(`Starting collaboration agent for collab ${collaborationId}`);
@@ -85,6 +86,9 @@ serve(async (req) => {
     if (collabError || !collaboration) {
       throw new Error(`Collaboration not found: ${collabError?.message}`);
     }
+    
+    // Use clientContent from client if provided (captures user's live edits), else use DB content
+    const initialDocumentContent = clientContent || collaboration.current_content;
 
     // Get project for model settings
     const { data: project } = await supabase.rpc("get_project_with_token", {
@@ -208,7 +212,7 @@ Start your response with { and end with }.`;
     let conversationHistory: Array<{ role: string; content: string }> = [];
     let finalStatus = "in_progress";
     let finalMessage = "";
-    let currentContent = collaboration.current_content;
+    let currentContent = initialDocumentContent;
 
     conversationHistory.push({ 
       role: "user", 
