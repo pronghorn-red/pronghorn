@@ -239,14 +239,45 @@ export function ArtifactCollaborator({
     }
   }, [getContentAtVersion]);
 
-  // Handle restore - creates a NEW version with the content from the selected version
+  // Handle restore - fetches fresh from DB and creates a NEW version with the content from the selected version
   const handleRestore = useCallback(async (version: number) => {
     if (!collaborationId) return;
     
     try {
-      // Get the content currently displayed (which is the content for the selected version)
-      const restoredContent = localContent;
-      const currentDbContent = collaboration?.current_content || artifact.content;
+      // Fetch history fresh from the database to ensure we have the latest data
+      // This is critical for multi-user real-time scenarios
+      const { data: historyData, error: historyError } = await supabase.rpc(
+        'get_collaboration_history_with_token',
+        {
+          p_collaboration_id: collaborationId,
+          p_token: shareToken || null,
+        }
+      );
+      
+      if (historyError) throw historyError;
+      
+      // Find the entry for the version we want to restore
+      const entryToRestore = historyData?.find((h: any) => h.version_number === version);
+      if (!entryToRestore?.full_content_snapshot) {
+        console.error('Version data:', { version, entryToRestore, allVersions: historyData?.map((h: any) => h.version_number) });
+        toast.error(`Cannot restore: content for version ${version} not found`);
+        return;
+      }
+      
+      const restoredContent = entryToRestore.full_content_snapshot;
+      
+      // Fetch current collaboration state fresh from the database
+      const { data: collabData, error: collabError } = await supabase.rpc(
+        'get_artifact_collaboration_with_token',
+        {
+          p_collaboration_id: collaborationId,
+          p_token: shareToken || null,
+        }
+      );
+      
+      if (collabError) throw collabError;
+      
+      const currentDbContent = collabData?.current_content || artifact.content;
       
       // Don't restore if content is the same as current
       if (restoredContent === currentDbContent) {
@@ -271,9 +302,9 @@ export function ArtifactCollaborator({
       
       if (result) {
         setLocalContent(restoredContent);
-        setViewingVersion(null);
+        setViewingVersion(null); // This will make slider follow latest
         setHasUnsavedChanges(false);
-        await refreshHistory();
+        await refreshHistory(); // Refresh to get the new version
         toast.success(`Created new version from v${version}`);
       } else {
         toast.error('Failed to restore version');
@@ -282,7 +313,7 @@ export function ArtifactCollaborator({
       console.error('Error restoring version:', error);
       toast.error('Failed to restore version');
     }
-  }, [collaborationId, localContent, collaboration?.current_content, artifact.content, insertEdit, refreshHistory]);
+  }, [collaborationId, shareToken, artifact.content, insertEdit, refreshHistory]);
 
   // Handle merge to artifact
   const handleMerge = useCallback(async () => {
