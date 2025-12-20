@@ -269,7 +269,7 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     '# Exports requirements, canvas, artifacts, specs to local folder',
     '# One-directional: Cloud → Local (read-only export)',
     '# ===========================================',
-    'SYNC_PROJECT_DATA=false',
+    'SYNC_PROJECT_DATA=true',
     'PROJECT_SYNC_FOLDER=./project',
     '',
     '# ===========================================',
@@ -347,7 +347,7 @@ PUSH_LOCAL_CHANGES=true
 # PROJECT DATA SYNC
 # Exports requirements, canvas, artifacts, specs to ./project folder
 # ===========================================
-SYNC_PROJECT_DATA=false
+SYNC_PROJECT_DATA=true
 PROJECT_SYNC_FOLDER=./project
 
 # ===========================================
@@ -1207,12 +1207,18 @@ async function fetchAndWriteRequirements() {
     sortReqs(rootReqs);
     rootReqs.forEach(r => sortReqs(r.children));
     
+    // Create requirements subfolder
+    const reqDir = path.join(PROJECT_DIR, 'requirements');
+    if (!fs.existsSync(reqDir)) {
+      fs.mkdirSync(reqDir, { recursive: true });
+    }
+    
     // Write JSON
-    const jsonPath = path.join(PROJECT_DIR, 'requirements.json');
+    const jsonPath = path.join(reqDir, 'requirements.json');
     fs.writeFileSync(jsonPath, JSON.stringify(rootReqs, null, 2), 'utf8');
     
     // Write Markdown
-    const mdPath = path.join(PROJECT_DIR, 'requirements.md');
+    const mdPath = path.join(reqDir, 'requirements.md');
     let md = '# Requirements\\n\\n';
     const writeReqMd = (req, depth = 0) => {
       const indent = '  '.repeat(depth);
@@ -1254,11 +1260,17 @@ async function fetchAndWriteCanvas() {
       exportedAt: new Date().toISOString(),
     };
     
-    const jsonPath = path.join(PROJECT_DIR, 'canvas.json');
+    // Create canvas subfolder
+    const canvasDir = path.join(PROJECT_DIR, 'canvas');
+    if (!fs.existsSync(canvasDir)) {
+      fs.mkdirSync(canvasDir, { recursive: true });
+    }
+    
+    const jsonPath = path.join(canvasDir, 'canvas.json');
     fs.writeFileSync(jsonPath, JSON.stringify(canvas, null, 2), 'utf8');
     
     // Write summary markdown
-    const mdPath = path.join(PROJECT_DIR, 'canvas.md');
+    const mdPath = path.join(canvasDir, 'canvas.md');
     let md = '# Canvas Summary\\n\\n';
     md += \`Nodes: \${canvas.nodes.length}\\n\`;
     md += \`Edges: \${canvas.edges.length}\\n\\n\`;
@@ -1377,13 +1389,19 @@ async function fetchAndWriteSpecifications() {
       return;
     }
     
+    // Create specifications subfolder
+    const specsDir = path.join(PROJECT_DIR, 'specifications');
+    if (!fs.existsSync(specsDir)) {
+      fs.mkdirSync(specsDir, { recursive: true });
+    }
+    
     // Write latest spec as markdown
     const latest = specs.find(s => s.is_latest) || specs[0];
-    const specPath = path.join(PROJECT_DIR, 'specification.md');
+    const specPath = path.join(specsDir, 'specification.md');
     fs.writeFileSync(specPath, latest.generated_spec || '', 'utf8');
     
     // Write all versions as JSON
-    const jsonPath = path.join(PROJECT_DIR, 'specifications.json');
+    const jsonPath = path.join(specsDir, 'specifications.json');
     fs.writeFileSync(jsonPath, JSON.stringify(specs.map(s => ({
       id: s.id,
       version: s.version,
@@ -1759,13 +1777,14 @@ INSTALL_COMMAND=npm install
 2. Automatically pushes edits to Pronghorn staging
 3. Binary files are skipped
 
-### Project Data Export (Optional)
+### Project Data Export (Enabled by Default)
 When \`SYNC_PROJECT_DATA=true\`:
-1. Exports requirements as \`./project/requirements.json\` and \`.md\`
-2. Exports canvas nodes/edges as \`./project/canvas.json\` and \`.md\`
+1. Exports requirements to \`./project/requirements/\` folder
+2. Exports canvas nodes/edges to \`./project/canvas/\` folder
 3. Exports artifacts to \`./project/artifacts/\` folder
-4. Exports specifications as \`./project/specification.md\`
-5. Real-time sync: updates when project data changes in Pronghorn
+4. Exports specifications to \`./project/specifications/\` folder
+5. Exports chat sessions to \`./project/chats/\` folder
+6. Real-time sync: updates when project data changes in Pronghorn
 
 ## 📊 Project Details
 
