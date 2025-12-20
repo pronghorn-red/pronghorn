@@ -11,7 +11,7 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeArtifacts } from "@/hooks/useRealtimeArtifacts";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown } from "lucide-react";
+import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AddArtifactModal } from "@/components/artifacts/AddArtifactModal";
+import { ArtifactCollaborator } from "@/components/collaboration/ArtifactCollaborator";
 import {
   Accordion,
   AccordionContent,
@@ -68,6 +69,7 @@ export default function Artifacts() {
   const [streamingSummary, setStreamingSummary] = useState<{ [key: string]: string }>({});
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [collaboratingArtifact, setCollaboratingArtifact] = useState<any>(null);
 
   // Fetch project settings for model configuration
   const { data: project } = useQuery({
@@ -257,6 +259,27 @@ ${artifact.content}`;
     );
   }
 
+  // Collaboration sub-view
+  if (collaboratingArtifact) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <PrimaryNav />
+        <div className="flex flex-1 relative overflow-hidden">
+          <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
+          <main className="flex-1 overflow-hidden">
+            <ArtifactCollaborator
+              projectId={projectId!}
+              artifact={collaboratingArtifact}
+              shareToken={shareToken}
+              onBack={() => setCollaboratingArtifact(null)}
+              onMerged={refresh}
+            />
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
@@ -353,6 +376,18 @@ ${artifact.content}`;
                           </div>
                           <div className="flex gap-2">
                             <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setCollaboratingArtifact(artifact)}
+                                  >
+                                    <Users className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Collaborate</TooltipContent>
+                              </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
