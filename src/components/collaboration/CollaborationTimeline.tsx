@@ -113,25 +113,23 @@ export function CollaborationTimeline({
           </Tooltip>
         </TooltipProvider>
 
-        {currentVersion < latestVersion && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => onRestore(currentVersion)}
-                  disabled={isRestoring}
-                >
-                  <RotateCcw className="h-3 w-3 mr-1" />
-                  Restore
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Restore document to this version</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => onRestore(currentVersion)}
+                disabled={isRestoring}
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Restore
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Create new version from this content</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     );
   }
@@ -182,17 +180,15 @@ export function CollaborationTimeline({
           <span className="text-sm text-muted-foreground">
             Version {currentVersion} of {latestVersion || 1}
           </span>
-          {currentVersion < latestVersion && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onRestore(currentVersion)}
-              disabled={isRestoring}
-            >
-              <RotateCcw className="h-3 w-3 mr-2" />
-              Restore to v{currentVersion}
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onRestore(currentVersion)}
+            disabled={isRestoring}
+          >
+            <RotateCcw className="h-3 w-3 mr-2" />
+            Restore v{currentVersion}
+          </Button>
         </div>
       </div>
 

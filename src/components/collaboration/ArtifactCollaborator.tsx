@@ -231,20 +231,49 @@ export function ArtifactCollaborator({
     }
   }, [history]);
 
-  // Handle restore
+  // Handle restore - creates a NEW version with the content from the selected version
   const handleRestore = useCallback(async (version: number) => {
     if (!collaborationId) return;
     
     try {
-      await restoreToVersion(version);
-      setViewingVersion(null);
-      setHasUnsavedChanges(false);
-      toast.success(`Restored to version ${version}`);
+      // Get the content from the version we're restoring
+      const entryToRestore = history.find(h => h.version_number === version);
+      if (!entryToRestore?.full_content_snapshot) {
+        toast.error('Cannot restore: version content not found');
+        return;
+      }
+      
+      const restoredContent = entryToRestore.full_content_snapshot;
+      const currentContent = collaboration?.current_content || artifact.content;
+      const lines = restoredContent.split('\n');
+      
+      // Insert a new edit with the restored content (this creates a new version)
+      const result = await insertEdit(
+        'edit',
+        1,
+        lines.length,
+        currentContent,
+        restoredContent,
+        restoredContent,
+        `Restored from version ${version}`,
+        'human',
+        'User'
+      );
+      
+      if (result) {
+        setLocalContent(restoredContent);
+        setViewingVersion(null);
+        setHasUnsavedChanges(false);
+        await refreshHistory();
+        toast.success(`Created new version from v${version}`);
+      } else {
+        toast.error('Failed to restore version');
+      }
     } catch (error) {
       console.error('Error restoring version:', error);
       toast.error('Failed to restore version');
     }
-  }, [collaborationId, restoreToVersion]);
+  }, [collaborationId, history, collaboration?.current_content, artifact.content, insertEdit, refreshHistory]);
 
   // Handle merge to artifact
   const handleMerge = useCallback(async () => {

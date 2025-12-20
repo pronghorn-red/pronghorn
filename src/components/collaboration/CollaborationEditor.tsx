@@ -127,11 +127,19 @@ export function CollaborationEditor({
         {viewMode === 'rendered' ? (
           <ScrollArea className="h-full">
             <div 
-              className="p-4 prose prose-sm dark:prose-invert max-w-none cursor-pointer"
+              className="p-4 prose prose-sm dark:prose-invert max-w-none cursor-pointer
+                         [&_p]:mb-4 [&_p]:whitespace-pre-wrap
+                         [&_br]:block [&_br]:content-[''] [&_br]:mt-2"
               onClick={() => !readOnly && setViewMode('source')}
             >
               {content ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    // Preserve line breaks within paragraphs
+                    p: ({ children }) => <p className="mb-4 whitespace-pre-wrap">{children}</p>,
+                  }}
+                >
                   {content}
                 </ReactMarkdown>
               ) : (
