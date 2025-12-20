@@ -222,29 +222,38 @@ export function ArtifactCollaborator({
     }
   }, [collaborationId, hasUnsavedChanges, localContent, collaboration?.current_content, artifact.content, insertEdit, refreshHistory]);
 
+  // Helper to get the correct content for a version
+  // The full_content_snapshot stores the NEW content after that version's edit
+  // So version N's snapshot = content AT version N
+  const getContentAtVersion = useCallback((version: number): string | null => {
+    const entry = history.find(h => h.version_number === version);
+    return entry?.full_content_snapshot || null;
+  }, [history]);
+
   // Handle version navigation
   const handleVersionChange = useCallback((version: number) => {
-    const entry = history.find(h => h.version_number === version);
-    if (entry?.full_content_snapshot) {
-      setLocalContent(entry.full_content_snapshot);
+    const content = getContentAtVersion(version);
+    if (content) {
+      setLocalContent(content);
       setViewingVersion(version);
     }
-  }, [history]);
+  }, [getContentAtVersion]);
 
   // Handle restore - creates a NEW version with the content from the selected version
   const handleRestore = useCallback(async (version: number) => {
     if (!collaborationId) return;
     
     try {
-      // Get the content from the version we're restoring
-      const entryToRestore = history.find(h => h.version_number === version);
-      if (!entryToRestore?.full_content_snapshot) {
-        toast.error('Cannot restore: version content not found');
+      // Get the content currently displayed (which is the content for the selected version)
+      const restoredContent = localContent;
+      const currentDbContent = collaboration?.current_content || artifact.content;
+      
+      // Don't restore if content is the same as current
+      if (restoredContent === currentDbContent) {
+        toast.info('Content is already the same as current version');
         return;
       }
       
-      const restoredContent = entryToRestore.full_content_snapshot;
-      const currentContent = collaboration?.current_content || artifact.content;
       const lines = restoredContent.split('\n');
       
       // Insert a new edit with the restored content (this creates a new version)
@@ -252,7 +261,7 @@ export function ArtifactCollaborator({
         'edit',
         1,
         lines.length,
-        currentContent,
+        currentDbContent,
         restoredContent,
         restoredContent,
         `Restored from version ${version}`,
@@ -273,7 +282,7 @@ export function ArtifactCollaborator({
       console.error('Error restoring version:', error);
       toast.error('Failed to restore version');
     }
-  }, [collaborationId, history, collaboration?.current_content, artifact.content, insertEdit, refreshHistory]);
+  }, [collaborationId, localContent, collaboration?.current_content, artifact.content, insertEdit, refreshHistory]);
 
   // Handle merge to artifact
   const handleMerge = useCallback(async () => {
