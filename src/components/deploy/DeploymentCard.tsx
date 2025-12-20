@@ -128,41 +128,53 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate, onSelect, isSelected
   const handleRestart = () => invokeRenderService('restart');
   const handleSyncStatus = () => invokeRenderService('status');
 
-  const handleDownloadPackage = async () => {
-    setIsActionLoading('download');
+  const handleDownloadPackage = async (mode: 'full' | 'env-only' = 'full') => {
+    setIsActionLoading(mode === 'full' ? 'download-full' : 'download-env');
     try {
       const { data, error } = await supabase.functions.invoke('generate-local-package', {
         body: {
           deploymentId: deployment.id,
           shareToken: shareToken || null,
+          mode,
         },
       });
 
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
 
-      // Decode base64 to binary
-      const binaryString = atob(data.data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+      if (mode === 'env-only') {
+        // Plain text .env file
+        const blob = new Blob([data.data], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = data.filename || `${deployment.environment}-${deployment.name}.env`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        toast.success('.env file downloaded');
+      } else {
+        // Decode base64 ZIP to binary
+        const binaryString = atob(data.data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'application/zip' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = data.filename || `${deployment.environment}-${deployment.name}-local.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        toast.success('Package downloaded');
       }
-
-      // Create a blob and trigger download
-      const blob = new Blob([bytes], { type: 'application/zip' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = data.filename || `${deployment.environment}-${deployment.name}-local.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-
-      toast.success('Package downloaded');
     } catch (error: any) {
       console.error('Error downloading package:', error);
-      toast.error(error.message || 'Failed to download package');
+      toast.error(error.message || 'Failed to download');
     } finally {
       setIsActionLoading(null);
     }

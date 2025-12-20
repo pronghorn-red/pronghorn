@@ -10,6 +10,7 @@ const corsHeaders = {
 interface GeneratePackageRequest {
   deploymentId: string;
   shareToken?: string;
+  mode?: 'full' | 'env-only'; // NEW: download mode
 }
 
 serve(async (req) => {
@@ -27,9 +28,9 @@ serve(async (req) => {
     });
 
     const body: GeneratePackageRequest = await req.json();
-    const { deploymentId, shareToken } = body;
+    const { deploymentId, shareToken, mode = 'full' } = body;
 
-    console.log(`[generate-local-package] DeploymentId: ${deploymentId}, shareToken: ${shareToken ? 'provided' : 'null'}`);
+    console.log(`[generate-local-package] DeploymentId: ${deploymentId}, mode: ${mode}, shareToken: ${shareToken ? 'provided' : 'null'}`);
 
     // Validate access and get deployment details
     const { data: deployment, error: deploymentError } = await supabase.rpc(
@@ -71,11 +72,26 @@ serve(async (req) => {
       p_token: shareToken || null,
     });
 
-    // Create ZIP file
+    // Generate the comprehensive .env file
+    const envContent = generateEnvFile(deployment, shareToken, repo, SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ENV-ONLY MODE: Just return the .env content as text
+    if (mode === 'env-only') {
+      console.log('[generate-local-package] Returning .env file only');
+      return new Response(JSON.stringify({ 
+        success: true, 
+        data: envContent,
+        filename: `${deployment.environment}-${deployment.name}.env`,
+        contentType: 'text/plain'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // FULL MODE: Create ZIP file with runner + .env
     const zip = new JSZip();
 
-    // 1. Create .env file with real-time config
-    const envContent = generateEnvFile(deployment, shareToken, repo, SUPABASE_URL, SUPABASE_ANON_KEY);
+    // 1. Create .env file with comprehensive runtime config
     zip.file('.env', envContent);
 
     // 2. Create package.json with Supabase client for real-time
@@ -103,15 +119,19 @@ node pronghorn-runner.js
 `;
     zip.file('start.bat', startScriptWindows);
 
+    // 6. Create .env.example as template
+    zip.file('.env.example', generateEnvExample());
+
     // Generate the ZIP as base64
     const zipContent = await zip.generateAsync({ type: 'base64' });
 
-    console.log('[generate-local-package] Package generated successfully');
+    console.log('[generate-local-package] Full package generated successfully');
 
     return new Response(JSON.stringify({ 
       success: true, 
       data: zipContent,
-      filename: `${deployment.environment}-${deployment.name}-local.zip`
+      filename: `${deployment.environment}-${deployment.name}-local.zip`,
+      contentType: 'application/zip'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -125,13 +145,128 @@ node pronghorn-runner.js
 });
 
 function generateEnvFile(deployment: any, shareToken: string | undefined, repo: any, supabaseUrl: string, supabaseAnonKey: string): string {
+  const projectType = deployment.project_type || 'vue_vite';
+  const isVite = isViteProject(projectType);
+  
+  // Determine commands based on project type
+  const runCommand = isVite ? 'npm run dev' : (deployment.run_command || 'npm run dev');
+  const buildCommand = isVite ? 'npm run build' : (deployment.build_command || '');
+  const runFolder = isVite ? '/' : (deployment.run_folder || '/');
+  const buildFolder = isVite ? 'dist' : (deployment.build_folder || 'dist');
+
   const lines = [
-    '# Pronghorn Real-Time Local Development Configuration',
-    `# Generated for: ${deployment.name}`,
-    `# Environment: ${deployment.environment}`,
+    '# =====================================================',
+    '# Pronghorn Runner Configuration',
+    `# Generated for: ${deployment.environment}-${deployment.name}`,
+    `# Generated at: ${new Date().toISOString()}`,
+    '# =====================================================',
     '',
     '# ===========================================',
-    '# REBUILD TRIGGERS (set which events trigger rebuilds)',
+    '# CORE IDENTIFICATION (REQUIRED)',
+    '# ===========================================',
+    `SUPABASE_URL=${supabaseUrl}`,
+    `SUPABASE_ANON_KEY=${supabaseAnonKey}`,
+    `PRONGHORN_PROJECT_ID=${deployment.project_id}`,
+    repo ? `PRONGHORN_REPO_ID=${repo.id}` : '# PRONGHORN_REPO_ID=<repo-uuid>',
+    `PRONGHORN_DEPLOYMENT_ID=${deployment.id}`,
+    shareToken ? `PRONGHORN_SHARE_TOKEN=${shareToken}` : '# PRONGHORN_SHARE_TOKEN=<your-token>',
+    '',
+    '# ===========================================',
+    '# RUNTIME CONFIGURATION',
+    '# ===========================================',
+    '# PROJECT_TYPE options: vue_vite, react_vite, static, node, python, go, ruby, rust, elixir, docker',
+    `PROJECT_TYPE=${projectType}`,
+    '',
+    '# Active runtime settings (uncomment and modify as needed)',
+    `RUN_COMMAND=${runCommand}`,
+    buildCommand ? `BUILD_COMMAND=${buildCommand}` : '# BUILD_COMMAND=',
+    `INSTALL_COMMAND=npm install`,
+    `RUN_FOLDER=${runFolder}`,
+    `BUILD_FOLDER=${buildFolder}`,
+    '',
+    '# ===========================================',
+    '# VITE / REACT / VUE (Node.js based)',
+    '# Uncomment these for Vite-based projects',
+    '# ===========================================',
+    '# PROJECT_TYPE=vue_vite',
+    '# RUN_COMMAND=npm run dev',
+    '# BUILD_COMMAND=npm run build',
+    '# INSTALL_COMMAND=npm install',
+    '# RUN_FOLDER=/',
+    '# BUILD_FOLDER=dist',
+    '',
+    '# ===========================================',
+    '# NODE.JS BACKEND',
+    '# Uncomment these for Node.js/Express projects',
+    '# ===========================================',
+    '# PROJECT_TYPE=node',
+    '# RUN_COMMAND=node index.js',
+    '# BUILD_COMMAND=npm run build',
+    '# INSTALL_COMMAND=npm install',
+    '# RUN_FOLDER=/',
+    '',
+    '# ===========================================',
+    '# PYTHON BACKEND',
+    '# Uncomment these for Python projects',
+    '# ===========================================',
+    '# PROJECT_TYPE=python',
+    '# RUN_COMMAND=python main.py',
+    '# BUILD_COMMAND=',
+    '# INSTALL_COMMAND=pip install -r requirements.txt',
+    '# RUN_FOLDER=/',
+    '',
+    '# ===========================================',
+    '# GO BACKEND',
+    '# Uncomment these for Go projects',
+    '# ===========================================',
+    '# PROJECT_TYPE=go',
+    '# RUN_COMMAND=./app',
+    '# BUILD_COMMAND=go build -o app',
+    '# INSTALL_COMMAND=go mod download',
+    '# RUN_FOLDER=/',
+    '',
+    '# ===========================================',
+    '# RUBY BACKEND',
+    '# Uncomment these for Ruby projects',
+    '# ===========================================',
+    '# PROJECT_TYPE=ruby',
+    '# RUN_COMMAND=bundle exec ruby app.rb',
+    '# BUILD_COMMAND=',
+    '# INSTALL_COMMAND=bundle install',
+    '# RUN_FOLDER=/',
+    '',
+    '# ===========================================',
+    '# RUST BACKEND',
+    '# Uncomment these for Rust projects',
+    '# ===========================================',
+    '# PROJECT_TYPE=rust',
+    '# RUN_COMMAND=./target/release/app',
+    '# BUILD_COMMAND=cargo build --release',
+    '# INSTALL_COMMAND=',
+    '# RUN_FOLDER=/',
+    '',
+    '# ===========================================',
+    '# ELIXIR BACKEND',
+    '# Uncomment these for Elixir projects',
+    '# ===========================================',
+    '# PROJECT_TYPE=elixir',
+    '# RUN_COMMAND=mix phx.server',
+    '# BUILD_COMMAND=mix compile',
+    '# INSTALL_COMMAND=mix deps.get',
+    '# RUN_FOLDER=/',
+    '',
+    '# ===========================================',
+    '# DOCKER',
+    '# Uncomment these for Docker-based projects',
+    '# ===========================================',
+    '# PROJECT_TYPE=docker',
+    '# RUN_COMMAND=docker-compose up',
+    '# BUILD_COMMAND=docker build -t app .',
+    '# INSTALL_COMMAND=',
+    '# RUN_FOLDER=/',
+    '',
+    '# ===========================================',
+    '# SYNC SETTINGS',
     '# ===========================================',
     '# REBUILD_ON_STAGING: Rebuild when files are staged (immediate, before commit)',
     '# REBUILD_ON_FILES: Rebuild when files are committed (after commit)',
@@ -145,6 +280,19 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     'PUSH_LOCAL_CHANGES=true',
     '',
     '# ===========================================',
+    '# PROJECT DATA SYNC (Phase 3 Feature)',
+    '# Enable one-directional sync of project metadata',
+    '# ===========================================',
+    '# SYNC_PROJECT_DATA=false',
+    '# PROJECT_SYNC_FOLDER=./project',
+    '',
+    '# ===========================================',
+    '# APP SETTINGS',
+    '# ===========================================',
+    `APP_ENVIRONMENT=${deployment.environment}`,
+    'APP_PORT=3000',
+    '',
+    '# ===========================================',
     '# GIT CONFIGURATION (only if REBUILD_ON_GIT=true)',
     '# ===========================================',
     repo ? `# GITHUB_REPO=${repo.organization}/${repo.repo}` : '# GITHUB_REPO=org/repo',
@@ -152,24 +300,8 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     '# GITHUB_PAT=your_personal_access_token',
     '',
     '# ===========================================',
-    '# SUPABASE / PRONGHORN CONFIGURATION',
-    '# ===========================================',
-    `SUPABASE_URL=${supabaseUrl}`,
-    `SUPABASE_ANON_KEY=${supabaseAnonKey}`,
-    `PRONGHORN_PROJECT_ID=${deployment.project_id}`,
-    repo ? `PRONGHORN_REPO_ID=${repo.id}` : '# PRONGHORN_REPO_ID=<repo-uuid>',
-    `PRONGHORN_DEPLOYMENT_ID=${deployment.id}`,
-    shareToken ? `PRONGHORN_SHARE_TOKEN=${shareToken}` : '# PRONGHORN_SHARE_TOKEN=<your-token>',
-    '',
-    '# ===========================================',
-    '# APPLICATION CONFIGURATION',
-    '# ===========================================',
-    `APP_ENVIRONMENT=${deployment.environment}`,
-    'APP_PORT=3000',
-    `PROJECT_TYPE=${deployment.project_type || 'node'}`,
-    '',
-    '# ===========================================',
     '# USER ENVIRONMENT VARIABLES',
+    '# Add your application-specific env vars below',
     '# ===========================================',
   ];
 
@@ -177,7 +309,7 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
   const envVars = deployment.env_vars || {};
   const envVarKeys = Object.keys(envVars);
   if (envVarKeys.length > 0) {
-    lines.push('# These keys match your Render.com deployment - add your local values');
+    lines.push('# These keys match your deployment configuration - add your local values');
     envVarKeys.forEach((key) => {
       lines.push(`${key}=`);
     });
@@ -188,7 +320,7 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
   const secretKeys = Object.keys(secrets);
   if (secretKeys.length > 0) {
     lines.push('');
-    lines.push('# Secrets (fill in your values)');
+    lines.push('# Secrets (fill in your values - DO NOT commit these!)');
     secretKeys.forEach((key) => {
       lines.push(`${key}=`);
     });
@@ -197,14 +329,71 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
   return lines.join('\n');
 }
 
+function generateEnvExample(): string {
+  return `# =====================================================
+# Pronghorn Runner Configuration Template
+# Copy this to .env and fill in your values
+# =====================================================
+
+# ===========================================
+# CORE IDENTIFICATION (REQUIRED)
+# Get these from your Pronghorn deployment
+# ===========================================
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+PRONGHORN_PROJECT_ID=your-project-uuid
+PRONGHORN_REPO_ID=your-repo-uuid
+PRONGHORN_DEPLOYMENT_ID=your-deployment-uuid
+PRONGHORN_SHARE_TOKEN=your-share-token
+
+# ===========================================
+# RUNTIME CONFIGURATION
+# ===========================================
+# PROJECT_TYPE options: vue_vite, react_vite, static, node, python, go, ruby, rust, elixir, docker
+PROJECT_TYPE=vue_vite
+RUN_COMMAND=npm run dev
+BUILD_COMMAND=npm run build
+INSTALL_COMMAND=npm install
+RUN_FOLDER=/
+BUILD_FOLDER=dist
+
+# ===========================================
+# SYNC SETTINGS
+# ===========================================
+REBUILD_ON_STAGING=true
+REBUILD_ON_FILES=true
+REBUILD_ON_GIT=false
+PUSH_LOCAL_CHANGES=true
+
+# ===========================================
+# PROJECT DATA SYNC
+# ===========================================
+# SYNC_PROJECT_DATA=false
+# PROJECT_SYNC_FOLDER=./project
+
+# ===========================================
+# APP SETTINGS
+# ===========================================
+APP_ENVIRONMENT=development
+APP_PORT=3000
+
+# ===========================================
+# GIT CONFIGURATION (only if REBUILD_ON_GIT=true)
+# ===========================================
+# GITHUB_REPO=org/repo
+# GITHUB_BRANCH=main
+# GITHUB_PAT=your_personal_access_token
+`;
+}
+
 function generatePackageJson(deployment: any): object {
   return {
-    name: `${deployment.environment}-${deployment.name}-local`,
+    name: `pronghorn-runner-${deployment.environment}-${deployment.name}`,
     version: '1.0.0',
     description: `Pronghorn Real-Time Local Development Runner for ${deployment.name}`,
     main: 'pronghorn-runner.js',
     scripts: {
-      start: 'node --permission --allow-fs-read=./* --allow-fs-write=./* pronghorn-runner.js',
+      start: 'node pronghorn-runner.js',
     },
     dependencies: {
       '@supabase/supabase-js': '^2.45.0',
@@ -212,32 +401,30 @@ function generatePackageJson(deployment: any): object {
       'node-fetch': '^3.3.2',
       'chokidar': '^3.5.3',
     },
+    engines: {
+      node: '>=18.0.0'
+    }
   };
 }
 
 function isViteProject(projectType: string | undefined): boolean {
-  return projectType === 'vue_vite' || projectType === 'react_vite';
+  return projectType === 'vue_vite' || projectType === 'react_vite' || projectType === 'static';
 }
 
 function generateRunnerScript(deployment: any, repo: any): string {
-  const repoUrl = repo ? `https://github.com/${repo.organization}/${repo.repo}.git` : '';
-  
-  // For Vue/React Vite projects, use fixed config
-  const isVite = isViteProject(deployment.project_type);
-  const runCommand = isVite ? 'npm run dev' : (deployment.run_command || 'npm run dev');
-  const buildCommand = isVite ? '' : (deployment.build_command || 'npm run build');
-  const runFolder = isVite ? '/' : (deployment.run_folder || '/');
-  
   return `#!/usr/bin/env node
 /**
  * Pronghorn Real-Time Local Development Runner
  * 
  * This script:
- * 1. Connects to Supabase Realtime to watch for file changes
- * 2. Pulls files from repo_files/repo_staging directly from database
- * 3. Writes files to ./app/ folder
- * 4. Runs npm run dev (Vite) or nodemon for hot reload
- * 5. Captures errors and sends telemetry back to Pronghorn
+ * 1. Reads ALL configuration from .env file
+ * 2. Connects to Supabase Realtime to watch for file changes
+ * 3. Pulls files from repo_files/repo_staging directly from database
+ * 4. Writes files to ./app/ folder
+ * 5. Runs the configured dev command for your project type
+ * 6. Captures errors and sends telemetry back to Pronghorn
+ * 
+ * Supports: Node.js, Python, Go, Ruby, Rust, Elixir, Docker
  */
 
 require('dotenv').config();
@@ -248,35 +435,42 @@ const fs = require('fs');
 // Dynamic import for ESM modules
 let supabase = null;
 
+// All configuration from .env
 const CONFIG = {
-  // Rebuild triggers
-  rebuildOnStaging: process.env.REBUILD_ON_STAGING === 'true',
-  rebuildOnFiles: process.env.REBUILD_ON_FILES === 'true',
-  rebuildOnGit: process.env.REBUILD_ON_GIT === 'true',
-  
-  // Bidirectional sync
-  pushLocalChanges: process.env.PUSH_LOCAL_CHANGES !== 'false',
-  
-  // Git config (for REBUILD_ON_GIT)
-  githubRepo: process.env.GITHUB_REPO,
-  githubBranch: process.env.GITHUB_BRANCH || '${deployment.branch || 'main'}',
-  githubPat: process.env.GITHUB_PAT,
-  
-  // Supabase config
+  // Core identification
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
-  
-  // Pronghorn config
   projectId: process.env.PRONGHORN_PROJECT_ID,
   repoId: process.env.PRONGHORN_REPO_ID,
   deploymentId: process.env.PRONGHORN_DEPLOYMENT_ID,
   shareToken: process.env.PRONGHORN_SHARE_TOKEN,
   
-  // App config
-  projectType: process.env.PROJECT_TYPE || '${deployment.project_type || 'vue_vite'}',
-  runCommand: '${runCommand}',
-  buildCommand: '${buildCommand}',
-  runFolder: '${runFolder}',
+  // Runtime configuration (all from .env)
+  projectType: process.env.PROJECT_TYPE || 'vue_vite',
+  runCommand: process.env.RUN_COMMAND || 'npm run dev',
+  buildCommand: process.env.BUILD_COMMAND || '',
+  installCommand: process.env.INSTALL_COMMAND || 'npm install',
+  runFolder: process.env.RUN_FOLDER || '/',
+  buildFolder: process.env.BUILD_FOLDER || 'dist',
+  
+  // Sync settings
+  rebuildOnStaging: process.env.REBUILD_ON_STAGING !== 'false',
+  rebuildOnFiles: process.env.REBUILD_ON_FILES !== 'false',
+  rebuildOnGit: process.env.REBUILD_ON_GIT === 'true',
+  pushLocalChanges: process.env.PUSH_LOCAL_CHANGES !== 'false',
+  
+  // Project data sync
+  syncProjectData: process.env.SYNC_PROJECT_DATA === 'true',
+  projectSyncFolder: process.env.PROJECT_SYNC_FOLDER || './project',
+  
+  // App settings
+  appEnvironment: process.env.APP_ENVIRONMENT || 'development',
+  appPort: process.env.APP_PORT || '3000',
+  
+  // Git config (for REBUILD_ON_GIT)
+  githubRepo: process.env.GITHUB_REPO,
+  githubBranch: process.env.GITHUB_BRANCH || 'main',
+  githubPat: process.env.GITHUB_PAT,
 };
 
 const APP_DIR = path.join(process.cwd(), 'app');
@@ -284,7 +478,6 @@ let devProcess = null;
 let isRestarting = false;
 
 // Track known staged files for detecting unstaging
-// Map<file_path, { operation_type, new_content }>
 let knownStagedFiles = new Map();
 
 // Debounce timer for staging sync
@@ -325,6 +518,10 @@ function isBinaryFile(filePath) {
   } catch {
     return true;
   }
+}
+
+function isNodeBasedProject() {
+  return ['vue_vite', 'react_vite', 'static', 'node', 'express'].includes(CONFIG.projectType);
 }
 
 // ============================================
@@ -473,16 +670,19 @@ async function writeFilesToDisk(files) {
   return changedPackageJsonDirs;
 }
 
-async function runNpmInstallInDirs(dirs) {
-  for (const dir of dirs) {
-    console.log(\`[Pronghorn] Running npm install in \${dir}...\`);
-    try {
-      execSync('npm install', { cwd: dir, stdio: 'inherit' });
-      console.log(\`[Pronghorn] npm install completed in \${dir}\`);
-    } catch (err) {
-      console.error(\`[Pronghorn] npm install failed in \${dir}:\`, err.message);
-      await reportLog('error', \`npm install failed in \${dir}: \${err.message}\`);
-    }
+async function runInstallCommand(dir) {
+  if (!CONFIG.installCommand) {
+    console.log('[Pronghorn] No install command configured, skipping...');
+    return;
+  }
+  
+  console.log(\`[Pronghorn] Running install command in \${dir}: \${CONFIG.installCommand}\`);
+  try {
+    execSync(CONFIG.installCommand, { cwd: dir, stdio: 'inherit' });
+    console.log(\`[Pronghorn] Install completed in \${dir}\`);
+  } catch (err) {
+    console.error(\`[Pronghorn] Install failed in \${dir}:\`, err.message);
+    await reportLog('error', \`Install failed in \${dir}: \${err.message}\`);
   }
 }
 
@@ -493,28 +693,31 @@ async function runNpmInstallInDirs(dirs) {
 function startDevServer() {
   const cwd = path.join(APP_DIR, CONFIG.runFolder.replace(/^\\//, ''));
   
-  // Check if package.json exists and install deps
-  const packageJsonPath = path.join(cwd, 'package.json');
-  if (fs.existsSync(packageJsonPath)) {
-    console.log('[Pronghorn] Installing dependencies...');
-    try {
-      execSync('npm install', { cwd, stdio: 'inherit' });
-    } catch (err) {
-      console.error('[Pronghorn] npm install failed:', err.message);
-      reportLog('error', \`npm install failed: \${err.message}\`);
+  // Check if package.json exists and install deps (for Node-based projects)
+  if (isNodeBasedProject()) {
+    const packageJsonPath = path.join(cwd, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      console.log('[Pronghorn] Installing dependencies...');
+      try {
+        execSync(CONFIG.installCommand, { cwd, stdio: 'inherit' });
+      } catch (err) {
+        console.error('[Pronghorn] Install failed:', err.message);
+        reportLog('error', \`Install failed: \${err.message}\`);
+      }
     }
   }
   
   console.log('[Pronghorn] Starting dev server...');
   console.log(\`[Pronghorn] Command: \${CONFIG.runCommand}\`);
   console.log(\`[Pronghorn] Directory: \${cwd}\`);
+  console.log(\`[Pronghorn] Project Type: \${CONFIG.projectType}\`);
   
   const [cmd, ...args] = CONFIG.runCommand.split(' ');
   devProcess = spawn(cmd, args, {
     cwd,
     shell: true,
     stdio: ['inherit', 'pipe', 'pipe'],
-    env: { ...process.env, FORCE_COLOR: '1' },
+    env: { ...process.env, FORCE_COLOR: '1', PORT: CONFIG.appPort },
   });
 
   devProcess.stdout.on('data', (data) => {
@@ -594,15 +797,7 @@ async function syncStagingToLocal() {
       return;
     }
     
-    console.log(\`[Pronghorn] Fetched \${stagedFiles?.length || 0} staged files from database:\`);
-    for (const staged of (stagedFiles || [])) {
-      console.log(\`[Pronghorn]   - \${staged.file_path} (op: \${staged.operation_type}) [content length: \${staged.new_content?.length || 0}]\`);
-    }
-    
-    console.log(\`[Pronghorn] Known staged files BEFORE sync: \${knownStagedFiles.size}\`);
-    for (const [path, data] of knownStagedFiles) {
-      console.log(\`[Pronghorn]   - \${path} (op: \${data.operation_type})\`);
-    }
+    console.log(\`[Pronghorn] Fetched \${stagedFiles?.length || 0} staged files from database\`);
     
     const currentStagedPaths = new Set();
     let needsRestart = false;
@@ -618,8 +813,6 @@ async function syncStagingToLocal() {
         if (fs.existsSync(fullPath)) {
           fs.unlinkSync(fullPath);
           console.log(\`[Pronghorn] Deleted (staged delete): \${staged.file_path}\`);
-        } else {
-          console.log(\`[Pronghorn] File already absent (staged delete): \${staged.file_path}\`);
         }
       } else {
         // 'add' or 'edit' - write new_content
@@ -637,20 +830,17 @@ async function syncStagingToLocal() {
           const existingContent = fs.readFileSync(fullPath, 'utf8');
           const existingHash = hashContent(existingContent);
           shouldWrite = (newHash !== existingHash);
-          if (!shouldWrite) {
-            console.log(\`[Pronghorn] Skip write (hash match): \${staged.file_path}\`);
-          }
         }
         
         if (shouldWrite) {
           fs.writeFileSync(fullPath, newContent, 'utf8');
-          console.log(\`[Pronghorn] Written (staged \${staged.operation_type}): \${staged.file_path} [\${newContent.length} bytes]\`);
+          console.log(\`[Pronghorn] Written (staged \${staged.operation_type}): \${staged.file_path}\`);
           
           // Check for package.json changes
           if (path.basename(staged.file_path) === 'package.json') {
             needsRestart = true;
-            console.log('[Pronghorn] package.json changed - will run npm install');
-            await runNpmInstallInDirs([dirPath]);
+            console.log('[Pronghorn] package.json changed - will run install');
+            await runInstallCommand(dirPath);
           }
         }
       }
@@ -659,7 +849,7 @@ async function syncStagingToLocal() {
     // Check for unstaged files (were in knownStagedFiles, now absent)
     for (const [filePath, oldState] of knownStagedFiles) {
       if (!currentStagedPaths.has(filePath)) {
-        console.log(\`[Pronghorn] File unstaged: \${filePath} (was: \${oldState.operation_type})\`);
+        console.log(\`[Pronghorn] File unstaged: \${filePath}\`);
         
         // Fetch from repo_files to revert to committed version
         const { data: repoFiles, error: repoError } = await supabase.rpc('get_repo_files_with_token', {
@@ -688,8 +878,6 @@ async function syncStagingToLocal() {
           if (fs.existsSync(fullPath)) {
             fs.unlinkSync(fullPath);
             console.log(\`[Pronghorn] Deleted (staged add rolled back): \${filePath}\`);
-          } else {
-            console.log(\`[Pronghorn] Already absent (staged add rolled back): \${filePath}\`);
           }
         }
       }
@@ -704,7 +892,6 @@ async function syncStagingToLocal() {
       });
     }
     
-    console.log(\`[Pronghorn] Known staged files AFTER sync: \${knownStagedFiles.size}\`);
     console.log(\`[Pronghorn] Synced \${stagedFiles?.length || 0} staged files\`);
     console.log('[Pronghorn] ================================================');
     
@@ -721,7 +908,6 @@ async function syncStagingToLocal() {
 
 function scheduleStagingSync() {
   // Debounce to handle DELETE+INSERT pairs during updates
-  console.log('[Pronghorn] Scheduling staging sync (debounce: ' + STAGING_DEBOUNCE_MS + 'ms)...');
   clearTimeout(stagingSyncTimer);
   stagingSyncTimer = setTimeout(async () => {
     await syncStagingToLocal();
@@ -759,7 +945,6 @@ async function initializeKnownStagedFiles() {
 async function setupRealtimeSubscription() {
   console.log('[Pronghorn] ========== SETTING UP REALTIME SUBSCRIPTIONS ==========');
   console.log(\`[Pronghorn] Repo ID: \${CONFIG.repoId}\`);
-  console.log('[Pronghorn] Using BROADCAST pattern on repo-staging and repo-files channels');
   
   // Channel names MUST match what edge functions broadcast on
   const stagingChannelName = \`repo-staging-\${CONFIG.repoId}\`;
@@ -773,7 +958,6 @@ async function setupRealtimeSubscription() {
       { event: 'staging_refresh' },
       async (payload) => {
         console.log('[Pronghorn] ========== STAGING BROADCAST RECEIVED ==========');
-        console.log('[Pronghorn] Payload:', JSON.stringify(payload.payload || {}));
         
         if (!CONFIG.rebuildOnStaging) {
           console.log('[Pronghorn] REBUILD_ON_STAGING is false, ignoring');
@@ -784,7 +968,7 @@ async function setupRealtimeSubscription() {
       }
     )
     .subscribe((status) => {
-      console.log(\`[Pronghorn] Staging channel (\${stagingChannelName}) status: \${status}\`);
+      console.log(\`[Pronghorn] Staging channel status: \${status}\`);
       if (status === 'SUBSCRIBED') {
         console.log('[Pronghorn] ✓ Listening for staging_refresh broadcasts');
       }
@@ -798,7 +982,6 @@ async function setupRealtimeSubscription() {
       { event: 'files_refresh' },
       async (payload) => {
         console.log('[Pronghorn] ========== FILES BROADCAST RECEIVED ==========');
-        console.log('[Pronghorn] Payload:', JSON.stringify(payload.payload || {}));
         
         if (!CONFIG.rebuildOnFiles) {
           console.log('[Pronghorn] REBUILD_ON_FILES is false, ignoring');
@@ -819,12 +1002,11 @@ async function setupRealtimeSubscription() {
       async (payload) => {
         if (!CONFIG.rebuildOnFiles) return;
         console.log('[Pronghorn] === FILES EVENT (postgres_changes) ===');
-        console.log('[Pronghorn] Event type:', payload.eventType);
         await handleRepoFileChange(payload);
       }
     )
     .subscribe((status) => {
-      console.log(\`[Pronghorn] Files channel (\${filesChannelName}) status: \${status}\`);
+      console.log(\`[Pronghorn] Files channel status: \${status}\`);
       if (status === 'SUBSCRIBED') {
         console.log('[Pronghorn] ✓ Listening for files_refresh broadcasts + postgres_changes');
       }
@@ -839,7 +1021,9 @@ async function syncAllFilesFromDatabase() {
     const files = await fetchAllFiles();
     const changedDirs = await writeFilesToDisk(files);
     if (changedDirs.length > 0) {
-      await runNpmInstallInDirs(changedDirs);
+      for (const dir of changedDirs) {
+        await runInstallCommand(dir);
+      }
       await restartDevServer();
     }
   } catch (err) {
@@ -856,23 +1040,14 @@ async function handleRepoFileChange(payload) {
     
     if (payload.eventType === 'DELETE') {
       const record = payload.old;
-      if (!record || !record.path) {
-        console.log('[Pronghorn] No path in deleted file record, skipping');
-        return;
-      }
+      if (!record || !record.path) return;
       filePath = record.path;
       isDelete = true;
-      console.log(\`[Pronghorn] File deleted from repo: \${filePath}\`);
     } else {
       const record = payload.new;
-      if (!record || !record.path) {
-        console.log('[Pronghorn] No path in file record, skipping');
-        return;
-      }
+      if (!record || !record.path) return;
       filePath = record.path;
       content = record.content;
-      isDelete = false;
-      console.log(\`[Pronghorn] File \${payload.eventType.toLowerCase()}d in repo: \${filePath}\`);
     }
     
     const fullPath = path.join(APP_DIR, filePath);
@@ -883,39 +1058,34 @@ async function handleRepoFileChange(payload) {
         fs.unlinkSync(fullPath);
         console.log(\`[Pronghorn] Deleted from disk: \${filePath}\`);
       }
-      await reportLog('info', \`File deleted: \${filePath}\`);
     } else {
       if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
       }
       
       // Check if package.json and content actually changed
-      let needsNpmInstall = false;
+      let needsInstall = false;
       if (path.basename(filePath) === 'package.json') {
         let existingContent = '';
         if (fs.existsSync(fullPath)) {
           existingContent = fs.readFileSync(fullPath, 'utf8');
         }
         if (existingContent !== (content || '')) {
-          needsNpmInstall = true;
+          needsInstall = true;
         }
       }
       
       fs.writeFileSync(fullPath, content || '', 'utf8');
       console.log(\`[Pronghorn] Written to disk: \${filePath}\`);
       
-      if (needsNpmInstall) {
-        console.log('[Pronghorn] package.json changed - running npm install...');
+      if (needsInstall) {
+        console.log('[Pronghorn] package.json changed - running install...');
         await stopDevServer();
-        await runNpmInstallInDirs([dirPath]);
+        await runInstallCommand(dirPath);
         startDevServer();
-      } else if (CONFIG.projectType === 'node' || CONFIG.projectType === 'express') {
+      } else if (!isNodeBasedProject() || CONFIG.projectType === 'node' || CONFIG.projectType === 'express') {
         await restartDevServer();
-      } else {
-        console.log('[Pronghorn] HMR will refresh');
       }
-      
-      await reportLog('info', \`File synced: \${filePath}\`);
     }
   } catch (err) {
     console.error('[Pronghorn] Error handling repo file change:', err.message);
@@ -942,6 +1112,8 @@ async function setupLocalFileWatcher() {
       '**/build/**',
       '**/.cache/**',
       '**/coverage/**',
+      '**/__pycache__/**',
+      '**/target/**',
       '**/*.log',
     ],
     persistent: true,
@@ -954,20 +1126,14 @@ async function setupLocalFileWatcher() {
   
   localFileWatcher.on('add', async (fullPath) => {
     const relativePath = path.relative(APP_DIR, fullPath).replace(/\\\\/g, '/');
-    if (isBinaryFile(fullPath)) {
-      console.log(\`[Pronghorn] Skip binary file: \${relativePath}\`);
-      return;
-    }
+    if (isBinaryFile(fullPath)) return;
     const content = fs.readFileSync(fullPath, 'utf8');
     await pushLocalChangeToCloud(relativePath, 'add', content);
   });
   
   localFileWatcher.on('change', async (fullPath) => {
     const relativePath = path.relative(APP_DIR, fullPath).replace(/\\\\/g, '/');
-    if (isBinaryFile(fullPath)) {
-      console.log(\`[Pronghorn] Skip binary file: \${relativePath}\`);
-      return;
-    }
+    if (isBinaryFile(fullPath)) return;
     const content = fs.readFileSync(fullPath, 'utf8');
     await pushLocalChangeToCloud(relativePath, 'edit', content);
   });
@@ -1050,8 +1216,6 @@ async function pollGitHub() {
     
     if (lastCommitSha && lastCommitSha !== data.sha) {
       console.log(\`[Pronghorn] New GitHub commit detected: \${data.sha.slice(0, 7)}\`);
-      // For Git mode, we'd need to pull from Git, not database
-      // This is a placeholder - actual implementation would clone/pull
       await reportLog('info', \`GitHub commit detected: \${data.sha.slice(0, 7)}\`);
     }
     
@@ -1067,19 +1231,23 @@ async function pollGitHub() {
 
 async function main() {
   console.log('');
-  console.log('╔══════════════════════════════════════════════════════════╗');
-  console.log('║     Pronghorn Real-Time Local Development Runner         ║');
-  console.log('╠══════════════════════════════════════════════════════════╣');
-  console.log(\`║  Deployment: \${CONFIG.deploymentId?.slice(0, 8) || 'N/A'}...                               ║\`);
-  console.log(\`║  Project Type: \${CONFIG.projectType.padEnd(40)}   ║\`);
-  console.log(\`║  Rebuild on Staging: \${CONFIG.rebuildOnStaging ? 'YES' : 'NO '}                              ║\`);
-  console.log(\`║  Rebuild on Files: \${CONFIG.rebuildOnFiles ? 'YES' : 'NO '}                                ║\`);
-  console.log(\`║  Rebuild on Git: \${CONFIG.rebuildOnGit ? 'YES' : 'NO '}                                  ║\`);
-  console.log('╚══════════════════════════════════════════════════════════╝');
+  console.log('╔══════════════════════════════════════════════════════════════════╗');
+  console.log('║         Pronghorn Real-Time Local Development Runner             ║');
+  console.log('╠══════════════════════════════════════════════════════════════════╣');
+  console.log(\`║  Deployment: \${(CONFIG.deploymentId?.slice(0, 8) || 'N/A').padEnd(52)} ║\`);
+  console.log(\`║  Project Type: \${CONFIG.projectType.padEnd(50)} ║\`);
+  console.log(\`║  Run Command: \${CONFIG.runCommand.padEnd(51)} ║\`);
+  console.log(\`║  Install Command: \${(CONFIG.installCommand || 'N/A').padEnd(47)} ║\`);
+  console.log('╠══════════════════════════════════════════════════════════════════╣');
+  console.log(\`║  Rebuild on Staging: \${CONFIG.rebuildOnStaging ? 'YES' : 'NO '}                                           ║\`);
+  console.log(\`║  Rebuild on Files: \${CONFIG.rebuildOnFiles ? 'YES' : 'NO '}                                             ║\`);
+  console.log(\`║  Rebuild on Git: \${CONFIG.rebuildOnGit ? 'YES' : 'NO '}                                               ║\`);
+  console.log(\`║  Push Local Changes: \${CONFIG.pushLocalChanges ? 'YES' : 'NO '}                                          ║\`);
+  console.log('╚══════════════════════════════════════════════════════════════════╝');
   console.log('');
 
   if (!CONFIG.supabaseUrl || !CONFIG.supabaseAnonKey) {
-    console.error('[Pronghorn] Missing Supabase configuration in .env');
+    console.error('[Pronghorn] Missing SUPABASE_URL or SUPABASE_ANON_KEY in .env');
     process.exit(1);
   }
   
@@ -1097,10 +1265,12 @@ async function main() {
     const files = await fetchAllFiles();
     const packageJsonDirs = await writeFilesToDisk(files);
     
-    // Run npm install in any directories with package.json on initial load
+    // Run install in any directories with package.json on initial load
     if (packageJsonDirs.length > 0) {
       console.log(\`[Pronghorn] Found \${packageJsonDirs.length} package.json file(s), installing dependencies...\`);
-      await runNpmInstallInDirs(packageJsonDirs);
+      for (const dir of packageJsonDirs) {
+        await runInstallCommand(dir);
+      }
     }
     
     await reportLog('info', \`Initial sync complete (\${files.length} files)\`);
@@ -1152,69 +1322,74 @@ main();
 }
 
 function generateReadme(deployment: any, project: any, repo: any): string {
-  return `# ${deployment.environment.toUpperCase()}-${deployment.name} Real-Time Local Development
+  return `# Pronghorn Runner - ${deployment.environment}-${deployment.name}
 
-This package provides **bidirectional real-time synchronization** with Pronghorn. Files are synced both ways - cloud changes appear locally, and local edits are pushed back to staging.
+This package provides **bidirectional real-time synchronization** with Pronghorn.
 
-## 🚀 Quick Start
+## 🚀 Installation Options
 
-### Windows
-\`\`\`cmd
-start.bat
+### Option 1: Download Full Package (this ZIP)
+\`\`\`bash
+# Extract ZIP, then:
+npm install
+npm start
 \`\`\`
 
-### Linux/Mac
+### Option 2: Git Clone (Recommended for updates)
 \`\`\`bash
-chmod +x start.sh
-./start.sh
-\`\`\`
-
-### Or manually
-\`\`\`bash
+git clone https://github.com/pronghorn-red/pronghorn-runner.git
+cd pronghorn-runner
+# Download your .env from Pronghorn and place it here
 npm install
 npm start
 \`\`\`
 
 ## ⚙️ Configuration
 
-Edit the \`.env\` file to configure behavior:
+All configuration is in the \`.env\` file. Key settings:
+
+### Runtime Configuration
+\`\`\`env
+PROJECT_TYPE=vue_vite   # vue_vite, react_vite, node, python, go, ruby, rust, elixir, docker
+RUN_COMMAND=npm run dev
+BUILD_COMMAND=npm run build
+INSTALL_COMMAND=npm install
+\`\`\`
 
 ### Sync Settings
-
 | Variable | Default | Description |
 |----------|---------|-------------|
-| \`REBUILD_ON_STAGING\` | \`true\` | Sync when files are staged (before commit) |
+| \`REBUILD_ON_STAGING\` | \`true\` | Sync when files are staged |
 | \`REBUILD_ON_FILES\` | \`true\` | Sync when files are committed |
-| \`REBUILD_ON_GIT\` | \`false\` | Poll GitHub for changes (requires PAT) |
-| \`PUSH_LOCAL_CHANGES\` | \`true\` | Push local file edits back to Pronghorn staging |
+| \`REBUILD_ON_GIT\` | \`false\` | Poll GitHub for changes |
+| \`PUSH_LOCAL_CHANGES\` | \`true\` | Push local edits back to cloud |
 
-### Required Configuration
+### Multi-Runtime Support
 
-| Variable | Description |
-|----------|-------------|
-| \`PRONGHORN_SHARE_TOKEN\` | Your project access token |
-| \`PRONGHORN_REPO_ID\` | Repository ID (auto-filled) |
-| \`SUPABASE_URL\` | Supabase project URL (auto-filled) |
-| \`SUPABASE_ANON_KEY\` | Supabase anonymous key (auto-filled) |
+| Type | Runtime | Install Command | Run Command |
+|------|---------|-----------------|-------------|
+| vue_vite | Node.js | npm install | npm run dev |
+| react_vite | Node.js | npm install | npm run dev |
+| node | Node.js | npm install | node index.js |
+| python | Python 3 | pip install -r requirements.txt | python main.py |
+| go | Go 1.18+ | go mod download | ./app |
+| ruby | Ruby | bundle install | bundle exec ruby app.rb |
+| rust | Rust | - | cargo run --release |
+| elixir | Elixir | mix deps.get | mix phx.server |
+| docker | Docker | - | docker-compose up |
 
 ## 📁 How It Works
 
 ### Cloud → Local (Pull)
-1. **Initial Sync**: Downloads all files from Pronghorn database to \`./app/\` folder
-2. **Real-Time Subscription**: Listens for changes to \`repo_staging\` and \`repo_files\` tables
-3. **Hash Comparison**: Only writes files when content actually changed (prevents loops)
-4. **Hot Reload**: When changes detected:
-   - **Vite/React/Vue**: Files update, HMR automatically refreshes browser
-   - **Node.js/Express**: Server restarts automatically
+1. Downloads all files from Pronghorn to \`./app/\`
+2. Listens for real-time changes
+3. Updates files when changes detected
+4. Hot-reloads or restarts server as needed
 
 ### Local → Cloud (Push)
-1. **File Watcher**: Uses chokidar to watch \`./app/\` folder for changes
-2. **Auto-Stage**: Local edits are automatically pushed to Pronghorn staging
-3. **Binary Detection**: Binary files are skipped (only text files synced)
-4. **Loop Prevention**: Hash comparison on cloud→local prevents infinite loops
-
-### Error Telemetry
-Errors are captured and sent back to Pronghorn for AI-assisted debugging.
+1. Watches \`./app/\` for file changes
+2. Automatically pushes edits to Pronghorn staging
+3. Binary files are skipped
 
 ## 📊 Project Details
 
@@ -1223,30 +1398,20 @@ Errors are captured and sent back to Pronghorn for AI-assisted debugging.
 | Project | ${project?.name || 'Unknown'} |
 | Environment | ${deployment.environment} |
 | Project Type | ${deployment.project_type || 'node'} |
-| Run Command | \`${deployment.run_command}\` |
-| Build Command | \`${deployment.build_command || 'N/A'}\` |
+| Run Command | \`${deployment.run_command || 'npm run dev'}\` |
 ${repo ? `| Repository | https://github.com/${repo.organization}/${repo.repo} |` : ''}
 
 ## 🔍 Troubleshooting
 
-### "Cannot find module @supabase/supabase-js"
+### "Cannot find module"
 Run \`npm install\` in this directory.
 
 ### Files not syncing
-1. Check that \`PRONGHORN_SHARE_TOKEN\` is set in \`.env\`
+1. Check \`PRONGHORN_SHARE_TOKEN\` is set in \`.env\`
 2. Ensure \`PRONGHORN_REPO_ID\` is correct
-3. Check console for subscription errors
-
-### Local changes not pushing
-1. Check that \`PUSH_LOCAL_CHANGES=true\` in \`.env\`
-2. Ensure file is not binary (check console for "Skip binary file" messages)
-3. Check console for push errors
 
 ### Port already in use
-Change the \`APP_PORT\` in your \`.env\` file.
-
-### Errors not appearing in Pronghorn
-Verify \`PRONGHORN_DEPLOYMENT_ID\` and \`PRONGHORN_SHARE_TOKEN\` are set.
+Change \`APP_PORT\` in your \`.env\` file.
 
 ---
 Generated by Pronghorn.RED - Real-Time Development Platform
