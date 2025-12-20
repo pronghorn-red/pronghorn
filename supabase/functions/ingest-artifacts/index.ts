@@ -209,11 +209,12 @@ Deno.serve(async (req) => {
         }
 
         // Create artifact via RPC
+        // Note: Title will be added via AI summary later - function only takes content, source_type, source_id, image_url
         const { data: artifactData, error: artifactError } = await supabase.rpc("insert_artifact_with_token", {
           p_project_id: projectId,
           p_token: token,
-          p_content: artifactContent,
-          p_ai_title: item.title || `Webhook Import ${new Date().toISOString()}`,
+          p_content: item.title ? `# ${item.title}\n\n${artifactContent}` : artifactContent,
+          p_source_type: "webhook",
           p_image_url: imageUrl
         });
 
