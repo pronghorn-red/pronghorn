@@ -414,20 +414,37 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate, onSelect, isSelected
               </>
             )}
             {deployment.platform === "local" && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleDownloadPackage}
-                disabled={isActionLoading === 'download'}
-                className="text-xs"
-              >
-                {isActionLoading === 'download' ? (
-                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                ) : (
-                  <Download className="h-3 w-3 mr-1" />
-                )}
-                Download
-              </Button>
+              <>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleDownloadPackage('full')}
+                  disabled={isActionLoading === 'download-full'}
+                  className="text-xs"
+                >
+                  {isActionLoading === 'download-full' ? (
+                    <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                  ) : (
+                    <Download className="h-3 w-3 mr-1" />
+                  )}
+                  Full Package
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => handleDownloadPackage('env-only')}
+                  disabled={isActionLoading === 'download-env'}
+                  className="text-xs"
+                  title="Download .env file only (use with pronghorn-runner)"
+                >
+                  {isActionLoading === 'download-env' ? (
+                    <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                  ) : (
+                    <Settings className="h-3 w-3 mr-1" />
+                  )}
+                  .env Only
+                </Button>
+              </>
             )}
             
             {/* Utility buttons */}
