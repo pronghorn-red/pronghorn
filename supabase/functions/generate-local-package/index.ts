@@ -278,11 +278,12 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     'PUSH_LOCAL_CHANGES=true',
     '',
     '# ===========================================',
-    '# PROJECT DATA SYNC (Phase 3 Feature)',
-    '# Enable one-directional sync of project metadata',
+    '# PROJECT DATA SYNC',
+    '# Exports requirements, canvas, artifacts, specs to local folder',
+    '# One-directional: Cloud → Local (read-only export)',
     '# ===========================================',
-    '# SYNC_PROJECT_DATA=false',
-    '# PROJECT_SYNC_FOLDER=./project',
+    'SYNC_PROJECT_DATA=false',
+    'PROJECT_SYNC_FOLDER=./project',
     '',
     '# ===========================================',
     '# APP SETTINGS',
@@ -357,9 +358,10 @@ PUSH_LOCAL_CHANGES=true
 
 # ===========================================
 # PROJECT DATA SYNC
+# Exports requirements, canvas, artifacts, specs to ./project folder
 # ===========================================
-# SYNC_PROJECT_DATA=false
-# PROJECT_SYNC_FOLDER=./project
+SYNC_PROJECT_DATA=false
+PROJECT_SYNC_FOLDER=./project
 
 # ===========================================
 # APP SETTINGS
@@ -1163,6 +1165,286 @@ async function pushLocalChangeToCloud(relativePath, operationType, content) {
 }
 
 // ============================================
+// PROJECT DATA SYNC (Phase 3)
+// Exports requirements, canvas, artifacts, specifications to local folder
+// ============================================
+
+const PROJECT_DIR = path.resolve(CONFIG.projectSyncFolder);
+
+async function ensureProjectDir() {
+  if (!fs.existsSync(PROJECT_DIR)) {
+    fs.mkdirSync(PROJECT_DIR, { recursive: true });
+    console.log(\`[Pronghorn] Created project sync folder: \${PROJECT_DIR}\`);
+  }
+}
+
+async function fetchAndWriteRequirements() {
+  console.log('[Pronghorn] Syncing requirements...');
+  try {
+    const { data: requirements, error } = await supabase.rpc('get_requirements_with_token', {
+      p_project_id: CONFIG.projectId,
+      p_token: CONFIG.shareToken || null,
+    });
+    
+    if (error) {
+      console.error('[Pronghorn] Error fetching requirements:', error.message);
+      return;
+    }
+    
+    if (!requirements || requirements.length === 0) {
+      console.log('[Pronghorn] No requirements found');
+      return;
+    }
+    
+    // Build tree structure
+    const reqMap = new Map();
+    requirements.forEach(r => reqMap.set(r.id, { ...r, children: [] }));
+    const rootReqs = [];
+    requirements.forEach(r => {
+      if (r.parent_id && reqMap.has(r.parent_id)) {
+        reqMap.get(r.parent_id).children.push(reqMap.get(r.id));
+      } else {
+        rootReqs.push(reqMap.get(r.id));
+      }
+    });
+    
+    // Sort by order_index
+    const sortReqs = (arr) => arr.sort((a, b) => a.order_index - b.order_index);
+    sortReqs(rootReqs);
+    rootReqs.forEach(r => sortReqs(r.children));
+    
+    // Write JSON
+    const jsonPath = path.join(PROJECT_DIR, 'requirements.json');
+    fs.writeFileSync(jsonPath, JSON.stringify(rootReqs, null, 2), 'utf8');
+    
+    // Write Markdown
+    const mdPath = path.join(PROJECT_DIR, 'requirements.md');
+    let md = '# Requirements\\n\\n';
+    const writeReqMd = (req, depth = 0) => {
+      const indent = '  '.repeat(depth);
+      const prefix = req.code ? \`[\${req.code}] \` : '';
+      md += \`\${indent}- **\${prefix}\${req.title}** (\${req.type})\\n\`;
+      if (req.content) {
+        md += \`\${indent}  \${req.content}\\n\`;
+      }
+      req.children.forEach(child => writeReqMd(child, depth + 1));
+    };
+    rootReqs.forEach(r => writeReqMd(r));
+    fs.writeFileSync(mdPath, md, 'utf8');
+    
+    console.log(\`[Pronghorn] Synced \${requirements.length} requirements\`);
+  } catch (err) {
+    console.error('[Pronghorn] Requirements sync error:', err.message);
+  }
+}
+
+async function fetchAndWriteCanvas() {
+  console.log('[Pronghorn] Syncing canvas...');
+  try {
+    const { data: nodes, error: nodesError } = await supabase.rpc('get_canvas_nodes_with_token', {
+      p_project_id: CONFIG.projectId,
+      p_token: CONFIG.shareToken || null,
+    });
+    
+    const { data: edges, error: edgesError } = await supabase.rpc('get_canvas_edges_with_token', {
+      p_project_id: CONFIG.projectId,
+      p_token: CONFIG.shareToken || null,
+    });
+    
+    if (nodesError) console.error('[Pronghorn] Canvas nodes error:', nodesError.message);
+    if (edgesError) console.error('[Pronghorn] Canvas edges error:', edgesError.message);
+    
+    const canvas = {
+      nodes: nodes || [],
+      edges: edges || [],
+      exportedAt: new Date().toISOString(),
+    };
+    
+    const jsonPath = path.join(PROJECT_DIR, 'canvas.json');
+    fs.writeFileSync(jsonPath, JSON.stringify(canvas, null, 2), 'utf8');
+    
+    // Write summary markdown
+    const mdPath = path.join(PROJECT_DIR, 'canvas.md');
+    let md = '# Canvas Summary\\n\\n';
+    md += \`Nodes: \${canvas.nodes.length}\\n\`;
+    md += \`Edges: \${canvas.edges.length}\\n\\n\`;
+    md += '## Nodes\\n\\n';
+    (nodes || []).forEach(n => {
+      const label = n.data?.label || n.data?.title || n.type;
+      md += \`- **\${label}** (type: \${n.type})\\n\`;
+    });
+    fs.writeFileSync(mdPath, md, 'utf8');
+    
+    console.log(\`[Pronghorn] Synced \${(nodes || []).length} canvas nodes, \${(edges || []).length} edges\`);
+  } catch (err) {
+    console.error('[Pronghorn] Canvas sync error:', err.message);
+  }
+}
+
+async function fetchAndWriteArtifacts() {
+  console.log('[Pronghorn] Syncing artifacts...');
+  try {
+    const { data: artifacts, error } = await supabase.rpc('get_artifacts_with_token', {
+      p_project_id: CONFIG.projectId,
+      p_token: CONFIG.shareToken || null,
+    });
+    
+    if (error) {
+      console.error('[Pronghorn] Artifacts error:', error.message);
+      return;
+    }
+    
+    if (!artifacts || artifacts.length === 0) {
+      console.log('[Pronghorn] No artifacts found');
+      return;
+    }
+    
+    // Create artifacts subfolder
+    const artifactsDir = path.join(PROJECT_DIR, 'artifacts');
+    if (!fs.existsSync(artifactsDir)) {
+      fs.mkdirSync(artifactsDir, { recursive: true });
+    }
+    
+    // Write index
+    const indexPath = path.join(artifactsDir, 'index.json');
+    fs.writeFileSync(indexPath, JSON.stringify(artifacts.map(a => ({
+      id: a.id,
+      title: a.ai_title || 'Untitled',
+      summary: a.ai_summary,
+      source_type: a.source_type,
+      created_at: a.created_at,
+    })), null, 2), 'utf8');
+    
+    // Write each artifact as markdown
+    artifacts.forEach((artifact, idx) => {
+      const title = artifact.ai_title || \`artifact-\${idx + 1}\`;
+      const safeName = title.replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 50);
+      const mdPath = path.join(artifactsDir, \`\${safeName}.md\`);
+      
+      let content = \`# \${title}\\n\\n\`;
+      if (artifact.ai_summary) {
+        content += \`> \${artifact.ai_summary}\\n\\n\`;
+      }
+      content += artifact.content || '';
+      
+      fs.writeFileSync(mdPath, content, 'utf8');
+    });
+    
+    console.log(\`[Pronghorn] Synced \${artifacts.length} artifacts\`);
+  } catch (err) {
+    console.error('[Pronghorn] Artifacts sync error:', err.message);
+  }
+}
+
+async function fetchAndWriteSpecifications() {
+  console.log('[Pronghorn] Syncing specifications...');
+  try {
+    const { data: specs, error } = await supabase.rpc('get_specifications_with_token', {
+      p_project_id: CONFIG.projectId,
+      p_token: CONFIG.shareToken || null,
+    });
+    
+    if (error) {
+      console.error('[Pronghorn] Specifications error:', error.message);
+      return;
+    }
+    
+    if (!specs || specs.length === 0) {
+      console.log('[Pronghorn] No specifications found');
+      return;
+    }
+    
+    // Write latest spec as markdown
+    const latest = specs.find(s => s.is_latest) || specs[0];
+    const specPath = path.join(PROJECT_DIR, 'specification.md');
+    fs.writeFileSync(specPath, latest.generated_spec || '', 'utf8');
+    
+    // Write all versions as JSON
+    const jsonPath = path.join(PROJECT_DIR, 'specifications.json');
+    fs.writeFileSync(jsonPath, JSON.stringify(specs.map(s => ({
+      id: s.id,
+      version: s.version,
+      is_latest: s.is_latest,
+      agent_title: s.agent_title,
+      created_at: s.created_at,
+    })), null, 2), 'utf8');
+    
+    console.log(\`[Pronghorn] Synced \${specs.length} specifications (latest v\${latest.version})\`);
+  } catch (err) {
+    console.error('[Pronghorn] Specifications sync error:', err.message);
+  }
+}
+
+async function syncAllProjectData() {
+  console.log('[Pronghorn] ========== SYNCING PROJECT DATA ==========');
+  await ensureProjectDir();
+  await Promise.all([
+    fetchAndWriteRequirements(),
+    fetchAndWriteCanvas(),
+    fetchAndWriteArtifacts(),
+    fetchAndWriteSpecifications(),
+  ]);
+  console.log('[Pronghorn] ========== PROJECT DATA SYNC COMPLETE ==========');
+}
+
+async function setupProjectDataSubscription() {
+  console.log('[Pronghorn] Setting up project data realtime subscription...');
+  
+  const projectChannelName = \`project-data-\${CONFIG.projectId}\`;
+  
+  const projectChannel = supabase
+    .channel(projectChannelName)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'requirements', filter: \`project_id=eq.\${CONFIG.projectId}\` },
+      async () => {
+        console.log('[Pronghorn] Requirements changed, syncing...');
+        await fetchAndWriteRequirements();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'canvas_nodes', filter: \`project_id=eq.\${CONFIG.projectId}\` },
+      async () => {
+        console.log('[Pronghorn] Canvas nodes changed, syncing...');
+        await fetchAndWriteCanvas();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'canvas_edges', filter: \`project_id=eq.\${CONFIG.projectId}\` },
+      async () => {
+        console.log('[Pronghorn] Canvas edges changed, syncing...');
+        await fetchAndWriteCanvas();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'artifacts', filter: \`project_id=eq.\${CONFIG.projectId}\` },
+      async () => {
+        console.log('[Pronghorn] Artifacts changed, syncing...');
+        await fetchAndWriteArtifacts();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'project_specifications', filter: \`project_id=eq.\${CONFIG.projectId}\` },
+      async () => {
+        console.log('[Pronghorn] Specifications changed, syncing...');
+        await fetchAndWriteSpecifications();
+      }
+    )
+    .subscribe((status) => {
+      console.log(\`[Pronghorn] Project data channel status: \${status}\`);
+      if (status === 'SUBSCRIBED') {
+        console.log('[Pronghorn] ✓ Listening for project data changes');
+      }
+    });
+  
+  return projectChannel;
+}
+
+// ============================================
 // MAIN
 // ============================================
 
@@ -1179,6 +1461,7 @@ async function main() {
   console.log(\`║  Rebuild on Staging: \${CONFIG.rebuildOnStaging ? 'YES' : 'NO '}                                           ║\`);
   console.log(\`║  Rebuild on Files: \${CONFIG.rebuildOnFiles ? 'YES' : 'NO '}                                             ║\`);
   console.log(\`║  Push Local Changes: \${CONFIG.pushLocalChanges ? 'YES' : 'NO '}                                          ║\`);
+  console.log(\`║  Sync Project Data: \${CONFIG.syncProjectData ? 'YES' : 'NO '}                                            ║\`);
   console.log('╚══════════════════════════════════════════════════════════════════╝');
   console.log('');
 
@@ -1222,6 +1505,14 @@ async function main() {
       await setupLocalFileWatcher();
     } else {
       console.log('[Pronghorn] Local → Cloud sync disabled (PUSH_LOCAL_CHANGES=false)');
+    }
+    
+    // Setup project data sync (Phase 3)
+    if (CONFIG.syncProjectData) {
+      await syncAllProjectData();
+      await setupProjectDataSubscription();
+    } else {
+      console.log('[Pronghorn] Project data sync disabled (SYNC_PROJECT_DATA=false)');
     }
     
     // Start dev server
@@ -1292,6 +1583,8 @@ INSTALL_COMMAND=npm install
 | \`REBUILD_ON_STAGING\` | \`true\` | Sync when files are staged |
 | \`REBUILD_ON_FILES\` | \`true\` | Sync when files are committed |
 | \`PUSH_LOCAL_CHANGES\` | \`true\` | Push local edits back to cloud |
+| \`SYNC_PROJECT_DATA\` | \`false\` | Export requirements, canvas, artifacts to ./project |
+| \`PROJECT_SYNC_FOLDER\` | \`./project\` | Folder for project data exports |
 
 ### Multi-Runtime Support
 
@@ -1319,6 +1612,14 @@ INSTALL_COMMAND=npm install
 1. Watches \`./app/\` for file changes
 2. Automatically pushes edits to Pronghorn staging
 3. Binary files are skipped
+
+### Project Data Export (Optional)
+When \`SYNC_PROJECT_DATA=true\`:
+1. Exports requirements as \`./project/requirements.json\` and \`.md\`
+2. Exports canvas nodes/edges as \`./project/canvas.json\` and \`.md\`
+3. Exports artifacts to \`./project/artifacts/\` folder
+4. Exports specifications as \`./project/specification.md\`
+5. Real-time sync: updates when project data changes in Pronghorn
 
 ## 📊 Project Details
 
