@@ -67,16 +67,10 @@ Deno.serve(async (req) => {
     token = req.headers.get("x-share-token");
 
     if (req.method === "GET") {
-      // Handle GET request - single text item via query params
-      const url = new URL(req.url);
-      projectId = projectId || url.searchParams.get("projectId");
-      token = token || url.searchParams.get("token");
-      const content = url.searchParams.get("content");
-      const title = url.searchParams.get("title");
-
-      if (content) {
-        items = [{ type: "text", content, title: title || undefined }];
-      }
+      // Return documentation page
+      return new Response(getDocumentationHtml(), {
+        headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" }
+      });
     } else if (req.method === "POST") {
       // Handle POST request - multi-item payload
       const body = await req.json() as IngestPayload;
@@ -293,4 +287,273 @@ function getExtensionFromContentType(contentType: string): string {
     "application/typescript": "ts",
   };
   return map[contentType] || "bin";
+}
+
+function getDocumentationHtml(): string {
+  const endpoint = "https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/ingest-artifacts";
+  
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pronghorn Artifact Ingest API</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      margin: 0;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { color: #ff6b6b; margin-bottom: 0.5rem; }
+    h2 { color: #ffa94d; margin-top: 2rem; border-bottom: 1px solid #333; padding-bottom: 0.5rem; }
+    h3 { color: #69db7c; }
+    .subtitle { color: #888; margin-bottom: 2rem; }
+    code {
+      background: #1a1a1a;
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #1a1a1a;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      border: 1px solid #333;
+    }
+    pre code { background: none; padding: 0; }
+    .warning {
+      background: #3d2a1a;
+      border-left: 4px solid #ffa94d;
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 0 8px 8px 0;
+    }
+    .info {
+      background: #1a2a3d;
+      border-left: 4px solid #69db7c;
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 0 8px 8px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+    }
+    th, td {
+      border: 1px solid #333;
+      padding: 0.75rem;
+      text-align: left;
+    }
+    th { background: #1a1a1a; color: #ffa94d; }
+    .method { 
+      display: inline-block;
+      background: #69db7c;
+      color: #0a0a0a;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    a { color: #69db7c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🦌 Pronghorn Artifact Ingest API</h1>
+    <p class="subtitle">Webhook endpoint to ingest text and images into your Pronghorn projects</p>
+
+    <div class="warning">
+      <strong>⚠️ Authentication Required</strong><br>
+      You need a valid <code>projectId</code> and <code>token</code> with <strong>editor</strong> or <strong>owner</strong> access to use this endpoint.
+    </div>
+
+    <h2>Endpoint</h2>
+    <pre><code><span class="method">POST</span> ${endpoint}</code></pre>
+
+    <h2>Authentication</h2>
+    <p>Provide credentials via headers OR in the request body:</p>
+    
+    <h3>Option 1: Headers (Recommended)</h3>
+    <table>
+      <tr><th>Header</th><th>Description</th></tr>
+      <tr><td><code>X-Project-Id</code></td><td>Your project UUID</td></tr>
+      <tr><td><code>X-Share-Token</code></td><td>Your editor/owner token UUID</td></tr>
+    </table>
+
+    <h3>Option 2: Request Body</h3>
+    <pre><code>{
+  "projectId": "your-project-uuid",
+  "token": "your-editor-token-uuid",
+  "items": [...]
+}</code></pre>
+
+    <h2>Request Body Schema</h2>
+    <pre><code>{
+  "projectId": "uuid",           // Optional if using headers
+  "token": "uuid",               // Optional if using headers
+  "items": [
+    {
+      "type": "text" | "image" | "binary",
+      "content": "string",       // Text content or base64-encoded binary
+      "title": "string",         // Optional: artifact title
+      "fileName": "string",      // Optional: for images/binary
+      "contentType": "string"    // Optional: MIME type for images/binary
+    }
+  ]
+}</code></pre>
+
+    <h2>Item Types</h2>
+    <table>
+      <tr><th>Type</th><th>Content Field</th><th>Notes</th></tr>
+      <tr><td><code>text</code></td><td>Plain text</td><td>Stored directly as artifact content</td></tr>
+      <tr><td><code>image</code></td><td>Base64-encoded image</td><td>Uploaded to storage, URL saved in artifact</td></tr>
+      <tr><td><code>binary</code></td><td>Base64-encoded file</td><td>Any binary file (PDF, etc.)</td></tr>
+    </table>
+
+    <h2>Limits</h2>
+    <ul>
+      <li>Maximum payload size: <strong>50MB</strong></li>
+      <li>Maximum items per request: <strong>100</strong></li>
+      <li>Maximum single item size: <strong>10MB</strong></li>
+    </ul>
+
+    <h2>Examples</h2>
+
+    <h3>cURL - Text Artifact</h3>
+    <pre><code>curl -X POST ${endpoint} \\
+  -H "Content-Type: application/json" \\
+  -H "X-Project-Id: YOUR_PROJECT_UUID" \\
+  -H "X-Share-Token: YOUR_EDITOR_TOKEN" \\
+  -d '{
+    "items": [
+      {
+        "type": "text",
+        "content": "This is my artifact content from the webhook.",
+        "title": "My Imported Note"
+      }
+    ]
+  }'</code></pre>
+
+    <h3>cURL - Image Upload</h3>
+    <pre><code># First encode your image to base64
+IMAGE_BASE64=$(base64 -i myimage.png)
+
+curl -X POST ${endpoint} \\
+  -H "Content-Type: application/json" \\
+  -H "X-Project-Id: YOUR_PROJECT_UUID" \\
+  -H "X-Share-Token: YOUR_EDITOR_TOKEN" \\
+  -d "{
+    \\"items\\": [
+      {
+        \\"type\\": \\"image\\",
+        \\"content\\": \\"$IMAGE_BASE64\\",
+        \\"fileName\\": \\"myimage.png\\",
+        \\"contentType\\": \\"image/png\\",
+        \\"title\\": \\"My Uploaded Image\\"
+      }
+    ]
+  }"</code></pre>
+
+    <h3>JavaScript / TypeScript</h3>
+    <pre><code>const response = await fetch(
+  "${endpoint}",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Project-Id": "YOUR_PROJECT_UUID",
+      "X-Share-Token": "YOUR_EDITOR_TOKEN"
+    },
+    body: JSON.stringify({
+      items: [
+        {
+          type: "text",
+          content: "Hello from my app!",
+          title: "Webhook Import"
+        }
+      ]
+    })
+  }
+);
+
+const result = await response.json();
+console.log(result);</code></pre>
+
+    <h3>Python</h3>
+    <pre><code>import requests
+import base64
+
+# Text artifact
+response = requests.post(
+    "${endpoint}",
+    headers={
+        "Content-Type": "application/json",
+        "X-Project-Id": "YOUR_PROJECT_UUID",
+        "X-Share-Token": "YOUR_EDITOR_TOKEN"
+    },
+    json={
+        "items": [
+            {
+                "type": "text",
+                "content": "Hello from Python!",
+                "title": "Python Import"
+            }
+        ]
+    }
+)
+print(response.json())
+
+# Image upload
+with open("image.png", "rb") as f:
+    image_base64 = base64.b64encode(f.read()).decode()
+
+response = requests.post(
+    "${endpoint}",
+    headers={
+        "Content-Type": "application/json",
+        "X-Project-Id": "YOUR_PROJECT_UUID",
+        "X-Share-Token": "YOUR_EDITOR_TOKEN"
+    },
+    json={
+        "items": [
+            {
+                "type": "image",
+                "content": image_base64,
+                "fileName": "image.png",
+                "contentType": "image/png",
+                "title": "Python Image Upload"
+            }
+        ]
+    }
+)</code></pre>
+
+    <h2>Response</h2>
+    <pre><code>{
+  "success": true,
+  "message": "Processed 2 items: 2 created, 0 failed",
+  "projectId": "your-project-uuid",
+  "itemsReceived": 2,
+  "itemsCreated": 2,
+  "itemsFailed": 0,
+  "results": [
+    { "success": true, "artifactId": "uuid-1", "index": 0 },
+    { "success": true, "artifactId": "uuid-2", "imageUrl": "https://...", "index": 1 }
+  ],
+  "processingTimeMs": 234
+}</code></pre>
+
+    <div class="info">
+      <strong>ℹ️ Need Help?</strong><br>
+      Visit <a href="https://pronghorn.red">pronghorn.red</a> to manage your projects and get your project ID and access tokens.
+    </div>
+  </div>
+</body>
+</html>`;
 }
