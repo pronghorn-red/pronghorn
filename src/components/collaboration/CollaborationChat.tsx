@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User, Loader2, Brain, Lightbulb, CheckCircle } from 'lucide-react';
+import { Send, Bot, User, Loader2, Brain, Lightbulb, CheckCircle, Paperclip } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -31,6 +31,8 @@ interface CollaborationChatProps {
   onSendMessage: (message: string) => void;
   disabled?: boolean;
   showBlackboard?: boolean;
+  attachedCount?: number;
+  onAttach?: () => void;
 }
 
 export function CollaborationChat({
@@ -41,6 +43,8 @@ export function CollaborationChat({
   onSendMessage,
   disabled = false,
   showBlackboard = true,
+  attachedCount = 0,
+  onAttach,
 }: CollaborationChatProps) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -218,18 +222,40 @@ export function CollaborationChat({
             className="min-h-[44px] max-h-[80px] resize-none text-sm"
             disabled={isStreaming || disabled}
           />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={!input.trim() || isStreaming || disabled}
-            className="flex-shrink-0 h-[44px] w-[44px]"
-          >
-            {isStreaming ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
+          <div className="flex flex-col gap-1 flex-shrink-0">
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!input.trim() || isStreaming || disabled}
+              className="h-[21px] w-[36px]"
+            >
+              {isStreaming ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Send className="h-3 w-3" />
+              )}
+            </Button>
+            {onAttach && (
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                onClick={onAttach}
+                disabled={isStreaming || disabled}
+                className="h-[21px] w-[36px] relative"
+              >
+                <Paperclip className="h-3 w-3" />
+                {attachedCount > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -top-1.5 -right-1.5 h-4 w-4 p-0 flex items-center justify-center text-[10px]"
+                  >
+                    {attachedCount}
+                  </Badge>
+                )}
+              </Button>
             )}
-          </Button>
+          </div>
         </div>
       </form>
     </div>

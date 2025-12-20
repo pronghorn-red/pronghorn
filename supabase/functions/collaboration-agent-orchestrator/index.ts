@@ -13,6 +13,7 @@ interface CollaborationRequest {
   shareToken: string;
   maxIterations?: number;
   currentContent?: string; // Editor content passed from client
+  attachedContext?: any; // Project context from ProjectSelector
 }
 
 function parseAgentResponse(rawText: string): any {
@@ -72,10 +73,11 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const { collaborationId, projectId, userMessage, shareToken, maxIterations = 25, currentContent: clientContent } = 
+    const { collaborationId, projectId, userMessage, shareToken, maxIterations = 25, currentContent: clientContent, attachedContext } = 
       await req.json() as CollaborationRequest;
 
     console.log(`Starting collaboration agent for collab ${collaborationId}`);
+    console.log(`Attached context received:`, attachedContext ? 'yes' : 'no');
 
     // Get collaboration details
     const { data: collaboration, error: collabError } = await supabase.rpc(
@@ -89,6 +91,59 @@ serve(async (req) => {
     
     // Use clientContent from client if provided (captures user's live edits), else use DB content
     const initialDocumentContent = clientContent || collaboration.current_content;
+
+    // Build attached context string for system prompt
+    let attachedContextStr = "";
+    if (attachedContext) {
+      const parts: string[] = [];
+      
+      if (attachedContext.projectMetadata) {
+        parts.push(`PROJECT METADATA:\n${JSON.stringify(attachedContext.projectMetadata, null, 2)}`);
+      }
+      
+      if (attachedContext.requirements?.length) {
+        parts.push(`REQUIREMENTS:\n${attachedContext.requirements.map((r: any) => 
+          `- [${r.type || 'REQ'}] ${r.title}${r.content ? ': ' + r.content.slice(0, 300) : ''}`).join('\n')}`);
+      }
+      
+      if (attachedContext.artifacts?.length) {
+        parts.push(`REFERENCED ARTIFACTS:\n${attachedContext.artifacts.map((a: any) => 
+          `- ${a.ai_title || 'Untitled'}: ${(a.content || '').slice(0, 500)}...`).join('\n')}`);
+      }
+      
+      if (attachedContext.standards?.length) {
+        parts.push(`STANDARDS:\n${attachedContext.standards.map((s: any) => 
+          `- ${s.name}: ${s.description || ''}`).join('\n')}`);
+      }
+      
+      if (attachedContext.techStacks?.length) {
+        parts.push(`TECH STACKS:\n${attachedContext.techStacks.map((t: any) => 
+          `- ${t.name}: ${t.description || ''}`).join('\n')}`);
+      }
+      
+      if (attachedContext.chatSessions?.length) {
+        parts.push(`CHAT SESSION EXCERPTS:\n${attachedContext.chatSessions.map((c: any) => 
+          `- ${c.ai_title || c.title || 'Chat'}: ${c.ai_summary || '(no summary)'}`).join('\n')}`);
+      }
+      
+      if (attachedContext.canvasNodes?.length) {
+        parts.push(`CANVAS NODES:\n${attachedContext.canvasNodes.map((n: any) => 
+          `- [${n.type}] ${n.data?.label || n.data?.title || 'Node'}: ${JSON.stringify(n.data).slice(0, 200)}`).join('\n')}`);
+      }
+      
+      if (attachedContext.files?.length) {
+        parts.push(`REPOSITORY FILES:\n${attachedContext.files.map((f: any) => 
+          `- ${f.path}: ${(f.content || '').slice(0, 500)}...`).join('\n')}`);
+      }
+      
+      if (attachedContext.databases?.length) {
+        parts.push(`DATABASE SCHEMAS:\n${attachedContext.databases.map((d: any) => 
+          `- ${d.name} (${d.type}): ${JSON.stringify(d.columns || d.definition || d).slice(0, 300)}`).join('\n')}`);
+      }
+      
+      attachedContextStr = parts.join('\n\n');
+      console.log(`Attached context string length: ${attachedContextStr.length}`);
+    }
 
     // Get project for model settings
     const { data: project } = await supabase.rpc("get_project_with_token", {
@@ -198,6 +253,9 @@ ${blackboardContext || "No entries yet"}
 
 CONVERSATION HISTORY:
 ${chatContext || "No messages yet"}
+
+${attachedContextStr ? `ATTACHED PROJECT CONTEXT (use this to inform your edits when relevant):
+${attachedContextStr}` : ''}
 
 RESPONSE FORMAT:
 {

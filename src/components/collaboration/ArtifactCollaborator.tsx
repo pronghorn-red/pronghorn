@@ -15,7 +15,8 @@ import {
   MessageSquare,
   FileText,
   History,
-  Users
+  Users,
+  Paperclip
 } from 'lucide-react';
 import { useRealtimeCollaboration } from '@/hooks/useRealtimeCollaboration';
 import { CollaborationEditor } from './CollaborationEditor';
@@ -35,6 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { ProjectSelector, ProjectSelectionResult } from '@/components/project/ProjectSelector';
 
 interface ArtifactCollaboratorProps {
   projectId: string;
@@ -84,6 +86,10 @@ export function ArtifactCollaborator({
   
   // Track when agent is editing to prevent sync from overwriting content
   const isAgentEditingRef = useRef<boolean>(false);
+  
+  // ProjectSelector state for attaching context
+  const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
+  const [attachedContext, setAttachedContext] = useState<ProjectSelectionResult | null>(null);
 
   const {
     collaboration,
@@ -107,6 +113,24 @@ export function ArtifactCollaborator({
     artifact.content.includes('```') ||
     artifact.content.includes('- ') ||
     artifact.content.includes('* ');
+
+  // Calculate total attached items count
+  const totalAttachments = useMemo(() => {
+    if (!attachedContext) return 0;
+    return (
+      (attachedContext.projectMetadata ? 1 : 0) +
+      attachedContext.artifacts.length +
+      attachedContext.chatSessions.length +
+      attachedContext.requirements.length +
+      attachedContext.standards.length +
+      attachedContext.techStacks.length +
+      attachedContext.canvasNodes.length +
+      attachedContext.canvasEdges.length +
+      attachedContext.canvasLayers.length +
+      (attachedContext.files?.length || 0) +
+      (attachedContext.databases?.length || 0)
+    );
+  }, [attachedContext]);
 
   // Create or load collaboration session
   useEffect(() => {
@@ -438,6 +462,19 @@ export function ArtifactCollaborator({
             shareToken: shareToken || null,
             maxIterations: 25, // Increased for complex tasks
             currentContent: localContent, // Send the current editor content
+            attachedContext: attachedContext ? {
+              projectMetadata: attachedContext.projectMetadata || null,
+              artifacts: attachedContext.artifacts.length > 0 ? attachedContext.artifacts : undefined,
+              chatSessions: attachedContext.chatSessions.length > 0 ? attachedContext.chatSessions : undefined,
+              requirements: attachedContext.requirements.length > 0 ? attachedContext.requirements : undefined,
+              standards: attachedContext.standards.length > 0 ? attachedContext.standards : undefined,
+              techStacks: attachedContext.techStacks.length > 0 ? attachedContext.techStacks : undefined,
+              canvasNodes: attachedContext.canvasNodes.length > 0 ? attachedContext.canvasNodes : undefined,
+              canvasEdges: attachedContext.canvasEdges.length > 0 ? attachedContext.canvasEdges : undefined,
+              canvasLayers: attachedContext.canvasLayers.length > 0 ? attachedContext.canvasLayers : undefined,
+              files: attachedContext.files?.length ? attachedContext.files : undefined,
+              databases: attachedContext.databases?.length ? attachedContext.databases : undefined,
+            } : undefined,
           }),
         }
       );
@@ -684,6 +721,8 @@ export function ArtifactCollaborator({
               isStreaming={isStreaming}
               streamingContent={streamingContent}
               onSendMessage={handleSendMessage}
+              attachedCount={totalAttachments}
+              onAttach={() => setIsProjectSelectorOpen(true)}
             />
           </TabsContent>
 
@@ -703,6 +742,19 @@ export function ArtifactCollaborator({
           onOpenChange={setShowMergeDialog}
           onConfirm={handleMerge}
           isMerging={isMerging}
+        />
+
+        <ProjectSelector
+          projectId={projectId}
+          shareToken={shareToken}
+          open={isProjectSelectorOpen}
+          onClose={() => setIsProjectSelectorOpen(false)}
+          onConfirm={(selection) => {
+            setAttachedContext(selection);
+            setIsProjectSelectorOpen(false);
+            toast.success("Project elements attached to collaboration context");
+          }}
+          initialSelection={attachedContext || undefined}
         />
       </div>
     );
@@ -797,6 +849,8 @@ export function ArtifactCollaborator({
               isStreaming={isStreaming}
               streamingContent={streamingContent}
               onSendMessage={handleSendMessage}
+              attachedCount={totalAttachments}
+              onAttach={() => setIsProjectSelectorOpen(true)}
             />
           </div>
         </ResizablePanel>
@@ -807,6 +861,19 @@ export function ArtifactCollaborator({
         onOpenChange={setShowMergeDialog}
         onConfirm={handleMerge}
         isMerging={isMerging}
+      />
+
+      <ProjectSelector
+        projectId={projectId}
+        shareToken={shareToken}
+        open={isProjectSelectorOpen}
+        onClose={() => setIsProjectSelectorOpen(false)}
+        onConfirm={(selection) => {
+          setAttachedContext(selection);
+          setIsProjectSelectorOpen(false);
+          toast.success("Project elements attached to collaboration context");
+        }}
+        initialSelection={attachedContext || undefined}
       />
     </div>
   );
