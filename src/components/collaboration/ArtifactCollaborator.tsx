@@ -206,6 +206,8 @@ export function ArtifactCollaborator({
       
       if (result) {
         setHasUnsavedChanges(false);
+        // Reset viewing version to null so slider follows latest
+        setViewingVersion(null);
         // Refresh history to show new version - this won't cause UI flicker
         await refreshHistory();
         toast.success('Changes saved');
@@ -385,6 +387,9 @@ export function ArtifactCollaborator({
       // We already have the current content from the SSE stream
       await Promise.all([refreshMessages(), refreshHistory()]);
       
+      // Reset viewing version so slider follows latest after agent saves
+      setViewingVersion(null);
+      
       if (lastMessage) {
         setStreamingContent('');
       }
@@ -451,21 +456,16 @@ export function ArtifactCollaborator({
     created_at: h.created_at,
   })), [history]);
   
-  // Get previous version's content for diff view - compare current content against previous version
+  // Get previous version's content for diff view - compare current selected version against the version before it
   const previousVersionContent = useMemo(() => {
-    if (historyEntries.length === 0) return null;
+    if (historyEntries.length === 0 || currentVersion <= 1) return null;
     
-    // Sort by version descending to get latest first
-    const sortedHistory = [...historyEntries].sort((a, b) => b.version_number - a.version_number);
+    // Find the snapshot for the version before the currently viewed version
+    const previousVersion = currentVersion - 1;
+    const previousEntry = historyEntries.find(h => h.version_number === previousVersion);
     
-    // If we have at least 2 versions, get the second-to-last snapshot
-    if (sortedHistory.length >= 2) {
-      // The previous version is the second entry (index 1)
-      return sortedHistory[1]?.full_content_snapshot || null;
-    }
-    
-    return null;
-  }, [historyEntries]);
+    return previousEntry?.full_content_snapshot || null;
+  }, [historyEntries, currentVersion]);
 
   // Early return for loading state - AFTER all hooks
   if (isCreatingCollab || isLoading) {
