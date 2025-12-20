@@ -54,7 +54,19 @@ export function useRealtimeRepos(projectId: string | undefined | null, shareToke
           loadRepos();
         }
       )
+      .on("broadcast", { event: "repos_refresh" }, () => {
+        loadRepos();
+      })
       .subscribe();
+    
+    // Broadcast helper for triggering refreshes
+    const broadcastRefresh = async () => {
+      await channel.send({
+        type: 'broadcast',
+        event: 'repos_refresh',
+        payload: {}
+      });
+    };
 
     return () => {
       supabase.removeChannel(channel);
