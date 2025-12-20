@@ -4129,35 +4129,65 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      insert_artifact_with_token: {
-        Args: {
-          p_content: string
-          p_image_url?: string
-          p_project_id: string
-          p_source_id?: string
-          p_source_type?: string
-          p_token: string
-        }
-        Returns: {
-          ai_summary: string | null
-          ai_title: string | null
-          content: string
-          created_at: string
-          created_by: string | null
-          id: string
-          image_url: string | null
-          project_id: string
-          source_id: string | null
-          source_type: string | null
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "artifacts"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      insert_artifact_with_token:
+        | {
+            Args: {
+              p_content: string
+              p_image_url?: string
+              p_project_id: string
+              p_source_id?: string
+              p_source_type?: string
+              p_token: string
+            }
+            Returns: {
+              ai_summary: string | null
+              ai_title: string | null
+              content: string
+              created_at: string
+              created_by: string | null
+              id: string
+              image_url: string | null
+              project_id: string
+              source_id: string | null
+              source_type: string | null
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "artifacts"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_content: string
+              p_image_url?: string
+              p_project_id: string
+              p_source_id?: string
+              p_source_type?: string
+              p_token: string
+            }
+            Returns: {
+              ai_summary: string | null
+              ai_title: string | null
+              content: string
+              created_at: string
+              created_by: string | null
+              id: string
+              image_url: string | null
+              project_id: string
+              source_id: string | null
+              source_type: string | null
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "artifacts"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       insert_chat_message_with_token: {
         Args: {
           p_chat_session_id: string
