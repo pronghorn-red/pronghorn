@@ -174,19 +174,24 @@ Deno.serve(async (req) => {
           // Decode base64
           const binaryData = Uint8Array.from(atob(item.content), c => c.charCodeAt(0));
           
-          // Generate unique filename
+          // ALWAYS generate unique filename - never reuse existing files
           const timestamp = Date.now();
           const randomId = crypto.randomUUID().split("-")[0];
           const extension = getExtensionFromContentType(item.contentType || "application/octet-stream");
-          const fileName = item.fileName || `webhook-${timestamp}-${randomId}.${extension}`;
+          
+          // Use client fileName as prefix if provided, but always append unique identifiers
+          const baseName = item.fileName 
+            ? item.fileName.replace(/\.[^/.]+$/, '') // Remove extension from client filename
+            : 'webhook';
+          const fileName = `${baseName}-${timestamp}-${randomId}.${extension}`;
           const storagePath = `${projectId}/${fileName}`;
 
-          // Upload to storage
+          // Upload to storage - use upsert: false since filenames are always unique
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from("artifact-images")
             .upload(storagePath, binaryData, {
               contentType: item.contentType || "application/octet-stream",
-              upsert: true
+              upsert: false  // Never update - always create new files
             });
 
           if (uploadError) {
