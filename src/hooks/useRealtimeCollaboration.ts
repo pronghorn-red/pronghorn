@@ -510,5 +510,8 @@ export function useRealtimeCollaboration(
     getContentAtVersion,
     getHistoryByActor,
     refresh: loadAll,
+    refreshHistory: loadHistory,
+    refreshMessages: loadMessages,
+    refreshBlackboard: loadBlackboard,
   };
 }

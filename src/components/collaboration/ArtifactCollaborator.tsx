@@ -93,6 +93,8 @@ export function ArtifactCollaborator({
     restoreToVersion,
     addBlackboardEntry,
     refresh,
+    refreshHistory,
+    refreshMessages,
   } = useRealtimeCollaboration(collaborationId, shareToken, !!collaborationId);
 
   // Detect if content is markdown
@@ -204,6 +206,8 @@ export function ArtifactCollaborator({
       
       if (result) {
         setHasUnsavedChanges(false);
+        // Refresh history to show new version - this won't cause UI flicker
+        await refreshHistory();
         toast.success('Changes saved');
       } else {
         toast.error('Failed to save changes');
@@ -214,7 +218,7 @@ export function ArtifactCollaborator({
     } finally {
       setIsSaving(false);
     }
-  }, [collaborationId, hasUnsavedChanges, localContent, collaboration?.current_content, artifact.content, insertEdit]);
+  }, [collaborationId, hasUnsavedChanges, localContent, collaboration?.current_content, artifact.content, insertEdit, refreshHistory]);
 
   // Handle version navigation
   const handleVersionChange = useCallback((version: number) => {
@@ -375,8 +379,9 @@ export function ArtifactCollaborator({
         }
       }
 
-      // Refresh all data after agent completes to get messages/blackboard/history
-      await refresh();
+      // Refresh only messages and history after agent completes (not full refresh to avoid flicker)
+      // We already have the current content from the SSE stream
+      await Promise.all([refreshMessages(), refreshHistory()]);
       
       if (lastMessage) {
         setStreamingContent('');
@@ -391,7 +396,7 @@ export function ArtifactCollaborator({
       setStreamingContent('');
       setOptimisticMessages([]); // Clear any remaining optimistic messages
     }
-  }, [collaborationId, projectId, shareToken, sendMessage, hasUnsavedChanges, localContent, collaboration?.current_content, artifact.content, insertEdit, refresh]);
+  }, [collaborationId, projectId, shareToken, sendMessage, hasUnsavedChanges, localContent, collaboration?.current_content, artifact.content, insertEdit, refreshMessages, refreshHistory]);
 
   const latestVersion = useMemo(() => 
     history.length > 0 ? Math.max(...history.map(h => h.version_number)) : 0,
@@ -428,7 +433,7 @@ export function ArtifactCollaborator({
     created_at: b.created_at,
   })), [blackboard]);
 
-  // Map history to the expected format
+  // Map history to the expected format (includes full_content_snapshot for diff)
   const historyEntries: HistoryEntry[] = useMemo(() => history.map(h => ({
     id: h.id,
     version_number: h.version_number,
@@ -439,21 +444,31 @@ export function ArtifactCollaborator({
     end_line: h.end_line,
     old_content: h.old_content,
     new_content: h.new_content,
+    full_content_snapshot: h.full_content_snapshot,
     narrative: h.narrative,
     created_at: h.created_at,
   })), [history]);
   
-  // Calculate highlighted lines based on the most recent edit
-  // Show where the new content was inserted (start_line to start_line + new_content lines - 1)
-  const highlightedLines = useMemo(() => {
-    if (historyEntries.length === 0) return [];
-    const latestEntry = historyEntries.find(h => h.version_number === latestVersion);
-    if (latestEntry && latestEntry.start_line && latestEntry.new_content) {
-      const newLineCount = latestEntry.new_content.split('\n').length;
-      return [{ start: latestEntry.start_line, end: latestEntry.start_line + newLineCount - 1 }];
-    }
-    return [];
+  // Get previous version's content for diff view
+  const previousVersionContent = useMemo(() => {
+    if (historyEntries.length < 2) return null;
+    // Sort to get the version before current
+    const sortedHistory = [...historyEntries].sort((a, b) => b.version_number - a.version_number);
+    // Get the second latest version (previous)
+    const previousEntry = sortedHistory.find(h => h.version_number === latestVersion - 1);
+    return previousEntry?.full_content_snapshot || null;
   }, [historyEntries, latestVersion]);
+
+  // Get the full content snapshot from history entries for diff
+  const getFullContentFromHistory = useMemo(() => {
+    const entryMap = new Map<number, string | null>();
+    for (const entry of historyEntries) {
+      if (entry.full_content_snapshot) {
+        entryMap.set(entry.version_number, entry.full_content_snapshot);
+      }
+    }
+    return entryMap;
+  }, [historyEntries]);
 
   // Early return for loading state - AFTER all hooks
   if (isCreatingCollab || isLoading) {
@@ -529,13 +544,14 @@ export function ArtifactCollaborator({
             <div className="flex flex-col h-full">
               <CollaborationEditor
                 content={localContent}
+                previousContent={getFullContentFromHistory.get(latestVersion - 1) || previousVersionContent}
                 isMarkdown={isMarkdown}
                 onChange={handleContentChange}
                 onSave={handleSave}
                 isSaving={isSaving}
                 hasUnsavedChanges={hasUnsavedChanges}
                 readOnly={viewingVersion !== null && viewingVersion < latestVersion}
-                highlightedLines={highlightedLines}
+                currentVersion={latestVersion}
               />
               {history.length > 0 && (
                 <CollaborationTimeline
@@ -637,13 +653,14 @@ export function ArtifactCollaborator({
           <div className="flex flex-col h-full">
             <CollaborationEditor
               content={localContent}
+              previousContent={getFullContentFromHistory.get(latestVersion - 1) || previousVersionContent}
               isMarkdown={isMarkdown}
               onChange={handleContentChange}
               onSave={handleSave}
               isSaving={isSaving}
               hasUnsavedChanges={hasUnsavedChanges}
               readOnly={viewingVersion !== null && viewingVersion < latestVersion}
-              highlightedLines={highlightedLines}
+              currentVersion={latestVersion}
             />
             {history.length > 0 && (
               <CollaborationTimeline

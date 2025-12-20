@@ -29,6 +29,7 @@ export interface HistoryEntry {
   end_line: number;
   old_content: string | null;
   new_content: string | null;
+  full_content_snapshot?: string | null;
   narrative: string | null;
   created_at: string;
 }

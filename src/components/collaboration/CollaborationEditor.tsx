@@ -2,37 +2,38 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Code, Save, Loader2 } from 'lucide-react';
-import Editor, { Monaco } from '@monaco-editor/react';
+import { Eye, Code, Save, Loader2, GitCompare } from 'lucide-react';
+import Editor, { DiffEditor, Monaco } from '@monaco-editor/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface CollaborationEditorProps {
   content: string;
+  previousContent?: string | null;
   isMarkdown: boolean;
   onChange: (content: string) => void;
   onSave: () => void;
   isSaving: boolean;
   hasUnsavedChanges: boolean;
   readOnly?: boolean;
-  highlightedLines?: { start: number; end: number }[];
+  currentVersion: number;
 }
 
 export function CollaborationEditor({
   content,
+  previousContent,
   isMarkdown,
   onChange,
   onSave,
   isSaving,
   hasUnsavedChanges,
   readOnly = false,
-  highlightedLines = [],
+  currentVersion,
 }: CollaborationEditorProps) {
-  const [viewMode, setViewMode] = useState<'rendered' | 'source'>(isMarkdown ? 'rendered' : 'source');
+  const [viewMode, setViewMode] = useState<'rendered' | 'source' | 'diff'>(isMarkdown ? 'rendered' : 'source');
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
-  const decorationsRef = useRef<string[]>([]);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-save on blur or after idle period
@@ -47,43 +48,11 @@ export function CollaborationEditor({
   const handleEditorDidMount = (editor: any, monaco: Monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-    
-    // Apply initial decorations
-    if (highlightedLines.length > 0) {
-      applyHighlightDecorations(editor, monaco, highlightedLines);
-    }
   };
-  
-  const applyHighlightDecorations = (editor: any, monaco: any, lines: { start: number; end: number }[]) => {
-    if (!editor || !monaco) return;
-    
-    const decorations = lines.map(({ start, end }) => ({
-      range: new monaco.Range(start, 1, end, 1),
-      options: {
-        isWholeLine: true,
-        className: 'collaboration-highlighted-line',
-        linesDecorationsClassName: 'collaboration-highlighted-gutter',
-      },
-    }));
-
-    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations);
-  };
-  
-  // Update decorations when highlightedLines change
-  useEffect(() => {
-    if (editorRef.current && monacoRef.current) {
-      if (highlightedLines.length > 0) {
-        applyHighlightDecorations(editorRef.current, monacoRef.current, highlightedLines);
-      } else {
-        decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, []);
-      }
-    }
-  }, [highlightedLines]);
 
   const handleContentChange = useCallback((value: string | undefined) => {
     if (value !== undefined) {
       onChange(value);
-      // Just mark as changed, no auto-save (user should manually save)
     }
   }, [onChange]);
 
@@ -96,13 +65,15 @@ export function CollaborationEditor({
     }
   }, [onSave, hasUnsavedChanges]);
 
+  // Check if we have diff content
+  const hasDiffContent = previousContent !== null && previousContent !== undefined && previousContent !== content;
+
   return (
     <div className="flex flex-col h-full" onKeyDown={handleKeyDown}>
       {/* Toolbar */}
       <div className="flex items-center justify-between p-2 border-b bg-muted/30">
         <div className="flex items-center gap-2">
-          {/* Always show toggle for switching between rendered and source view */}
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'rendered' | 'source')}>
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'rendered' | 'source' | 'diff')}>
             <TabsList className="h-8">
               <TabsTrigger value="rendered" className="text-xs h-6 px-2">
                 <Eye className="h-3 w-3 mr-1" />
@@ -112,8 +83,21 @@ export function CollaborationEditor({
                 <Code className="h-3 w-3 mr-1" />
                 Source
               </TabsTrigger>
+              <TabsTrigger 
+                value="diff" 
+                className="text-xs h-6 px-2"
+                disabled={!hasDiffContent}
+              >
+                <GitCompare className="h-3 w-3 mr-1" />
+                Diff
+              </TabsTrigger>
             </TabsList>
           </Tabs>
+          {currentVersion > 0 && (
+            <Badge variant="outline" className="text-xs">
+              v{currentVersion}
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {hasUnsavedChanges && (
@@ -157,6 +141,25 @@ export function CollaborationEditor({
               )}
             </div>
           </ScrollArea>
+        ) : viewMode === 'diff' && hasDiffContent ? (
+          <DiffEditor
+            height="100%"
+            language={isMarkdown ? 'markdown' : 'plaintext'}
+            original={previousContent || ''}
+            modified={content}
+            options={{
+              minimap: { enabled: false },
+              wordWrap: 'on',
+              fontSize: 13,
+              scrollBeyondLastLine: false,
+              readOnly: true,
+              renderSideBySide: true,
+              padding: { top: 12 },
+              automaticLayout: true,
+              originalEditable: false,
+            }}
+            theme="vs-dark"
+          />
         ) : (
           <Editor
             height="100%"
@@ -178,18 +181,6 @@ export function CollaborationEditor({
           />
         )}
       </div>
-      
-      {/* CSS for highlighted lines */}
-      <style>{`
-        .collaboration-highlighted-line {
-          background-color: rgba(34, 197, 94, 0.15) !important;
-        }
-        .collaboration-highlighted-gutter {
-          background-color: rgb(34, 197, 94);
-          width: 3px !important;
-          margin-left: 3px;
-        }
-      `}</style>
     </div>
   );
 }
