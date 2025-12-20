@@ -334,7 +334,7 @@ export function ArtifactCollaborator({
     }
   }, [collaborationId, shareToken, artifact.content, insertEdit, refreshHistory]);
 
-  // Handle merge to artifact
+  // Handle merge to artifact - updates the source artifact but keeps collaboration session open
   const handleMerge = useCallback(async () => {
     if (!collaborationId) return;
     
@@ -347,17 +347,17 @@ export function ArtifactCollaborator({
       
       if (error) throw error;
       
-      toast.success('Collaboration merged to artifact');
+      toast.success('Content merged to source artifact - collaboration session remains active');
       setShowMergeDialog(false);
-      onMerged?.();
-      onBack();
+      onMerged?.(); // Refresh artifact list to show updated content
+      // Don't call onBack() - keep the collaboration session open
     } catch (error) {
       console.error('Error merging collaboration:', error);
       toast.error('Failed to merge collaboration');
     } finally {
       setIsMerging(false);
     }
-  }, [collaborationId, shareToken, onMerged, onBack]);
+  }, [collaborationId, shareToken, onMerged]);
 
   // Handle chat message send with streaming
   const handleSendMessage = useCallback(async (content: string) => {
