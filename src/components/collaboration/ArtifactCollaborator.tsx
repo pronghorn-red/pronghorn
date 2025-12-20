@@ -554,7 +554,7 @@ export function ArtifactCollaborator({
       setOptimisticMessages([]); // Clear any remaining optimistic messages
       isAgentEditingRef.current = false; // Re-enable sync after agent is done
     }
-  }, [collaborationId, projectId, shareToken, sendMessage, hasUnsavedChanges, localContent, collaboration?.current_content, artifact.content, insertEdit, refreshMessages, refreshHistory]);
+  }, [collaborationId, projectId, shareToken, sendMessage, hasUnsavedChanges, localContent, collaboration?.current_content, artifact.content, insertEdit, refreshMessages, refreshHistory, attachedContext]);
 
   const latestVersion = useMemo(() => 
     history.length > 0 ? Math.max(...history.map(h => h.version_number)) : 0,
