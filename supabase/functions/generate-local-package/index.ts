@@ -106,20 +106,7 @@ serve(async (req) => {
     const readme = generateReadme(deployment, project, repo);
     zip.file('README.md', readme);
 
-    // 5. Create start scripts
-    const startScriptBash = `#!/bin/bash
-npm install
-node pronghorn-runner.js
-`;
-    zip.file('start.sh', startScriptBash);
-
-    const startScriptWindows = `@echo off
-npm install
-node pronghorn-runner.js
-`;
-    zip.file('start.bat', startScriptWindows);
-
-    // 6. Create .env.example as template
+    // 5. Create .env.example as template
     zip.file('.env.example', generateEnvExample());
 
     // Generate the ZIP as base64
@@ -1395,60 +1382,82 @@ async function syncAllProjectData() {
 }
 
 async function setupProjectDataSubscription() {
-  console.log('[Pronghorn] Setting up project data realtime subscription...');
+  console.log('[Pronghorn] Setting up project data realtime subscriptions via broadcast events...');
   
-  const projectChannelName = \`project-data-\${CONFIG.projectId}\`;
+  const channels = [];
   
-  const projectChannel = supabase
-    .channel(projectChannelName)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'requirements', filter: \`project_id=eq.\${CONFIG.projectId}\` },
-      async () => {
-        console.log('[Pronghorn] Requirements changed, syncing...');
-        await fetchAndWriteRequirements();
-      }
-    )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'canvas_nodes', filter: \`project_id=eq.\${CONFIG.projectId}\` },
-      async () => {
-        console.log('[Pronghorn] Canvas nodes changed, syncing...');
-        await fetchAndWriteCanvas();
-      }
-    )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'canvas_edges', filter: \`project_id=eq.\${CONFIG.projectId}\` },
-      async () => {
-        console.log('[Pronghorn] Canvas edges changed, syncing...');
-        await fetchAndWriteCanvas();
-      }
-    )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'artifacts', filter: \`project_id=eq.\${CONFIG.projectId}\` },
-      async () => {
-        console.log('[Pronghorn] Artifacts changed, syncing...');
-        await fetchAndWriteArtifacts();
-      }
-    )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'project_specifications', filter: \`project_id=eq.\${CONFIG.projectId}\` },
-      async () => {
-        console.log('[Pronghorn] Specifications changed, syncing...');
-        await fetchAndWriteSpecifications();
-      }
-    )
+  // Subscribe to requirements channel - matches frontend's useRealtimeRequirements
+  const requirementsChannel = supabase
+    .channel(\`requirements-\${CONFIG.projectId}\`)
+    .on('broadcast', { event: 'requirements_refresh' }, async (payload) => {
+      console.log('[Pronghorn] Requirements refresh broadcast received:', payload);
+      await fetchAndWriteRequirements();
+    })
     .subscribe((status) => {
-      console.log(\`[Pronghorn] Project data channel status: \${status}\`);
       if (status === 'SUBSCRIBED') {
-        console.log('[Pronghorn] ✓ Listening for project data changes');
+        console.log('[Pronghorn] ✓ Listening for requirements broadcast');
       }
     });
+  channels.push(requirementsChannel);
   
-  return projectChannel;
+  // Subscribe to canvas nodes channel - matches frontend's useRealtimeCanvas
+  const canvasNodesChannel = supabase
+    .channel(\`canvas-nodes-\${CONFIG.projectId}\`)
+    .on('broadcast', { event: 'canvas_refresh' }, async (payload) => {
+      console.log('[Pronghorn] Canvas nodes refresh broadcast received:', payload);
+      await fetchAndWriteCanvas();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Pronghorn] ✓ Listening for canvas nodes broadcast');
+      }
+    });
+  channels.push(canvasNodesChannel);
+  
+  // Subscribe to canvas edges channel - matches frontend's useRealtimeCanvas
+  const canvasEdgesChannel = supabase
+    .channel(\`canvas-edges-\${CONFIG.projectId}\`)
+    .on('broadcast', { event: 'canvas_refresh' }, async (payload) => {
+      console.log('[Pronghorn] Canvas edges refresh broadcast received:', payload);
+      await fetchAndWriteCanvas();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Pronghorn] ✓ Listening for canvas edges broadcast');
+      }
+    });
+  channels.push(canvasEdgesChannel);
+  
+  // Subscribe to artifacts channel - matches frontend's useRealtimeArtifacts
+  const artifactsChannel = supabase
+    .channel(\`artifacts-\${CONFIG.projectId}\`)
+    .on('broadcast', { event: 'artifact_refresh' }, async (payload) => {
+      console.log('[Pronghorn] Artifacts refresh broadcast received:', payload);
+      await fetchAndWriteArtifacts();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Pronghorn] ✓ Listening for artifacts broadcast');
+      }
+    });
+  channels.push(artifactsChannel);
+  
+  // Subscribe to specifications channel - matches frontend's useRealtimeSpecifications
+  const specificationsChannel = supabase
+    .channel(\`specifications-\${CONFIG.projectId}\`)
+    .on('broadcast', { event: 'specification_refresh' }, async (payload) => {
+      console.log('[Pronghorn] Specifications refresh broadcast received:', payload);
+      await fetchAndWriteSpecifications();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Pronghorn] ✓ Listening for specifications broadcast');
+      }
+    });
+  channels.push(specificationsChannel);
+  
+  console.log('[Pronghorn] All project data broadcast channels set up');
+  return channels;
 }
 
 // ============================================
