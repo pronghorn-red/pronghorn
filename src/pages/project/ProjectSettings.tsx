@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Copy, Globe, EyeOff } from "lucide-react";
+import { Copy, EyeOff, ImageIcon, Globe } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -22,6 +22,9 @@ import { DeleteProjectDialog } from "@/components/dashboard/DeleteProjectDialog"
 import { CloneProjectDialog } from "@/components/dashboard/CloneProjectDialog";
 import { TokenManagement } from "@/components/project/TokenManagement";
 import { AccessLevelBanner } from "@/components/project/AccessLevelBanner";
+import { SplashImageSelector } from "@/components/project/SplashImageSelector";
+import { PublishProjectDialog } from "@/components/admin/PublishProjectDialog";
+import { useRealtimeArtifacts } from "@/hooks/useRealtimeArtifacts";
 
 import { Switch } from "@/components/ui/switch";
 import { ProjectActivityHeatmap } from "@/components/project/ProjectActivityHeatmap";
@@ -42,11 +45,15 @@ export default function ProjectSettings() {
   const [timelineEnd, setTimelineEnd] = useState("");
   const [priority, setPriority] = useState("medium");
   const [tags, setTags] = useState("");
+  const [splashImageUrl, setSplashImageUrl] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
   const [maxTokens, setMaxTokens] = useState(32768);
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
   const [thinkingBudget, setThinkingBudget] = useState(-1);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Fetch artifacts for splash image selector
+  const { artifacts } = useRealtimeArtifacts(projectId, shareToken, isTokenSet);
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -160,6 +167,7 @@ export default function ProjectSettings() {
       setTimelineEnd(project.timeline_end || "");
       setPriority(project.priority || "medium");
       setTags(project.tags?.join(", ") || "");
+      setSplashImageUrl((project as any).splash_image_url || null);
       setSelectedModel(project.selected_model || "gemini-2.5-flash");
       setMaxTokens(project.max_tokens || 32768);
       setThinkingEnabled(project.thinking_enabled || false);
@@ -186,6 +194,7 @@ export default function ProjectSettings() {
               .map((t) => t.trim())
               .filter(Boolean)
           : null,
+        p_splash_image_url: splashImageUrl,
       });
 
       if (error) throw error;
@@ -274,6 +283,23 @@ export default function ProjectSettings() {
                       />
                     </div>
 
+                    {/* Splash Image Section */}
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <ImageIcon className="h-4 w-4" />
+                        Project Cover Image
+                      </Label>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        This image is displayed on the dashboard card and gallery
+                      </p>
+                      <SplashImageSelector
+                        projectId={projectId!}
+                        shareToken={shareToken}
+                        currentImageUrl={splashImageUrl}
+                        artifacts={artifacts}
+                        onImageSelect={setSplashImageUrl}
+                      />
+                    </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="organization">Organization</Label>
@@ -529,29 +555,13 @@ export default function ProjectSettings() {
                                 Make this project available in the public gallery for others to clone
                               </p>
                             </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={async () => {
-                                try {
-                                  const { data, error } = await supabase.rpc('publish_project_to_gallery', {
-                                    p_project_id: projectId,
-                                    p_name: project?.name || null,
-                                    p_description: project?.description || null,
-                                    p_image_url: null,
-                                    p_tags: project?.tags || null,
-                                    p_category: null
-                                  });
-                                  if (error) throw error;
-                                  toast.success("Project published to gallery!");
-                                } catch (err) {
-                                  toast.error(err instanceof Error ? err.message : "Failed to publish");
-                                }
-                              }}
-                            >
-                              <Globe className="mr-2 h-4 w-4" />
-                              Publish
-                            </Button>
+                            <PublishProjectDialog
+                              projectId={projectId!}
+                              projectName={project?.name || ""}
+                              projectDescription={project?.description}
+                              projectTags={project?.tags}
+                              splashImageUrl={splashImageUrl}
+                            />
                           </div>
                           <div className="flex items-center justify-between">
                             <div className="space-y-0.5">

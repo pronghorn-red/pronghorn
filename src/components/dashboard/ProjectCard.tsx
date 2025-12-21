@@ -18,6 +18,7 @@ interface ProjectCardProps {
   organization?: string | null;
   budget?: number | null;
   scope?: string | null;
+  splashImageUrl?: string | null;
   onClick?: (projectId: string) => void;
   onUpdate?: () => void;
   isAnonymous?: boolean;
@@ -50,6 +51,7 @@ export function ProjectCard({
   organization,
   budget,
   scope,
+  splashImageUrl,
   onClick,
   onUpdate,
   isAnonymous,
@@ -62,8 +64,18 @@ export function ProjectCard({
 
   return (
     <Card
-      className="card-hover group relative"
+      className="card-hover group relative overflow-hidden"
     >
+      {/* Splash Image Banner */}
+      {splashImageUrl && (
+        <div className="h-32 w-full overflow-hidden">
+          <img
+            src={splashImageUrl}
+            alt={projectName}
+            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+          />
+        </div>
+      )}
       <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-background/80 backdrop-blur-sm rounded-md p-1">
         {!isAnonymous && (
           <CloneProjectDialog

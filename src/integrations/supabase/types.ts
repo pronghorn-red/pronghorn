@@ -1797,6 +1797,7 @@ export type Database = {
           priority: string | null
           scope: string | null
           selected_model: string | null
+          splash_image_url: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
           thinking_budget: number | null
@@ -1820,6 +1821,7 @@ export type Database = {
           priority?: string | null
           scope?: string | null
           selected_model?: string | null
+          splash_image_url?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           tags?: string[] | null
           thinking_budget?: number | null
@@ -1843,6 +1845,7 @@ export type Database = {
           priority?: string | null
           scope?: string | null
           selected_model?: string | null
+          splash_image_url?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           tags?: string[] | null
           thinking_budget?: number | null
@@ -3838,6 +3841,7 @@ export type Database = {
           priority: string | null
           scope: string | null
           selected_model: string | null
+          splash_image_url: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
           thinking_budget: number | null
@@ -5240,6 +5244,7 @@ export type Database = {
           priority: string | null
           scope: string | null
           selected_model: string | null
+          splash_image_url: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
           thinking_budget: number | null
@@ -5821,6 +5826,7 @@ export type Database = {
           priority: string | null
           scope: string | null
           selected_model: string | null
+          splash_image_url: string | null
           status: Database["public"]["Enums"]["project_status"]
           tags: string[] | null
           thinking_budget: number | null
@@ -5861,51 +5867,99 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      update_project_with_token: {
-        Args: {
-          p_budget?: number
-          p_description?: string
-          p_name?: string
-          p_organization?: string
-          p_priority?: string
-          p_project_id: string
-          p_scope?: string
-          p_status?: Database["public"]["Enums"]["project_status"]
-          p_tags?: string[]
-          p_timeline_end?: string
-          p_timeline_start?: string
-          p_token?: string
-        }
-        Returns: {
-          budget: number | null
-          created_at: string
-          created_by: string | null
-          description: string | null
-          github_branch: string | null
-          github_repo: string | null
-          id: string
-          max_tokens: number | null
-          name: string
-          org_id: string
-          organization: string | null
-          priority: string | null
-          scope: string | null
-          selected_model: string | null
-          status: Database["public"]["Enums"]["project_status"]
-          tags: string[] | null
-          thinking_budget: number | null
-          thinking_enabled: boolean | null
-          timeline_end: string | null
-          timeline_start: string | null
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "projects"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      update_project_with_token:
+        | {
+            Args: {
+              p_budget?: number
+              p_description?: string
+              p_name?: string
+              p_organization?: string
+              p_priority?: string
+              p_project_id: string
+              p_scope?: string
+              p_status?: Database["public"]["Enums"]["project_status"]
+              p_tags?: string[]
+              p_timeline_end?: string
+              p_timeline_start?: string
+              p_token?: string
+            }
+            Returns: {
+              budget: number | null
+              created_at: string
+              created_by: string | null
+              description: string | null
+              github_branch: string | null
+              github_repo: string | null
+              id: string
+              max_tokens: number | null
+              name: string
+              org_id: string
+              organization: string | null
+              priority: string | null
+              scope: string | null
+              selected_model: string | null
+              splash_image_url: string | null
+              status: Database["public"]["Enums"]["project_status"]
+              tags: string[] | null
+              thinking_budget: number | null
+              thinking_enabled: boolean | null
+              timeline_end: string | null
+              timeline_start: string | null
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "projects"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_budget?: number
+              p_description?: string
+              p_name?: string
+              p_organization?: string
+              p_priority?: string
+              p_project_id: string
+              p_scope?: string
+              p_splash_image_url?: string
+              p_tags?: string[]
+              p_timeline_end?: string
+              p_timeline_start?: string
+              p_token: string
+            }
+            Returns: {
+              budget: number | null
+              created_at: string
+              created_by: string | null
+              description: string | null
+              github_branch: string | null
+              github_repo: string | null
+              id: string
+              max_tokens: number | null
+              name: string
+              org_id: string
+              organization: string | null
+              priority: string | null
+              scope: string | null
+              selected_model: string | null
+              splash_image_url: string | null
+              status: Database["public"]["Enums"]["project_status"]
+              tags: string[] | null
+              thinking_budget: number | null
+              thinking_enabled: boolean | null
+              timeline_end: string | null
+              timeline_start: string | null
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "projects"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       update_published_project: {
         Args: {
           p_category?: string

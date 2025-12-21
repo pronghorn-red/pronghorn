@@ -49,6 +49,7 @@ export default function Dashboard() {
         organization: p.organization,
         budget: p.budget,
         scope: p.scope,
+        splashImageUrl: (p as any).splash_image_url,
       }));
     },
     enabled: !!user,
