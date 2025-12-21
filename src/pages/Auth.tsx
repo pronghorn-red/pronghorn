@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,31 +48,45 @@ export default function Auth() {
   // Email verification success state
   const [verificationSuccess, setVerificationSuccess] = useState(false);
 
-  // Handle URL params after Supabase redirect
+  // Handle URL params after Supabase redirect - check IMMEDIATELY before any session redirects
   useEffect(() => {
     const verified = searchParams.get('verified');
     const recovery = searchParams.get('recovery');
     
     if (verified === 'true') {
-      // User was redirected after email verification
       setVerificationSuccess(true);
       toast.success("Email verified successfully! You can now sign in.");
     }
     
     if (recovery === 'true') {
-      // User was redirected after clicking password reset link
-      // They should now have a valid session to update their password
+      // Set reset mode IMMEDIATELY to prevent redirect race condition
       setResetMode(true);
       toast.success("Please set your new password.");
     }
   }, [searchParams]);
 
-  // Redirect to dashboard if already authenticated (except in reset mode)
+  // Listen for PASSWORD_RECOVERY auth event from Supabase
   useEffect(() => {
-    if (session && !resetMode) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, _session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setResetMode(true);
+          toast.success("Please set your new password.");
+        }
+      }
+    );
+    
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Redirect to dashboard if already authenticated (except in reset mode or recovery flow)
+  useEffect(() => {
+    const recovery = searchParams.get('recovery');
+    // Don't redirect if we're in reset mode OR if recovery param is present (race condition guard)
+    if (session && !resetMode && recovery !== 'true') {
       navigate("/dashboard");
     }
-  }, [session, navigate, resetMode]);
+  }, [session, navigate, resetMode, searchParams]);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -172,10 +187,17 @@ export default function Auth() {
     setLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      // Handle specific error cases
+      if (error.message?.includes('session') || error.message?.includes('token') || error.message?.includes('expired')) {
+        toast.error("Your reset link has expired. Please request a new one.");
+      } else {
+        toast.error(error.message);
+      }
     } else {
       toast.success("Password updated successfully!");
       setResetMode(false);
+      // Clear URL params to prevent issues on refresh
+      window.history.replaceState({}, '', '/auth');
       navigate("/dashboard");
     }
   };
