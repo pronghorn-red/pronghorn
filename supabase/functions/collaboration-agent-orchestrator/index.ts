@@ -471,7 +471,7 @@ Start your response with { and end with }.`;
                   p_start_line: start_line,
                   p_end_line: end_line,
                   p_old_content: lines.slice(start_line - 1, end_line).join("\n"),
-                  p_new_content: new_content,
+                  p_new_content: contentToInsert,
                   p_new_full_content: currentContent,
                   p_narrative: narrative || "Agent edit",
                   p_actor_type: "agent",

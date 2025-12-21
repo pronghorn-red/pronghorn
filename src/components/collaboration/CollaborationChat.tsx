@@ -118,8 +118,8 @@ export function CollaborationChat({
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
-      <ScrollArea className="flex-1 p-3 min-h-0 w-full">
-        <div className="space-y-3 w-full overflow-x-hidden">
+      <ScrollArea className="flex-1 p-3 min-h-0">
+        <div className="space-y-3 pr-2">
           {combinedTimeline.length === 0 && !isStreaming && (
             <div className="text-center py-8 text-muted-foreground text-sm">
               Start a conversation to collaborate on this artifact
@@ -135,17 +135,17 @@ export function CollaborationChat({
                     onClick={() => toggleBlackboard(entry.id)}
                     className={`w-full text-left px-2 py-1.5 rounded-md border text-xs ${getBlackboardColor(entry.entry_type)}`}
                   >
-                    <div className="flex items-center gap-1.5 overflow-hidden">
+                    <div className="flex items-center gap-1.5">
                       {getBlackboardIcon(entry.entry_type)}
                       <Badge variant="outline" className="text-[10px] px-1 py-0 flex-shrink-0">
                         {entry.entry_type}
                       </Badge>
-                      <span className="truncate opacity-80 text-xs">
+                      <span className="truncate opacity-80 text-xs flex-1">
                         {entry.content.slice(0, 50)}...
                       </span>
                     </div>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="px-2 py-1.5 text-xs text-muted-foreground break-words">
+                  <CollapsibleContent className="px-2 py-1.5 text-xs text-muted-foreground whitespace-pre-wrap">
                     {entry.content}
                   </CollapsibleContent>
                 </Collapsible>
@@ -156,8 +156,8 @@ export function CollaborationChat({
             const isUser = message.role === 'user';
             
             return (
-              <div key={message.id} className="min-w-0 w-full overflow-x-hidden">
-                <div className="flex items-center gap-1.5 mb-1 min-w-0">
+              <div key={message.id}>
+                <div className="flex items-center gap-1.5 mb-1">
                   {isUser ? (
                     <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                   ) : (
@@ -169,16 +169,16 @@ export function CollaborationChat({
                   </span>
                 </div>
                 <div
-                  className={`p-2 rounded-lg text-sm max-w-full overflow-hidden ${
+                  className={`p-2 rounded-lg text-sm ${
                     isUser
                       ? 'bg-primary/5 border border-primary/10'
                       : 'bg-muted/30 border'
                   }`}
                 >
                   {isUser ? (
-                    <p className="whitespace-pre-wrap break-words text-sm w-full" style={{ overflowWrap: 'anywhere' }}>{message.content}</p>
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   ) : (
-                    <div className="prose prose-sm dark:prose-invert max-w-none w-full overflow-hidden [&_p]:m-0 [&_p]:whitespace-pre-wrap [&_p]:break-words [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_pre]:text-xs [&_code]:text-xs [&_code]:break-all" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                    <div className="text-sm prose prose-sm dark:prose-invert max-w-none [&_p]:m-0 [&_p]:whitespace-pre-wrap [&_pre]:overflow-x-auto [&_pre]:text-xs [&_code]:text-xs">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {message.content}
                       </ReactMarkdown>
