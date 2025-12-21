@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { Loader2, Eye, EyeOff, ArrowLeft, Info, CheckCircle } from "lucide-react";
+import { Loader2, Eye, EyeOff, ArrowLeft, Info, CheckCircle, AlertTriangle } from "lucide-react";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -47,23 +47,42 @@ export default function Auth() {
 
   // Email verification success state
   const [verificationSuccess, setVerificationSuccess] = useState(false);
+  
+  // Expired link error state
+  const [expiredLinkError, setExpiredLinkError] = useState<string | null>(null);
 
   // Handle URL params after Supabase redirect - check IMMEDIATELY before any session redirects
   useEffect(() => {
     const verified = searchParams.get('verified');
     const recovery = searchParams.get('recovery');
     
+    // Check hash fragment for errors (Supabase puts errors there)
+    const hash = window.location.hash;
+    if (hash) {
+      const hashParams = new URLSearchParams(hash.substring(1));
+      const error = hashParams.get('error');
+      const errorCode = hashParams.get('error_code');
+      const errorDescription = hashParams.get('error_description');
+      
+      if (error === 'access_denied' && errorCode === 'otp_expired') {
+        setExpiredLinkError(errorDescription?.replace(/\+/g, ' ') || 'Your reset link has expired. Please request a new one.');
+        // Clear the hash to prevent re-triggering
+        window.history.replaceState({}, '', window.location.pathname + window.location.search);
+      }
+    }
+    
     if (verified === 'true') {
       setVerificationSuccess(true);
       toast.success("Email verified successfully! You can now sign in.");
     }
     
-    if (recovery === 'true') {
+    if (recovery === 'true' && !expiredLinkError) {
       // Set reset mode IMMEDIATELY to prevent redirect race condition
+      // But only if there's no expired link error
       setResetMode(true);
       toast.success("Please set your new password.");
     }
-  }, [searchParams]);
+  }, [searchParams, expiredLinkError]);
 
   // Listen for PASSWORD_RECOVERY auth event from Supabase
   useEffect(() => {
@@ -341,6 +360,26 @@ export default function Auth() {
           <CardDescription>Sign in to access your projects</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Expired link error banner */}
+          {expiredLinkError && (
+            <Alert className="mb-4 border-amber-500/50 bg-amber-500/10">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <AlertDescription className="text-amber-700 dark:text-amber-400">
+                {expiredLinkError}
+                <Button
+                  variant="link"
+                  className="p-0 h-auto ml-1 text-amber-700 dark:text-amber-400 underline"
+                  onClick={() => {
+                    setExpiredLinkError(null);
+                    setForgotPasswordMode(true);
+                  }}
+                >
+                  Request a new link
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Verification success message */}
           {verificationSuccess && (
             <Alert className="mb-4 border-green-500/50 bg-green-500/10">
