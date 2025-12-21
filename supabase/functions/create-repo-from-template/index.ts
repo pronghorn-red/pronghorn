@@ -155,6 +155,17 @@ Deno.serve(async (req) => {
       `Created repository from template: ${organization}/${finalRepoName} from ${templateOrg}/${templateRepo}`,
     );
 
+    // Broadcast repos_refresh event for realtime sync
+    try {
+      await supabase.channel(`project_repos-${projectId}`).send({
+        type: 'broadcast',
+        event: 'repos_refresh',
+        payload: { repoId: newRepo.id }
+      });
+    } catch (broadcastError) {
+      console.log('[create-repo-from-template] Broadcast failed (non-fatal):', broadcastError);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

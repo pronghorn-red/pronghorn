@@ -139,6 +139,17 @@ Deno.serve(async (req) => {
 
     console.log(`Linked existing repository: ${organization}/${repo}#${branch}`);
 
+    // Broadcast repos_refresh event for realtime sync
+    try {
+      await supabase.channel(`project_repos-${projectId}`).send({
+        type: 'broadcast',
+        event: 'repos_refresh',
+        payload: { repoId: newRepo.id }
+      });
+    } catch (broadcastError) {
+      console.log('[link-existing-repo] Broadcast failed (non-fatal):', broadcastError);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

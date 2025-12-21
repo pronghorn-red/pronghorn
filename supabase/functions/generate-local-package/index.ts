@@ -1789,6 +1789,25 @@ async function setupProjectDataSubscription() {
     });
   channels.push(chatSessionsChannel);
   
+  // Subscribe to chat messages channel (for real-time message updates)
+  const chatMessagesChannel = supabase
+    .channel(\`chat-messages-\${CONFIG.projectId}\`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'chat_messages',
+    }, async (payload) => {
+      // Check if this message belongs to a session in our project
+      console.log('[Pronghorn] Chat message postgres_changes received');
+      await fetchAndWriteChats();
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[Pronghorn] ✓ Listening for chat messages');
+      }
+    });
+  channels.push(chatMessagesChannel);
+  
   // Subscribe to repositories channel
   const reposChannel = supabase
     .channel(\`project_repos-\${CONFIG.projectId}\`)

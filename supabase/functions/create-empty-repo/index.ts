@@ -157,6 +157,17 @@ Deno.serve(async (req) => {
 
     console.log(`Created empty repository: ${organization}/${finalRepoName}`);
 
+    // Broadcast repos_refresh event for realtime sync
+    try {
+      await supabase.channel(`project_repos-${projectId}`).send({
+        type: 'broadcast',
+        event: 'repos_refresh',
+        payload: { repoId: newRepo.id }
+      });
+    } catch (broadcastError) {
+      console.log('[create-empty-repo] Broadcast failed (non-fatal):', broadcastError);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
