@@ -221,6 +221,23 @@ export default function Landing() {
         ]
       }
     },
+    { 
+      icon: Users, 
+      label: "Collaboration", 
+      description: "AI-assisted document co-authoring with version control", 
+      phase: "design",
+      hasAgent: true,
+      featured: true,
+      aiDetails: {
+        title: "AI Collaboration Agent",
+        capabilities: [
+          "Real-time AI co-authoring of project artifacts",
+          "Line-by-line diff tracking with full version history",
+          "Shared blackboard for human-AI collaboration context",
+          "Merge changes back to source artifacts when ready"
+        ]
+      }
+    },
   ];
 
   const canvasAgents = [
@@ -499,7 +516,7 @@ export default function Landing() {
           </div>
 
           {/* Steps Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 max-w-4xl mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
             {workflowSteps.map((step, index) => {
               const phaseColors = {
                 setup: "border-blue-200 hover:border-blue-400 hover:bg-blue-50/50",
