@@ -10,7 +10,62 @@ const corsHeaders = {
 interface GeneratePackageRequest {
   deploymentId: string;
   shareToken?: string;
-  mode?: 'full' | 'env-only'; // NEW: download mode
+  mode?: 'full' | 'env-only'; // download mode
+}
+
+// Encryption helpers (must match deployment-secrets edge function)
+const ENCRYPTION_KEY = Deno.env.get('SECRETS_ENCRYPTION_KEY');
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  }
+  return bytes;
+}
+
+async function decrypt(ciphertext: string): Promise<string> {
+  if (!ENCRYPTION_KEY) {
+    throw new Error('SECRETS_ENCRYPTION_KEY not configured');
+  }
+  
+  const keyBytes = hexToBytes(ENCRYPTION_KEY);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyBytes.buffer as ArrayBuffer,
+    { name: 'AES-GCM' },
+    false,
+    ['decrypt']
+  );
+  
+  // Format: iv (12 bytes hex) + ciphertext (hex)
+  const ivHex = ciphertext.slice(0, 24);
+  const dataHex = ciphertext.slice(24);
+  
+  const iv = hexToBytes(ivHex);
+  const data = hexToBytes(dataHex);
+  
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
+    key,
+    data.buffer as ArrayBuffer
+  );
+  
+  return new TextDecoder().decode(decrypted);
+}
+
+async function decryptEnvVars(encryptedEnvVars: string | null): Promise<Record<string, string>> {
+  if (!encryptedEnvVars || !ENCRYPTION_KEY) {
+    return {};
+  }
+  
+  try {
+    const decrypted = await decrypt(encryptedEnvVars);
+    return JSON.parse(decrypted);
+  } catch (error) {
+    console.error('[generate-local-package] Failed to decrypt env vars:', error);
+    return {};
+  }
 }
 
 serve(async (req) => {
@@ -21,6 +76,7 @@ serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
     const authHeader = req.headers.get('Authorization');
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -32,7 +88,7 @@ serve(async (req) => {
 
     console.log(`[generate-local-package] DeploymentId: ${deploymentId}, mode: ${mode}, shareToken: ${shareToken ? 'provided' : 'null'}`);
 
-    // Validate access and get deployment details
+    // Validate access and get deployment details (requires owner access)
     const { data: deployment, error: deploymentError } = await supabase.rpc(
       'get_deployment_with_secrets_with_token',
       { p_deployment_id: deploymentId, p_token: shareToken || null }
@@ -46,6 +102,10 @@ serve(async (req) => {
     if (!deployment) {
       throw new Error('Deployment not found or access denied');
     }
+
+    // Decrypt env vars for local deployment package (owner already validated via RPC)
+    const decryptedEnvVars = await decryptEnvVars(deployment.env_vars_encrypted);
+    console.log(`[generate-local-package] Decrypted ${Object.keys(decryptedEnvVars).length} env vars`);
 
     // Get repo details - prefer deployment.repo_id, fallback to Prime repo
     let repo = null;
@@ -72,8 +132,8 @@ serve(async (req) => {
       p_token: shareToken || null,
     });
 
-    // Generate the comprehensive .env file
-    const envContent = generateEnvFile(deployment, shareToken, repo, SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Generate the comprehensive .env file with decrypted values
+    const envContent = generateEnvFile(deployment, shareToken, repo, SUPABASE_URL, SUPABASE_ANON_KEY, decryptedEnvVars);
 
     // ENV-ONLY MODE: Just return the .env content as text
     if (mode === 'env-only') {
@@ -131,7 +191,7 @@ serve(async (req) => {
   }
 });
 
-function generateEnvFile(deployment: any, shareToken: string | undefined, repo: any, supabaseUrl: string, supabaseAnonKey: string): string {
+function generateEnvFile(deployment: any, shareToken: string | undefined, repo: any, supabaseUrl: string, supabaseAnonKey: string, decryptedEnvVars: Record<string, string> = {}): string {
   const projectType = deployment.project_type || 'vue_vite';
   const isVite = isViteProject(projectType);
   
@@ -284,25 +344,27 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     '# ===========================================',
   ];
 
-  // Add user-defined env vars (keys only - values stored in Render, not database)
-  const envVars = deployment.env_vars || {};
-  const envVarKeys = Object.keys(envVars);
-  if (envVarKeys.length > 0) {
-    lines.push('# These keys match your deployment configuration - add your local values');
-    envVarKeys.forEach((key) => {
-      lines.push(`${key}=`);
+  // Add user-defined env vars with decrypted values (owner access already validated)
+  const decryptedKeys = Object.keys(decryptedEnvVars);
+  if (decryptedKeys.length > 0) {
+    lines.push('# Your deployment environment variables (decrypted for local use)');
+    decryptedKeys.forEach((key) => {
+      const value = decryptedEnvVars[key] || '';
+      // Quote values with special characters
+      const needsQuotes = value.includes(' ') || value.includes('#') || value.includes('=');
+      const quotedValue = needsQuotes ? `"${value}"` : value;
+      lines.push(`${key}=${quotedValue}`);
     });
-  }
-
-  // Add secrets (keys only - user must fill in)
-  const secrets = deployment.secrets || {};
-  const secretKeys = Object.keys(secrets);
-  if (secretKeys.length > 0) {
-    lines.push('');
-    lines.push('# Secrets (fill in your values - DO NOT commit these!)');
-    secretKeys.forEach((key) => {
-      lines.push(`${key}=`);
-    });
+  } else {
+    // Fallback: show keys only if no decrypted values available
+    const envVars = deployment.env_vars || {};
+    const envVarKeys = Object.keys(envVars);
+    if (envVarKeys.length > 0) {
+      lines.push('# These keys match your deployment configuration - add your local values');
+      envVarKeys.forEach((key) => {
+        lines.push(`${key}=`);
+      });
+    }
   }
 
   return lines.join('\n');

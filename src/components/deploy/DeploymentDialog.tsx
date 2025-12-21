@@ -21,8 +21,9 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, HardDrive, Plus, X } from "lucide-react";
+import { Loader2, RefreshCw, HardDrive, Lock } from "lucide-react";
 import EnvVarEditor from "./EnvVarEditor";
+import { getDeploymentSecrets, setDeploymentSecrets } from "@/lib/deploymentSecrets";
 import type { Database } from "@/integrations/supabase/types";
 
 type Deployment = Database["public"]["Tables"]["project_deployments"]["Row"];
@@ -68,6 +69,7 @@ const DeploymentDialog = ({
 }: DeploymentDialogProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncingEnvVars, setIsSyncingEnvVars] = useState(false);
+  const [isLoadingSecrets, setIsLoadingSecrets] = useState(false);
   const [primeRepoName, setPrimeRepoName] = useState("");
   
   // Generate a random 4-character alphanumeric ID
@@ -151,21 +153,10 @@ const DeploymentDialog = ({
         diskMountPath: (deployment as any).disk_mount_path || "/data",
         diskSizeGB: (deployment as any).disk_size_gb || 1,
       });
-      // Load env var keys from database (values shown as masked)
-      const storedEnvVars = deployment.env_vars as Record<string, boolean> | null;
-      if (storedEnvVars) {
-        const keys = Object.keys(storedEnvVars);
-        setOriginalKeys(new Set(keys));
-        setEnvVars(
-          keys.map((key) => ({
-            key,
-            value: "", // Values not stored - user must re-enter or pull from Render
-          }))
-        );
-      } else {
-        setOriginalKeys(new Set());
-        setEnvVars([]);
-      }
+      
+      // Load encrypted env vars (owner only - will fail silently for non-owners)
+      loadEncryptedSecrets(deployment.id);
+      
       setClearExisting(false);
     } else {
       // Create mode: reset form and fetch prime repo
@@ -192,6 +183,48 @@ const DeploymentDialog = ({
       setActiveTab("config");
     }
   }, [open, mode, deployment, defaultPlatform, primeRepoName, settingsLoaded, projectTypes]);
+
+  // Load encrypted secrets for edit mode
+  const loadEncryptedSecrets = async (deploymentId: string) => {
+    setIsLoadingSecrets(true);
+    try {
+      const { envVars: decryptedEnvVars } = await getDeploymentSecrets(deploymentId, shareToken);
+      
+      if (decryptedEnvVars && Object.keys(decryptedEnvVars).length > 0) {
+        const envVarsArray = Object.entries(decryptedEnvVars).map(([key, value]) => ({
+          key,
+          value,
+        }));
+        setEnvVars(envVarsArray);
+        setOriginalKeys(new Set(Object.keys(decryptedEnvVars)));
+      } else {
+        // Fallback: load keys from deployment.env_vars (for backwards compatibility)
+        const storedEnvVars = deployment?.env_vars as Record<string, boolean> | null;
+        if (storedEnvVars) {
+          const keys = Object.keys(storedEnvVars);
+          setOriginalKeys(new Set(keys));
+          setEnvVars(keys.map((key) => ({ key, value: "" })));
+        } else {
+          setOriginalKeys(new Set());
+          setEnvVars([]);
+        }
+      }
+    } catch (error) {
+      console.log("[DeploymentDialog] Could not load encrypted secrets (may not be owner):", error);
+      // Fallback: load keys only from deployment.env_vars
+      const storedEnvVars = deployment?.env_vars as Record<string, boolean> | null;
+      if (storedEnvVars) {
+        const keys = Object.keys(storedEnvVars);
+        setOriginalKeys(new Set(keys));
+        setEnvVars(keys.map((key) => ({ key, value: "" })));
+      } else {
+        setOriginalKeys(new Set());
+        setEnvVars([]);
+      }
+    } finally {
+      setIsLoadingSecrets(false);
+    }
+  };
 
   // Fetch prime repo name for default deployment name (create mode only)
   useEffect(() => {
@@ -277,11 +310,19 @@ const DeploymentDialog = ({
 
     setIsSubmitting(true);
     try {
-      // Build env vars - store only keys in database
+      // Build env vars - store keys in database for reference
       const envVarsKeysOnly: Record<string, boolean> = {};
       const envVarsArray = envVars.filter((v) => v.key.trim());
       envVarsArray.forEach(({ key }) => {
         envVarsKeysOnly[key.trim()] = true;
+      });
+
+      // Build env vars object with values for encrypted storage
+      const envVarsWithValuesObj: Record<string, string> = {};
+      envVarsArray.forEach(({ key, value }) => {
+        if (key.trim()) {
+          envVarsWithValuesObj[key.trim()] = value;
+        }
       });
 
       // Get env vars with values (for Render)
@@ -294,7 +335,7 @@ const DeploymentDialog = ({
       const deletedKeys = [...originalKeys].filter((k) => !currentKeys.has(k));
 
       if (mode === "create") {
-        // Create new deployment - store only keys in DB
+        // Create new deployment - store keys in DB
         const { data: newDeployment, error } = await supabase.rpc("insert_deployment_with_token", {
           p_project_id: projectId,
           p_token: shareToken || null,
@@ -315,6 +356,19 @@ const DeploymentDialog = ({
         });
 
         if (error) throw error;
+
+        // Save encrypted env vars with values
+        if (newDeployment && Object.keys(envVarsWithValuesObj).length > 0) {
+          try {
+            await setDeploymentSecrets(newDeployment.id, shareToken, {
+              envVars: envVarsWithValuesObj,
+            });
+          } catch (secretError) {
+            console.error("Failed to save encrypted env vars:", secretError);
+            // Don't fail the whole operation, just warn
+            toast.warning("Deployment created but env var encryption failed");
+          }
+        }
 
         // If cloud deployment with env vars, create service immediately with env vars
         if (form.platform === "pronghorn_cloud" && envVarsWithValues.length > 0 && newDeployment) {
@@ -339,7 +393,7 @@ const DeploymentDialog = ({
           toast.success("Deployment created");
         }
       } else if (mode === "edit" && deployment) {
-        // Update deployment - store only keys in DB
+        // Update deployment - store keys in DB
         const { error } = await supabase.rpc("update_deployment_with_token", {
           p_deployment_id: deployment.id,
           p_token: shareToken || null,
@@ -359,6 +413,16 @@ const DeploymentDialog = ({
         });
 
         if (error) throw error;
+
+        // Save encrypted env vars with values
+        try {
+          await setDeploymentSecrets(deployment.id, shareToken, {
+            envVars: envVarsWithValuesObj,
+          });
+        } catch (secretError) {
+          console.error("Failed to save encrypted env vars:", secretError);
+          toast.warning("Deployment updated but env var encryption failed");
+        }
 
         // If Render service exists, sync config AND env vars
         if (deployment.render_service_id) {
@@ -631,7 +695,10 @@ const DeploymentDialog = ({
 
             <TabsContent value="env" className="space-y-4 mt-0 h-full">
               <div className="flex items-center justify-between">
-                <Label className="text-base">Environment Variables</Label>
+                <div className="flex items-center gap-2">
+                  <Label className="text-base">Environment Variables</Label>
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                </div>
                 {hasRenderService && (
                   <Button
                     variant="outline"
@@ -649,10 +716,17 @@ const DeploymentDialog = ({
                 )}
               </div>
 
-              <EnvVarEditor
-                value={envVars}
-                onChange={setEnvVars}
-              />
+              {isLoadingSecrets ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Loading encrypted variables...</span>
+                </div>
+              ) : (
+                <EnvVarEditor
+                  value={envVars}
+                  onChange={setEnvVars}
+                />
+              )}
 
               {hasRenderService && (
                 <div className="flex items-center gap-2 pt-2 border-t">
@@ -670,8 +744,7 @@ const DeploymentDialog = ({
               )}
 
               <p className="text-xs text-muted-foreground">
-                Only keys are stored in Pronghorn. Values are sent directly to Render and not persisted here.
-                Leave values blank to preserve existing Render values.
+                Environment variables are encrypted at rest. Values are decrypted for owners only.
               </p>
             </TabsContent>
 

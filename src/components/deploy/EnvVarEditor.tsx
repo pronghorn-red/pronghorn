@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Eye, EyeOff, AlertCircle, Upload, Download } from "lucide-react";
+import { Plus, Trash2, Eye, EyeOff, AlertCircle, Upload, Download, FileText } from "lucide-react";
 
 interface EnvVar {
   key: string;
@@ -22,6 +22,45 @@ interface EnvVarEditorProps {
   keysOnlyMode?: boolean;
 }
 
+/**
+ * Parse .env format text into key-value pairs
+ * Handles: comments (#), quoted values, empty lines, inline comments
+ */
+function parseEnvFormat(text: string): Array<{ key: string; value: string }> {
+  return text
+    .split('\n')
+    .filter(line => {
+      const trimmed = line.trim();
+      return trimmed && !trimmed.startsWith('#');
+    })
+    .map(line => {
+      // Find first = sign
+      const eqIndex = line.indexOf('=');
+      if (eqIndex === -1) return null;
+      
+      const key = line.substring(0, eqIndex).trim();
+      let value = line.substring(eqIndex + 1);
+      
+      // Remove inline comments (but not in quoted values)
+      const trimmedValue = value.trim();
+      if (trimmedValue.startsWith('"') && trimmedValue.endsWith('"')) {
+        value = trimmedValue.slice(1, -1);
+      } else if (trimmedValue.startsWith("'") && trimmedValue.endsWith("'")) {
+        value = trimmedValue.slice(1, -1);
+      } else {
+        // Remove inline comment
+        const commentIndex = value.indexOf(' #');
+        if (commentIndex > -1) {
+          value = value.substring(0, commentIndex);
+        }
+        value = value.trim();
+      }
+      
+      return { key, value };
+    })
+    .filter((item): item is { key: string; value: string } => item !== null && item.key.length > 0);
+}
+
 const EnvVarEditor = ({
   value,
   onChange,
@@ -31,9 +70,11 @@ const EnvVarEditor = ({
   disabled = false,
   keysOnlyMode = false,
 }: EnvVarEditorProps) => {
-  const [mode, setMode] = useState<"key-value" | "json">("key-value");
+  const [mode, setMode] = useState<"key-value" | "json" | "dotenv">("key-value");
   const [jsonValue, setJsonValue] = useState("");
+  const [dotenvValue, setDotenvValue] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [dotenvError, setDotenvError] = useState<string | null>(null);
   const [visibleValues, setVisibleValues] = useState<Set<number>>(new Set());
 
   // Sync JSON value when switching to JSON mode or when value changes
@@ -48,6 +89,22 @@ const EnvVarEditor = ({
     }
   }, [mode]);
 
+  // Sync dotenv value when switching to dotenv mode
+  useEffect(() => {
+    if (mode === "dotenv") {
+      const lines = value
+        .filter(({ key }) => key.trim())
+        .map(({ key, value: val }) => {
+          // Quote values with spaces or special chars
+          const needsQuotes = val.includes(' ') || val.includes('#') || val.includes('=');
+          const quotedVal = needsQuotes ? `"${val}"` : val;
+          return `${key.trim()}=${quotedVal}`;
+        });
+      setDotenvValue(lines.join('\n'));
+      setDotenvError(null);
+    }
+  }, [mode]);
+
   const handleModeChange = (newMode: string) => {
     if (newMode === "json") {
       // Convert key-value to JSON
@@ -57,8 +114,19 @@ const EnvVarEditor = ({
       });
       setJsonValue(JSON.stringify(obj, null, 2));
       setJsonError(null);
+    } else if (newMode === "dotenv") {
+      // Convert key-value to .env format
+      const lines = value
+        .filter(({ key }) => key.trim())
+        .map(({ key, value: val }) => {
+          const needsQuotes = val.includes(' ') || val.includes('#') || val.includes('=');
+          const quotedVal = needsQuotes ? `"${val}"` : val;
+          return `${key.trim()}=${quotedVal}`;
+        });
+      setDotenvValue(lines.join('\n'));
+      setDotenvError(null);
     }
-    setMode(newMode as "key-value" | "json");
+    setMode(newMode as "key-value" | "json" | "dotenv");
   };
 
   const handleJsonChange = (newJson: string) => {
@@ -87,6 +155,18 @@ const EnvVarEditor = ({
       onChange(newVars);
     } catch (e) {
       setJsonError("Invalid JSON format");
+    }
+  };
+
+  const handleDotenvChange = (newDotenv: string) => {
+    setDotenvValue(newDotenv);
+    
+    try {
+      const parsed = parseEnvFormat(newDotenv);
+      setDotenvError(null);
+      onChange(parsed);
+    } catch (e) {
+      setDotenvError("Failed to parse .env format");
     }
   };
 
@@ -164,6 +244,25 @@ const EnvVarEditor = ({
     input.click();
   };
 
+  const importFromEnvFile = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".env,.env.*,text/plain";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      
+      try {
+        const text = await file.text();
+        const parsed = parseEnvFormat(text);
+        onChange(parsed);
+      } catch (e) {
+        setDotenvError("Failed to parse .env file");
+      }
+    };
+    input.click();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -171,6 +270,10 @@ const EnvVarEditor = ({
           <TabsList className="h-8">
             <TabsTrigger value="key-value" className="text-xs px-3">Key-Value</TabsTrigger>
             <TabsTrigger value="json" className="text-xs px-3">JSON</TabsTrigger>
+            <TabsTrigger value="dotenv" className="text-xs px-3">
+              <FileText className="h-3 w-3 mr-1" />
+              .env
+            </TabsTrigger>
           </TabsList>
         </Tabs>
         
@@ -179,7 +282,7 @@ const EnvVarEditor = ({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={importFromJson}
+            onClick={mode === "dotenv" ? importFromEnvFile : importFromJson}
             disabled={disabled}
             className="h-7 text-xs"
           >
@@ -289,7 +392,7 @@ const EnvVarEditor = ({
             Add Variable
           </Button>
         </div>
-      ) : (
+      ) : mode === "json" ? (
         <div className="space-y-2">
           <Textarea
             value={jsonValue}
@@ -305,10 +408,29 @@ const EnvVarEditor = ({
             </div>
           )}
         </div>
+      ) : (
+        <div className="space-y-2">
+          <Textarea
+            value={dotenvValue}
+            onChange={(e) => handleDotenvChange(e.target.value)}
+            placeholder={`# Paste your .env content here\nDATABASE_URL=postgres://...\nAPI_KEY="your-api-key"\nDEBUG=true`}
+            className="font-mono text-sm min-h-[200px]"
+            disabled={disabled}
+          />
+          <p className="text-xs text-muted-foreground">
+            Paste KEY=value pairs (one per line). Supports comments (#), quoted values, and inline comments.
+          </p>
+          {dotenvError && (
+            <div className="flex items-center gap-2 text-destructive text-sm">
+              <AlertCircle className="h-4 w-4" />
+              {dotenvError}
+            </div>
+          )}
+        </div>
       )}
 
       <p className="text-xs text-muted-foreground">
-        Values are sent directly to Render.com and not stored in Pronghorn.
+        Environment variables are encrypted and stored securely.
         {keysOnlyMode && " Leave value blank to keep existing. Enter new value to update. Remove row to delete."}
       </p>
     </div>
