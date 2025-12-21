@@ -465,6 +465,17 @@ async function initSupabase() {
     },
   });
   console.log('[Pronghorn] Supabase client initialized with WebSocket support');
+  
+  // Set share token in session for RLS policies to work with postgres_changes
+  // This must be called before setting up realtime subscriptions
+  if (CONFIG.shareToken) {
+    const { error } = await supabase.rpc('set_share_token', { token: CONFIG.shareToken });
+    if (error) {
+      console.warn('[Pronghorn] Failed to set share token in session:', error.message);
+    } else {
+      console.log('[Pronghorn] Share token set in session for RLS validation');
+    }
+  }
 }
 
 // ============================================
