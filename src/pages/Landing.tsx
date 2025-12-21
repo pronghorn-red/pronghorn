@@ -78,6 +78,23 @@ export default function Landing() {
       }
     },
     { 
+      icon: Users, 
+      label: "Collaboration", 
+      description: "AI-assisted document co-authoring with version control", 
+      phase: "setup",
+      hasAgent: true,
+      featured: true,
+      aiDetails: {
+        title: "AI Collaboration Agent",
+        capabilities: [
+          "Real-time AI co-authoring of project artifacts",
+          "Line-by-line diff tracking with full version history",
+          "Shared blackboard for human-AI collaboration context",
+          "Merge changes back to source artifacts when ready"
+        ]
+      }
+    },
+    { 
       icon: MessageSquare, 
       label: "Chat", 
       description: "AI-powered conversations about your project", 
@@ -191,21 +208,6 @@ export default function Landing() {
       }
     },
     { 
-      icon: Rocket, 
-      label: "Deploy", 
-      description: "Push to cloud or local environments", 
-      phase: "ship",
-      aiDetails: {
-        title: "Deployment Options",
-        capabilities: [
-          "Deploy to Render.com cloud hosting",
-          "Local development runner with hot reload",
-          "Environment-based deployments (dev/uat/prod)",
-          "Bug telemetry integration for automated fixes"
-        ]
-      }
-    },
-    { 
       icon: Database, 
       label: "Database", 
       description: "Manage, explore & import data", 
@@ -222,19 +224,17 @@ export default function Landing() {
       }
     },
     { 
-      icon: Users, 
-      label: "Collaboration", 
-      description: "AI-assisted document co-authoring with version control", 
-      phase: "design",
-      hasAgent: true,
-      featured: true,
+      icon: Rocket, 
+      label: "Deploy", 
+      description: "Push to cloud or local environments", 
+      phase: "ship",
       aiDetails: {
-        title: "AI Collaboration Agent",
+        title: "Deployment Options",
         capabilities: [
-          "Real-time AI co-authoring of project artifacts",
-          "Line-by-line diff tracking with full version history",
-          "Shared blackboard for human-AI collaboration context",
-          "Merge changes back to source artifacts when ready"
+          "Deploy to Render.com cloud hosting",
+          "Local development runner with hot reload",
+          "Environment-based deployments (dev/uat/prod)",
+          "Bug telemetry integration for automated fixes"
         ]
       }
     },
