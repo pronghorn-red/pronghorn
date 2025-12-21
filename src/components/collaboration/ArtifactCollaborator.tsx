@@ -578,15 +578,15 @@ export function ArtifactCollaborator({
         // Auto-follow: keep viewing the latest
         setViewingVersion(null);
         
-        // Also sync the content if we're not in the middle of editing
-        if (!hasUnsavedChanges && !justSavedRef.current) {
-          // Content will be synced via the collaboration.current_content useEffect
+        // Explicitly sync content - don't rely on other effects (race condition fix)
+        if (!hasUnsavedChanges && !justSavedRef.current && collaboration?.current_content) {
+          setLocalContent(collaboration.current_content);
         }
       }
       
       prevLatestVersionRef.current = latestVersion;
     }
-  }, [latestVersion, viewingVersion, hasUnsavedChanges]);
+  }, [latestVersion, viewingVersion, hasUnsavedChanges, collaboration?.current_content]);
 
   const currentVersion = viewingVersion || latestVersion;
 
