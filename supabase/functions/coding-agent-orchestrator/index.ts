@@ -1201,6 +1201,13 @@ Use them to understand context and inform your file operations.` : ''}`;
           p_token: shareToken,
         });
 
+        // Broadcast operation started
+        await supabase.channel(`agent-operations-project-${projectId}`).send({
+          type: 'broadcast',
+          event: 'agent_operation_refresh',
+          payload: { sessionId: session.id, operationId: logEntry?.id, status: 'in_progress' }
+        });
+
         try {
           let result;
 
@@ -1916,6 +1923,13 @@ Use them to understand context and inform your file operations.` : ''}`;
             p_token: shareToken,
           });
 
+          // Broadcast operation refresh
+          await supabase.channel(`agent-operations-project-${projectId}`).send({
+            type: 'broadcast',
+            event: 'agent_operation_refresh',
+            payload: { sessionId: session.id, operationId: logEntry.id, status: 'completed' }
+          });
+
           operationResults.push({ type: op.type, success: true, data: result?.data });
         } catch (error) {
           console.error("Operation failed:", error);
@@ -1937,6 +1951,13 @@ Use them to understand context and inform your file operations.` : ''}`;
             p_status: "failed",
             p_error_message: errorMessage,
             p_token: shareToken,
+          });
+
+          // Broadcast operation refresh
+          await supabase.channel(`agent-operations-project-${projectId}`).send({
+            type: 'broadcast',
+            event: 'agent_operation_refresh',
+            payload: { sessionId: session.id, operationId: logEntry.id, status: 'failed' }
           });
 
           operationResults.push({
