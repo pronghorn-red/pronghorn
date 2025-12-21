@@ -42,14 +42,15 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   
   // Track the current active token (may be updated if owner rolls their own token)
+  // Initialize with shareToken immediately
   const [activeToken, setActiveToken] = useState<string | null>(shareToken);
   
-  // Keep activeToken in sync with shareToken prop initially
+  // Keep activeToken in sync with shareToken prop when it changes externally
   useEffect(() => {
-    if (shareToken && !activeToken) {
+    if (shareToken && shareToken !== activeToken) {
       setActiveToken(shareToken);
     }
-  }, [shareToken, activeToken]);
+  }, [shareToken]);
 
   // Broadcast refresh to other clients
   const broadcastRefresh = useCallback(() => {
@@ -238,13 +239,16 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
   };
 
   const [showMyToken, setShowMyToken] = useState(false);
+  
+  // Use activeToken for display (it gets updated when owner rolls their token)
+  const displayToken = activeToken || shareToken;
 
   const copyCurrentAccessUrl = () => {
-    if (!shareToken) {
+    if (!displayToken) {
       toast.error("No access token available");
       return;
     }
-    const url = `https://pronghorn.red/project/${projectId}/settings/t/${shareToken}`;
+    const url = `https://pronghorn.red/project/${projectId}/settings/t/${displayToken}`;
     navigator.clipboard.writeText(url);
     toast.success("Access URL copied to clipboard");
   };
@@ -257,7 +261,7 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
   return (
     <>
       {/* Your Current Access URL Card */}
-      {shareToken && (
+      {displayToken && (
         <Card className="mb-4">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -273,7 +277,7 @@ export function TokenManagement({ projectId, shareToken }: TokenManagementProps)
               <Input 
                 readOnly 
                 value={showMyToken 
-                  ? `https://pronghorn.red/project/${projectId}/settings/t/${shareToken}`
+                  ? `https://pronghorn.red/project/${projectId}/settings/t/${displayToken}`
                   : `https://pronghorn.red/project/${projectId}/settings/t/••••••••••••`
                 }
                 className="font-mono text-xs"
