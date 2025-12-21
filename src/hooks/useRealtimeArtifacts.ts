@@ -150,14 +150,12 @@ export const useRealtimeArtifacts = (
         );
       }
 
-      // Broadcast using the same channel we're subscribed to (like canvas does)
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'artifact_refresh',
-          payload: { action: 'insert', id: data?.id }
-        });
-      }
+      // Broadcast using fresh channel reference (like chat sessions does)
+      await supabase.channel(`artifacts-${projectId}`).send({
+        type: 'broadcast',
+        event: 'artifact_refresh',
+        payload: { action: 'insert', id: data?.id }
+      });
 
       toast.success("Artifact created successfully");
       return data;
@@ -205,14 +203,12 @@ export const useRealtimeArtifacts = (
 
       if (error) throw error;
       
-      // Broadcast using the same channel we're subscribed to (like canvas does)
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'artifact_refresh',
-          payload: { action: 'update', id }
-        });
-      }
+      // Broadcast using fresh channel reference (like chat sessions does)
+      await supabase.channel(`artifacts-${projectId}`).send({
+        type: 'broadcast',
+        event: 'artifact_refresh',
+        payload: { action: 'update', id }
+      });
       
       toast.success("Artifact updated successfully");
       return data;
@@ -241,14 +237,12 @@ export const useRealtimeArtifacts = (
 
       if (error) throw error;
       
-      // Broadcast using the same channel we're subscribed to (like canvas does)
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'artifact_refresh',
-          payload: { action: 'delete', id }
-        });
-      }
+      // Broadcast using fresh channel reference (like chat sessions does)
+      await supabase.channel(`artifacts-${projectId}`).send({
+        type: 'broadcast',
+        event: 'artifact_refresh',
+        payload: { action: 'delete', id }
+      });
       
       toast.success("Artifact deleted successfully");
     } catch (error) {
