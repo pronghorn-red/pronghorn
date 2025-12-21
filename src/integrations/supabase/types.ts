@@ -3535,12 +3535,12 @@ export type Database = {
       get_linked_projects: {
         Args: never
         Returns: {
-          created_at: string
           id: string
           is_valid: boolean
           project_description: string
           project_id: string
           project_name: string
+          project_splash_image_url: string
           project_status: Database["public"]["Enums"]["project_status"]
           project_updated_at: string
           role: Database["public"]["Enums"]["project_token_role"]
