@@ -219,6 +219,8 @@ export const useRealtimeChatMessages = (
   const [isLoading, setIsLoading] = useState(true);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // Track recently saved message IDs to skip redundant realtime reloads
+  const recentlySavedIdsRef = useRef<Set<string>>(new Set());
 
   const loadMessages = async () => {
     if (!chatSessionId || !enabled) return;
@@ -271,7 +273,14 @@ export const useRealtimeChatMessages = (
           table: "chat_messages",
           filter: `chat_session_id=eq.${chatSessionId}`,
         },
-        () => {
+        (payload) => {
+          // Skip reload if this is an INSERT we just saved locally
+          if (payload.eventType === 'INSERT' && payload.new?.id) {
+            if (recentlySavedIdsRef.current.has(payload.new.id)) {
+              console.log('Skipping reload for recently saved message:', payload.new.id);
+              return;
+            }
+          }
           loadMessages();
         }
       )
@@ -403,6 +412,15 @@ export const useRealtimeChatMessages = (
       });
 
       if (error) throw error;
+
+      // Track this ID so realtime doesn't reload for it (prevents flicker)
+      if (data?.id) {
+        recentlySavedIdsRef.current.add(data.id);
+        // Clear after a short delay to allow future updates
+        setTimeout(() => {
+          recentlySavedIdsRef.current.delete(data.id);
+        }, 2000);
+      }
 
       // Broadcast using the subscribed channel reference (like Canvas does)
       if (channelRef.current) {
