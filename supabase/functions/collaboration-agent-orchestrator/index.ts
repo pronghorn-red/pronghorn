@@ -462,6 +462,21 @@ Start your response with { and end with }.`;
                   narrative,
                   content: currentContent  // Send actual new content to prevent stale data
                 });
+
+                // Broadcast edit for multi-user real-time sync
+                try {
+                  await supabase.channel(`collaboration-${collaborationId}`).send({
+                    type: 'broadcast',
+                    event: 'collaboration_edit',
+                    payload: { 
+                      edit: { version: newVersion, startLine: start_line, endLine: end_line },
+                      version: newVersion,
+                      actor: 'AI Agent'
+                    }
+                  });
+                } catch (broadcastError) {
+                  console.warn('Failed to broadcast edit:', broadcastError);
+                }
               }
             }
 
@@ -474,6 +489,17 @@ Start your response with { and end with }.`;
                 p_content: parsed.blackboard_entry.content,
                 p_metadata: {},
               });
+
+              // Broadcast blackboard for multi-user real-time sync
+              try {
+                await supabase.channel(`collaboration-${collaborationId}`).send({
+                  type: 'broadcast',
+                  event: 'collaboration_blackboard',
+                  payload: { entry: { type: parsed.blackboard_entry.type || "progress", content: parsed.blackboard_entry.content } }
+                });
+              } catch (broadcastError) {
+                console.warn('Failed to broadcast blackboard:', broadcastError);
+              }
             }
 
             // Update conversation history
@@ -504,6 +530,17 @@ Start your response with { and end with }.`;
             p_content: finalMessage || "I've made the requested changes to the document.",
             p_metadata: { iterations: iteration },
           });
+
+          // Broadcast assistant message for multi-user real-time sync
+          try {
+            await supabase.channel(`collaboration-${collaborationId}`).send({
+              type: 'broadcast',
+              event: 'collaboration_message',
+              payload: { message: { role: 'assistant', content: finalMessage || "I've made the requested changes to the document." } }
+            });
+          } catch (broadcastError) {
+            console.warn('Failed to broadcast message:', broadcastError);
+          }
 
           sendEvent({ 
             type: "done", 
