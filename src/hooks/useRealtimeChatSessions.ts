@@ -230,7 +230,24 @@ export const useRealtimeChatMessages = (
       });
 
       if (error) throw error;
-      setMessages(data || []);
+      
+      // Preserve temporary messages (streaming) that haven't been saved yet
+      // This prevents realtime DB updates from wiping the streaming assistant message
+      setMessages((prev) => {
+        const tempMessages = prev.filter((m) => m.id.startsWith("temp-"));
+        const dbMessages = data || [];
+        
+        // If no temp messages, just use DB data
+        if (tempMessages.length === 0) {
+          return dbMessages;
+        }
+        
+        // Merge: DB messages first, then any temp messages not yet in DB
+        const dbMessageIds = new Set(dbMessages.map((m: ChatMessage) => m.id));
+        const newTempMessages = tempMessages.filter((m) => !dbMessageIds.has(m.id));
+        
+        return [...dbMessages, ...newTempMessages];
+      });
     } catch (error) {
       console.error("Error loading messages:", error);
       toast.error("Failed to load messages");

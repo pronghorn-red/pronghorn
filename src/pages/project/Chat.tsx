@@ -486,6 +486,7 @@ export default function Chat() {
               if (parsed.type === "delta" && typeof parsed.text === "string") {
                 fullResponse += parsed.text;
                 updateStreamingMessage(assistantTempId, fullResponse);
+                setStreamingContent(fullResponse); // Backup for guaranteed UI update
                 continue;
               }
 
@@ -497,6 +498,7 @@ export default function Chat() {
               if (content) {
                 fullResponse += content;
                 updateStreamingMessage(assistantTempId, fullResponse);
+                setStreamingContent(fullResponse); // Backup for guaranteed UI update
               }
             } catch (e) {
               console.error("Error parsing stream line", e);
@@ -512,10 +514,12 @@ export default function Chat() {
               if (parsed.type === "delta" && typeof parsed.text === "string") {
                 fullResponse += parsed.text;
                 updateStreamingMessage(assistantTempId, fullResponse);
+                setStreamingContent(fullResponse); // Backup for guaranteed UI update
               } else if (!parsed.type && parsed.choices?.[0]?.delta?.content) {
                 const content = parsed.choices[0].delta.content;
                 fullResponse += content;
                 updateStreamingMessage(assistantTempId, fullResponse);
+                setStreamingContent(fullResponse); // Backup for guaranteed UI update
               }
             } catch (e) {
               console.error("Error parsing final stream buffer", e);
@@ -523,6 +527,9 @@ export default function Chat() {
           }
         }
       }
+
+      // Clear streaming content before saving - the temp message will be replaced with real one
+      setStreamingContent("");
 
       // Save to database and replace temp message with real one
       if (fullResponse) {
