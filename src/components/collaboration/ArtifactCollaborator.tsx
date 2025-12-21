@@ -295,6 +295,13 @@ export function ArtifactCollaborator({
         // Refresh history to show new version
         await refreshHistory();
         toast.success(hasConflict ? 'Changes saved (overwritten remote)' : 'Changes saved');
+        
+        // Clear justSavedRef after a short delay as a fallback
+        // This ensures we can receive updates even if another user saves first
+        setTimeout(() => {
+          justSavedRef.current = false;
+          justSavedContentRef.current = '';
+        }, 2000);
       } else {
         justSavedRef.current = false;
         toast.error('Failed to save changes');
@@ -400,6 +407,12 @@ export function ArtifactCollaborator({
         setHasUnsavedChanges(false);
         await refreshHistory(); // Refresh to get the new version
         toast.success(`Created new version from v${version}`);
+        
+        // Clear justSavedRef after a short delay as a fallback
+        setTimeout(() => {
+          justSavedRef.current = false;
+          justSavedContentRef.current = '';
+        }, 2000);
       } else {
         justSavedRef.current = false;
         toast.error('Failed to restore version');
@@ -604,6 +617,14 @@ export function ArtifactCollaborator({
     if (latestVersion > prevLatestVersionRef.current) {
       // A new version arrived (from another user or agent)
       
+      // If we were waiting for our save to confirm, but a NEW version arrived
+      // (not our save), clear the justSaved state - we need to accept their changes
+      if (justSavedRef.current && collaboration?.current_content !== justSavedContentRef.current) {
+        // Another user's save arrived - clear our "just saved" state
+        justSavedRef.current = false;
+        justSavedContentRef.current = '';
+      }
+      
       if (hasUnsavedChanges) {
         // We have unsaved changes AND another version arrived = CONFLICT
         setHasConflict(true);
@@ -617,8 +638,8 @@ export function ArtifactCollaborator({
           // Auto-follow: keep viewing the latest
           setViewingVersion(null);
           
-          // Explicitly sync content - don't rely on other effects (race condition fix)
-          if (!justSavedRef.current && collaboration?.current_content) {
+          // Explicitly sync content - now this will run since we cleared justSavedRef above
+          if (collaboration?.current_content) {
             isSyncingContentRef.current = true;
             setLocalContent(collaboration.current_content);
             Promise.resolve().then(() => {
