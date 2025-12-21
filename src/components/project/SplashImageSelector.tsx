@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -32,6 +32,11 @@ export function SplashImageSelector({
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentImageUrl);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync previewUrl when currentImageUrl changes (e.g., on initial load)
+  useEffect(() => {
+    setPreviewUrl(currentImageUrl);
+  }, [currentImageUrl]);
 
   // Filter artifacts to only show those with image_url
   const imageArtifacts = artifacts.filter((a) => a.image_url);
