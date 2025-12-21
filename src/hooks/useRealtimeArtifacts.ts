@@ -150,13 +150,18 @@ export const useRealtimeArtifacts = (
         );
       }
 
-      // Broadcast using the subscribed channel instance
-      if (channelRef.current) {
-        channelRef.current.send({
+      // Broadcast using async channel pattern for reliability
+      try {
+        const broadcastChannel = supabase.channel(`artifacts-${projectId}-broadcast`);
+        await broadcastChannel.subscribe();
+        await broadcastChannel.send({
           type: 'broadcast',
           event: 'artifact_refresh',
           payload: { action: 'insert', id: data?.id }
         });
+        supabase.removeChannel(broadcastChannel);
+      } catch (e) {
+        console.warn('Failed to broadcast artifact insert:', e);
       }
 
       toast.success("Artifact created successfully");
@@ -205,13 +210,18 @@ export const useRealtimeArtifacts = (
 
       if (error) throw error;
       
-      // Broadcast using the subscribed channel instance
-      if (channelRef.current) {
-        channelRef.current.send({
+      // Broadcast using async channel pattern for reliability
+      try {
+        const broadcastChannel = supabase.channel(`artifacts-${projectId}-broadcast`);
+        await broadcastChannel.subscribe();
+        await broadcastChannel.send({
           type: 'broadcast',
           event: 'artifact_refresh',
           payload: { action: 'update', id }
         });
+        supabase.removeChannel(broadcastChannel);
+      } catch (e) {
+        console.warn('Failed to broadcast artifact update:', e);
       }
       
       toast.success("Artifact updated successfully");
@@ -241,13 +251,18 @@ export const useRealtimeArtifacts = (
 
       if (error) throw error;
       
-      // Broadcast using the subscribed channel instance
-      if (channelRef.current) {
-        channelRef.current.send({
+      // Broadcast using async channel pattern for reliability
+      try {
+        const broadcastChannel = supabase.channel(`artifacts-${projectId}-broadcast`);
+        await broadcastChannel.subscribe();
+        await broadcastChannel.send({
           type: 'broadcast',
           event: 'artifact_refresh',
           payload: { action: 'delete', id }
         });
+        supabase.removeChannel(broadcastChannel);
+      } catch (e) {
+        console.warn('Failed to broadcast artifact delete:', e);
       }
       
       toast.success("Artifact deleted successfully");

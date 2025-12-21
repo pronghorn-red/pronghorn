@@ -289,15 +289,22 @@ export const useRealtimeChatMessages = (
         );
       }
 
-      // Broadcast refresh event for real-time sync (message-level)
+      // Broadcast refresh event for real-time sync (message-level channel for browser sync)
       await supabase.channel(`chat-messages-${chatSessionId}`).send({
         type: 'broadcast',
         event: 'chat_message_refresh',
         payload: {}
       });
 
-      // Also broadcast to session-level channel for local runner sync
+      // Also broadcast to project-level chat-messages channel for local runner sync
       if (projectId) {
+        await supabase.channel(`chat-messages-${projectId}`).send({
+          type: 'broadcast',
+          event: 'chat_message_refresh',
+          payload: { action: 'message_added', sessionId: chatSessionId }
+        });
+        
+        // And to session-level channel for local runner sync
         await supabase.channel(`chat-sessions-${projectId}`).send({
           type: 'broadcast',
           event: 'chat_session_refresh',
