@@ -54,7 +54,7 @@ export default function Artifacts() {
   const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const { user } = useAuth();
   const hasAccessToken = !!shareToken || !!user;
-  const { artifacts, isLoading, addArtifact, updateArtifact, deleteArtifact, refresh } = useRealtimeArtifacts(
+  const { artifacts, isLoading, addArtifact, updateArtifact, deleteArtifact, refresh, broadcastRefresh } = useRealtimeArtifacts(
     projectId,
     shareToken,
     hasAccessToken && isTokenSet
@@ -346,6 +346,8 @@ ${artifact.content}`;
                     projectId={projectId!}
                     shareToken={shareToken}
                     onArtifactsCreated={handleArtifactsCreated}
+                    addArtifact={addArtifact}
+                    broadcastRefresh={broadcastRefresh}
                   />
                 </div>
               </div>

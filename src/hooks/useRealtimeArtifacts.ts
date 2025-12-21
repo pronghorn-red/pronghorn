@@ -261,6 +261,16 @@ export const useRealtimeArtifacts = (
     }
   };
 
+  const broadcastRefresh = useCallback((action: string = 'refresh', id?: string) => {
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'artifact_refresh',
+        payload: { action, id }
+      });
+    }
+  }, []);
+
   return {
     artifacts,
     isLoading,
@@ -268,5 +278,6 @@ export const useRealtimeArtifacts = (
     updateArtifact,
     deleteArtifact,
     refresh: loadArtifacts,
+    broadcastRefresh,
   };
 };

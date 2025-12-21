@@ -41,6 +41,8 @@ interface AddArtifactModalProps {
   projectId: string;
   shareToken: string | null;
   onArtifactsCreated: () => void;
+  addArtifact: (content: string, sourceType?: string, sourceId?: string, imageUrl?: string) => Promise<any>;
+  broadcastRefresh: (action?: string, id?: string) => void;
 }
 
 export function AddArtifactModal({
@@ -49,6 +51,8 @@ export function AddArtifactModal({
   projectId,
   shareToken,
   onArtifactsCreated,
+  addArtifact,
+  broadcastRefresh,
 }: AddArtifactModalProps) {
   const [activeTab, setActiveTab] = useState<TabType>("manual");
   const [isCreating, setIsCreating] = useState(false);
@@ -191,7 +195,7 @@ export function AddArtifactModal({
             reader.readAsDataURL(img.file);
           });
 
-          const { error } = await supabase.functions.invoke("upload-artifact-image", {
+          const { data, error } = await supabase.functions.invoke("upload-artifact-image", {
             body: {
               projectId,
               shareToken,
@@ -203,6 +207,8 @@ export function AddArtifactModal({
           });
 
           if (error) throw error;
+          // Broadcast after successful image upload since edge function creates artifact directly
+          broadcastRefresh('insert', data?.artifact?.id);
           successCount++;
         } catch (err) {
           console.error("Failed to create image artifact:", err);
@@ -216,13 +222,7 @@ export function AddArtifactModal({
           // Single merged artifact
           try {
             const content = formatExcelDataAsJson(excelData.sheets, excelSelectedRows);
-            const { error } = await supabase.rpc("insert_artifact_with_token", {
-              p_project_id: projectId,
-              p_token: shareToken || null,
-              p_content: content,
-              p_source_type: "excel",
-            });
-            if (error) throw error;
+            await addArtifact(content, "excel");
             successCount++;
           } catch (err) {
             console.error("Failed to create Excel artifact:", err);
@@ -248,13 +248,7 @@ export function AddArtifactModal({
                   data: rowData
                 }, null, 2);
                 
-                const { error } = await supabase.rpc("insert_artifact_with_token", {
-                  p_project_id: projectId,
-                  p_token: shareToken || null,
-                  p_content: content,
-                  p_source_type: "excel-row",
-                });
-                if (error) throw error;
+                await addArtifact(content, "excel-row");
                 successCount++;
               } catch (err) {
                 console.error("Failed to create Excel row artifact:", err);
@@ -268,13 +262,7 @@ export function AddArtifactModal({
       // Create text file artifacts
       for (const file of textFiles.filter(f => f.selected)) {
         try {
-          const { error } = await supabase.rpc("insert_artifact_with_token", {
-            p_project_id: projectId,
-            p_token: shareToken || null,
-            p_content: file.content,
-            p_source_type: file.file.name.split('.').pop() || "text",
-          });
-          if (error) throw error;
+          await addArtifact(file.content, file.file.name.split('.').pop() || "text");
           successCount++;
         } catch (err) {
           console.error("Failed to create text artifact:", err);
@@ -285,13 +273,7 @@ export function AddArtifactModal({
       // Create manual entry artifact
       if (manualContent.trim()) {
         try {
-          const { error } = await supabase.rpc("insert_artifact_with_token", {
-            p_project_id: projectId,
-            p_token: shareToken || null,
-            p_content: manualContent.trim(),
-            p_source_type: "manual",
-          });
-          if (error) throw error;
+          await addArtifact(manualContent.trim(), "manual");
           successCount++;
         } catch (err) {
           console.error("Failed to create manual artifact:", err);
