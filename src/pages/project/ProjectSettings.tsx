@@ -194,7 +194,8 @@ export default function ProjectSettings() {
               .map((t) => t.trim())
               .filter(Boolean)
           : null,
-        p_splash_image_url: splashImageUrl,
+        // Pass actual value or null (not undefined) - the RPC uses '__UNCHANGED__' as default
+        p_splash_image_url: splashImageUrl ?? null,
       });
 
       if (error) throw error;
