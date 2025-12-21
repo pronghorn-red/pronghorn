@@ -21,6 +21,7 @@ import {
 import { Loader2, Link, CheckCircle, XCircle, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { setDatabaseConnectionString } from "@/lib/databaseConnectionSecrets";
 
 interface ConnectDatabaseDialogProps {
   open: boolean;
@@ -173,36 +174,33 @@ export function ConnectDatabaseDialog({
 
     try {
       if (isEditing) {
-        // Update existing connection
-        const updateParams: any = {
+        // Update existing connection metadata first
+        const { error } = await supabase.rpc("update_db_connection_with_token", {
           p_connection_id: editConnection.id,
           p_token: shareToken,
           p_name: name.trim(),
           p_description: description.trim() || null,
           p_ssl_mode: sslMode,
-        };
+          p_host: connectionString && parsedInfo ? parsedInfo.host : undefined,
+          p_port: connectionString && parsedInfo ? parsedInfo.port : undefined,
+          p_database_name: connectionString && parsedInfo ? parsedInfo.database_name : undefined,
+        });
+        if (error) throw error;
 
-        // Only update connection_string if user provided a new one
+        // If user provided a new connection string, encrypt and store it separately
         if (connectionString) {
-          updateParams.p_connection_string = connectionString;
-          if (parsedInfo) {
-            updateParams.p_host = parsedInfo.host;
-            updateParams.p_port = parsedInfo.port;
-            updateParams.p_database_name = parsedInfo.database_name;
-          }
+          await setDatabaseConnectionString(editConnection.id, shareToken, connectionString);
         }
 
-        const { error } = await supabase.rpc("update_db_connection_with_token", updateParams);
-
-        if (error) throw error;
         toast.success("Connection updated successfully");
       } else {
-        // Create new connection
-        const { error } = await supabase.rpc("insert_db_connection_with_token", {
+        // Create new connection with placeholder connection_string
+        // The actual connection string will be encrypted and stored via edge function
+        const { data: newConnection, error } = await supabase.rpc("insert_db_connection_with_token", {
           p_project_id: projectId,
           p_token: shareToken,
           p_name: name.trim(),
-          p_connection_string: connectionString,
+          p_connection_string: "__PENDING_ENCRYPTION__", // Placeholder - will be replaced by encrypted value
           p_description: description.trim() || null,
           p_host: parsedInfo?.host || null,
           p_port: parsedInfo?.port || 5432,
@@ -211,13 +209,23 @@ export function ConnectDatabaseDialog({
         });
 
         if (error) throw error;
+
+        // Now encrypt and store the actual connection string
+        // The RPC returns the connection ID as a string
+        const connectionId = newConnection as unknown as string;
+        if (!connectionId) {
+          throw new Error("Failed to get connection ID from insert");
+        }
+
+        await setDatabaseConnectionString(connectionId, shareToken, connectionString);
         toast.success("Database connection added successfully");
       }
 
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to save connection");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to save connection";
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

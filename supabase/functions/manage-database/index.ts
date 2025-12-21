@@ -7,6 +7,68 @@ const corsHeaders = {
 };
 
 const RENDER_API_URL = "https://api.render.com/v1";
+const ENCRYPTION_KEY = Deno.env.get('SECRETS_ENCRYPTION_KEY');
+
+// ============== Encryption/Decryption Helpers ==============
+
+// Convert hex string to Uint8Array
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  }
+  return bytes;
+}
+
+// Decrypt using AES-GCM
+async function decrypt(ciphertext: string): Promise<string> {
+  if (!ENCRYPTION_KEY) {
+    throw new Error('SECRETS_ENCRYPTION_KEY not configured');
+  }
+  
+  const [ivHex, encryptedHex] = ciphertext.split(':');
+  if (!ivHex || !encryptedHex) {
+    throw new Error('Invalid ciphertext format');
+  }
+  
+  const keyBytes = hexToBytes(ENCRYPTION_KEY);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyBytes.buffer as ArrayBuffer,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+  
+  const iv = hexToBytes(ivHex);
+  const encrypted = hexToBytes(encryptedHex);
+  
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
+    key,
+    encrypted.buffer as ArrayBuffer
+  );
+  
+  const decoder = new TextDecoder();
+  return decoder.decode(decrypted);
+}
+
+// Check if a value appears to be encrypted (iv:ciphertext format)
+function isEncrypted(value: string): boolean {
+  if (!value || typeof value !== 'string') return false;
+  // Plaintext connection strings start with postgresql:// or postgres://
+  if (value.startsWith('postgresql://') || value.startsWith('postgres://')) {
+    return false;
+  }
+  // Check for hex:hex format (IV is 12 bytes = 24 hex chars)
+  const parts = value.split(':');
+  if (parts.length >= 2 && parts[0].length === 24 && /^[0-9a-f]+$/i.test(parts[0])) {
+    return true;
+  }
+  return false;
+}
+
+// ============== End Encryption/Decryption Helpers ==============
 
 interface ManageDatabaseRequest {
   action: 'get_schema' | 'execute_sql' | 'execute_sql_batch' | 'get_table_data' | 'get_table_columns' | 'export_table' 
@@ -96,7 +158,20 @@ Deno.serve(async (req) => {
         throw new Error(connError?.message || "Connection not found or access denied");
       }
 
-      connectionString = connString;
+      // Decrypt connection string if it's encrypted
+      if (isEncrypted(connString)) {
+        try {
+          connectionString = await decrypt(connString);
+          console.log("[manage-database] Successfully decrypted connection string");
+        } catch (decryptError) {
+          console.error("[manage-database] Failed to decrypt connection string:", decryptError);
+          throw new Error("Failed to decrypt connection string. Ensure SECRETS_ENCRYPTION_KEY is configured.");
+        }
+      } else {
+        // Legacy plaintext connection string
+        console.log("[manage-database] Using plaintext connection string (legacy)");
+        connectionString = connString;
+      }
 
       // Get connection details for project_id
       const { data: connDetails, error: detailsError } = await supabase.rpc("get_db_connection_with_token", {
