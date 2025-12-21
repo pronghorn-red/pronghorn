@@ -104,3 +104,9 @@ verify_jwt = false
 
 [functions.deployment-secrets]
 verify_jwt = false
+
+[functions.send-auth-email]
+verify_jwt = false
+
+[functions.collaboration-agent-orchestrator]
+verify_jwt = false

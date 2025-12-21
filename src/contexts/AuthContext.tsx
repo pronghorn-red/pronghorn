@@ -43,16 +43,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string) => {
-    const redirectUrl = `${window.location.origin}/dashboard`;
-    
-    const { error } = await supabase.auth.signUp({
+    // First, create the user in Supabase with email confirmation
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: redirectUrl
+        emailRedirectTo: `https://pronghorn.red/auth?mode=verify`
       }
     });
-    return { error };
+    
+    if (error) {
+      return { error };
+    }
+
+    // Send branded verification email via Resend
+    try {
+      const response = await supabase.functions.invoke('send-auth-email', {
+        body: {
+          type: 'verification',
+          email: email,
+          redirectUrl: `https://pronghorn.red/auth?mode=verify`
+        }
+      });
+
+      if (response.error) {
+        console.warn("Failed to send branded email, Supabase default was used:", response.error);
+      }
+    } catch (e) {
+      console.warn("Failed to send branded email:", e);
+    }
+
+    return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
@@ -107,10 +128,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
+    // Trigger Supabase password reset (this creates the recovery token)
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: 'https://pronghorn.red/auth?mode=reset',
     });
-    return { error };
+
+    if (error) {
+      return { error };
+    }
+
+    // Send branded password reset email via Resend
+    try {
+      const response = await supabase.functions.invoke('send-auth-email', {
+        body: {
+          type: 'password-reset',
+          email: email,
+          redirectUrl: 'https://pronghorn.red/auth?mode=reset'
+        }
+      });
+
+      if (response.error) {
+        console.warn("Failed to send branded email, Supabase default was used:", response.error);
+      }
+    } catch (e) {
+      console.warn("Failed to send branded email:", e);
+    }
+
+    return { error: null };
   };
 
   const updatePassword = async (newPassword: string) => {

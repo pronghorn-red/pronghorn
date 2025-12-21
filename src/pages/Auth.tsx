@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { Loader2, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { Loader2, Eye, EyeOff, ArrowLeft, Info, CheckCircle } from "lucide-react";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -43,11 +44,18 @@ export default function Auth() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
-  // Check URL params for reset mode
+  // Email verification success state
+  const [verificationSuccess, setVerificationSuccess] = useState(false);
+
+  // Check URL params for reset/verify mode
   useEffect(() => {
     const mode = searchParams.get('mode');
     if (mode === 'reset') {
       setResetMode(true);
+    } else if (mode === 'verify') {
+      // Email verification happened via Supabase magic link
+      setVerificationSuccess(true);
+      toast.success("Email verified successfully! You can now sign in.");
     }
   }, [searchParams]);
 
@@ -107,8 +115,7 @@ export default function Auth() {
     if (error) {
       toast.error(error.message);
     } else {
-      toast.success("Account created! Please check your email to confirm.");
-      navigate("/dashboard");
+      toast.success("Account created! Please check your email to verify your account.");
     }
   };
 
@@ -168,6 +175,20 @@ export default function Auth() {
     >
       {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
     </button>
+  );
+
+  // Login type information component
+  const LoginTypeInfo = () => (
+    <Alert className="mb-4 border-muted bg-muted/50">
+      <Info className="h-4 w-4" />
+      <AlertDescription className="text-sm">
+        <ul className="mt-1 space-y-1 text-muted-foreground">
+          <li><span className="font-medium text-foreground">Google SSO:</span> Government of Alberta accounts only</li>
+          <li><span className="font-medium text-foreground">Microsoft SSO:</span> Organizations with Entra ID (Azure AD)</li>
+          <li><span className="font-medium text-foreground">Email/Password:</span> Public access for everyone</li>
+        </ul>
+      </AlertDescription>
+    </Alert>
   );
 
   // Reset password form (when user comes back from email link)
@@ -284,6 +305,19 @@ export default function Auth() {
           <CardDescription>Sign in to access your projects</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Verification success message */}
+          {verificationSuccess && (
+            <Alert className="mb-4 border-green-500/50 bg-green-500/10">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <AlertDescription className="text-green-700 dark:text-green-400">
+                Your email has been verified! You can now sign in to your account.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Login type information */}
+          <LoginTypeInfo />
+
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Sign In</TabsTrigger>
@@ -437,6 +471,10 @@ export default function Auth() {
                   Create Account
                 </Button>
               </form>
+
+              <p className="mt-4 text-xs text-center text-muted-foreground">
+                After signing up, you'll receive a verification email. Please verify your email before signing in.
+              </p>
             </TabsContent>
           </Tabs>
 
