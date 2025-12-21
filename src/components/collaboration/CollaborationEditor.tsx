@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Code, Save, Loader2, GitCompare } from 'lucide-react';
+import { Eye, Code, Save, Loader2, GitCompare, AlertTriangle } from 'lucide-react';
 import Editor, { DiffEditor, Monaco } from '@monaco-editor/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -16,6 +16,7 @@ interface CollaborationEditorProps {
   onSave: () => void;
   isSaving: boolean;
   hasUnsavedChanges: boolean;
+  hasConflict?: boolean;
   readOnly?: boolean;
   currentVersion: number;
 }
@@ -28,6 +29,7 @@ export function CollaborationEditor({
   onSave,
   isSaving,
   hasUnsavedChanges,
+  hasConflict = false,
   readOnly = false,
   currentVersion,
 }: CollaborationEditorProps) {
@@ -100,24 +102,31 @@ export function CollaborationEditor({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {hasUnsavedChanges && (
+          {hasConflict && (
+            <Badge variant="destructive" className="text-xs flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" />
+              Conflict
+            </Badge>
+          )}
+          {hasUnsavedChanges && !hasConflict && (
             <Badge variant="secondary" className="text-xs">
               Unsaved
             </Badge>
           )}
           <Button
-            variant="outline"
+            variant={hasConflict ? "destructive" : "outline"}
             size="sm"
             onClick={onSave}
             disabled={isSaving || !hasUnsavedChanges}
             className="h-7"
+            title={hasConflict ? "Save to overwrite remote changes" : undefined}
           >
             {isSaving ? (
               <Loader2 className="h-3 w-3 animate-spin mr-1" />
             ) : (
               <Save className="h-3 w-3 mr-1" />
             )}
-            Save
+            {hasConflict ? 'Overwrite' : 'Save'}
           </Button>
         </div>
       </div>
