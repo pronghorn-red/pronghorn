@@ -1861,6 +1861,62 @@ export type Database = {
           },
         ]
       }
+      published_projects: {
+        Row: {
+          category: string | null
+          clone_count: number | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_visible: boolean
+          name: string
+          project_id: string
+          published_at: string
+          published_by: string | null
+          tags: string[] | null
+          updated_at: string
+          view_count: number | null
+        }
+        Insert: {
+          category?: string | null
+          clone_count?: number | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_visible?: boolean
+          name: string
+          project_id: string
+          published_at?: string
+          published_by?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          view_count?: number | null
+        }
+        Update: {
+          category?: string | null
+          clone_count?: number | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_visible?: boolean
+          name?: string
+          project_id?: string
+          published_at?: string
+          published_by?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          view_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "published_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       repo_commits: {
         Row: {
           branch: string
@@ -2500,6 +2556,32 @@ export type Database = {
       authorize_project_access: {
         Args: { p_project_id: string; p_token?: string }
         Returns: Database["public"]["Enums"]["project_token_role"]
+      }
+      clone_project_with_token: {
+        Args: {
+          p_clone_artifacts?: boolean
+          p_clone_canvas?: boolean
+          p_clone_chat?: boolean
+          p_clone_repo_files?: boolean
+          p_clone_repo_staging?: boolean
+          p_clone_requirements?: boolean
+          p_clone_specifications?: boolean
+          p_clone_standards?: boolean
+          p_new_name: string
+          p_source_project_id: string
+          p_token: string
+        }
+        Returns: {
+          id: string
+          share_token: string
+        }[]
+      }
+      clone_published_project: {
+        Args: { p_new_name?: string; p_published_id: string }
+        Returns: {
+          id: string
+          share_token: string
+        }[]
       }
       commit_staged_with_token: {
         Args: {
@@ -3771,6 +3853,36 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_published_projects: {
+        Args: {
+          p_category?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_tags?: string[]
+        }
+        Returns: {
+          category: string | null
+          clone_count: number | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_visible: boolean
+          name: string
+          project_id: string
+          published_at: string
+          published_by: string | null
+          tags: string[] | null
+          updated_at: string
+          view_count: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "published_projects"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_repo_by_id_with_token: {
         Args: { p_repo_id: string; p_token: string }
         Returns: {
@@ -4074,6 +4186,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_published_project_views: {
+        Args: { p_published_id: string }
+        Returns: undefined
       }
       insert_agent_llm_log_with_token: {
         Args: {
@@ -4972,6 +5088,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      publish_project_to_gallery: {
+        Args: {
+          p_category?: string
+          p_description?: string
+          p_image_url?: string
+          p_name?: string
+          p_project_id: string
+          p_tags?: string[]
+        }
+        Returns: string
+      }
       rename_file_with_token: {
         Args: { p_file_id: string; p_new_path: string; p_token?: string }
         Returns: {
@@ -5277,6 +5404,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      toggle_published_project_visibility: {
+        Args: { p_published_id: string }
+        Returns: boolean
       }
       unlink_shared_project: {
         Args: { p_project_id: string }
@@ -5771,6 +5902,38 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_published_project: {
+        Args: {
+          p_category?: string
+          p_description?: string
+          p_image_url?: string
+          p_is_visible?: boolean
+          p_name?: string
+          p_published_id: string
+          p_tags?: string[]
+        }
+        Returns: {
+          category: string | null
+          clone_count: number | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_visible: boolean
+          name: string
+          project_id: string
+          published_at: string
+          published_by: string | null
+          tags: string[] | null
+          updated_at: string
+          view_count: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "published_projects"
           isOneToOne: true
           isSetofReturn: false
         }
