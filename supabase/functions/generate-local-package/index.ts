@@ -1803,6 +1803,10 @@ async function setupProjectDataSubscription() {
   // Subscribe to chat messages channel (for real-time message updates)
   const chatMessagesChannel = supabase
     .channel(\`chat-messages-\${CONFIG.projectId}\`)
+    .on('broadcast', { event: 'chat_message_refresh' }, async () => {
+      console.log('[Pronghorn] Chat message broadcast received');
+      await fetchAndWriteChats();
+    })
     .on('postgres_changes', {
       event: '*',
       schema: 'public',

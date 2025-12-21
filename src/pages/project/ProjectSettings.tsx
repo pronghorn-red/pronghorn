@@ -77,7 +77,7 @@ export default function ProjectSettings() {
     if (!projectId || !isTokenSet) return;
 
     const channel = supabase
-      .channel(`project-settings-${projectId}`)
+      .channel(`project-${projectId}`)
       .on(
         "postgres_changes",
         {
