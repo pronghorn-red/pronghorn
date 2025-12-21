@@ -87,6 +87,10 @@ export function ArtifactCollaborator({
   // Track when agent is editing to prevent sync from overwriting content
   const isAgentEditingRef = useRef<boolean>(false);
   
+  // Track when we're programmatically syncing content to prevent feedback loop
+  // (Monaco onChange fires even for programmatic changes, which would set hasUnsavedChanges=true)
+  const isSyncingContentRef = useRef<boolean>(false);
+  
   // ProjectSelector state for attaching context
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
   const [attachedContext, setAttachedContext] = useState<ProjectSelectionResult | null>(null);
@@ -221,7 +225,11 @@ export function ArtifactCollaborator({
       
       // Only update if we're not in the middle of saving or viewing a specific version
       if (!isSaving && viewingVersion === null) {
+        isSyncingContentRef.current = true;
         setLocalContent(collaboration.current_content);
+        Promise.resolve().then(() => {
+          isSyncingContentRef.current = false;
+        });
       }
     }
   }, [collaboration?.current_content, hasUnsavedChanges, isSaving, viewingVersion]);
@@ -229,7 +237,10 @@ export function ArtifactCollaborator({
   // Handle content changes
   const handleContentChange = useCallback((content: string) => {
     setLocalContent(content);
-    setHasUnsavedChanges(true);
+    // Only mark as unsaved if this is a real user edit, not a programmatic sync
+    if (!isSyncingContentRef.current) {
+      setHasUnsavedChanges(true);
+    }
   }, []);
 
   // Save changes as an edit
@@ -292,8 +303,12 @@ export function ArtifactCollaborator({
   const handleVersionChange = useCallback((version: number) => {
     const content = getContentAtVersion(version);
     if (content) {
+      isSyncingContentRef.current = true;
       setLocalContent(content);
       setViewingVersion(version);
+      Promise.resolve().then(() => {
+        isSyncingContentRef.current = false;
+      });
     }
   }, [getContentAtVersion]);
 
@@ -580,7 +595,11 @@ export function ArtifactCollaborator({
         
         // Explicitly sync content - don't rely on other effects (race condition fix)
         if (!hasUnsavedChanges && !justSavedRef.current && collaboration?.current_content) {
+          isSyncingContentRef.current = true;
           setLocalContent(collaboration.current_content);
+          Promise.resolve().then(() => {
+            isSyncingContentRef.current = false;
+          });
         }
       }
       
