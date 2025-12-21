@@ -1811,8 +1811,8 @@ async function setupProjectDataSubscription() {
       event: '*',
       schema: 'public',
       table: 'chat_messages',
+      filter: \`project_id=eq.\${CONFIG.projectId}\`,
     }, async (payload) => {
-      // Check if this message belongs to a session in our project
       console.log('[Pronghorn] Chat message postgres_changes received');
       await fetchAndWriteChats();
     })
