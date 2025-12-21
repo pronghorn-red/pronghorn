@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -29,6 +29,7 @@ export const useRealtimeChatSessions = (
 ) => {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const loadSessions = async () => {
     if (!projectId || !enabled) return;
@@ -73,8 +74,11 @@ export const useRealtimeChatSessions = (
       })
       .subscribe();
 
+    channelRef.current = channel;
+
     return () => {
       supabase.removeChannel(channel);
+      channelRef.current = null;
     };
   }, [projectId, enabled]);
 
@@ -93,12 +97,14 @@ export const useRealtimeChatSessions = (
         setSessions((prev) => [data, ...prev]);
       }
       
-      // Broadcast refresh event for real-time sync
-      await supabase.channel(`chat-sessions-${projectId}`).send({
-        type: 'broadcast',
-        event: 'chat_session_refresh',
-        payload: {}
-      });
+      // Broadcast using the subscribed channel reference (like Canvas does)
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'chat_session_refresh',
+          payload: {}
+        });
+      }
       
       toast.success("Chat session created");
       return data;
@@ -141,12 +147,14 @@ export const useRealtimeChatSessions = (
 
       if (error) throw error;
       
-      // Broadcast refresh event for real-time sync
-      await supabase.channel(`chat-sessions-${projectId}`).send({
-        type: 'broadcast',
-        event: 'chat_session_refresh',
-        payload: {}
-      });
+      // Broadcast using the subscribed channel reference (like Canvas does)
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'chat_session_refresh',
+          payload: {}
+        });
+      }
       
       toast.success("Chat session updated");
       return data;
@@ -172,12 +180,14 @@ export const useRealtimeChatSessions = (
 
       if (error) throw error;
       
-      // Broadcast refresh event for real-time sync
-      await supabase.channel(`chat-sessions-${projectId}`).send({
-        type: 'broadcast',
-        event: 'chat_session_refresh',
-        payload: {}
-      });
+      // Broadcast using the subscribed channel reference (like Canvas does)
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'chat_session_refresh',
+          payload: {}
+        });
+      }
       
       toast.success("Chat session deleted");
     } catch (error) {
@@ -207,6 +217,8 @@ export const useRealtimeChatMessages = (
 ) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const loadMessages = async () => {
     if (!chatSessionId || !enabled) return;
@@ -251,10 +263,29 @@ export const useRealtimeChatMessages = (
       })
       .subscribe();
 
+    channelRef.current = channel;
+
+    // Also subscribe to project-level channel for local runner sync
+    let projectChannel: ReturnType<typeof supabase.channel> | null = null;
+    if (projectId) {
+      projectChannel = supabase
+        .channel(`chat-messages-${projectId}`)
+        .on("broadcast", { event: "chat_message_refresh" }, () => {
+          loadMessages();
+        })
+        .subscribe();
+      sessionChannelRef.current = projectChannel;
+    }
+
     return () => {
       supabase.removeChannel(channel);
+      channelRef.current = null;
+      if (projectChannel) {
+        supabase.removeChannel(projectChannel);
+        sessionChannelRef.current = null;
+      }
     };
-  }, [chatSessionId, enabled]);
+  }, [chatSessionId, enabled, projectId]);
 
   const addMessage = async (role: string, content: string) => {
     if (!chatSessionId) return;
@@ -289,25 +320,20 @@ export const useRealtimeChatMessages = (
         );
       }
 
-      // Broadcast refresh event for real-time sync (message-level channel for browser sync)
-      await supabase.channel(`chat-messages-${chatSessionId}`).send({
-        type: 'broadcast',
-        event: 'chat_message_refresh',
-        payload: {}
-      });
-
-      // Also broadcast to project-level chat-messages channel for local runner sync
-      if (projectId) {
-        await supabase.channel(`chat-messages-${projectId}`).send({
+      // Broadcast using the subscribed channel reference (like Canvas does)
+      if (channelRef.current) {
+        channelRef.current.send({
           type: 'broadcast',
           event: 'chat_message_refresh',
-          payload: { action: 'message_added', sessionId: chatSessionId }
+          payload: {}
         });
-        
-        // And to session-level channel for local runner sync
-        await supabase.channel(`chat-sessions-${projectId}`).send({
+      }
+
+      // Also broadcast to project-level channel for local runner sync
+      if (projectId && sessionChannelRef.current) {
+        sessionChannelRef.current.send({
           type: 'broadcast',
-          event: 'chat_session_refresh',
+          event: 'chat_message_refresh',
           payload: { action: 'message_added', sessionId: chatSessionId }
         });
       }
