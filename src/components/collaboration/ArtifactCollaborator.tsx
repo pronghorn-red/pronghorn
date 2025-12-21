@@ -16,7 +16,10 @@ import {
   FileText,
   History,
   Users,
-  Paperclip
+  Paperclip,
+  AlertTriangle,
+  RefreshCw,
+  Save
 } from 'lucide-react';
 import { useRealtimeCollaboration } from '@/hooks/useRealtimeCollaboration';
 import { CollaborationEditor } from './CollaborationEditor';
@@ -68,6 +71,10 @@ export function ArtifactCollaborator({
   const [localContent, setLocalContent] = useState(artifact.content);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Conflict detection state
+  const [baseVersionWhenEditing, setBaseVersionWhenEditing] = useState<number | null>(null);
+  const [hasConflict, setHasConflict] = useState(false);
   
   // Streaming state for AI responses
   const [isStreaming, setIsStreaming] = useState(false);
@@ -240,8 +247,16 @@ export function ArtifactCollaborator({
     // Only mark as unsaved if this is a real user edit, not a programmatic sync
     if (!isSyncingContentRef.current) {
       setHasUnsavedChanges(true);
+      // Record the version we started editing from (if not already set)
+      if (baseVersionWhenEditing === null) {
+        // Use the hook's latest version or calculate from history
+        const currentLatest = latestVersionFromHook || (
+          history.length > 0 ? Math.max(...history.map(h => h.version_number)) : 0
+        );
+        setBaseVersionWhenEditing(currentLatest);
+      }
     }
-  }, []);
+  }, [baseVersionWhenEditing, latestVersionFromHook, history]);
 
   // Save changes as an edit
   const handleSave = useCallback(async () => {
@@ -273,11 +288,13 @@ export function ArtifactCollaborator({
       
       if (result) {
         setHasUnsavedChanges(false);
+        setBaseVersionWhenEditing(null);  // Clear base version
+        setHasConflict(false);             // Clear conflict
         // Reset viewing version to null so slider follows latest
         setViewingVersion(null);
         // Refresh history to show new version
         await refreshHistory();
-        toast.success('Changes saved');
+        toast.success(hasConflict ? 'Changes saved (overwritten remote)' : 'Changes saved');
       } else {
         justSavedRef.current = false;
         toast.error('Failed to save changes');
@@ -586,20 +603,28 @@ export function ArtifactCollaborator({
   useEffect(() => {
     if (latestVersion > prevLatestVersionRef.current) {
       // A new version arrived (from another user or agent)
-      const wasFollowingLatest = viewingVersion === null || 
-        viewingVersion === prevLatestVersionRef.current;
       
-      if (wasFollowingLatest && !isAgentEditingRef.current) {
-        // Auto-follow: keep viewing the latest
-        setViewingVersion(null);
+      if (hasUnsavedChanges) {
+        // We have unsaved changes AND another version arrived = CONFLICT
+        setHasConflict(true);
+        console.log('Conflict detected: new version arrived while user has unsaved changes');
+        // DON'T sync content - user's work is more important
+      } else if (!isAgentEditingRef.current) {
+        const wasFollowingLatest = viewingVersion === null || 
+          viewingVersion === prevLatestVersionRef.current;
         
-        // Explicitly sync content - don't rely on other effects (race condition fix)
-        if (!hasUnsavedChanges && !justSavedRef.current && collaboration?.current_content) {
-          isSyncingContentRef.current = true;
-          setLocalContent(collaboration.current_content);
-          Promise.resolve().then(() => {
-            isSyncingContentRef.current = false;
-          });
+        if (wasFollowingLatest) {
+          // Auto-follow: keep viewing the latest
+          setViewingVersion(null);
+          
+          // Explicitly sync content - don't rely on other effects (race condition fix)
+          if (!justSavedRef.current && collaboration?.current_content) {
+            isSyncingContentRef.current = true;
+            setLocalContent(collaboration.current_content);
+            Promise.resolve().then(() => {
+              isSyncingContentRef.current = false;
+            });
+          }
         }
       }
       
@@ -696,21 +721,52 @@ export function ArtifactCollaborator({
                 <Badge variant="outline" className="text-xs">
                   v{currentVersion}
                 </Badge>
-                {hasUnsavedChanges && (
+                {hasConflict && (
+                  <Badge variant="destructive" className="text-xs flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    Conflict
+                  </Badge>
+                )}
+                {hasUnsavedChanges && !hasConflict && (
                   <Badge variant="secondary" className="text-xs">Unsaved</Badge>
                 )}
               </div>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowMergeDialog(true)}
-            disabled={hasUnsavedChanges}
-          >
-            <GitMerge className="h-4 w-4 mr-1" />
-            Merge
-          </Button>
+          <div className="flex items-center gap-2">
+            {hasConflict && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setHasUnsavedChanges(false);
+                  setHasConflict(false);
+                  setBaseVersionWhenEditing(null);
+                  if (collaboration?.current_content) {
+                    isSyncingContentRef.current = true;
+                    setLocalContent(collaboration.current_content);
+                    Promise.resolve().then(() => {
+                      isSyncingContentRef.current = false;
+                    });
+                  }
+                  toast.info('Synced to latest version');
+                }}
+                className="text-xs"
+              >
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Discard & Sync
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowMergeDialog(true)}
+              disabled={hasUnsavedChanges}
+            >
+              <GitMerge className="h-4 w-4 mr-1" />
+              Merge
+            </Button>
+          </div>
         </div>
 
         {/* Mobile tabs */}
@@ -744,6 +800,7 @@ export function ArtifactCollaborator({
                 onSave={handleSave}
                 isSaving={isSaving}
                 hasUnsavedChanges={hasUnsavedChanges}
+                hasConflict={hasConflict}
                 readOnly={viewingVersion !== null && viewingVersion < latestVersion}
                 currentVersion={latestVersion}
               />
@@ -829,13 +886,42 @@ export function ArtifactCollaborator({
               <Badge variant="secondary" className="text-xs">
                 v{currentVersion} of {latestVersion}
               </Badge>
-              {hasUnsavedChanges && (
+              {hasConflict && (
+                <Badge variant="destructive" className="text-xs flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Conflict
+                </Badge>
+              )}
+              {hasUnsavedChanges && !hasConflict && (
                 <Badge variant="destructive" className="text-xs">Unsaved</Badge>
               )}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {hasConflict && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setHasUnsavedChanges(false);
+                setHasConflict(false);
+                setBaseVersionWhenEditing(null);
+                if (collaboration?.current_content) {
+                  isSyncingContentRef.current = true;
+                  setLocalContent(collaboration.current_content);
+                  Promise.resolve().then(() => {
+                    isSyncingContentRef.current = false;
+                  });
+                }
+                toast.info('Synced to latest version');
+              }}
+              className="text-xs"
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Discard & Sync
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -869,6 +955,7 @@ export function ArtifactCollaborator({
               onSave={handleSave}
               isSaving={isSaving}
               hasUnsavedChanges={hasUnsavedChanges}
+              hasConflict={hasConflict}
               readOnly={viewingVersion !== null && viewingVersion < latestVersion}
               currentVersion={latestVersion}
             />
