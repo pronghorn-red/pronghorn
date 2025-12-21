@@ -361,11 +361,19 @@ export default function Landing() {
             </p>
           </div>
 
-          {/* Phase Header */}
-          <div className="flex justify-center mb-8">
+          {/* Phase Headers */}
+          <div className="flex justify-center gap-4 mb-8">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
               <Settings className="w-4 h-4" />
               Plan
+            </div>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-rose-100 text-rose-700 rounded-full text-sm font-medium">
+              <Sparkles className="w-4 h-4" />
+              Design
+            </div>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium">
+              <Rocket className="w-4 h-4" />
+              Build
             </div>
           </div>
 
