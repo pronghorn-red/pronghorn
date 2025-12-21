@@ -13,13 +13,14 @@ import { Loader2, Eye, EyeOff, ArrowLeft, Info, CheckCircle } from "lucide-react
 export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { signIn, signUp, signInWithGoogle, signInWithAzure, resetPassword, updatePassword } = useAuth();
+  const { signIn, signUp, signInWithGoogle, signInWithAzure, resetPassword, updatePassword, verifyOtp } = useAuth();
   
   // Loading states
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [azureLoading, setAzureLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [verifyingToken, setVerifyingToken] = useState(false);
   
   // Form states
   const [loginEmail, setLoginEmail] = useState("");
@@ -47,17 +48,41 @@ export default function Auth() {
   // Email verification success state
   const [verificationSuccess, setVerificationSuccess] = useState(false);
 
-  // Check URL params for reset/verify mode
+  // Handle token verification from email links
   useEffect(() => {
-    const mode = searchParams.get('mode');
-    if (mode === 'reset') {
-      setResetMode(true);
-    } else if (mode === 'verify') {
-      // Email verification happened via Supabase magic link
-      setVerificationSuccess(true);
-      toast.success("Email verified successfully! You can now sign in.");
-    }
-  }, [searchParams]);
+    const handleTokenVerification = async () => {
+      const tokenHash = searchParams.get('token_hash');
+      const type = searchParams.get('type');
+      
+      if (tokenHash && type) {
+        setVerifyingToken(true);
+        
+        try {
+          const { error } = await verifyOtp(tokenHash, type);
+          
+          if (error) {
+            console.error("Token verification error:", error);
+            toast.error(error.message || "Verification failed. The link may have expired.");
+          } else {
+            if (type === 'signup' || type === 'email') {
+              setVerificationSuccess(true);
+              toast.success("Email verified successfully! You can now sign in.");
+            } else if (type === 'recovery') {
+              setResetMode(true);
+              toast.success("Email verified! Please set your new password.");
+            }
+          }
+        } catch (e: any) {
+          console.error("Token verification exception:", e);
+          toast.error("Verification failed. Please try again.");
+        } finally {
+          setVerifyingToken(false);
+        }
+      }
+    };
+
+    handleTokenVerification();
+  }, [searchParams, verifyOtp]);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -190,6 +215,22 @@ export default function Auth() {
       </AlertDescription>
     </Alert>
   );
+
+  // Show loading while verifying token
+  if (verifyingToken) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-muted-foreground">Verifying your email...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Reset password form (when user comes back from email link)
   if (resetMode) {
@@ -472,16 +513,15 @@ export default function Auth() {
                 </Button>
               </form>
 
-              <p className="mt-4 text-xs text-center text-muted-foreground">
-                After signing up, you'll receive a verification email. Please verify your email before signing in.
+              <p className="mt-4 text-center text-sm text-muted-foreground">
+                By signing up, you agree to our Terms of Service and Privacy Policy.
               </p>
             </TabsContent>
           </Tabs>
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Don't need an account?</p>
-            <Button variant="link" onClick={() => navigate("/dashboard")} className="p-0 h-auto">
-              Continue as anonymous user
+          <div className="mt-6 text-center">
+            <Button variant="link" onClick={() => navigate("/")} className="text-sm">
+              Continue without signing in
             </Button>
           </div>
         </CardContent>

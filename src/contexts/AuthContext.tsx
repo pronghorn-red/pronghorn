@@ -13,6 +13,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   updatePassword: (newPassword: string) => Promise<{ error: any }>;
+  verifyOtp: (tokenHash: string, type: string) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,37 +44,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string) => {
-    // First, create the user in Supabase with email confirmation
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `https://pronghorn.red/auth?mode=verify`
-      }
-    });
-    
-    if (error) {
-      return { error };
-    }
-
-    // Send branded verification email via Resend
+    // Call edge function which will create user and send branded email with proper token
     try {
       const response = await supabase.functions.invoke('send-auth-email', {
         body: {
-          type: 'verification',
+          type: 'signup',
           email: email,
-          redirectUrl: `https://pronghorn.red/auth?mode=verify`
+          password: password
         }
       });
 
       if (response.error) {
-        console.warn("Failed to send branded email, Supabase default was used:", response.error);
+        console.error("Signup error:", response.error);
+        return { error: response.error };
       }
-    } catch (e) {
-      console.warn("Failed to send branded email:", e);
-    }
 
-    return { error: null };
+      if (response.data?.error) {
+        console.error("Signup error from function:", response.data.error);
+        return { error: { message: response.data.error } };
+      }
+
+      return { error: null };
+    } catch (e: any) {
+      console.error("Signup exception:", e);
+      return { error: { message: e.message || "Failed to create account" } };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
@@ -128,33 +123,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    // Trigger Supabase password reset (this creates the recovery token)
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://pronghorn.red/auth?mode=reset',
-    });
-
-    if (error) {
-      return { error };
-    }
-
-    // Send branded password reset email via Resend
+    // Call edge function which will generate recovery link and send branded email
     try {
       const response = await supabase.functions.invoke('send-auth-email', {
         body: {
-          type: 'password-reset',
-          email: email,
-          redirectUrl: 'https://pronghorn.red/auth?mode=reset'
+          type: 'recovery',
+          email: email
         }
       });
 
       if (response.error) {
-        console.warn("Failed to send branded email, Supabase default was used:", response.error);
+        console.error("Password reset error:", response.error);
+        return { error: response.error };
       }
-    } catch (e) {
-      console.warn("Failed to send branded email:", e);
-    }
 
-    return { error: null };
+      if (response.data?.error) {
+        console.error("Password reset error from function:", response.data.error);
+        return { error: { message: response.data.error } };
+      }
+
+      return { error: null };
+    } catch (e: any) {
+      console.error("Password reset exception:", e);
+      return { error: { message: e.message || "Failed to send reset email" } };
+    }
   };
 
   const updatePassword = async (newPassword: string) => {
@@ -164,8 +156,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
+  const verifyOtp = async (tokenHash: string, type: string) => {
+    // Verify the OTP token from email link
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: type as 'signup' | 'recovery' | 'email',
+    });
+    return { error };
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signInWithGoogle, signInWithAzure, signOut, resetPassword, updatePassword }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      session, 
+      loading, 
+      signUp, 
+      signIn, 
+      signInWithGoogle, 
+      signInWithAzure, 
+      signOut, 
+      resetPassword, 
+      updatePassword,
+      verifyOtp 
+    }}>
       {children}
     </AuthContext.Provider>
   );

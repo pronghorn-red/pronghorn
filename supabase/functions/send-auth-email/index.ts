@@ -8,10 +8,9 @@ const corsHeaders = {
 };
 
 interface SendAuthEmailRequest {
-  type: 'verification' | 'password-reset';
+  type: 'signup' | 'recovery';
   email: string;
-  token?: string;
-  redirectUrl?: string;
+  password?: string; // Required for signup
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -23,7 +22,14 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
     
-    const { type, email, token, redirectUrl }: SendAuthEmailRequest = await req.json();
+    // Create admin client with service role key
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+    
+    const { type, email, password }: SendAuthEmailRequest = await req.json();
     
     console.log(`Processing ${type} email for: ${email}`);
 
@@ -32,26 +38,84 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     const baseUrl = "https://pronghorn.red";
-    const logoUrl = `${baseUrl}/pronghorn-logo.jpeg`;
-
+    let actionUrl: string;
     let subject: string;
     let heading: string;
     let message: string;
     let buttonText: string;
-    let actionUrl: string;
 
-    if (type === 'verification') {
+    if (type === 'signup') {
+      if (!password) {
+        throw new Error("Password is required for signup");
+      }
+
+      // Generate signup confirmation link using admin API
+      const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'signup',
+        email: email,
+        password: password,
+        options: {
+          redirectTo: `${baseUrl}/auth`
+        }
+      });
+
+      if (linkError) {
+        console.error("Error generating signup link:", linkError);
+        throw new Error(`Failed to generate verification link: ${linkError.message}`);
+      }
+
+      // Extract the verification URL from the action_link
+      // The action_link contains the full URL with token_hash and type
+      actionUrl = linkData.properties.action_link;
+      
+      // Modify the redirect to go to our auth page
+      const url = new URL(actionUrl);
+      const token_hash = url.searchParams.get('token_hash') || url.searchParams.get('token');
+      const linkType = url.searchParams.get('type');
+      
+      // Build our custom verification URL
+      actionUrl = `${baseUrl}/auth?token_hash=${token_hash}&type=${linkType}`;
+      
+      console.log("Generated verification URL:", actionUrl);
+
       subject = "Verify your Pronghorn account";
       heading = "Welcome to Pronghorn!";
       message = "Please verify your email address to complete your account setup and access all features.";
       buttonText = "Verify Email Address";
-      actionUrl = redirectUrl || `${baseUrl}/auth?mode=verify&token=${token}`;
-    } else if (type === 'password-reset') {
+
+    } else if (type === 'recovery') {
+      // Generate password recovery link using admin API
+      const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'recovery',
+        email: email,
+        options: {
+          redirectTo: `${baseUrl}/auth`
+        }
+      });
+
+      if (linkError) {
+        console.error("Error generating recovery link:", linkError);
+        throw new Error(`Failed to generate recovery link: ${linkError.message}`);
+      }
+
+      // Extract the recovery URL
+      actionUrl = linkData.properties.action_link;
+      
+      // Modify the redirect to go to our auth page
+      const url = new URL(actionUrl);
+      const token_hash = url.searchParams.get('token_hash') || url.searchParams.get('token');
+      const linkType = url.searchParams.get('type');
+      
+      // Build our custom recovery URL
+      actionUrl = `${baseUrl}/auth?token_hash=${token_hash}&type=${linkType}`;
+      
+      console.log("Generated recovery URL:", actionUrl);
+
       subject = "Reset your Pronghorn password";
       heading = "Password Reset Request";
       message = "You requested to reset your password. Click the button below to set a new password. This link expires in 24 hours.";
       buttonText = "Reset Password";
-      actionUrl = redirectUrl || `${baseUrl}/auth?mode=reset`;
+
     } else {
       throw new Error("Invalid email type");
     }
@@ -69,10 +133,9 @@ const handler = async (req: Request): Promise<Response> => {
           <tr>
             <td style="padding: 40px 20px;">
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-                <!-- Header with Logo -->
+                <!-- Header -->
                 <tr>
                   <td style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); padding: 32px 40px; text-align: center;">
-                    <img src="${logoUrl}" alt="Pronghorn Logo" width="60" height="60" style="border-radius: 8px; margin-bottom: 16px;">
                     <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">${heading}</h1>
                   </td>
                 </tr>
@@ -103,7 +166,7 @@ const handler = async (req: Request): Promise<Response> => {
                       <a href="${actionUrl}" style="color: #dc2626; font-size: 14px;">${actionUrl}</a>
                     </p>
                     
-                    ${type === 'verification' ? `
+                    ${type === 'signup' ? `
                     <p style="margin: 24px 0 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
                       If you didn't create a Pronghorn account, you can safely ignore this email.
                     </p>
