@@ -119,7 +119,7 @@ export function CollaborationChat({
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
       <ScrollArea className="flex-1 p-3 min-h-0">
-        <div className="space-y-3 pr-2">
+        <div className="space-y-3 pr-2" style={{ wordBreak: 'break-word' }}>
           {combinedTimeline.length === 0 && !isStreaming && (
             <div className="text-center py-8 text-muted-foreground text-sm">
               Start a conversation to collaborate on this artifact
