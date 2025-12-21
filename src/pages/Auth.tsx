@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff, ArrowLeft, Info, CheckCircle, AlertTriangle } from "lucide-react";
+import { PronghornLogo } from "@/components/layout/PronghornLogo";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -261,7 +262,7 @@ export default function Auth() {
       <AlertDescription className="text-sm">
         <ul className="mt-1 space-y-1 text-muted-foreground">
           <li><span className="font-medium text-foreground">Google SSO:</span> Government of Alberta accounts only</li>
-          <li><span className="font-medium text-foreground">Microsoft SSO:</span> Organizations with Entra ID (Azure AD)</li>
+          <li><span className="font-medium text-foreground">Microsoft SSO:</span> Organizations with Entra ID</li>
           <li><span className="font-medium text-foreground">Email/Password:</span> Public access for everyone</li>
         </ul>
       </AlertDescription>
@@ -274,11 +275,9 @@ export default function Auth() {
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <div className="flex justify-center mb-4">
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                <span className="text-white font-bold text-2xl">P</span>
-              </div>
-            </div>
+            <Link to="/" className="flex justify-center mb-4">
+              <PronghornLogo className="h-12 w-12 rounded-lg" />
+            </Link>
             <CardTitle className="text-2xl">Set New Password</CardTitle>
             <CardDescription>Enter your new password below</CardDescription>
           </CardHeader>
@@ -329,11 +328,9 @@ export default function Auth() {
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <div className="flex justify-center mb-4">
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                <span className="text-white font-bold text-2xl">P</span>
-              </div>
-            </div>
+            <Link to="/" className="flex justify-center mb-4">
+              <PronghornLogo className="h-12 w-12 rounded-lg" />
+            </Link>
             <CardTitle className="text-2xl">Reset Password</CardTitle>
             <CardDescription>Enter your email to receive a reset link</CardDescription>
           </CardHeader>
@@ -373,12 +370,12 @@ export default function Auth() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <span className="text-white font-bold text-2xl">P</span>
-            </div>
-          </div>
-          <CardTitle className="text-2xl">Welcome to Pronghorn</CardTitle>
+          <Link to="/" className="flex justify-center mb-4">
+            <PronghornLogo className="h-12 w-12 rounded-lg" />
+          </Link>
+          <CardTitle className="text-2xl">
+            <Link to="/" className="hover:text-primary transition-colors">Welcome to Pronghorn</Link>
+          </CardTitle>
           <CardDescription>Sign in to access your projects</CardDescription>
         </CardHeader>
         <CardContent>
