@@ -113,3 +113,6 @@ verify_jwt = false
 
 [functions.collaboration-agent-orchestrator]
 verify_jwt = false
+
+[functions.database-connection-secrets]
+verify_jwt = false
