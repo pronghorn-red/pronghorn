@@ -1,10 +1,11 @@
-import { Clock, TrendingUp, Pencil } from "lucide-react";
+import { Clock, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { EditProjectDialog } from "./EditProjectDialog";
 import { DeleteProjectDialog } from "./DeleteProjectDialog";
+import { CloneProjectDialog } from "./CloneProjectDialog";
 import { useAdmin } from "@/contexts/AdminContext";
 import { useAuth } from "@/contexts/AuthContext";
 interface ProjectCardProps {
@@ -64,6 +65,13 @@ export function ProjectCard({
       className="card-hover group relative"
     >
       <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-background/80 backdrop-blur-sm rounded-md p-1">
+        {!isAnonymous && (
+          <CloneProjectDialog
+            projectId={projectId}
+            projectName={projectName}
+            shareToken={shareToken}
+          />
+        )}
         {!isAnonymous && (
           <EditProjectDialog
             projectId={projectId}

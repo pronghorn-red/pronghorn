@@ -1,5 +1,8 @@
 project_id = "obkzdksfayygnrzdqoam"
 
+[functions.clone-project]
+verify_jwt = false
+
 [functions.decompose-requirements]
 verify_jwt = false
 
