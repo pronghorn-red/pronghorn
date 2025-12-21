@@ -361,24 +361,11 @@ export default function Landing() {
             </p>
           </div>
 
-          {/* Phase Headers */}
-          <div className="grid grid-cols-3 gap-4 mb-8 max-w-4xl mx-auto">
-            <div className="text-center">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">Plan<Settings className="w-4 h-4" />
-                Setup
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-rose-100 text-rose-700 rounded-full text-sm font-medium">
-                <Sparkles className="w-4 h-4" />
-                Design
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium">
-                <Rocket className="w-4 h-4" />
-                Ship
-              </div>
+          {/* Phase Header */}
+          <div className="flex justify-center mb-8">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+              <Settings className="w-4 h-4" />
+              Plan
             </div>
           </div>
 
