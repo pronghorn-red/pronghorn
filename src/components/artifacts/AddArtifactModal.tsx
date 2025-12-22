@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { ArtifactImageGallery, ImageFile } from "./ArtifactImageGallery";
 import { ArtifactTextFileList, TextFile } from "./ArtifactTextFileList";
 import { ArtifactExcelViewer } from "./ArtifactExcelViewer";
-import { ArtifactDocxPlaceholder } from "./ArtifactDocxPlaceholder";
+import { ArtifactDocxViewer, type DocxData, type DocxExportOptions } from "./ArtifactDocxViewer";
 import { ArtifactPdfPlaceholder, type PdfData, type PdfExportOptions } from "./ArtifactPdfPlaceholder";
 import { ArtifactPptxViewer, PptxExportOptions } from "./ArtifactPptxViewer";
 import { rasterizeSelectedPages } from "@/utils/parsePdf";
@@ -33,6 +33,7 @@ import { ArtifactUniversalUpload } from "./ArtifactUniversalUpload";
 import { ExcelData, formatExcelDataAsJson, parseExcelFile } from "@/utils/parseExcel";
 import { PptxData, getAllText, getTextPerSlide } from "@/utils/parsePptx";
 import { rasterizeSlide } from "@/utils/renderPptxSlide";
+import { getTextContent, rasterizeDocx } from "@/utils/parseDocx";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -86,8 +87,14 @@ export function AddArtifactModal({
     selectedImages: new Set(),
   });
 
-  // Phase 2 file states (coming soon)
-  const [docxFiles, setDocxFiles] = useState<File[]>([]);
+  // DOCX state
+  const [docxData, setDocxData] = useState<DocxData | null>(null);
+  const [docxExportOptions, setDocxExportOptions] = useState<DocxExportOptions>({
+    mode: "text",
+    outputFormat: "markdown",
+    extractImages: true,
+    selectedImages: new Set(),
+  });
 
   // PDF state
   const [pdfData, setPdfData] = useState<PdfData | null>(null);
@@ -163,6 +170,24 @@ export function AddArtifactModal({
 
   const pdfCount = getPdfCount();
 
+  // Calculate DOCX artifact count
+  const getDocxCount = useCallback(() => {
+    if (!docxData) return 0;
+    let count = 0;
+    if (docxExportOptions.mode === "text" || docxExportOptions.mode === "both") {
+      count += 1;
+    }
+    if (docxExportOptions.mode === "rasterize" || docxExportOptions.mode === "both") {
+      count += 1;
+    }
+    if (docxExportOptions.extractImages) {
+      count += docxExportOptions.selectedImages.size;
+    }
+    return count;
+  }, [docxData, docxExportOptions]);
+
+  const docxCount = getDocxCount();
+
   const getTotalCount = () => {
     let count = 0;
     count += selectedImagesCount;
@@ -176,6 +201,8 @@ export function AddArtifactModal({
     count += pptxCount;
     // PDF count
     count += pdfCount;
+    // DOCX count
+    count += docxCount;
     return count;
   };
 
@@ -189,7 +216,7 @@ export function AddArtifactModal({
     { id: "text", label: "Text Files", icon: <FileText className="h-4 w-4" />, count: selectedTextFilesCount },
     { id: "pptx", label: "PowerPoint", icon: <Presentation className="h-4 w-4" />, count: pptxCount },
     { id: "pdf", label: "PDF", icon: <FileIcon className="h-4 w-4" />, count: pdfCount },
-    { id: "docx", label: "Word", icon: <FileText className="h-4 w-4" />, count: docxFiles.length },
+    { id: "docx", label: "Word", icon: <FileText className="h-4 w-4" />, count: docxCount },
   ];
 
   // Handlers for universal upload
@@ -227,7 +254,10 @@ export function AddArtifactModal({
   };
 
   const handleUniversalDocxAdded = (files: File[]) => {
-    setDocxFiles(prev => [...prev, ...files]);
+    // DOCX files are now handled by the viewer component - switch to DOCX tab
+    if (files.length > 0) {
+      setActiveTab("docx");
+    }
   };
 
   const handleUniversalPdfAdded = (files: File[]) => {
@@ -579,6 +609,77 @@ export function AddArtifactModal({
         }
       }
 
+      // Create DOCX artifacts
+      if (docxData) {
+        // Text extraction
+        if (docxExportOptions.mode === "text" || docxExportOptions.mode === "both") {
+          try {
+            const textContent = getTextContent(docxData, docxExportOptions.outputFormat);
+            const sourceType = docxExportOptions.outputFormat === "markdown" ? "docx-markdown" :
+                               docxExportOptions.outputFormat === "html" ? "docx-html" : "docx-text";
+            await addArtifact(textContent, sourceType);
+            successCount++;
+          } catch (err) {
+            console.error("Failed to create DOCX text artifact:", err);
+            errorCount++;
+          }
+        }
+
+        // Rasterize document
+        if (docxExportOptions.mode === "rasterize" || docxExportOptions.mode === "both") {
+          try {
+            const dataUrl = await rasterizeDocx(docxData.arrayBuffer, { width: 800, scale: 2 });
+            const base64Data = dataUrl.split(",")[1];
+
+            const { data, error } = await supabase.functions.invoke("upload-artifact-image", {
+              body: {
+                projectId,
+                shareToken,
+                imageData: base64Data,
+                fileName: `${docxData.filename.replace(/\.docx?$/i, "")}_rasterized.png`,
+                content: `Rasterized document: ${docxData.filename}`,
+                sourceType: "docx-rasterized",
+              },
+            });
+
+            if (error) throw error;
+            broadcastRefresh("insert", data?.artifact?.id);
+            successCount++;
+          } catch (err) {
+            console.error("Failed to rasterize DOCX:", err);
+            errorCount++;
+          }
+        }
+
+        // Extract selected embedded images
+        if (docxExportOptions.extractImages && docxExportOptions.selectedImages.size > 0) {
+          for (const imageId of docxExportOptions.selectedImages) {
+            const img = docxData.embeddedImages.get(imageId);
+            if (!img) continue;
+
+            try {
+              const { data, error } = await supabase.functions.invoke("upload-artifact-image", {
+                body: {
+                  projectId,
+                  shareToken,
+                  imageData: img.base64,
+                  fileName: `${docxData.filename.replace(/\.docx?$/i, "")}_${img.filename}`,
+                  content: `Embedded image from ${docxData.filename}: ${img.filename}`,
+                  sourceType: "docx-image",
+                },
+              });
+
+              if (error) throw error;
+              broadcastRefresh("insert", data?.artifact?.id);
+              successCount++;
+            } catch (err) {
+              console.error(`Failed to create artifact for DOCX image ${img.filename}:`, err);
+              errorCount++;
+            }
+          }
+        }
+      }
+
       if (successCount > 0) {
         toast.success(`Created ${successCount} artifact${successCount !== 1 ? 's' : ''}`);
         onArtifactsCreated();
@@ -609,7 +710,13 @@ export function AddArtifactModal({
       selectedSlides: new Set(),
       selectedImages: new Set(),
     });
-    setDocxFiles([]);
+    setDocxData(null);
+    setDocxExportOptions({
+      mode: "text",
+      outputFormat: "markdown",
+      extractImages: true,
+      selectedImages: new Set(),
+    });
     setPdfData(null);
     setPdfExportOptions({
       mode: "text",
@@ -716,19 +823,8 @@ export function AddArtifactModal({
 
               <ScrollArea className="flex-1">
                 <div className="p-1.5 space-y-0.5">
-                  {/* Active tabs (first 7 including PPTX and PDF) */}
-                  {tabs.slice(0, 7).map(tab => renderSidebarButton(tab))}
-
-                  <Separator className="my-1.5" />
-                  
-                  {!sidebarCollapsed && (
-                    <div className="px-2 py-1 text-[10px] sm:text-xs text-muted-foreground font-medium">
-                      Coming Soon
-                    </div>
-                  )}
-
-                  {/* Coming soon tabs (Word only) */}
-                  {tabs.slice(7).map(tab => renderSidebarButton(tab, true))}
+                  {/* All tabs are now active */}
+                  {tabs.map(tab => renderSidebarButton(tab))}
                 </div>
               </ScrollArea>
             </div>
@@ -762,7 +858,7 @@ export function AddArtifactModal({
                       images: images.length,
                       excel: excelData ? 1 : 0,
                       textFiles: textFiles.length,
-                      docx: docxFiles.length,
+                      docx: docxData ? 1 : 0,
                       pdf: pdfData ? 1 : 0,
                       pptx: pptxData ? 1 : 0,
                     }}
@@ -799,9 +895,11 @@ export function AddArtifactModal({
                   />
                 )}
                 {activeTab === "docx" && (
-                  <ArtifactDocxPlaceholder
-                    files={docxFiles}
-                    onFilesChange={setDocxFiles}
+                  <ArtifactDocxViewer
+                    docxData={docxData}
+                    onDocxDataChange={setDocxData}
+                    exportOptions={docxExportOptions}
+                    onExportOptionsChange={setDocxExportOptions}
                   />
                 )}
                 {activeTab === "pdf" && (
