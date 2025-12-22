@@ -314,7 +314,10 @@ export async function processDocxFile(file: File): Promise<DocxData> {
 /**
  * Rasterize a DOCX document to page images by rendering HTML content
  * Returns an array of page images, each page is US Letter sized (8.5x11 at 96 DPI = 816x1056)
- * Uses positioning instead of cloning to avoid style loss issues
+ * 
+ * IMPORTANT: html-to-image cannot capture off-screen elements (left: -9999px produces blank).
+ * We use on-screen positioning with z-index layering to keep element visible to the renderer
+ * but not visible to the user.
  */
 export async function rasterizeDocx(
   arrayBuffer: ArrayBuffer,
@@ -329,16 +332,32 @@ export async function rasterizeDocx(
   // Dynamically import html-to-image
   const { toPng } = await import("html-to-image");
   
+  // Create an overlay to hide the rendering from the user
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position: fixed;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: transparent;
+    z-index: 99998;
+    pointer-events: none;
+  `;
+  
   // Create a fixed-size viewport container (this is what we capture)
+  // Position it on-screen so html-to-image can render it properly
   const viewport = document.createElement("div");
   viewport.style.cssText = `
     position: fixed;
-    left: -9999px;
+    left: 0;
     top: 0;
     width: ${width}px;
     height: ${PAGE_HEIGHT}px;
     overflow: hidden;
     background: white;
+    z-index: 99999;
+    opacity: 0.01;
   `;
   
   // Create content wrapper that will be positioned for each page
@@ -380,6 +399,7 @@ export async function rasterizeDocx(
   `;
   
   viewport.appendChild(contentWrapper);
+  document.body.appendChild(overlay);
   document.body.appendChild(viewport);
   
   try {
@@ -390,6 +410,9 @@ export async function rasterizeDocx(
     const contentHeight = contentWrapper.scrollHeight;
     const pageCount = Math.max(1, Math.ceil(contentHeight / PAGE_HEIGHT));
     const pages: string[] = [];
+    
+    // Make viewport fully visible for capture (html-to-image needs this)
+    viewport.style.opacity = "1";
     
     // Capture each page by repositioning the content wrapper
     for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
@@ -413,6 +436,7 @@ export async function rasterizeDocx(
   } finally {
     // Clean up
     document.body.removeChild(viewport);
+    document.body.removeChild(overlay);
   }
 }
 
