@@ -913,41 +913,49 @@ export function AddArtifactModal({
                     onImagesAdded={handleUniversalImagesAdded}
                     onExcelAdded={handleUniversalExcelAdded}
                     onTextFilesAdded={handleUniversalTextFilesAdded}
-                    onDocxAdded={handleUniversalDocxAdded}
-                    onPdfAdded={handleUniversalPdfAdded}
-                    onPptxAdded={handleUniversalPptxAdded}
+                    onDocxFilesAdded={handleUniversalDocxAdded}
+                    onPdfFilesAdded={handleUniversalPdfAdded}
+                    onPptxFilesAdded={handleUniversalPptxAdded}
+                    counts={{
+                      images: images.filter(i => i.selected).length,
+                      excel: excelData ? Array.from(excelSelectedRows.values()).reduce((a, b) => a + b.size, 0) : 0,
+                      textFiles: textFiles.filter(t => t.selected).length,
+                      docx: docxData ? 1 : 0,
+                      pdf: pdfData ? pdfExportOptions.selectedPages.size : 0,
+                      pptx: pptxData ? pptxExportOptions.selectedSlides.size : 0,
+                    }}
                   />
                 )}
 
                 {activeTab === "images" && (
                   <ArtifactImageGallery
                     images={images}
-                    setImages={setImages}
+                    onImagesChange={setImages}
                   />
                 )}
 
                 {activeTab === "excel" && (
                   <ArtifactExcelViewer
                     excelData={excelData}
-                    setExcelData={setExcelData}
+                    onExcelDataChange={setExcelData}
                     selectedRows={excelSelectedRows}
-                    setSelectedRows={setExcelSelectedRows}
+                    onSelectedRowsChange={setExcelSelectedRows}
                     mergeAsOne={excelMergeAsOne}
-                    setMergeAsOne={setExcelMergeAsOne}
+                    onMergeAsOneChange={setExcelMergeAsOne}
                   />
                 )}
 
                 {activeTab === "text" && (
                   <ArtifactTextFileList
-                    textFiles={textFiles}
-                    setTextFiles={setTextFiles}
+                    files={textFiles}
+                    onFilesChange={setTextFiles}
                   />
                 )}
 
                 {activeTab === "pptx" && (
                   <ArtifactPptxViewer
                     pptxData={pptxData}
-                    setPptxData={setPptxData}
+                    onPptxDataChange={setPptxData}
                     exportOptions={pptxExportOptions}
                     onExportOptionsChange={setPptxExportOptions}
                   />
@@ -956,7 +964,7 @@ export function AddArtifactModal({
                 {activeTab === "pdf" && (
                   <ArtifactPdfPlaceholder
                     pdfData={pdfData}
-                    setPdfData={setPdfData}
+                    onPdfDataChange={setPdfData}
                     exportOptions={pdfExportOptions}
                     onExportOptionsChange={setPdfExportOptions}
                   />
@@ -965,7 +973,7 @@ export function AddArtifactModal({
                 {activeTab === "docx" && (
                   <ArtifactDocxViewer
                     docxData={docxData}
-                    setDocxData={setDocxData}
+                    onDocxDataChange={setDocxData}
                     exportOptions={docxExportOptions}
                     onExportOptionsChange={setDocxExportOptions}
                   />
