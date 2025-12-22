@@ -10,7 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
 import { 
   FileText, X, Loader2, Image as ImageIcon, 
-  CheckSquare, Square, FileDown
+  CheckSquare, Square, FileDown, ScanEye
 } from "lucide-react";
 import {
   Select,
@@ -43,6 +43,7 @@ interface ArtifactDocxViewerProps {
   onDocxDataChange: (data: DocxData | null) => void;
   exportOptions: DocxExportOptions;
   onExportOptionsChange: (options: DocxExportOptions) => void;
+  textOverrides?: Map<string, string>; // VR-processed content overrides
 }
 
 export function ArtifactDocxViewer({
@@ -50,6 +51,7 @@ export function ArtifactDocxViewer({
   onDocxDataChange,
   exportOptions,
   onExportOptionsChange,
+  textOverrides,
 }: ArtifactDocxViewerProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -482,6 +484,7 @@ export function ArtifactDocxViewer({
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                     {rasterizedPages.map((page, index) => {
                       const isSelected = exportOptions.selectedRasterPages.has(index);
+                      const hasVrContent = textOverrides?.has(`docx-${index}`);
                       return (
                         <div
                           key={index}
@@ -497,13 +500,22 @@ export function ArtifactDocxViewer({
                               className="h-4 w-4 bg-background/80"
                             />
                           </div>
+                          {/* VR indicator */}
+                          {hasVrContent && (
+                            <div className="absolute top-1 right-1 bg-primary/90 rounded-full p-0.5 z-10">
+                              <ScanEye className="h-3 w-3 text-primary-foreground" />
+                            </div>
+                          )}
                           <img
                             src={page}
                             alt={`Page ${index + 1}`}
                             className="w-full h-auto object-contain"
                           />
                           <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
-                            <p className="text-[10px] text-white text-center">Page {index + 1}</p>
+                            <p className="text-[10px] text-white text-center">
+                              Page {index + 1}
+                              {hasVrContent && " (OCR)"}
+                            </p>
                           </div>
                         </div>
                       );

@@ -1127,6 +1127,7 @@ export function AddArtifactModal({
                     onPptxDataChange={setPptxData}
                     exportOptions={pptxExportOptions}
                     onExportOptionsChange={setPptxExportOptions}
+                    textOverrides={vrOverriddenContent}
                   />
                 )}
 
@@ -1136,6 +1137,7 @@ export function AddArtifactModal({
                     onPdfDataChange={setPdfData}
                     exportOptions={pdfExportOptions}
                     onExportOptionsChange={setPdfExportOptions}
+                    textOverrides={vrOverriddenContent}
                   />
                 )}
 
@@ -1145,6 +1147,7 @@ export function AddArtifactModal({
                     onDocxDataChange={setDocxData}
                     exportOptions={docxExportOptions}
                     onExportOptionsChange={setDocxExportOptions}
+                    textOverrides={vrOverriddenContent}
                   />
                 )}
               </div>
