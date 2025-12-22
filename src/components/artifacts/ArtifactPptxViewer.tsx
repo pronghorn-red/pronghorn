@@ -349,6 +349,52 @@ export function ArtifactPptxViewer({
           {/* Main scrollable content area */}
           <ScrollArea className="flex-1 min-h-0">
             <div className="space-y-4 pr-4">
+              {/* Preview panel at top */}
+              {previewSlide && (
+                <div className="border-b pb-4 mb-2">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                    Preview: Slide {previewSlide.index + 1}
+                  </div>
+                  <div className="flex gap-4">
+                    {/* Preview thumbnail */}
+                    <div className="w-48 aspect-video rounded border bg-white overflow-hidden shrink-0">
+                      {thumbnails.get(previewSlide.index) ? (
+                        <img
+                          src={thumbnails.get(previewSlide.index)}
+                          alt={`Slide ${previewSlide.index + 1}`}
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Preview text content */}
+                    <div className="flex-1 min-w-0">
+                      {previewSlide.title && (
+                        <div className="text-sm font-medium truncate mb-2">{previewSlide.title}</div>
+                      )}
+                      <div className="text-xs text-muted-foreground space-y-1 max-h-24 overflow-y-auto">
+                        {previewSlide.textContent.length > 0 ? (
+                          previewSlide.textContent.slice(0, 5).map((text, i) => (
+                            <p key={i} className="line-clamp-1">{text}</p>
+                          ))
+                        ) : (
+                          <p className="italic">No text content</p>
+                        )}
+                        {previewSlide.textContent.length > 5 && (
+                          <p className="text-muted-foreground/50">
+                            +{previewSlide.textContent.length - 5} more...
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Slide selection header */}
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium">
@@ -491,51 +537,6 @@ export function ArtifactPptxViewer({
                 </div>
               )}
 
-              {/* Preview panel at bottom */}
-              {previewSlide && (
-                <div className="border-t pt-4 mt-2">
-                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                    Preview: Slide {previewSlide.index + 1}
-                  </div>
-                  <div className="flex gap-4">
-                    {/* Preview thumbnail */}
-                    <div className="w-48 aspect-video rounded border bg-white overflow-hidden shrink-0">
-                      {thumbnails.get(previewSlide.index) ? (
-                        <img
-                          src={thumbnails.get(previewSlide.index)}
-                          alt={`Slide ${previewSlide.index + 1}`}
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Preview text content */}
-                    <div className="flex-1 min-w-0">
-                      {previewSlide.title && (
-                        <div className="text-sm font-medium truncate mb-2">{previewSlide.title}</div>
-                      )}
-                      <div className="text-xs text-muted-foreground space-y-1 max-h-24 overflow-y-auto">
-                        {previewSlide.textContent.length > 0 ? (
-                          previewSlide.textContent.slice(0, 5).map((text, i) => (
-                            <p key={i} className="line-clamp-1">{text}</p>
-                          ))
-                        ) : (
-                          <p className="italic">No text content</p>
-                        )}
-                        {previewSlide.textContent.length > 5 && (
-                          <p className="text-muted-foreground/50">
-                            +{previewSlide.textContent.length - 5} more...
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </ScrollArea>
         </>
