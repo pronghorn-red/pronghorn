@@ -417,16 +417,16 @@ ${artifact.content}`;
                     {imageArtifacts.map((artifact) => (
                       <div 
                         key={artifact.id}
-                        className="break-inside-avoid rounded-lg overflow-hidden border bg-card hover:ring-2 hover:ring-primary/50 transition-all group relative"
+                        className="break-inside-avoid rounded-lg overflow-hidden border bg-card hover:ring-2 hover:ring-primary/50 transition-all group relative cursor-pointer"
+                        onClick={() => setPreviewImage({ url: artifact.image_url!, title: artifact.ai_title || "" })}
                       >
                         <img 
                           src={artifact.image_url!} 
                           alt={artifact.ai_title || "Artifact"}
-                          className="w-full h-auto cursor-pointer"
-                          onClick={() => setPreviewImage({ url: artifact.image_url!, title: artifact.ai_title || "" })}
+                          className="w-full h-auto"
                         />
                         {/* Hover overlay with title and actions */}
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3 pointer-events-none">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
                               <p className="text-white text-sm font-medium truncate">
@@ -438,7 +438,7 @@ ${artifact.content}`;
                                 </p>
                               )}
                             </div>
-                            <div className="flex gap-1 shrink-0">
+                            <div className="flex gap-1 shrink-0 pointer-events-auto">
                               {artifact.provenance_id && (
                                 <TooltipProvider>
                                   <Tooltip>
