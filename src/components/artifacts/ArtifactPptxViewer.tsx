@@ -361,90 +361,79 @@ export function ArtifactPptxViewer({
               </div>
             </div>
 
-            {/* Slide Styling section */}
+            {/* Custom Styles checkbox and options */}
             {(exportOptions.mode === "rasterize" || exportOptions.mode === "both") && (
               <Separator className="my-2" />
             )}
             {(exportOptions.mode === "rasterize" || exportOptions.mode === "both") && (
               <div className="space-y-3">
-                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Slide Styling
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="custom-styles"
+                    checked={exportOptions.useAutoBackground === false || exportOptions.useAutoFontColor === false}
+                    onCheckedChange={(checked) =>
+                      onExportOptionsChange({
+                        ...exportOptions,
+                        useAutoBackground: !checked,
+                        useAutoFontColor: !checked,
+                        overrideBackgroundColor: checked ? (exportOptions.overrideBackgroundColor || "#0081AB") : exportOptions.overrideBackgroundColor,
+                        overrideFontColor: checked ? (exportOptions.overrideFontColor || "#FFFFFF") : exportOptions.overrideFontColor,
+                      })
+                    }
+                  />
+                  <Label htmlFor="custom-styles" className="text-sm cursor-pointer">
+                    Custom Styles
+                  </Label>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Background Color */}
-                  <div className="space-y-2">
-                    <Label className="text-xs">Background Color</Label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="color"
-                        value={exportOptions.overrideBackgroundColor || "#FFFFFF"}
-                        onChange={(e) =>
-                          onExportOptionsChange({
-                            ...exportOptions,
-                            overrideBackgroundColor: e.target.value,
-                            useAutoBackground: false,
-                          })
-                        }
-                        className="w-8 h-8 rounded border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={exportOptions.useAutoBackground !== false}
-                      />
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id="auto-bg"
-                          checked={exportOptions.useAutoBackground !== false}
-                          onCheckedChange={(checked) =>
-                            onExportOptionsChange({ 
-                              ...exportOptions, 
-                              useAutoBackground: !!checked,
-                              // Set a default override color when switching to manual
-                              overrideBackgroundColor: checked ? exportOptions.overrideBackgroundColor : (exportOptions.overrideBackgroundColor || "#0081AB"),
-                            })
-                          }
-                        />
-                        <Label htmlFor="auto-bg" className="text-xs cursor-pointer">
-                          Auto
-                        </Label>
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Font Color */}
-                  <div className="space-y-2">
-                    <Label className="text-xs">Font Color</Label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="color"
-                        value={exportOptions.overrideFontColor || "#000000"}
-                        onChange={(e) =>
-                          onExportOptionsChange({
-                            ...exportOptions,
-                            overrideFontColor: e.target.value,
-                            useAutoFontColor: false,
-                          })
-                        }
-                        className="w-8 h-8 rounded border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={exportOptions.useAutoFontColor !== false}
-                      />
+                {/* Show color pickers only when custom styles is enabled */}
+                {(exportOptions.useAutoBackground === false || exportOptions.useAutoFontColor === false) && (
+                  <div className="grid grid-cols-2 gap-4 pl-6">
+                    {/* Background Color */}
+                    <div className="space-y-2">
+                      <Label className="text-xs">Background Color</Label>
                       <div className="flex items-center gap-2">
-                        <Checkbox
-                          id="auto-font"
-                          checked={exportOptions.useAutoFontColor !== false}
-                          onCheckedChange={(checked) =>
-                            onExportOptionsChange({ 
-                              ...exportOptions, 
-                              useAutoFontColor: !!checked,
-                              // Set a default override color when switching to manual
-                              overrideFontColor: checked ? exportOptions.overrideFontColor : (exportOptions.overrideFontColor || "#FFFFFF"),
+                        <input
+                          type="color"
+                          value={exportOptions.overrideBackgroundColor || "#0081AB"}
+                          onChange={(e) =>
+                            onExportOptionsChange({
+                              ...exportOptions,
+                              overrideBackgroundColor: e.target.value,
+                              useAutoBackground: false,
                             })
                           }
+                          className="w-8 h-8 rounded border cursor-pointer"
                         />
-                        <Label htmlFor="auto-font" className="text-xs cursor-pointer">
-                          Auto
-                        </Label>
+                        <span className="text-xs text-muted-foreground font-mono">
+                          {exportOptions.overrideBackgroundColor || "#0081AB"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Font Color */}
+                    <div className="space-y-2">
+                      <Label className="text-xs">Font Color</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={exportOptions.overrideFontColor || "#FFFFFF"}
+                          onChange={(e) =>
+                            onExportOptionsChange({
+                              ...exportOptions,
+                              overrideFontColor: e.target.value,
+                              useAutoFontColor: false,
+                            })
+                          }
+                          className="w-8 h-8 rounded border cursor-pointer"
+                        />
+                        <span className="text-xs text-muted-foreground font-mono">
+                          {exportOptions.overrideFontColor || "#FFFFFF"}
+                        </span>
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>
