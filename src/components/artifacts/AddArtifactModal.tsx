@@ -19,8 +19,9 @@ import {
 } from "@/components/ui/tooltip";
 import { 
   Image, FileSpreadsheet, FileText, PenLine, FileIcon, 
-  Presentation, Loader2, Upload, PanelLeftClose, PanelLeft
+  Presentation, Loader2, Upload, PanelLeftClose, PanelLeft, ScanEye
 } from "lucide-react";
+import { VisualRecognitionImportDialog, RasterizedImage } from "./VisualRecognitionImportDialog";
 import { cn } from "@/lib/utils";
 import { ArtifactImageGallery, ImageFile } from "./ArtifactImageGallery";
 import { ArtifactTextFileList, TextFile } from "./ArtifactTextFileList";

@@ -6,8 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// OCR extraction prompt
-const EXTRACTION_PROMPT = `You are an expert document OCR and analysis system. Analyze this image and extract ALL content.
+// Default OCR extraction prompt
+const DEFAULT_EXTRACTION_PROMPT = `You are an expert document OCR and analysis system. Analyze this image and extract ALL content.
 
 ## Instructions:
 1. Extract all visible text exactly as it appears, maintaining formatting in Markdown
@@ -30,51 +30,19 @@ For any non-text elements, provide detailed descriptions in this format:
 Return the content in reading order (top-to-bottom, left-to-right for Western documents).
 Preserve paragraph breaks and formatting as much as possible.`;
 
-// Helper: Fetch image and convert to base64
-async function fetchImageAsBase64(imageUrl: string): Promise<{ mimeType: string; data: string } | null> {
-  try {
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-      console.error(`Failed to fetch image: ${imageUrl}, status: ${response.status}`);
-      return null;
-    }
-    
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
-    const arrayBuffer = await response.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64 = btoa(binary);
-    
-    return {
-      mimeType: contentType,
-      data: base64
-    };
-  } catch (error) {
-    console.error(`Error fetching image ${imageUrl}:`, error);
-    return null;
-  }
-}
-
-// Process single artifact with Gemini Vision API (direct REST call)
-async function processArtifactWithGemini(
+// Process single image with Gemini Vision API (direct REST call)
+async function processImageWithGemini(
   apiKey: string,
   modelName: string,
-  imageUrl: string
+  imageData: { mimeType: string; data: string },
+  prompt: string
 ): Promise<string> {
-  const imageData = await fetchImageAsBase64(imageUrl);
-  if (!imageData) {
-    throw new Error('Failed to fetch image');
-  }
-
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
   
   const requestBody = {
     contents: [{
       parts: [
-        { text: EXTRACTION_PROMPT },
+        { text: prompt },
         {
           inline_data: {
             mime_type: imageData.mimeType,
@@ -118,39 +86,32 @@ async function processArtifactWithGemini(
   throw new Error('No text content in response');
 }
 
-// Process artifacts in batches
-async function processBatch(
-  apiKey: string,
-  modelName: string,
-  artifacts: Array<{ id: string; image_url: string }>,
-  encoder: TextEncoder,
-  controller: ReadableStreamDefaultController
-) {
-  const results = await Promise.allSettled(
-    artifacts.map(async (artifact) => {
-      try {
-        const extractedText = await processArtifactWithGemini(apiKey, modelName, artifact.image_url);
-        return { id: artifact.id, success: true, content: extractedText };
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`Error processing artifact ${artifact.id}:`, error);
-        return { id: artifact.id, success: false, error: errorMessage };
-      }
-    })
-  );
-
-  // Stream results back
-  for (const result of results) {
-    if (result.status === 'fulfilled') {
-      const data = `data: ${JSON.stringify(result.value)}\n\n`;
-      controller.enqueue(encoder.encode(data));
-    } else {
-      const data = `data: ${JSON.stringify({ success: false, error: result.reason })}\n\n`;
-      controller.enqueue(encoder.encode(data));
+// Helper: Fetch image and convert to base64
+async function fetchImageAsBase64(imageUrl: string): Promise<{ mimeType: string; data: string } | null> {
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      console.error(`Failed to fetch image: ${imageUrl}, status: ${response.status}`);
+      return null;
     }
+    
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    
+    return {
+      mimeType: contentType,
+      data: base64
+    };
+  } catch (error) {
+    console.error(`Error fetching image ${imageUrl}:`, error);
+    return null;
   }
-
-  return results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean);
 }
 
 serve(async (req) => {
@@ -161,31 +122,26 @@ serve(async (req) => {
 
   try {
     const { 
+      // Mode 1: Process artifacts by ID (database mode)
       artifactIds, 
       projectId, 
       shareToken,
-      model = 'gemini-2.5-flash'
+      // Mode 2: Process direct images (inline mode - no DB updates)
+      images, // Array of { id, base64, mimeType, existingText? }
+      // Common options
+      model = 'gemini-2.5-flash',
+      prompt, // Custom prompt (optional)
+      mode = 'replace' // 'replace' or 'augment'
     } = await req.json();
 
     console.log('visual-recognition REQUEST:', { 
       artifactIds: artifactIds?.length,
+      images: images?.length,
       projectId,
-      model
+      model,
+      mode,
+      hasCustomPrompt: !!prompt
     });
-
-    if (!artifactIds || !Array.isArray(artifactIds) || artifactIds.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'artifactIds array is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!projectId) {
-      return new Response(
-        JSON.stringify({ error: 'projectId is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
     // Validate model - use correct Gemini model names
     const validModels = ['gemini-2.5-flash', 'gemini-2.0-flash'];
@@ -197,6 +153,126 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'GEMINI_API_KEY not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const effectivePrompt = prompt || DEFAULT_EXTRACTION_PROMPT;
+
+    // Mode 2: Direct image processing (no DB, returns results directly)
+    if (images && Array.isArray(images) && images.length > 0) {
+      console.log(`Processing ${images.length} direct images with model ${selectedModel}`);
+
+      // Set up streaming response
+      const encoder = new TextEncoder();
+      
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            // Send initial status
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+              type: 'start', 
+              total: images.length 
+            })}\n\n`));
+
+            let processed = 0;
+            const allResults: Array<{ id: string; success: boolean; content?: string; error?: string }> = [];
+
+            // Process images in parallel (batches of 5)
+            const BATCH_SIZE = 5;
+            for (let i = 0; i < images.length; i += BATCH_SIZE) {
+              const batch = images.slice(i, i + BATCH_SIZE);
+              
+              // Send progress
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                type: 'progress', 
+                processed,
+                total: images.length,
+                currentBatch: batch.map((img: { id: string }) => img.id)
+              })}\n\n`));
+
+              const batchResults = await Promise.allSettled(
+                batch.map(async (img: { id: string; base64: string; mimeType: string; existingText?: string }) => {
+                  try {
+                    const extractedText = await processImageWithGemini(
+                      apiKey,
+                      selectedModel,
+                      { mimeType: img.mimeType, data: img.base64 },
+                      effectivePrompt
+                    );
+
+                    // Apply mode (replace or augment)
+                    let finalContent = extractedText;
+                    if (mode === 'augment' && img.existingText) {
+                      finalContent = `${img.existingText}\n\n---\n\n## Visual Recognition Extract:\n\n${extractedText}`;
+                    }
+
+                    return { id: img.id, success: true, content: finalContent };
+                  } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                    console.error(`Error processing image ${img.id}:`, error);
+                    return { id: img.id, success: false, error: errorMessage };
+                  }
+                })
+              );
+
+              // Stream results back
+              for (const result of batchResults) {
+                if (result.status === 'fulfilled') {
+                  allResults.push(result.value);
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(result.value)}\n\n`));
+                } else {
+                  const errorResult = { id: 'unknown', success: false, error: String(result.reason) };
+                  allResults.push(errorResult);
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorResult)}\n\n`));
+                }
+              }
+
+              processed += batch.length;
+            }
+
+            // Send completion
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+              type: 'complete', 
+              processed: allResults.length,
+              successful: allResults.filter(r => r?.success).length,
+              failed: allResults.filter(r => r && !r.success).length
+            })}\n\n`));
+            
+            controller.close();
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.error('Stream processing error:', error);
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+              type: 'error', 
+              error: errorMessage 
+            })}\n\n`));
+            controller.close();
+          }
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+    }
+
+    // Mode 1: Artifact-based processing (original flow)
+    if (!artifactIds || !Array.isArray(artifactIds) || artifactIds.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Either artifactIds or images array is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!projectId) {
+      return new Response(
+        JSON.stringify({ error: 'projectId is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -241,8 +317,8 @@ serve(async (req) => {
 
     // Filter to only requested artifacts with images
     const artifactsToProcess = artifacts
-      .filter((a: { id: string; image_url: string | null }) => artifactIds.includes(a.id) && a.image_url)
-      .map((a: { id: string; image_url: string }) => ({ id: a.id, image_url: a.image_url }));
+      .filter((a: { id: string; image_url: string | null; content?: string }) => artifactIds.includes(a.id) && a.image_url)
+      .map((a: { id: string; image_url: string; content?: string }) => ({ id: a.id, image_url: a.image_url, content: a.content }));
 
     if (artifactsToProcess.length === 0) {
       return new Response(
@@ -266,26 +342,53 @@ serve(async (req) => {
             total: artifactsToProcess.length 
           })}\n\n`));
 
-          // Process in batches of 5
-          const batches: Array<Array<{ id: string; image_url: string }>> = [];
-          for (let i = 0; i < artifactsToProcess.length; i += BATCH_SIZE) {
-            batches.push(artifactsToProcess.slice(i, i + BATCH_SIZE));
-          }
-
           let processed = 0;
           const allResults: Array<{ id: string; success: boolean; content?: string; error?: string }> = [];
 
-          for (const batch of batches) {
+          // Process in batches
+          for (let i = 0; i < artifactsToProcess.length; i += BATCH_SIZE) {
+            const batch = artifactsToProcess.slice(i, i + BATCH_SIZE);
+            
             // Send batch progress
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
               type: 'progress', 
               processed,
               total: artifactsToProcess.length,
-              currentBatch: batch.map(a => a.id)
+              currentBatch: batch.map((a: { id: string }) => a.id)
             })}\n\n`));
 
-            const batchResults = await processBatch(apiKey, selectedModel, batch, encoder, controller);
-            allResults.push(...(batchResults as { id: string; success: boolean; content?: string; error?: string }[]));
+            const batchResults = await Promise.allSettled(
+              batch.map(async (artifact: { id: string; image_url: string; content?: string }) => {
+                try {
+                  const imageData = await fetchImageAsBase64(artifact.image_url);
+                  if (!imageData) {
+                    throw new Error('Failed to fetch image');
+                  }
+                  
+                  const extractedText = await processImageWithGemini(apiKey, selectedModel, imageData, effectivePrompt);
+                  
+                  // Apply mode
+                  let finalContent = extractedText;
+                  if (mode === 'augment' && artifact.content) {
+                    finalContent = `${artifact.content}\n\n---\n\n## Visual Recognition Extract:\n\n${extractedText}`;
+                  }
+                  
+                  return { id: artifact.id, success: true, content: finalContent };
+                } catch (error) {
+                  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                  console.error(`Error processing artifact ${artifact.id}:`, error);
+                  return { id: artifact.id, success: false, error: errorMessage };
+                }
+              })
+            );
+
+            // Stream results back
+            for (const result of batchResults) {
+              const value = result.status === 'fulfilled' ? result.value : { success: false, error: result.reason };
+              allResults.push(value);
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(value)}\n\n`));
+            }
+
             processed += batch.length;
           }
 

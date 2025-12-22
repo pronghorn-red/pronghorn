@@ -10,7 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
 import { 
   FileText, X, Loader2, Image as ImageIcon, 
-  CheckSquare, Square, FileDown, ScanEye
+  CheckSquare, Square, FileDown
 } from "lucide-react";
 import {
   Select,
@@ -371,44 +371,6 @@ export function ArtifactDocxViewer({
           )}
         </div>
 
-        {/* Visual Recognition Option - only shown when rasterizing */}
-        {(exportOptions.mode === "rasterize" || exportOptions.mode === "both") && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 border-t mt-2">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="docx-visual-recognition"
-                checked={exportOptions.visualRecognition || false}
-                onCheckedChange={(checked) =>
-                  onExportOptionsChange({ 
-                    ...exportOptions, 
-                    visualRecognition: !!checked,
-                    visualRecognitionModel: checked ? (exportOptions.visualRecognitionModel || 'gemini-2.5-flash') : exportOptions.visualRecognitionModel
-                  })
-                }
-              />
-              <Label htmlFor="docx-visual-recognition" className="text-xs cursor-pointer flex items-center gap-1.5">
-                <ScanEye className="h-3.5 w-3.5" />
-                Apply Visual Recognition (OCR)
-              </Label>
-            </div>
-            {exportOptions.visualRecognition && (
-              <Select
-                value={exportOptions.visualRecognitionModel || 'gemini-2.5-flash'}
-                onValueChange={(value) =>
-                  onExportOptionsChange({ ...exportOptions, visualRecognitionModel: value })
-                }
-              >
-                <SelectTrigger className="h-7 w-[180px] text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
-                  <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Main Content */}
