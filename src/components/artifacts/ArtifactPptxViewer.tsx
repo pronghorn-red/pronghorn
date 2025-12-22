@@ -58,6 +58,19 @@ export function ArtifactPptxViewer({
   const [thumbnails, setThumbnails] = useState<Map<number, string>>(new Map());
   const [previewSlideIndex, setPreviewSlideIndex] = useState<number | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  
+  // Local state for color pickers to avoid regenerating on every drag
+  const [localBgColor, setLocalBgColor] = useState(exportOptions.overrideBackgroundColor || "#0081AB");
+  const [localFontColor, setLocalFontColor] = useState(exportOptions.overrideFontColor || "#FFFFFF");
+  
+  // Sync local colors when export options change externally
+  useEffect(() => {
+    setLocalBgColor(exportOptions.overrideBackgroundColor || "#0081AB");
+  }, [exportOptions.overrideBackgroundColor]);
+  
+  useEffect(() => {
+    setLocalFontColor(exportOptions.overrideFontColor || "#FFFFFF");
+  }, [exportOptions.overrideFontColor]);
 
   // Generate thumbnails when data or color options change
   useEffect(() => {
@@ -395,18 +408,19 @@ export function ArtifactPptxViewer({
                       <div className="flex items-center gap-2">
                         <input
                           type="color"
-                          value={exportOptions.overrideBackgroundColor || "#0081AB"}
-                          onChange={(e) =>
+                          value={localBgColor}
+                          onChange={(e) => setLocalBgColor(e.target.value)}
+                          onBlur={() =>
                             onExportOptionsChange({
                               ...exportOptions,
-                              overrideBackgroundColor: e.target.value,
+                              overrideBackgroundColor: localBgColor,
                               useAutoBackground: false,
                             })
                           }
                           className="w-8 h-8 rounded border cursor-pointer"
                         />
                         <span className="text-xs text-muted-foreground font-mono">
-                          {exportOptions.overrideBackgroundColor || "#0081AB"}
+                          {localBgColor}
                         </span>
                       </div>
                     </div>
@@ -417,18 +431,19 @@ export function ArtifactPptxViewer({
                       <div className="flex items-center gap-2">
                         <input
                           type="color"
-                          value={exportOptions.overrideFontColor || "#FFFFFF"}
-                          onChange={(e) =>
+                          value={localFontColor}
+                          onChange={(e) => setLocalFontColor(e.target.value)}
+                          onBlur={() =>
                             onExportOptionsChange({
                               ...exportOptions,
-                              overrideFontColor: e.target.value,
+                              overrideFontColor: localFontColor,
                               useAutoFontColor: false,
                             })
                           }
                           className="w-8 h-8 rounded border cursor-pointer"
                         />
                         <span className="text-xs text-muted-foreground font-mono">
-                          {exportOptions.overrideFontColor || "#FFFFFF"}
+                          {localFontColor}
                         </span>
                       </div>
                     </div>
