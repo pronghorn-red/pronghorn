@@ -74,6 +74,9 @@ export interface PdfExportOptions {
   extractImages: boolean;
   selectedPages: Set<number>;
   selectedImages: Set<string>;
+  // Visual Recognition options (applied after rasterization)
+  visualRecognition?: boolean;
+  visualRecognitionModel?: string;
 }
 
 /**

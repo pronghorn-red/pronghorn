@@ -65,6 +65,7 @@ export function AddArtifactModal({
 }: AddArtifactModalProps) {
   const [activeTab, setActiveTab] = useState<TabType>("manual");
   const [isCreating, setIsCreating] = useState(false);
+  const [creatingMessage, setCreatingMessage] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -282,12 +283,92 @@ export function AddArtifactModal({
     }
   };
 
+  // Helper to process visual recognition on rasterized artifacts
+  const processVisualRecognition = async (
+    artifactIds: string[], 
+    model: string
+  ): Promise<{ successful: number; failed: number }> => {
+    if (artifactIds.length === 0) return { successful: 0, failed: 0 };
+    
+    setCreatingMessage(`Applying Visual Recognition (${artifactIds.length} pages)...`);
+    
+    try {
+      const response = await fetch(
+        `https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/visual-recognition`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ia3pka3NmYXl5Z25yemRxb2FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0MTA4MzcsImV4cCI6MjA3ODk4NjgzN30.xOKphCiEilzPTo9EGHNJqAJfruM_bijI9PN3BQBF-z8`,
+          },
+          body: JSON.stringify({
+            artifactIds,
+            projectId,
+            shareToken,
+            model,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to process visual recognition");
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let result = { successful: 0, failed: 0 };
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6).trim();
+            if (!data) continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === 'progress') {
+                setCreatingMessage(`Visual Recognition: ${parsed.processed}/${parsed.total} pages...`);
+              } else if (parsed.type === 'complete') {
+                result = { successful: parsed.successful, failed: parsed.failed };
+              }
+            } catch (e) {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+
+      return result;
+    } catch (error) {
+      console.error("Visual recognition error:", error);
+      return { successful: 0, failed: artifactIds.length };
+    }
+  };
+
   const handleCreateArtifacts = async () => {
     if (totalCount === 0) return;
 
     setIsCreating(true);
+    setCreatingMessage("Creating artifacts...");
     let successCount = 0;
     let errorCount = 0;
+    
+    // Track rasterized artifact IDs for visual recognition
+    const pptxRasterizedIds: string[] = [];
+    const pdfRasterizedIds: string[] = [];
+    const docxRasterizedIds: string[] = [];
 
     try {
       // Create image artifacts
@@ -469,6 +550,10 @@ export function AddArtifactModal({
               });
 
               if (error) throw error;
+              // Track for visual recognition
+              if (data?.artifact?.id) {
+                pptxRasterizedIds.push(data.artifact.id);
+              }
               broadcastRefresh("insert", data?.artifact?.id);
               successCount++;
             } catch (err) {
@@ -587,6 +672,10 @@ export function AddArtifactModal({
                 });
 
                 if (error) throw error;
+                // Track for visual recognition
+                if (data?.artifact?.id) {
+                  pdfRasterizedIds.push(data.artifact.id);
+                }
                 broadcastRefresh("insert", data?.artifact?.id);
                 successCount++;
               } catch (err) {
@@ -702,6 +791,10 @@ export function AddArtifactModal({
                 });
 
                 if (error) throw error;
+                // Track for visual recognition
+                if (data?.artifact?.id) {
+                  docxRasterizedIds.push(data.artifact.id);
+                }
                 broadcastRefresh("insert", data?.artifact?.id);
                 successCount++;
               }
@@ -741,8 +834,48 @@ export function AddArtifactModal({
         }
       }
 
+      // Apply Visual Recognition if enabled for any rasterized artifacts
+      let vrSuccessCount = 0;
+      let vrErrorCount = 0;
+
+      // PPTX Visual Recognition
+      if (pptxExportOptions.visualRecognition && pptxRasterizedIds.length > 0) {
+        const vrResult = await processVisualRecognition(
+          pptxRasterizedIds, 
+          pptxExportOptions.visualRecognitionModel || 'gemini-2.5-flash'
+        );
+        vrSuccessCount += vrResult.successful;
+        vrErrorCount += vrResult.failed;
+      }
+
+      // PDF Visual Recognition
+      if (pdfExportOptions.visualRecognition && pdfRasterizedIds.length > 0) {
+        const vrResult = await processVisualRecognition(
+          pdfRasterizedIds, 
+          pdfExportOptions.visualRecognitionModel || 'gemini-2.5-flash'
+        );
+        vrSuccessCount += vrResult.successful;
+        vrErrorCount += vrResult.failed;
+      }
+
+      // DOCX Visual Recognition
+      if (docxExportOptions.visualRecognition && docxRasterizedIds.length > 0) {
+        const vrResult = await processVisualRecognition(
+          docxRasterizedIds, 
+          docxExportOptions.visualRecognitionModel || 'gemini-2.5-flash'
+        );
+        vrSuccessCount += vrResult.successful;
+        vrErrorCount += vrResult.failed;
+      }
+
+      setCreatingMessage("");
+
       if (successCount > 0) {
-        toast.success(`Created ${successCount} artifact${successCount !== 1 ? 's' : ''}`);
+        let message = `Created ${successCount} artifact${successCount !== 1 ? 's' : ''}`;
+        if (vrSuccessCount > 0) {
+          message += ` (${vrSuccessCount} with OCR)`;
+        }
+        toast.success(message);
         onArtifactsCreated();
         resetState();
         onOpenChange(false);
@@ -751,8 +884,12 @@ export function AddArtifactModal({
       if (errorCount > 0) {
         toast.error(`Failed to create ${errorCount} artifact${errorCount !== 1 ? 's' : ''}`);
       }
+      if (vrErrorCount > 0) {
+        toast.warning(`Visual recognition failed for ${vrErrorCount} artifact${vrErrorCount !== 1 ? 's' : ''}`);
+      }
     } finally {
       setIsCreating(false);
+      setCreatingMessage("");
     }
   };
 
@@ -1003,7 +1140,7 @@ export function AddArtifactModal({
                   {isCreating ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
+                      {creatingMessage || "Creating..."}
                     </>
                   ) : (
                     <>Add {totalCount > 0 ? totalCount : ''} Artifact{totalCount !== 1 ? 's' : ''}</>

@@ -21,6 +21,9 @@ export interface DocxExportOptions {
   selectedRasterPages: Set<number>;
   rasterizedPageCount: number;
   cachedRasterizedPages?: string[]; // Cached page data URLs to avoid re-rasterization
+  // Visual Recognition options (applied after rasterization)
+  visualRecognition?: boolean;
+  visualRecognitionModel?: string;
 }
 
 export interface DocxData {

@@ -164,7 +164,7 @@ serve(async (req) => {
       artifactIds, 
       projectId, 
       shareToken,
-      model = 'gemini-2.5-flash-preview-05-20'
+      model = 'gemini-2.5-flash'
     } = await req.json();
 
     console.log('visual-recognition REQUEST:', { 
@@ -187,9 +187,9 @@ serve(async (req) => {
       );
     }
 
-    // Validate model
-    const validModels = ['gemini-2.5-flash-preview-05-20', 'gemini-2.5-flash'];
-    const selectedModel = validModels.includes(model) ? model : 'gemini-2.5-flash-preview-05-20';
+    // Validate model - use correct Gemini model names
+    const validModels = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+    const selectedModel = validModels.includes(model) ? model : 'gemini-2.5-flash';
 
     // Get API key
     const apiKey = Deno.env.get('GEMINI_API_KEY');

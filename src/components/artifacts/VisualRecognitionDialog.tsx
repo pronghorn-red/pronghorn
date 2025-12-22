@@ -59,7 +59,7 @@ export function VisualRecognitionDialog({
   shareToken,
   onComplete,
 }: VisualRecognitionDialogProps) {
-  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-preview-05-20");
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
   const [selectedArtifacts, setSelectedArtifacts] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState<ProcessingStatus>('idle');
   const [progress, setProgress] = useState(0);
@@ -241,11 +241,11 @@ export function VisualRecognitionDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="gemini-2.5-flash-preview-05-20">
-                  Gemini 3 Flash Preview (Recommended)
-                </SelectItem>
                 <SelectItem value="gemini-2.5-flash">
-                  Gemini 2.5 Flash
+                  Gemini 2.5 Flash (Recommended)
+                </SelectItem>
+                <SelectItem value="gemini-2.0-flash">
+                  Gemini 2.0 Flash
                 </SelectItem>
               </SelectContent>
             </Select>
