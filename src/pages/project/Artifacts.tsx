@@ -11,7 +11,8 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeArtifacts } from "@/hooks/useRealtimeArtifacts";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users } from "lucide-react";
+import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download } from "lucide-react";
+import { ArtifactDownloadDropdown } from "@/components/artifacts/ArtifactDownloadDropdown";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -417,6 +418,15 @@ ${artifact.content}`;
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
+                                  <ArtifactDownloadDropdown
+                                    title={artifact.ai_title || "Artifact"}
+                                    content={artifact.content}
+                                  />
+                                </TooltipTrigger>
+                                <TooltipContent>Download</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -541,6 +551,15 @@ ${artifact.content}`;
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>Edit Artifact</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <ArtifactDownloadDropdown
+                                      title={artifact.ai_title || "Artifact"}
+                                      content={artifact.content}
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipContent>Download</TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
                                   <TooltipTrigger asChild>

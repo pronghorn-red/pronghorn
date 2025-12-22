@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   FileText,
+  FileType,
+  FileJson,
   Download,
   Trash2,
   Eye,
@@ -23,7 +25,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { VersionHistoryDropdown } from "./VersionHistoryDropdown";
+import { MarkdownProcessor } from "@/utils/markdownProcessor";
+import { toast } from "sonner";
 
 export interface SavedSpecification {
   id: string;
@@ -79,6 +89,83 @@ export function SavedSpecificationsPanel({
     }
     setDeleteDialogOpen(false);
     setSpecToDelete(null);
+  };
+
+  const sanitizeFilename = (name: string) => {
+    return name
+      .replace(/[^a-zA-Z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .toLowerCase()
+      .slice(0, 50) || "specification";
+  };
+
+  const handleDownloadWord = async (spec: SavedSpecification) => {
+    try {
+      const processor = new MarkdownProcessor();
+      const sections = [{ title: spec.agent_title, value: spec.generated_spec }];
+      const blob = await processor.generateWordDocument(spec.agent_title, sections);
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${sanitizeFilename(spec.agent_title)}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success("Downloaded as Word document");
+    } catch (error) {
+      console.error("Error downloading Word:", error);
+      toast.error("Failed to download Word document");
+    }
+  };
+
+  const handleDownloadMarkdown = (spec: SavedSpecification) => {
+    try {
+      const markdownContent = `# ${spec.agent_title}\n\n${spec.generated_spec}`;
+      const blob = new Blob([markdownContent], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${sanitizeFilename(spec.agent_title)}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success("Downloaded as Markdown");
+    } catch (error) {
+      console.error("Error downloading Markdown:", error);
+      toast.error("Failed to download Markdown");
+    }
+  };
+
+  const handleDownloadJson = (spec: SavedSpecification) => {
+    try {
+      const jsonContent = JSON.stringify({
+        agent_id: spec.agent_id,
+        agent_title: spec.agent_title,
+        version: spec.version,
+        generated_spec: spec.generated_spec,
+        raw_data: spec.raw_data,
+        created_at: spec.created_at,
+      }, null, 2);
+      const blob = new Blob([jsonContent], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${sanitizeFilename(spec.agent_title)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success("Downloaded as JSON");
+    } catch (error) {
+      console.error("Error downloading JSON:", error);
+      toast.error("Failed to download JSON");
+    }
   };
 
   // Get the displayed spec for an agent (selected version or latest)
@@ -179,15 +266,32 @@ export function SavedSpecificationsPanel({
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => onDownload(displayedSpec)}
-                          title="Download"
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Download"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-popover">
+                            <DropdownMenuItem onClick={() => handleDownloadWord(displayedSpec)} className="cursor-pointer">
+                              <FileType className="h-4 w-4 mr-2" />
+                              Download as Word
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDownloadMarkdown(displayedSpec)} className="cursor-pointer">
+                              <FileText className="h-4 w-4 mr-2" />
+                              Download as Markdown
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDownloadJson(displayedSpec)} className="cursor-pointer">
+                              <FileJson className="h-4 w-4 mr-2" />
+                              Download as JSON
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         <Button
                           variant="ghost"
                           size="icon"
