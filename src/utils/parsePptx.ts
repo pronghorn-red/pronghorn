@@ -13,19 +13,43 @@ export interface PptxImage {
   height?: number;
 }
 
+// Rich text formatting for individual text runs
+export interface PptxTextRun {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  fontSize?: number;    // in points
+  fontColor?: string;   // hex color
+  fontFamily?: string;
+}
+
+// Paragraph with multiple runs and formatting
+export interface PptxParagraph {
+  runs: PptxTextRun[];
+  alignment?: 'left' | 'center' | 'right' | 'justify';
+  bulletType?: 'none' | 'bullet' | 'number';
+  bulletChar?: string;
+  level?: number;       // indentation level (0-8)
+  spaceBefore?: number; // spacing in points
+  spaceAfter?: number;
+}
+
 export interface PptxShape {
   type: "text" | "image" | "shape" | "chart";
   x: number;        // Position in pixels (converted from EMUs)
   y: number;
   width: number;
   height: number;
-  text?: string;
+  text?: string;    // Backward compat: concatenated text
+  paragraphs?: PptxParagraph[];  // Rich text paragraphs
   fill?: string;    // Background color (hex)
   imageRef?: string; // Reference to image in media
   fontSize?: number;
   fontColor?: string;
   bold?: boolean;
   italic?: boolean;
+  verticalAlign?: 'top' | 'middle' | 'bottom';
 }
 
 export interface PptxSlide {
@@ -36,6 +60,7 @@ export interface PptxSlide {
   images: PptxImage[];          // Images referenced on this slide
   shapes: PptxShape[];          // Basic shape info for rendering
   notes?: string;               // Speaker notes
+  backgroundColor?: string;     // Slide background color (hex)
 }
 
 export interface PptxData {
@@ -95,6 +120,16 @@ function emuToPx(emu: string | number): number {
 }
 
 /**
+ * Parse EMU value to points (for font sizes)
+ */
+function emuToPoints(emu: string | number): number {
+  const value = typeof emu === "string" ? parseInt(emu, 10) : emu;
+  if (isNaN(value)) return 0;
+  // 1 point = 12700 EMUs
+  return Math.round(value / 12700);
+}
+
+/**
  * Extract text from XML using getElementsByTagNameNS
  */
 function extractTextFromXml(doc: Document): string[] {
@@ -140,6 +175,10 @@ function parseColor(element: Element | null): string | undefined {
       accent4: "#FFC000",
       accent5: "#5B9BD5",
       accent6: "#70AD47",
+      lt1: "#FFFFFF",
+      lt2: "#E7E6E6",
+      dk1: "#000000",
+      dk2: "#44546A",
     };
     if (val && schemeMap[val]) return schemeMap[val];
   }
@@ -204,6 +243,250 @@ function findXfrm(element: Element): { x: number; y: number; width: number; heig
 }
 
 /**
+ * Extract paragraphs with rich text formatting from a shape element
+ */
+function extractParagraphsFromShape(sp: Element): PptxParagraph[] {
+  const paragraphs: PptxParagraph[] = [];
+  
+  // Find txBody (text body) element
+  const txBody = sp.getElementsByTagNameNS(NS.p, "txBody")[0] || 
+                 sp.getElementsByTagNameNS(NS.a, "txBody")[0];
+  
+  if (!txBody) return paragraphs;
+  
+  // Get all paragraph elements
+  const pElements = txBody.getElementsByTagNameNS(NS.a, "p");
+  
+  for (let i = 0; i < pElements.length; i++) {
+    const pEl = pElements[i];
+    const paragraph: PptxParagraph = { runs: [] };
+    
+    // Parse paragraph properties (pPr)
+    const pPr = pEl.getElementsByTagNameNS(NS.a, "pPr")[0];
+    if (pPr) {
+      // Alignment
+      const algn = pPr.getAttribute("algn");
+      if (algn) {
+        const alignMap: Record<string, 'left' | 'center' | 'right' | 'justify'> = {
+          l: 'left',
+          ctr: 'center',
+          r: 'right',
+          just: 'justify',
+        };
+        paragraph.alignment = alignMap[algn] || 'left';
+      }
+      
+      // Indentation level
+      const lvl = pPr.getAttribute("lvl");
+      if (lvl) {
+        paragraph.level = parseInt(lvl, 10);
+      }
+      
+      // Check for bullet
+      const buNone = pPr.getElementsByTagNameNS(NS.a, "buNone")[0];
+      const buChar = pPr.getElementsByTagNameNS(NS.a, "buChar")[0];
+      const buAutoNum = pPr.getElementsByTagNameNS(NS.a, "buAutoNum")[0];
+      
+      if (buNone) {
+        paragraph.bulletType = 'none';
+      } else if (buAutoNum) {
+        paragraph.bulletType = 'number';
+      } else if (buChar) {
+        paragraph.bulletType = 'bullet';
+        paragraph.bulletChar = buChar.getAttribute("char") || "•";
+      } else {
+        // Default: check if there's a default bullet (common in PPT)
+        // If level > 0, assume bullet
+        if (paragraph.level && paragraph.level > 0) {
+          paragraph.bulletType = 'bullet';
+          paragraph.bulletChar = "•";
+        }
+      }
+      
+      // Spacing
+      const spcBef = pPr.getElementsByTagNameNS(NS.a, "spcBef")[0];
+      const spcAft = pPr.getElementsByTagNameNS(NS.a, "spcAft")[0];
+      
+      if (spcBef) {
+        const spcPts = spcBef.getElementsByTagNameNS(NS.a, "spcPts")[0];
+        if (spcPts) {
+          const val = spcPts.getAttribute("val");
+          if (val) paragraph.spaceBefore = parseInt(val, 10) / 100;
+        }
+      }
+      
+      if (spcAft) {
+        const spcPts = spcAft.getElementsByTagNameNS(NS.a, "spcPts")[0];
+        if (spcPts) {
+          const val = spcPts.getAttribute("val");
+          if (val) paragraph.spaceAfter = parseInt(val, 10) / 100;
+        }
+      }
+    }
+    
+    // Get all run elements (r) and field elements (fld)
+    const children = pEl.children;
+    for (let j = 0; j < children.length; j++) {
+      const child = children[j];
+      const localName = child.localName;
+      
+      if (localName === "r" || localName === "fld") {
+        const run: PptxTextRun = { text: "" };
+        
+        // Get text content
+        const tEl = child.getElementsByTagNameNS(NS.a, "t")[0];
+        if (tEl && tEl.textContent) {
+          run.text = tEl.textContent;
+        }
+        
+        // Skip empty runs
+        if (!run.text) continue;
+        
+        // Get run properties (rPr)
+        const rPr = child.getElementsByTagNameNS(NS.a, "rPr")[0];
+        if (rPr) {
+          // Bold
+          const b = rPr.getAttribute("b");
+          run.bold = b === "1" || b === "true";
+          
+          // Italic
+          const i = rPr.getAttribute("i");
+          run.italic = i === "1" || i === "true";
+          
+          // Underline
+          const u = rPr.getAttribute("u");
+          run.underline = u !== null && u !== "none";
+          
+          // Font size (sz is in hundredths of a point)
+          const sz = rPr.getAttribute("sz");
+          if (sz) {
+            run.fontSize = parseInt(sz, 10) / 100;
+          }
+          
+          // Font color
+          const solidFill = rPr.getElementsByTagNameNS(NS.a, "solidFill")[0];
+          run.fontColor = parseColor(solidFill);
+          
+          // Font family
+          const latin = rPr.getElementsByTagNameNS(NS.a, "latin")[0];
+          if (latin) {
+            run.fontFamily = latin.getAttribute("typeface") || undefined;
+          }
+        }
+        
+        paragraph.runs.push(run);
+      }
+    }
+    
+    // Only add paragraph if it has content
+    if (paragraph.runs.length > 0) {
+      paragraphs.push(paragraph);
+    }
+  }
+  
+  return paragraphs;
+}
+
+/**
+ * Extract slide background color from slide, layout, or master XML
+ */
+async function extractSlideBackground(
+  zip: JSZip,
+  slideIndex: number,
+  slideRels: Record<string, string>
+): Promise<string | undefined> {
+  const parser = new DOMParser();
+  
+  // Try to get background from slide first
+  const slidePath = `ppt/slides/slide${slideIndex + 1}.xml`;
+  const slideFile = zip.file(slidePath);
+  if (slideFile) {
+    const slideXml = await slideFile.async("string");
+    const slideDoc = parser.parseFromString(slideXml, "application/xml");
+    
+    // Check for slide-level background
+    const cSld = slideDoc.getElementsByTagNameNS(NS.p, "cSld")[0];
+    if (cSld) {
+      const bg = cSld.getElementsByTagNameNS(NS.p, "bg")[0];
+      if (bg) {
+        const bgPr = bg.getElementsByTagNameNS(NS.p, "bgPr")[0];
+        if (bgPr) {
+          const solidFill = bgPr.getElementsByTagNameNS(NS.a, "solidFill")[0];
+          const color = parseColor(solidFill);
+          if (color) return color;
+        }
+        // Check bgRef with schemeClr
+        const bgRef = bg.getElementsByTagNameNS(NS.p, "bgRef")[0];
+        if (bgRef) {
+          const color = parseColor(bgRef);
+          if (color) return color;
+        }
+      }
+    }
+  }
+  
+  // Try to get background from slide layout
+  const layoutRelId = Object.keys(slideRels).find(id => 
+    slideRels[id].includes("slideLayouts")
+  );
+  
+  if (layoutRelId && slideRels[layoutRelId]) {
+    const layoutPath = slideRels[layoutRelId].replace("ppt/ppt/", "ppt/");
+    const layoutFile = zip.file(layoutPath);
+    if (layoutFile) {
+      const layoutXml = await layoutFile.async("string");
+      const layoutDoc = parser.parseFromString(layoutXml, "application/xml");
+      
+      const cSld = layoutDoc.getElementsByTagNameNS(NS.p, "cSld")[0];
+      if (cSld) {
+        const bg = cSld.getElementsByTagNameNS(NS.p, "bg")[0];
+        if (bg) {
+          const bgPr = bg.getElementsByTagNameNS(NS.p, "bgPr")[0];
+          if (bgPr) {
+            const solidFill = bgPr.getElementsByTagNameNS(NS.a, "solidFill")[0];
+            const color = parseColor(solidFill);
+            if (color) return color;
+          }
+        }
+      }
+    }
+  }
+  
+  // Try to get background from slide master
+  try {
+    const masterFiles = Object.keys(zip.files).filter(f => 
+      f.startsWith("ppt/slideMasters/") && f.endsWith(".xml") && !f.includes("_rels")
+    );
+    
+    if (masterFiles.length > 0) {
+      const masterFile = zip.file(masterFiles[0]);
+      if (masterFile) {
+        const masterXml = await masterFile.async("string");
+        const masterDoc = parser.parseFromString(masterXml, "application/xml");
+        
+        const cSld = masterDoc.getElementsByTagNameNS(NS.p, "cSld")[0];
+        if (cSld) {
+          const bg = cSld.getElementsByTagNameNS(NS.p, "bg")[0];
+          if (bg) {
+            const bgPr = bg.getElementsByTagNameNS(NS.p, "bgPr")[0];
+            if (bgPr) {
+              const solidFill = bgPr.getElementsByTagNameNS(NS.a, "solidFill")[0];
+              const color = parseColor(solidFill);
+              if (color) return color;
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to extract master background:", e);
+  }
+  
+  // Default to white
+  return undefined;
+}
+
+/**
  * Extract shapes from slide XML
  */
 function extractShapesFromXml(doc: Document, rels: Record<string, string>): PptxShape[] {
@@ -219,7 +502,10 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
     // Get transform (position and size) with fallback
     const transform = findXfrm(sp);
     
-    // Extract text content regardless of transform
+    // Extract paragraphs with rich text
+    const paragraphs = extractParagraphsFromShape(sp);
+    
+    // Also extract plain text for backward compatibility
     const textContent: string[] = [];
     const textNodes = sp.getElementsByTagNameNS(NS.a, "t");
     for (let j = 0; j < textNodes.length; j++) {
@@ -236,13 +522,13 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
     const width = transform?.width ?? SLIDE_WIDTH - 100;
     const height = transform?.height ?? 50;
     
-    console.log(`[PPTX Parser] Shape ${i}: x=${x}, y=${y}, w=${width}, h=${height}, text="${textContent.join(" ").substring(0, 30)}..."`);
+    console.log(`[PPTX Parser] Shape ${i}: x=${x}, y=${y}, w=${width}, h=${height}, paragraphs=${paragraphs.length}`);
     
     // Get fill color
     const solidFill = sp.getElementsByTagNameNS(NS.a, "solidFill")[0];
     const fill = parseColor(solidFill);
     
-    // Get font properties from first run
+    // Get first run's font properties for backward compat
     const rPr = sp.getElementsByTagNameNS(NS.a, "rPr")[0];
     let fontSize: number | undefined;
     let fontColor: string | undefined;
@@ -251,13 +537,23 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
     
     if (rPr) {
       const sz = rPr.getAttribute("sz");
-      if (sz) fontSize = parseInt(sz, 10) / 100; // sz is in hundredths of a point
+      if (sz) fontSize = parseInt(sz, 10) / 100;
       
       bold = rPr.getAttribute("b") === "1";
       italic = rPr.getAttribute("i") === "1";
       
       const solidFillRpr = rPr.getElementsByTagNameNS(NS.a, "solidFill")[0];
       fontColor = parseColor(solidFillRpr);
+    }
+    
+    // Get vertical alignment from bodyPr
+    const bodyPr = sp.getElementsByTagNameNS(NS.a, "bodyPr")[0];
+    let verticalAlign: 'top' | 'middle' | 'bottom' | undefined;
+    if (bodyPr) {
+      const anchor = bodyPr.getAttribute("anchor");
+      if (anchor === "t") verticalAlign = 'top';
+      else if (anchor === "ctr") verticalAlign = 'middle';
+      else if (anchor === "b") verticalAlign = 'bottom';
     }
     
     shapes.push({
@@ -267,11 +563,13 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
       width,
       height,
       text: textContent.join(" "),
+      paragraphs: paragraphs.length > 0 ? paragraphs : undefined,
       fill,
       fontSize,
       fontColor,
       bold,
       italic,
+      verticalAlign,
     });
   }
   
@@ -421,6 +719,9 @@ async function parseSlide(
   // Extract shapes
   const shapes = extractShapesFromXml(doc, rels);
   
+  // Extract background color
+  const backgroundColor = await extractSlideBackground(zip, slideIndex, rels);
+  
   // Find images used in this slide
   const slideImages: PptxImage[] = [];
   for (const shape of shapes) {
@@ -453,6 +754,7 @@ async function parseSlide(
     mergedText: textContent.join("\n"),
     images: slideImages,
     shapes,
+    backgroundColor,
   };
 }
 
@@ -501,22 +803,23 @@ export async function parsePptxFile(file: File): Promise<PptxData> {
   };
 }
 
+// ============================================================================
+// Utility functions
+// ============================================================================
+
 /**
- * Get all text from a PPTX as a single merged string
+ * Get all text from a PPTX merged into a single string
  */
 export function getAllText(data: PptxData, separator = "\n\n"): string {
-  return data.slides
-    .map((slide, idx) => {
-      const slideHeader = `--- Slide ${idx + 1}${slide.title ? `: ${slide.title}` : ""} ---`;
-      return `${slideHeader}\n${slide.mergedText}`;
-    })
-    .join(separator);
+  return data.slides.map((slide) => slide.mergedText).join(separator);
 }
 
 /**
- * Get text per slide as separate strings
+ * Get text per slide
  */
-export function getTextPerSlide(data: PptxData): { index: number; title: string; text: string }[] {
+export function getTextPerSlide(
+  data: PptxData
+): { index: number; title: string; text: string }[] {
   return data.slides.map((slide) => ({
     index: slide.index,
     title: slide.title || `Slide ${slide.index + 1}`,

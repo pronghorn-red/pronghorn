@@ -1,5 +1,5 @@
 import { toPng } from "html-to-image";
-import type { PptxSlide, PptxImage } from "./parsePptx";
+import type { PptxSlide, PptxImage, PptxParagraph, PptxTextRun } from "./parsePptx";
 import { SLIDE_WIDTH, SLIDE_HEIGHT } from "./parsePptx";
 
 // ============================================================================
@@ -11,6 +11,96 @@ export interface RasterizeOptions {
   height?: number;
   pixelRatio?: number;
   backgroundColor?: string;
+}
+
+// Default font stack
+const DEFAULT_FONT = '"Open Sans", Calibri, Arial, sans-serif';
+
+/**
+ * Create HTML for a text run with formatting
+ */
+function createTextRunElement(run: PptxTextRun, scale: number): HTMLSpanElement {
+  const span = document.createElement("span");
+  span.textContent = run.text;
+  
+  // Apply formatting
+  if (run.bold) span.style.fontWeight = "bold";
+  if (run.italic) span.style.fontStyle = "italic";
+  if (run.underline) span.style.textDecoration = "underline";
+  
+  if (run.fontSize) {
+    span.style.fontSize = `${run.fontSize * scale}px`;
+  }
+  
+  if (run.fontColor) {
+    span.style.color = run.fontColor;
+  }
+  
+  if (run.fontFamily) {
+    span.style.fontFamily = `"${run.fontFamily}", ${DEFAULT_FONT}`;
+  }
+  
+  return span;
+}
+
+/**
+ * Create HTML for a paragraph with runs
+ */
+function createParagraphElement(
+  paragraph: PptxParagraph,
+  scale: number,
+  defaultFontSize: number
+): HTMLParagraphElement {
+  const p = document.createElement("p");
+  p.style.margin = "0";
+  p.style.padding = "0";
+  p.style.lineHeight = "1.3";
+  p.style.fontFamily = DEFAULT_FONT;
+  p.style.fontSize = `${defaultFontSize * scale}px`;
+  
+  // Apply alignment
+  if (paragraph.alignment) {
+    p.style.textAlign = paragraph.alignment;
+  }
+  
+  // Apply spacing
+  if (paragraph.spaceBefore) {
+    p.style.marginTop = `${paragraph.spaceBefore * scale}px`;
+  }
+  if (paragraph.spaceAfter) {
+    p.style.marginBottom = `${paragraph.spaceAfter * scale}px`;
+  } else {
+    p.style.marginBottom = `${4 * scale}px`;
+  }
+  
+  // Apply indentation for bullet levels
+  const level = paragraph.level || 0;
+  if (level > 0) {
+    p.style.marginLeft = `${level * 20 * scale}px`;
+  }
+  
+  // Add bullet or number
+  if (paragraph.bulletType === 'bullet') {
+    const bullet = document.createElement("span");
+    bullet.textContent = (paragraph.bulletChar || "•") + " ";
+    bullet.style.marginRight = `${4 * scale}px`;
+    p.appendChild(bullet);
+  } else if (paragraph.bulletType === 'number') {
+    // For numbered lists, we'd need context of list position
+    // For now, use a generic bullet
+    const bullet = document.createElement("span");
+    bullet.textContent = "• ";
+    bullet.style.marginRight = `${4 * scale}px`;
+    p.appendChild(bullet);
+  }
+  
+  // Add text runs
+  for (const run of paragraph.runs) {
+    const span = createTextRunElement(run, scale);
+    p.appendChild(span);
+  }
+  
+  return p;
 }
 
 /**
@@ -28,6 +118,7 @@ function createShapeElement(
   el.style.width = `${shape.width * scale}px`;
   el.style.height = `${shape.height * scale}px`;
   el.style.overflow = "hidden";
+  el.style.boxSizing = "border-box";
 
   if (shape.type === "image" && shape.imageRef) {
     const img = media.get(shape.imageRef);
@@ -39,31 +130,49 @@ function createShapeElement(
       imgEl.style.objectFit = "contain";
       el.appendChild(imgEl);
     }
-  } else if (shape.type === "text" && shape.text) {
-    el.style.display = "flex";
-    el.style.alignItems = "center";
-    el.style.justifyContent = "center";
+  } else if (shape.type === "text") {
+    // Apply padding
     el.style.padding = `${4 * scale}px`;
-    el.style.boxSizing = "border-box";
-    el.style.wordBreak = "break-word";
-    el.style.textAlign = "center";
+    
+    // Apply vertical alignment
+    el.style.display = "flex";
+    el.style.flexDirection = "column";
+    
+    if (shape.verticalAlign === 'middle') {
+      el.style.justifyContent = "center";
+    } else if (shape.verticalAlign === 'bottom') {
+      el.style.justifyContent = "flex-end";
+    } else {
+      el.style.justifyContent = "flex-start";
+    }
 
     if (shape.fill) {
       el.style.backgroundColor = shape.fill;
     }
 
-    const textEl = document.createElement("span");
-    textEl.textContent = shape.text;
-    textEl.style.fontFamily = "Calibri, Arial, sans-serif";
-    textEl.style.fontSize = shape.fontSize
-      ? `${shape.fontSize * scale}px`
-      : `${14 * scale}px`;
-    textEl.style.color = shape.fontColor || "#000000";
-    textEl.style.fontWeight = shape.bold ? "bold" : "normal";
-    textEl.style.fontStyle = shape.italic ? "italic" : "normal";
-    textEl.style.lineHeight = "1.2";
+    // Default font size
+    const defaultFontSize = shape.fontSize || 14;
 
-    el.appendChild(textEl);
+    // Render rich paragraphs if available
+    if (shape.paragraphs && shape.paragraphs.length > 0) {
+      for (const paragraph of shape.paragraphs) {
+        const pEl = createParagraphElement(paragraph, scale, defaultFontSize);
+        el.appendChild(pEl);
+      }
+    } else if (shape.text) {
+      // Fallback to simple text rendering
+      const textEl = document.createElement("span");
+      textEl.textContent = shape.text;
+      textEl.style.fontFamily = DEFAULT_FONT;
+      textEl.style.fontSize = `${defaultFontSize * scale}px`;
+      textEl.style.color = shape.fontColor || "#000000";
+      textEl.style.fontWeight = shape.bold ? "bold" : "normal";
+      textEl.style.fontStyle = shape.italic ? "italic" : "normal";
+      textEl.style.lineHeight = "1.3";
+      textEl.style.wordBreak = "break-word";
+
+      el.appendChild(textEl);
+    }
   } else if (shape.type === "shape") {
     if (shape.fill) {
       el.style.backgroundColor = shape.fill;
@@ -74,16 +183,6 @@ function createShapeElement(
   }
 
   return el;
-}
-
-/**
- * Check if any shapes are "renderable" (have non-zero dimensions or text)
- */
-function hasRenderableShapes(shapes: PptxSlide["shapes"]): boolean {
-  return shapes.some(shape => 
-    (shape.width > 0 && shape.height > 0) || 
-    (shape.type === "text" && shape.text && shape.text.trim().length > 0)
-  );
 }
 
 /**
@@ -102,11 +201,11 @@ export function renderSlideToHtml(
   container.style.width = `${width}px`;
   container.style.height = `${height}px`;
   container.style.position = "relative";
-  container.style.backgroundColor = "#FFFFFF";
+  container.style.backgroundColor = slide.backgroundColor || "#FFFFFF";
   container.style.overflow = "hidden";
-  container.style.fontFamily = "Calibri, Arial, sans-serif";
+  container.style.fontFamily = DEFAULT_FONT;
 
-  console.log(`[PPTX Renderer] Rendering slide ${slide.index + 1} with ${slide.shapes.length} shapes`);
+  console.log(`[PPTX Renderer] Rendering slide ${slide.index + 1} with ${slide.shapes.length} shapes, bg: ${slide.backgroundColor || '#FFFFFF'}`);
 
   // Check if we have renderable shapes
   const renderableShapes = slide.shapes.filter(shape => 
@@ -121,7 +220,6 @@ export function renderSlideToHtml(
   for (const shape of slide.shapes) {
     // Skip shapes with zero dimensions and no text
     if (shape.width === 0 && shape.height === 0 && (!shape.text || shape.text.trim().length === 0)) {
-      console.log(`[PPTX Renderer] Skipping zero-dimension shape without text`);
       continue;
     }
     
@@ -132,14 +230,14 @@ export function renderSlideToHtml(
 
   console.log(`[PPTX Renderer] Shapes rendered: ${shapesRendered}`);
 
-  // If no shapes rendered OR all shapes had zero dimensions, show placeholder with text content
+  // If no shapes rendered, show placeholder with text content
   if (shapesRendered === 0 && slide.textContent.length > 0) {
     console.log(`[PPTX Renderer] Using text fallback with ${slide.textContent.length} text items`);
     const textContainer = document.createElement("div");
     textContainer.style.padding = `${20 * scale}px`;
     textContainer.style.fontSize = `${16 * scale}px`;
     textContainer.style.color = "#333";
-    textContainer.style.fontFamily = "Calibri, Arial, sans-serif";
+    textContainer.style.fontFamily = DEFAULT_FONT;
     textContainer.style.lineHeight = "1.5";
     textContainer.innerHTML = slide.textContent
       .map((t) => `<p style="margin: ${8 * scale}px 0;">${escapeHtml(t)}</p>`)
@@ -154,11 +252,9 @@ export function renderSlideToHtml(
   slideNum.style.right = `${12 * scale}px`;
   slideNum.style.fontSize = `${10 * scale}px`;
   slideNum.style.color = "#999";
-  slideNum.style.fontFamily = "Calibri, Arial, sans-serif";
+  slideNum.style.fontFamily = DEFAULT_FONT;
   slideNum.textContent = `${slide.index + 1}`;
   container.appendChild(slideNum);
-
-  console.log(`[PPTX Renderer] Container children: ${container.children.length}`);
 
   return container;
 }
@@ -204,7 +300,6 @@ export async function rasterizeElement(
   } = options;
 
   // Add element to DOM temporarily (required for html-to-image)
-  // Use visibility instead of offscreen positioning for more reliable capture
   element.style.position = "fixed";
   element.style.left = "0";
   element.style.top = "0";
@@ -212,10 +307,6 @@ export async function rasterizeElement(
   element.style.opacity = "1";
   element.style.visibility = "visible";
   document.body.appendChild(element);
-
-  // Debug: log the HTML content
-  console.log("[PPTX Rasterizer] HTML to capture:", element.innerHTML.substring(0, 500));
-  console.log("[PPTX Rasterizer] Element dimensions:", element.offsetWidth, "x", element.offsetHeight);
 
   try {
     // Wait for all images to load before capturing
