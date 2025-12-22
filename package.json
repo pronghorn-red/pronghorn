@@ -48,7 +48,6 @@
     "date-fns": "^3.6.0",
     "diff": "^8.0.2",
     "docx": "^9.5.1",
-    "docx-preview": "^0.3.7",
     "embla-carousel-react": "^8.6.0",
     "exceljs": "^4.4.0",
     "html-to-image": "^1.11.13",

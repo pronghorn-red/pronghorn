@@ -310,7 +310,8 @@ export async function processDocxFile(file: File): Promise<DocxData> {
 }
 
 /**
- * Rasterize a DOCX document to an image using docx-preview
+ * Rasterize a DOCX document to an image by rendering HTML content
+ * Uses the converted HTML from mammoth instead of docx-preview
  */
 export async function rasterizeDocx(
   arrayBuffer: ArrayBuffer,
@@ -318,11 +319,11 @@ export async function rasterizeDocx(
 ): Promise<string> {
   const { width = 800, scale = 2 } = options;
   
-  // Dynamically import docx-preview and html-to-image
-  const [{ renderAsync }, { toPng }] = await Promise.all([
-    import("docx-preview"),
-    import("html-to-image"),
-  ]);
+  // First convert to HTML using mammoth
+  const htmlContent = await convertToHtml(arrayBuffer);
+  
+  // Dynamically import html-to-image
+  const { toPng } = await import("html-to-image");
   
   // Create a container element
   const container = document.createElement("div");
@@ -332,30 +333,37 @@ export async function rasterizeDocx(
     top: 0;
     width: ${width}px;
     background: white;
-    font-family: 'Times New Roman', serif;
+    font-family: 'Times New Roman', Georgia, serif;
     padding: 40px;
     box-sizing: border-box;
+    line-height: 1.6;
+    color: #000;
   `;
+  
+  // Add styles for the HTML content
+  container.innerHTML = `
+    <style>
+      h1, h2, h3, h4, h5, h6 { margin: 1em 0 0.5em; font-weight: bold; }
+      h1 { font-size: 2em; }
+      h2 { font-size: 1.5em; }
+      h3 { font-size: 1.25em; }
+      p { margin: 0.5em 0; }
+      ul, ol { margin: 0.5em 0; padding-left: 2em; }
+      table { border-collapse: collapse; margin: 1em 0; width: 100%; }
+      td, th { border: 1px solid #ccc; padding: 8px; text-align: left; }
+      th { background: #f5f5f5; font-weight: bold; }
+      strong, b { font-weight: bold; }
+      em, i { font-style: italic; }
+      img { max-width: 100%; height: auto; }
+    </style>
+    ${htmlContent}
+  `;
+  
   document.body.appendChild(container);
   
   try {
-    // Render the document
-    await renderAsync(arrayBuffer, container, undefined, {
-      className: "docx-preview",
-      inWrapper: false,
-      ignoreWidth: false,
-      ignoreHeight: false,
-      ignoreFonts: false,
-      breakPages: false,
-      useBase64URL: true,
-      renderHeaders: true,
-      renderFooters: true,
-      renderFootnotes: true,
-      renderEndnotes: true,
-    });
-    
     // Wait for any images to load
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 300));
     
     // Capture as PNG
     const dataUrl = await toPng(container, {
