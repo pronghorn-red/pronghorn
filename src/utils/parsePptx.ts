@@ -1327,7 +1327,7 @@ async function parseSlide(
   let title: string | undefined;
   for (const shape of shapes) {
     if ((shape.placeholderType === 'title' || shape.placeholderType === 'ctrTitle') && shape.text) {
-      title = shape.text;
+      title = shape.text.trim();
       break; // Use first title found
     }
   }
@@ -1343,10 +1343,17 @@ async function parseSlide(
         shape.placeholderType === 'sldNum') {
       continue;
     }
-    // Add shape text if it exists
-    if (shape.text && shape.text.trim()) {
-      textContent.push(shape.text.trim());
-    }
+    
+    const shapeText = shape.text?.trim();
+    if (!shapeText) continue;
+    
+    // Skip if this text exactly matches the title (duplicate prevention)
+    if (title && shapeText === title) continue;
+    
+    // Skip if this looks like a slide number (just a number 1-999)
+    if (/^\d{1,3}$/.test(shapeText)) continue;
+    
+    textContent.push(shapeText);
   }
   
   return {
