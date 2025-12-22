@@ -133,32 +133,35 @@ export const extractPDFText = async (arrayBuffer: ArrayBuffer): Promise<PDFTextC
       disableNormalization: false,
     });
     
-    // DEBUG: Log font styles and raw text items for first page
-    if (i === 1) {
-      console.group('🔍 PDF Font Diagnostics - Page 1');
-      console.log('Font Styles:', textContentItems.styles);
-      console.log('First 10 text items (raw):', textContentItems.items.slice(0, 10));
-      
-      // Log each unique font used
-      const fontsUsed = new Set<string>();
-      textContentItems.items.forEach((item: unknown) => {
-        const typedItem = item as { fontName?: string };
-        if (typedItem.fontName) {
-          fontsUsed.add(typedItem.fontName);
-        }
-      });
-      console.log('Fonts used on page:', Array.from(fontsUsed));
-      
-      // Check for ToUnicode issues - look at char codes
-      const sampleItems = textContentItems.items.slice(0, 5) as Array<{ str?: string; fontName?: string }>;
-      sampleItems.forEach((item, idx) => {
-        if (item.str) {
-          const charCodes = Array.from(item.str).map(c => c.charCodeAt(0));
-          console.log(`Item ${idx}: "${item.str}" | Font: ${item.fontName} | CharCodes:`, charCodes);
-        }
-      });
-      console.groupEnd();
-    }
+    // DEBUG: Log font styles and text items for EVERY page to find where corruption starts
+    console.group(`🔍 PDF Font Diagnostics - Page ${i}`);
+    console.log('Font Styles:', textContentItems.styles);
+    
+    // Log each unique font used on this page
+    const fontsUsed = new Set<string>();
+    textContentItems.items.forEach((item: unknown) => {
+      const typedItem = item as { fontName?: string };
+      if (typedItem.fontName) {
+        fontsUsed.add(typedItem.fontName);
+      }
+    });
+    console.log('Fonts used on page:', Array.from(fontsUsed));
+    
+    // Log first 5 text items with char codes to spot encoding issues
+    const sampleItems = textContentItems.items.slice(0, 5) as Array<{ str?: string; fontName?: string }>;
+    sampleItems.forEach((item, idx) => {
+      if (item.str) {
+        const charCodes = Array.from(item.str).map(c => c.charCodeAt(0));
+        // Flag if char codes are in suspicious ranges (extended Latin, private use, etc.)
+        const hasWeirdCodes = charCodes.some(c => (c > 127 && c < 256) || c > 0xF000);
+        console.log(
+          `Item ${idx}: "${item.str}" | Font: ${item.fontName} | CharCodes:`, 
+          charCodes, 
+          hasWeirdCodes ? '⚠️ POSSIBLE ENCODING ISSUE' : '✓'
+        );
+      }
+    });
+    console.groupEnd();
     
     const pageText = textContentItems.items
       .map((item: unknown, index: number, arr: unknown[]) => {
