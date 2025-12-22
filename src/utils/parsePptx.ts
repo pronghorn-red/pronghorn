@@ -150,55 +150,65 @@ function extractTextFromXml(doc: Document): string[] {
 // Theme colors cache - will be populated when parsing starts
 let themeColors: Record<string, string> = {};
 
+// Color map from slide master - maps scheme colors like 'bg1' to theme colors like 'lt1'
+let colorMap: Record<string, string> = {};
+
 /**
- * Parse theme.xml to extract actual color values
+ * Parse ALL theme files to extract color values
+ * Iterates through ppt/theme/theme*.xml files
  */
 async function parseThemeColors(zip: JSZip): Promise<Record<string, string>> {
   const colors: Record<string, string> = {};
+  const parser = new DOMParser();
   
   try {
-    const themeFile = zip.file("ppt/theme/theme1.xml");
-    if (!themeFile) return colors;
+    // Find ALL theme files in the theme folder
+    const themeFiles = Object.keys(zip.files).filter(f => 
+      f.startsWith("ppt/theme/theme") && f.endsWith(".xml") && !f.includes("_rels")
+    );
     
-    const themeXml = await themeFile.async("string");
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(themeXml, "application/xml");
+    console.log(`[PPTX Parser] Found ${themeFiles.length} theme files:`, themeFiles);
     
-    // Parse clrScheme for actual scheme color values
-    const clrScheme = doc.getElementsByTagNameNS(NS.a, "clrScheme")[0];
-    if (!clrScheme) return colors;
-    
-    // Standard Office color scheme names
-    const colorNames = ['dk1', 'lt1', 'dk2', 'lt2', 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6', 'hlink', 'folHlink'];
-    
-    for (const name of colorNames) {
-      // Find element by local name within clrScheme
-      const children = clrScheme.children;
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i];
-        if (child.localName === name) {
-          // Check for srgbClr
-          const srgb = child.getElementsByTagNameNS(NS.a, "srgbClr")[0];
-          if (srgb) {
-            const val = srgb.getAttribute("val");
-            if (val) colors[name] = `#${val}`;
+    for (const themePath of themeFiles) {
+      const themeFile = zip.file(themePath);
+      if (!themeFile) continue;
+      
+      const themeXml = await themeFile.async("string");
+      const doc = parser.parseFromString(themeXml, "application/xml");
+      
+      // Parse clrScheme for actual scheme color values
+      const clrScheme = doc.getElementsByTagNameNS(NS.a, "clrScheme")[0];
+      if (!clrScheme) continue;
+      
+      // Standard Office color scheme names
+      const colorNames = ['dk1', 'lt1', 'dk2', 'lt2', 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6', 'hlink', 'folHlink'];
+      
+      for (const name of colorNames) {
+        // Skip if we already have this color
+        if (colors[name]) continue;
+        
+        // Find element by local name within clrScheme
+        const children = clrScheme.children;
+        for (let i = 0; i < children.length; i++) {
+          const child = children[i];
+          if (child.localName === name) {
+            // Check for srgbClr
+            const srgb = child.getElementsByTagNameNS(NS.a, "srgbClr")[0];
+            if (srgb) {
+              const val = srgb.getAttribute("val");
+              if (val) colors[name] = `#${val}`;
+            }
+            // Check for sysClr (system color)
+            const sysClr = child.getElementsByTagNameNS(NS.a, "sysClr")[0];
+            if (sysClr && !colors[name]) {
+              const lastClr = sysClr.getAttribute("lastClr");
+              if (lastClr) colors[name] = `#${lastClr}`;
+            }
+            break;
           }
-          // Check for sysClr (system color)
-          const sysClr = child.getElementsByTagNameNS(NS.a, "sysClr")[0];
-          if (sysClr && !colors[name]) {
-            const lastClr = sysClr.getAttribute("lastClr");
-            if (lastClr) colors[name] = `#${lastClr}`;
-          }
-          break;
         }
       }
     }
-    
-    // Map tx1/tx2/bg1/bg2 aliases
-    if (colors.dk1) colors.tx1 = colors.dk1;
-    if (colors.dk2) colors.tx2 = colors.dk2;
-    if (colors.lt1) colors.bg1 = colors.lt1;
-    if (colors.lt2) colors.bg2 = colors.lt2;
     
     console.log("[PPTX Parser] Parsed theme colors:", colors);
   } catch (error) {
@@ -209,7 +219,74 @@ async function parseThemeColors(zip: JSZip): Promise<Record<string, string>> {
 }
 
 /**
- * Parse color from PPTX XML with theme color support
+ * Parse clrMap from slide master to map scheme colors (like bg1) to theme colors (like lt1)
+ * Iterates through all slideMasters in ppt/slideMasters/
+ */
+async function parseColorMapFromMasters(zip: JSZip): Promise<Record<string, string>> {
+  const clrMap: Record<string, string> = {};
+  const parser = new DOMParser();
+  
+  try {
+    // Find ALL slideMaster files
+    const masterFiles = Object.keys(zip.files).filter(f => 
+      f.startsWith("ppt/slideMasters/slideMaster") && f.endsWith(".xml") && !f.includes("_rels")
+    );
+    
+    console.log(`[PPTX Parser] Found ${masterFiles.length} slide master files:`, masterFiles);
+    
+    for (const masterPath of masterFiles) {
+      const masterFile = zip.file(masterPath);
+      if (!masterFile) continue;
+      
+      const masterXml = await masterFile.async("string");
+      const doc = parser.parseFromString(masterXml, "application/xml");
+      
+      // Find clrMap element
+      const clrMapEl = doc.getElementsByTagNameNS(NS.p, "clrMap")[0];
+      if (clrMapEl) {
+        // Extract all color mappings: bg1, bg2, tx1, tx2, accent1-6, hlink, folHlink
+        const attributes = ['bg1', 'bg2', 'tx1', 'tx2', 'accent1', 'accent2', 'accent3', 
+                           'accent4', 'accent5', 'accent6', 'hlink', 'folHlink'];
+        for (const attr of attributes) {
+          const val = clrMapEl.getAttribute(attr);
+          if (val && !clrMap[attr]) {
+            clrMap[attr] = val;
+          }
+        }
+        console.log(`[PPTX Parser] Parsed clrMap from ${masterPath}:`, clrMap);
+        break; // Use first master's clrMap
+      }
+    }
+  } catch (error) {
+    console.warn("Failed to parse color map from masters:", error);
+  }
+  
+  return clrMap;
+}
+
+/**
+ * Resolve a scheme color using clrMap and themeColors
+ * For example: bg1 -> lt1 (via clrMap) -> #FFFFFF (via themeColors)
+ */
+function resolveSchemeColor(schemeColorName: string): string | undefined {
+  // First, check if we have a mapping in colorMap (e.g., bg1 -> lt1)
+  const mappedName = colorMap[schemeColorName] || schemeColorName;
+  
+  // Then look up the actual color value
+  if (themeColors[mappedName]) {
+    return themeColors[mappedName];
+  }
+  
+  // Also check if original name has a direct color
+  if (themeColors[schemeColorName]) {
+    return themeColors[schemeColorName];
+  }
+  
+  return undefined;
+}
+
+/**
+ * Parse color from PPTX XML with theme color and clrMap support
  */
 function parseColor(element: Element | null): string | undefined {
   if (!element) return undefined;
@@ -221,11 +298,14 @@ function parseColor(element: Element | null): string | undefined {
     if (val) return `#${val}`;
   }
   
-  // Try schemeClr (theme color) - use parsed theme colors or fallback
+  // Try schemeClr (theme color) - resolve via clrMap and theme colors
   const schemeClr = element.getElementsByTagNameNS(NS.a, "schemeClr")[0];
   if (schemeClr) {
     const val = schemeClr.getAttribute("val");
-    if (val && themeColors[val]) return themeColors[val];
+    if (val) {
+      const resolved = resolveSchemeColor(val);
+      if (resolved) return resolved;
+    }
     
     // Fallback map if theme parsing didn't work
     const schemeMap: Record<string, string> = {
@@ -944,6 +1024,9 @@ export async function parsePptxFile(file: File): Promise<PptxData> {
   
   // Parse theme colors first (for proper color resolution)
   themeColors = await parseThemeColors(zip);
+  
+  // Parse color map from slide masters (for resolving scheme colors like bg1 -> lt1)
+  colorMap = await parseColorMapFromMasters(zip);
   
   // Extract metadata
   const metadata = await extractMetadata(zip);

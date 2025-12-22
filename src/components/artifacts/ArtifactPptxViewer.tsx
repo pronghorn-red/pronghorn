@@ -59,12 +59,16 @@ export function ArtifactPptxViewer({
   const [previewSlideIndex, setPreviewSlideIndex] = useState<number | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
 
-  // Generate thumbnails when data changes
+  // Generate thumbnails when data or color options change
   useEffect(() => {
     if (!pptxData) {
       setThumbnails(new Map());
       return;
     }
+
+    // Determine override colors based on auto settings
+    const bgColor = exportOptions.useAutoBackground === false ? exportOptions.overrideBackgroundColor : undefined;
+    const fontColor = exportOptions.useAutoFontColor === false ? exportOptions.overrideFontColor : undefined;
 
     const generateThumbnails = async () => {
       const newThumbnails = new Map<number, string>();
@@ -72,7 +76,10 @@ export function ArtifactPptxViewer({
       for (let i = 0; i < pptxData.slides.length; i++) {
         const slide = pptxData.slides[i];
         try {
-          const thumbnail = await generateSlideThumbnail(slide, pptxData.media);
+          const thumbnail = await generateSlideThumbnail(slide, pptxData.media, undefined, {
+            overrideBackgroundColor: bgColor,
+            overrideFontColor: fontColor,
+          });
           if (thumbnail) {
             newThumbnails.set(i, thumbnail);
             setThumbnails(new Map(newThumbnails));
@@ -84,7 +91,7 @@ export function ArtifactPptxViewer({
     };
 
     generateThumbnails();
-  }, [pptxData]);
+  }, [pptxData, exportOptions.useAutoBackground, exportOptions.useAutoFontColor, exportOptions.overrideBackgroundColor, exportOptions.overrideFontColor]);
 
   const handleDragOver = () => setIsDragging(true);
   const handleDragLeave = () => setIsDragging(false);
@@ -161,37 +168,7 @@ export function ArtifactPptxViewer({
     });
   };
 
-  // Regenerate thumbnails when color overrides change
-  useEffect(() => {
-    if (!pptxData) return;
-    
-    const shouldRegenerate = 
-      (!exportOptions.useAutoBackground && exportOptions.overrideBackgroundColor) ||
-      (!exportOptions.useAutoFontColor && exportOptions.overrideFontColor);
-    
-    if (!shouldRegenerate) return;
-
-    const regenerateThumbnails = async () => {
-      const newThumbnails = new Map<number, string>();
-      for (let i = 0; i < pptxData.slides.length; i++) {
-        const slide = pptxData.slides[i];
-        try {
-          const thumbnail = await generateSlideThumbnail(slide, pptxData.media, undefined, {
-            overrideBackgroundColor: !exportOptions.useAutoBackground ? exportOptions.overrideBackgroundColor : undefined,
-            overrideFontColor: !exportOptions.useAutoFontColor ? exportOptions.overrideFontColor : undefined,
-          });
-          if (thumbnail) {
-            newThumbnails.set(i, thumbnail);
-          }
-        } catch (error) {
-          console.warn(`Failed to regenerate thumbnail for slide ${i + 1}`);
-        }
-      }
-      setThumbnails(newThumbnails);
-    };
-
-    regenerateThumbnails();
-  }, [pptxData, exportOptions.overrideBackgroundColor, exportOptions.overrideFontColor, exportOptions.useAutoBackground, exportOptions.useAutoFontColor]);
+  // No separate regeneration effect needed - main effect handles all cases
 
   const toggleSlideSelection = (index: number) => {
     const newSelected = new Set(exportOptions.selectedSlides);
@@ -419,6 +396,8 @@ export function ArtifactPptxViewer({
                             onExportOptionsChange({ 
                               ...exportOptions, 
                               useAutoBackground: !!checked,
+                              // Set a default override color when switching to manual
+                              overrideBackgroundColor: checked ? exportOptions.overrideBackgroundColor : (exportOptions.overrideBackgroundColor || "#0081AB"),
                             })
                           }
                         />
@@ -454,6 +433,8 @@ export function ArtifactPptxViewer({
                             onExportOptionsChange({ 
                               ...exportOptions, 
                               useAutoFontColor: !!checked,
+                              // Set a default override color when switching to manual
+                              overrideFontColor: checked ? exportOptions.overrideFontColor : (exportOptions.overrideFontColor || "#FFFFFF"),
                             })
                           }
                         />
