@@ -11,6 +11,8 @@ export interface RasterizeOptions {
   height?: number;
   pixelRatio?: number;
   backgroundColor?: string;
+  overrideBackgroundColor?: string;
+  overrideFontColor?: string;
 }
 
 // Default font stack
@@ -19,7 +21,7 @@ const DEFAULT_FONT = '"Open Sans", Calibri, Arial, sans-serif';
 /**
  * Create HTML for a text run with formatting
  */
-function createTextRunElement(run: PptxTextRun, scale: number): HTMLSpanElement {
+function createTextRunElement(run: PptxTextRun, scale: number, overrideFontColor?: string): HTMLSpanElement {
   const span = document.createElement("span");
   span.textContent = run.text;
   
@@ -32,7 +34,10 @@ function createTextRunElement(run: PptxTextRun, scale: number): HTMLSpanElement 
     span.style.fontSize = `${run.fontSize * scale}px`;
   }
   
-  if (run.fontColor) {
+  // Use override color if provided, otherwise use run's color
+  if (overrideFontColor) {
+    span.style.color = overrideFontColor;
+  } else if (run.fontColor) {
     span.style.color = run.fontColor;
   }
   
@@ -49,7 +54,8 @@ function createTextRunElement(run: PptxTextRun, scale: number): HTMLSpanElement 
 function createParagraphElement(
   paragraph: PptxParagraph,
   scale: number,
-  defaultFontSize: number
+  defaultFontSize: number,
+  overrideFontColor?: string
 ): HTMLParagraphElement {
   const p = document.createElement("p");
   p.style.margin = "0";
@@ -84,6 +90,7 @@ function createParagraphElement(
     const bullet = document.createElement("span");
     bullet.textContent = (paragraph.bulletChar || "•") + " ";
     bullet.style.marginRight = `${4 * scale}px`;
+    if (overrideFontColor) bullet.style.color = overrideFontColor;
     p.appendChild(bullet);
   } else if (paragraph.bulletType === 'number') {
     // For numbered lists, we'd need context of list position
@@ -91,12 +98,13 @@ function createParagraphElement(
     const bullet = document.createElement("span");
     bullet.textContent = "• ";
     bullet.style.marginRight = `${4 * scale}px`;
+    if (overrideFontColor) bullet.style.color = overrideFontColor;
     p.appendChild(bullet);
   }
   
   // Add text runs
   for (const run of paragraph.runs) {
-    const span = createTextRunElement(run, scale);
+    const span = createTextRunElement(run, scale, overrideFontColor);
     p.appendChild(span);
   }
   
@@ -109,7 +117,8 @@ function createParagraphElement(
 function createShapeElement(
   shape: PptxSlide["shapes"][0],
   media: Map<string, PptxImage>,
-  scale: number
+  scale: number,
+  overrideFontColor?: string
 ): HTMLElement {
   const el = document.createElement("div");
   el.style.position = "absolute";
@@ -150,13 +159,13 @@ function createShapeElement(
       el.style.backgroundColor = shape.fill;
     }
 
-    // Default font size
-    const defaultFontSize = shape.fontSize || 14;
+    // Default font size - use larger defaults for title placeholders
+    const defaultFontSize = shape.fontSize || (shape.placeholderType === 'title' ? 36 : shape.placeholderType === 'subTitle' ? 24 : 14);
 
     // Render rich paragraphs if available
     if (shape.paragraphs && shape.paragraphs.length > 0) {
       for (const paragraph of shape.paragraphs) {
-        const pEl = createParagraphElement(paragraph, scale, defaultFontSize);
+        const pEl = createParagraphElement(paragraph, scale, defaultFontSize, overrideFontColor);
         el.appendChild(pEl);
       }
     } else if (shape.text) {
@@ -165,7 +174,7 @@ function createShapeElement(
       textEl.textContent = shape.text;
       textEl.style.fontFamily = DEFAULT_FONT;
       textEl.style.fontSize = `${defaultFontSize * scale}px`;
-      textEl.style.color = shape.fontColor || "#000000";
+      textEl.style.color = overrideFontColor || shape.fontColor || "#000000";
       textEl.style.fontWeight = shape.bold ? "bold" : "normal";
       textEl.style.fontStyle = shape.italic ? "italic" : "normal";
       textEl.style.lineHeight = "1.3";
@@ -191,21 +200,28 @@ function createShapeElement(
 export function renderSlideToHtml(
   slide: PptxSlide,
   media: Map<string, PptxImage>,
-  options: { width?: number; height?: number } = {}
+  options: { width?: number; height?: number; overrideBackgroundColor?: string; overrideFontColor?: string } = {}
 ): HTMLDivElement {
   const width = options.width || SLIDE_WIDTH;
   const height = options.height || SLIDE_HEIGHT;
   const scale = width / SLIDE_WIDTH;
+  
+  // Use override color if provided, otherwise use slide's detected color
+  const bgColor = options.overrideBackgroundColor || slide.backgroundColor || "#FFFFFF";
+  const fontColor = options.overrideFontColor;
 
   const container = document.createElement("div");
   container.style.width = `${width}px`;
   container.style.height = `${height}px`;
   container.style.position = "relative";
-  container.style.backgroundColor = slide.backgroundColor || "#FFFFFF";
+  container.style.backgroundColor = bgColor;
   container.style.overflow = "hidden";
   container.style.fontFamily = DEFAULT_FONT;
+  if (fontColor) {
+    container.style.color = fontColor;
+  }
 
-  console.log(`[PPTX Renderer] Rendering slide ${slide.index + 1} with ${slide.shapes.length} shapes, bg: ${slide.backgroundColor || '#FFFFFF'}`);
+  console.log(`[PPTX Renderer] Rendering slide ${slide.index + 1} with ${slide.shapes.length} shapes, bg: ${bgColor}`);
 
   // Check if we have renderable shapes
   const renderableShapes = slide.shapes.filter(shape => 
@@ -223,7 +239,7 @@ export function renderSlideToHtml(
       continue;
     }
     
-    const shapeEl = createShapeElement(shape, media, scale);
+    const shapeEl = createShapeElement(shape, media, scale, fontColor);
     container.appendChild(shapeEl);
     shapesRendered++;
   }
@@ -236,7 +252,7 @@ export function renderSlideToHtml(
     const textContainer = document.createElement("div");
     textContainer.style.padding = `${20 * scale}px`;
     textContainer.style.fontSize = `${16 * scale}px`;
-    textContainer.style.color = "#333";
+    textContainer.style.color = fontColor || "#333";
     textContainer.style.fontFamily = DEFAULT_FONT;
     textContainer.style.lineHeight = "1.5";
     textContainer.innerHTML = slide.textContent
@@ -347,7 +363,12 @@ export async function rasterizeSlide(
   const width = options.width || SLIDE_WIDTH;
   const height = options.height || SLIDE_HEIGHT;
 
-  const element = renderSlideToHtml(slide, media, { width, height });
+  const element = renderSlideToHtml(slide, media, { 
+    width, 
+    height,
+    overrideBackgroundColor: options.overrideBackgroundColor,
+    overrideFontColor: options.overrideFontColor,
+  });
   return rasterizeElement(element, { ...options, width, height });
 }
 
@@ -357,13 +378,16 @@ export async function rasterizeSlide(
 export async function generateSlideThumbnail(
   slide: PptxSlide,
   media: Map<string, PptxImage>,
-  size: { width: number; height: number } = { width: 192, height: 108 }
+  size: { width: number; height: number } = { width: 192, height: 108 },
+  colorOverrides?: { overrideBackgroundColor?: string; overrideFontColor?: string }
 ): Promise<string> {
   try {
     const blob = await rasterizeSlide(slide, media, {
       width: size.width,
       height: size.height,
       pixelRatio: 2,
+      overrideBackgroundColor: colorOverrides?.overrideBackgroundColor,
+      overrideFontColor: colorOverrides?.overrideFontColor,
     });
 
     return new Promise((resolve, reject) => {

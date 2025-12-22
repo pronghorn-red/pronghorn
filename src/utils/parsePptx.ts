@@ -50,6 +50,7 @@ export interface PptxShape {
   bold?: boolean;
   italic?: boolean;
   verticalAlign?: 'top' | 'middle' | 'bottom';
+  placeholderType?: 'title' | 'ctrTitle' | 'subTitle' | 'body' | 'ftr' | 'dt' | 'sldNum' | 'pic' | 'other';
 }
 
 export interface PptxSlide {
@@ -502,6 +503,26 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
     // Get transform (position and size) with fallback
     const transform = findXfrm(sp);
     
+    // Check for placeholder type
+    let placeholderType: PptxShape['placeholderType'] | undefined;
+    const nvSpPr = sp.getElementsByTagNameNS(NS.p, "nvSpPr")[0];
+    if (nvSpPr) {
+      const nvPr = nvSpPr.getElementsByTagNameNS(NS.p, "nvPr")[0];
+      if (nvPr) {
+        const ph = nvPr.getElementsByTagNameNS(NS.p, "ph")[0];
+        if (ph) {
+          const phType = ph.getAttribute("type");
+          if (phType === "title" || phType === "ctrTitle" || phType === "subTitle" || 
+              phType === "body" || phType === "ftr" || phType === "dt" || 
+              phType === "sldNum" || phType === "pic") {
+            placeholderType = phType;
+          } else if (phType) {
+            placeholderType = 'other';
+          }
+        }
+      }
+    }
+    
     // Extract paragraphs with rich text
     const paragraphs = extractParagraphsFromShape(sp);
     
@@ -522,7 +543,7 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
     const width = transform?.width ?? SLIDE_WIDTH - 100;
     const height = transform?.height ?? 50;
     
-    console.log(`[PPTX Parser] Shape ${i}: x=${x}, y=${y}, w=${width}, h=${height}, paragraphs=${paragraphs.length}`);
+    console.log(`[PPTX Parser] Shape ${i}: x=${x}, y=${y}, w=${width}, h=${height}, paragraphs=${paragraphs.length}, placeholder=${placeholderType || 'none'}`);
     
     // Get fill color
     const solidFill = sp.getElementsByTagNameNS(NS.a, "solidFill")[0];
@@ -570,6 +591,7 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
       bold,
       italic,
       verticalAlign,
+      placeholderType,
     });
   }
   

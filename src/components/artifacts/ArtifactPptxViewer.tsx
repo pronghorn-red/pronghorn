@@ -31,6 +31,11 @@ export interface PptxExportOptions {
   extractImages: boolean;
   selectedSlides: Set<number>;
   selectedImages: Set<string>;
+  // Manual color overrides for slides
+  overrideBackgroundColor?: string;
+  overrideFontColor?: string;
+  useAutoBackground?: boolean;
+  useAutoFontColor?: boolean;
 }
 
 interface ArtifactPptxViewerProps {
@@ -151,8 +156,42 @@ export function ArtifactPptxViewer({
       extractImages: true,
       selectedSlides: new Set(),
       selectedImages: new Set(),
+      useAutoBackground: true,
+      useAutoFontColor: true,
     });
   };
+
+  // Regenerate thumbnails when color overrides change
+  useEffect(() => {
+    if (!pptxData) return;
+    
+    const shouldRegenerate = 
+      (!exportOptions.useAutoBackground && exportOptions.overrideBackgroundColor) ||
+      (!exportOptions.useAutoFontColor && exportOptions.overrideFontColor);
+    
+    if (!shouldRegenerate) return;
+
+    const regenerateThumbnails = async () => {
+      const newThumbnails = new Map<number, string>();
+      for (let i = 0; i < pptxData.slides.length; i++) {
+        const slide = pptxData.slides[i];
+        try {
+          const thumbnail = await generateSlideThumbnail(slide, pptxData.media, undefined, {
+            overrideBackgroundColor: !exportOptions.useAutoBackground ? exportOptions.overrideBackgroundColor : undefined,
+            overrideFontColor: !exportOptions.useAutoFontColor ? exportOptions.overrideFontColor : undefined,
+          });
+          if (thumbnail) {
+            newThumbnails.set(i, thumbnail);
+          }
+        } catch (error) {
+          console.warn(`Failed to regenerate thumbnail for slide ${i + 1}`);
+        }
+      }
+      setThumbnails(newThumbnails);
+    };
+
+    regenerateThumbnails();
+  }, [pptxData, exportOptions.overrideBackgroundColor, exportOptions.overrideFontColor, exportOptions.useAutoBackground, exportOptions.useAutoFontColor]);
 
   const toggleSlideSelection = (index: number) => {
     const newSelected = new Set(exportOptions.selectedSlides);
@@ -344,6 +383,93 @@ export function ArtifactPptxViewer({
                 </Label>
               </div>
             </div>
+
+            {/* Slide Styling section */}
+            {(exportOptions.mode === "rasterize" || exportOptions.mode === "both") && (
+              <Separator className="my-2" />
+            )}
+            {(exportOptions.mode === "rasterize" || exportOptions.mode === "both") && (
+              <div className="space-y-3">
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Slide Styling
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Background Color */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="auto-bg"
+                        checked={exportOptions.useAutoBackground !== false}
+                        onCheckedChange={(checked) =>
+                          onExportOptionsChange({ 
+                            ...exportOptions, 
+                            useAutoBackground: !!checked,
+                          })
+                        }
+                      />
+                      <Label htmlFor="auto-bg" className="text-xs cursor-pointer">
+                        Auto-detect background
+                      </Label>
+                    </div>
+                    {exportOptions.useAutoBackground === false && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={exportOptions.overrideBackgroundColor || "#FFFFFF"}
+                          onChange={(e) =>
+                            onExportOptionsChange({
+                              ...exportOptions,
+                              overrideBackgroundColor: e.target.value,
+                            })
+                          }
+                          className="w-8 h-8 rounded border cursor-pointer"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {exportOptions.overrideBackgroundColor || "#FFFFFF"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Font Color */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="auto-font"
+                        checked={exportOptions.useAutoFontColor !== false}
+                        onCheckedChange={(checked) =>
+                          onExportOptionsChange({ 
+                            ...exportOptions, 
+                            useAutoFontColor: !!checked,
+                          })
+                        }
+                      />
+                      <Label htmlFor="auto-font" className="text-xs cursor-pointer">
+                        Auto-detect font color
+                      </Label>
+                    </div>
+                    {exportOptions.useAutoFontColor === false && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={exportOptions.overrideFontColor || "#000000"}
+                          onChange={(e) =>
+                            onExportOptionsChange({
+                              ...exportOptions,
+                              overrideFontColor: e.target.value,
+                            })
+                          }
+                          className="w-8 h-8 rounded border cursor-pointer"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {exportOptions.overrideFontColor || "#000000"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Main scrollable content area */}
