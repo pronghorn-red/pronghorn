@@ -77,6 +77,16 @@ function createShapeElement(
 }
 
 /**
+ * Check if any shapes are "renderable" (have non-zero dimensions or text)
+ */
+function hasRenderableShapes(shapes: PptxSlide["shapes"]): boolean {
+  return shapes.some(shape => 
+    (shape.width > 0 && shape.height > 0) || 
+    (shape.type === "text" && shape.text && shape.text.trim().length > 0)
+  );
+}
+
+/**
  * Render a slide to an HTML element (off-screen)
  */
 export function renderSlideToHtml(
@@ -96,14 +106,35 @@ export function renderSlideToHtml(
   container.style.overflow = "hidden";
   container.style.fontFamily = "Calibri, Arial, sans-serif";
 
+  console.log(`[PPTX Renderer] Rendering slide ${slide.index + 1} with ${slide.shapes.length} shapes`);
+
+  // Check if we have renderable shapes
+  const renderableShapes = slide.shapes.filter(shape => 
+    (shape.width > 0 && shape.height > 0) || 
+    (shape.type === "text" && shape.text && shape.text.trim().length > 0)
+  );
+
+  console.log(`[PPTX Renderer] Renderable shapes: ${renderableShapes.length}`);
+
   // Render shapes in order (background to foreground)
+  let shapesRendered = 0;
   for (const shape of slide.shapes) {
+    // Skip shapes with zero dimensions and no text
+    if (shape.width === 0 && shape.height === 0 && (!shape.text || shape.text.trim().length === 0)) {
+      console.log(`[PPTX Renderer] Skipping zero-dimension shape without text`);
+      continue;
+    }
+    
     const shapeEl = createShapeElement(shape, media, scale);
     container.appendChild(shapeEl);
+    shapesRendered++;
   }
 
-  // If no shapes rendered, show placeholder with text content
-  if (slide.shapes.length === 0 && slide.textContent.length > 0) {
+  console.log(`[PPTX Renderer] Shapes rendered: ${shapesRendered}`);
+
+  // If no shapes rendered OR all shapes had zero dimensions, show placeholder with text content
+  if (shapesRendered === 0 && slide.textContent.length > 0) {
+    console.log(`[PPTX Renderer] Using text fallback with ${slide.textContent.length} text items`);
     const textContainer = document.createElement("div");
     textContainer.style.padding = `${20 * scale}px`;
     textContainer.style.fontSize = `${16 * scale}px`;
@@ -126,6 +157,8 @@ export function renderSlideToHtml(
   slideNum.style.fontFamily = "Calibri, Arial, sans-serif";
   slideNum.textContent = `${slide.index + 1}`;
   container.appendChild(slideNum);
+
+  console.log(`[PPTX Renderer] Container children: ${container.children.length}`);
 
   return container;
 }

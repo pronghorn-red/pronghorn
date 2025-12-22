@@ -171,6 +171,39 @@ function parseRelationships(relsXml: string): Record<string, string> {
 }
 
 /**
+ * Helper to find xfrm element with fallback for different namespaces
+ */
+function findXfrm(element: Element): { x: number; y: number; width: number; height: number } | null {
+  // Try standard namespace first
+  let xfrm = element.getElementsByTagNameNS(NS.a, "xfrm")[0];
+  
+  // Fallback: try querySelector without namespace
+  if (!xfrm) {
+    xfrm = element.querySelector("xfrm") as Element;
+  }
+  
+  if (!xfrm) return null;
+  
+  // Try to get offset and extent
+  let off = xfrm.getElementsByTagNameNS(NS.a, "off")[0];
+  let ext = xfrm.getElementsByTagNameNS(NS.a, "ext")[0];
+  
+  // Fallback without namespace
+  if (!off) off = xfrm.querySelector("off") as Element;
+  if (!ext) ext = xfrm.querySelector("ext") as Element;
+  
+  // If still not found, return null
+  if (!off || !ext) return null;
+  
+  const x = emuToPx(off.getAttribute("x") || "0");
+  const y = emuToPx(off.getAttribute("y") || "0");
+  const width = emuToPx(ext.getAttribute("cx") || "0");
+  const height = emuToPx(ext.getAttribute("cy") || "0");
+  
+  return { x, y, width, height };
+}
+
+/**
  * Extract shapes from slide XML
  */
 function extractShapesFromXml(doc: Document, rels: Record<string, string>): PptxShape[] {
@@ -178,30 +211,32 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
   
   // Find all sp (shape) elements
   const spElements = doc.getElementsByTagNameNS(NS.p, "sp");
+  console.log(`[PPTX Parser] Found ${spElements.length} shape elements`);
+  
   for (let i = 0; i < spElements.length; i++) {
     const sp = spElements[i];
     
-    // Get transform (position and size)
-    const xfrm = sp.getElementsByTagNameNS(NS.a, "xfrm")[0];
-    if (!xfrm) continue;
+    // Get transform (position and size) with fallback
+    const transform = findXfrm(sp);
     
-    const off = xfrm.getElementsByTagNameNS(NS.a, "off")[0];
-    const ext = xfrm.getElementsByTagNameNS(NS.a, "ext")[0];
-    
-    if (!off || !ext) continue;
-    
-    const x = emuToPx(off.getAttribute("x") || "0");
-    const y = emuToPx(off.getAttribute("y") || "0");
-    const width = emuToPx(ext.getAttribute("cx") || "0");
-    const height = emuToPx(ext.getAttribute("cy") || "0");
-    
-    // Extract text content
+    // Extract text content regardless of transform
     const textContent: string[] = [];
     const textNodes = sp.getElementsByTagNameNS(NS.a, "t");
     for (let j = 0; j < textNodes.length; j++) {
       const text = textNodes[j].textContent?.trim();
       if (text) textContent.push(text);
     }
+    
+    // Skip if no transform AND no text
+    if (!transform && textContent.length === 0) continue;
+    
+    // Use default dimensions if transform missing but we have text
+    const x = transform?.x ?? 50;
+    const y = transform?.y ?? 50 + i * 60;
+    const width = transform?.width ?? SLIDE_WIDTH - 100;
+    const height = transform?.height ?? 50;
+    
+    console.log(`[PPTX Parser] Shape ${i}: x=${x}, y=${y}, w=${width}, h=${height}, text="${textContent.join(" ").substring(0, 30)}..."`);
     
     // Get fill color
     const solidFill = sp.getElementsByTagNameNS(NS.a, "solidFill")[0];
@@ -242,22 +277,16 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
   
   // Find all pic (picture) elements
   const picElements = doc.getElementsByTagNameNS(NS.p, "pic");
+  console.log(`[PPTX Parser] Found ${picElements.length} picture elements`);
+  
   for (let i = 0; i < picElements.length; i++) {
     const pic = picElements[i];
     
-    // Get transform
-    const xfrm = pic.getElementsByTagNameNS(NS.a, "xfrm")[0];
-    if (!xfrm) continue;
+    // Get transform with fallback
+    const transform = findXfrm(pic);
+    if (!transform) continue;
     
-    const off = xfrm.getElementsByTagNameNS(NS.a, "off")[0];
-    const ext = xfrm.getElementsByTagNameNS(NS.a, "ext")[0];
-    
-    if (!off || !ext) continue;
-    
-    const x = emuToPx(off.getAttribute("x") || "0");
-    const y = emuToPx(off.getAttribute("y") || "0");
-    const width = emuToPx(ext.getAttribute("cx") || "0");
-    const height = emuToPx(ext.getAttribute("cy") || "0");
+    const { x, y, width, height } = transform;
     
     // Get image reference
     const blip = pic.getElementsByTagNameNS(NS.a, "blip")[0];
@@ -281,6 +310,7 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
     });
   }
   
+  console.log(`[PPTX Parser] Total shapes extracted: ${shapes.length}`);
   return shapes;
 }
 

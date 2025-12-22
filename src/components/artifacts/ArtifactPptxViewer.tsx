@@ -351,6 +351,35 @@ export function ArtifactPptxViewer({
             </div>
           </div>
 
+          {/* Picture Gallery - Shows all extracted images */}
+          {pptxData.media.size > 0 && (
+            <div className="shrink-0 space-y-2">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">
+                  Picture Gallery ({pptxData.media.size} image{pptxData.media.size !== 1 ? "s" : ""})
+                </span>
+              </div>
+              <ScrollArea className="h-28 border rounded-lg p-2 bg-muted/20">
+                <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2">
+                  {Array.from(pptxData.media.values()).map((img) => (
+                    <div 
+                      key={img.id} 
+                      className="aspect-square rounded border overflow-hidden bg-white hover:ring-2 ring-primary cursor-pointer"
+                      title={img.filename}
+                    >
+                      <img 
+                        src={`data:${img.mimeType};base64,${img.base64}`}
+                        alt={img.filename}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+
           {/* Slide grid and preview */}
           <div className="flex flex-1 gap-3 min-h-0 overflow-hidden">
             {/* Slide thumbnails */}
@@ -457,30 +486,6 @@ export function ArtifactPptxViewer({
                   </div>
                 </ScrollArea>
 
-                {previewSlide.images.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <ImageIcon className="h-3 w-3" />
-                      {previewSlide.images.length} embedded image{previewSlide.images.length !== 1 ? "s" : ""}
-                    </div>
-                    <div className="grid grid-cols-3 gap-1">
-                      {previewSlide.images.slice(0, 6).map((img) => (
-                        <div key={img.id} className="aspect-square rounded border overflow-hidden bg-muted/50">
-                          <img 
-                            src={`data:${img.mimeType};base64,${img.base64}`}
-                            alt={img.filename}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      ))}
-                      {previewSlide.images.length > 6 && (
-                        <div className="aspect-square rounded border bg-muted/50 flex items-center justify-center text-xs text-muted-foreground">
-                          +{previewSlide.images.length - 6}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
