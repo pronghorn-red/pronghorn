@@ -20,6 +20,8 @@ serve(async (req) => {
       content, 
       sourceType, 
       sourceId,
+      // Title field
+      title,
       // Provenance tracking fields
       provenanceId,
       provenancePath,
@@ -91,7 +93,7 @@ serve(async (req) => {
       publicUrl = url;
     }
 
-    // Create artifact using token-based RPC with provenance fields
+    // Create artifact using token-based RPC with title and provenance fields
     const { data: artifact, error: artifactError } = await supabase.rpc('insert_artifact_with_token', {
       p_project_id: projectId,
       p_token: shareToken || null,
@@ -99,6 +101,7 @@ serve(async (req) => {
       p_source_type: sourceType || null,
       p_source_id: sourceId || null,
       p_image_url: publicUrl,
+      p_ai_title: title || null,
       p_provenance_id: provenanceId || null,
       p_provenance_path: provenancePath || null,
       p_provenance_page: provenancePage || null,
