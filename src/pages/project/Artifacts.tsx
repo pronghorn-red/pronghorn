@@ -25,6 +25,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { AddArtifactModal } from "@/components/artifacts/AddArtifactModal";
 import { ArtifactCollaborator } from "@/components/collaboration/ArtifactCollaborator";
 import {
@@ -74,6 +84,7 @@ export default function Artifacts() {
   const [collaboratingArtifact, setCollaboratingArtifact] = useState<any>(null);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
   const [provenanceFilter, setProvenanceFilter] = useState<string | null>(null);
+  const [deletingArtifact, setDeletingArtifact] = useState<{ id: string; title: string } | null>(null);
 
   // Fetch project settings for model configuration
   const { data: project } = useQuery({
@@ -468,7 +479,7 @@ ${artifact.content}`;
                                       className="h-7 w-7 text-white hover:bg-white/20"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        deleteArtifact(artifact.id);
+                                        setDeletingArtifact({ id: artifact.id, title: artifact.ai_title || "Untitled" });
                                       }}
                                     >
                                       <Trash2 className="h-3 w-3" />
@@ -578,7 +589,7 @@ ${artifact.content}`;
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    onClick={() => deleteArtifact(artifact.id)}
+                                    onClick={() => setDeletingArtifact({ id: artifact.id, title: artifact.ai_title || "Untitled" })}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
@@ -748,7 +759,7 @@ ${artifact.content}`;
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8"
-                                      onClick={() => deleteArtifact(artifact.id)}
+                                      onClick={() => setDeletingArtifact({ id: artifact.id, title: artifact.ai_title || "Untitled" })}
                                     >
                                       <Trash2 className="h-3 w-3" />
                                     </Button>
@@ -831,6 +842,32 @@ ${artifact.content}`;
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deletingArtifact} onOpenChange={(open) => !open && setDeletingArtifact(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Artifact</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deletingArtifact?.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deletingArtifact) {
+                  deleteArtifact(deletingArtifact.id);
+                  setDeletingArtifact(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
