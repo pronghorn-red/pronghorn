@@ -273,6 +273,18 @@ interface PlaceholderPosition {
 }
 let placeholderPositions: Map<string, PlaceholderPosition> = new Map();
 
+// Per-layout placeholder styles (includes font info)
+interface PlaceholderStyle {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontSize?: number;      // in points
+  fontColor?: string;     // resolved hex color
+  alignment?: 'left' | 'center' | 'right' | 'justify';
+  verticalAlign?: 'top' | 'middle' | 'bottom';
+}
+
 /**
  * Parse placeholder positions from slide masters
  * These are used when a shape doesn't have its own transform
@@ -379,6 +391,113 @@ async function parsePlaceholderPositions(zip: JSZip): Promise<void> {
   }
   
   console.log(`[PPTX Parser] Total placeholder positions cached:`, Object.fromEntries(placeholderPositions));
+}
+
+/**
+ * Parse placeholder styles from a specific slide layout XML
+ * Extracts position, font color, font size, alignment for each placeholder type
+ */
+async function parseLayoutPlaceholderStyles(
+  zip: JSZip,
+  layoutPath: string
+): Promise<Map<string, PlaceholderStyle>> {
+  const styles = new Map<string, PlaceholderStyle>();
+  const parser = new DOMParser();
+  
+  const layoutFile = zip.file(layoutPath);
+  if (!layoutFile) {
+    console.log(`[PPTX Parser] Layout file not found: ${layoutPath}`);
+    return styles;
+  }
+  
+  try {
+    const xml = await layoutFile.async("string");
+    const doc = parser.parseFromString(xml, "application/xml");
+    
+    // Find all shape elements with placeholders
+    const spElements = doc.getElementsByTagNameNS(NS.p, "sp");
+    
+    for (let i = 0; i < spElements.length; i++) {
+      const sp = spElements[i];
+      
+      // Check for placeholder type
+      const nvSpPr = sp.getElementsByTagNameNS(NS.p, "nvSpPr")[0];
+      if (!nvSpPr) continue;
+      
+      const nvPr = nvSpPr.getElementsByTagNameNS(NS.p, "nvPr")[0];
+      if (!nvPr) continue;
+      
+      const ph = nvPr.getElementsByTagNameNS(NS.p, "ph")[0];
+      if (!ph) continue;
+      
+      const phType = ph.getAttribute("type") || "body";
+      
+      // Extract position
+      const transform = findXfrm(sp);
+      
+      // Extract default text properties from lstStyle or txBody
+      const txBody = sp.getElementsByTagNameNS(NS.p, "txBody")[0];
+      let fontSize: number | undefined;
+      let fontColor: string | undefined;
+      let alignment: 'left' | 'center' | 'right' | 'justify' | undefined;
+      let verticalAlign: 'top' | 'middle' | 'bottom' | undefined;
+      
+      if (txBody) {
+        // Get lstStyle which defines default paragraph/run properties
+        const lstStyle = txBody.getElementsByTagNameNS(NS.a, "lstStyle")[0];
+        if (lstStyle) {
+          // Look for lvl1pPr (level 1 paragraph properties) first
+          const lvl1pPr = lstStyle.getElementsByTagNameNS(NS.a, "lvl1pPr")[0];
+          if (lvl1pPr) {
+            // Get alignment
+            const algn = lvl1pPr.getAttribute("algn");
+            if (algn) {
+              alignment = { l: 'left', ctr: 'center', r: 'right', just: 'justify' }[algn] as typeof alignment;
+            }
+            
+            // Get default run properties (defRPr)
+            const defRPr = lvl1pPr.getElementsByTagNameNS(NS.a, "defRPr")[0];
+            if (defRPr) {
+              // Font size (sz is in hundredths of a point)
+              const sz = defRPr.getAttribute("sz");
+              if (sz) fontSize = parseInt(sz, 10) / 100;
+              
+              // Font color from solidFill
+              const solidFill = defRPr.getElementsByTagNameNS(NS.a, "solidFill")[0];
+              fontColor = parseColor(solidFill);
+            }
+          }
+        }
+        
+        // Get vertical alignment from bodyPr
+        const bodyPr = txBody.getElementsByTagNameNS(NS.a, "bodyPr")[0];
+        if (bodyPr) {
+          const anchor = bodyPr.getAttribute("anchor");
+          if (anchor === "t") verticalAlign = 'top';
+          else if (anchor === "ctr") verticalAlign = 'middle';
+          else if (anchor === "b") verticalAlign = 'bottom';
+        }
+      }
+      
+      // Store the style
+      styles.set(phType, {
+        x: transform?.x ?? 0,
+        y: transform?.y ?? 0,
+        width: transform?.width ?? SLIDE_WIDTH,
+        height: transform?.height ?? 100,
+        fontSize,
+        fontColor,
+        alignment,
+        verticalAlign,
+      });
+      
+      console.log(`[PPTX Parser] Layout placeholder '${phType}': fontColor=${fontColor}, fontSize=${fontSize}, pos=(${transform?.x}, ${transform?.y})`);
+    }
+  } catch (error) {
+    console.warn(`Failed to parse layout placeholder styles from ${layoutPath}:`, error);
+  }
+  
+  return styles;
 }
 
 /**
@@ -841,8 +960,15 @@ async function extractSlideBackground(
 
 /**
  * Extract shapes from slide XML
+ * @param doc - Parsed slide XML document
+ * @param rels - Relationship mappings for the slide
+ * @param layoutStyles - Optional placeholder styles from the slide's layout
  */
-function extractShapesFromXml(doc: Document, rels: Record<string, string>): PptxShape[] {
+function extractShapesFromXml(
+  doc: Document, 
+  rels: Record<string, string>,
+  layoutStyles?: Map<string, PlaceholderStyle>
+): PptxShape[] {
   const shapes: PptxShape[] = [];
   
   // Find all sp (shape) elements
@@ -889,8 +1015,11 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
     // Skip if no transform AND no text
     if (!transform && textContent.length === 0) continue;
     
-    // Determine position: use transform if available, otherwise inherit from placeholder positions
+    // Determine position: use transform if available, otherwise inherit from layout or placeholder positions
     let x: number, y: number, width: number, height: number;
+    
+    // Check if we have layout-specific styles for this placeholder
+    const layoutStyle = placeholderType && layoutStyles?.get(placeholderType);
     
     if (transform) {
       // Use explicit transform from the shape
@@ -898,14 +1027,21 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
       y = transform.y;
       width = transform.width;
       height = transform.height;
+    } else if (layoutStyle && layoutStyle.width > 0) {
+      // Inherit position from this slide's specific layout
+      x = layoutStyle.x;
+      y = layoutStyle.y;
+      width = layoutStyle.width;
+      height = layoutStyle.height;
+      console.log(`[PPTX Parser] Shape ${i}: Using layout position for placeholder '${placeholderType}': x=${x}, y=${y}`);
     } else if (placeholderType && placeholderPositions.has(placeholderType)) {
-      // Inherit position from placeholder cache (slide master/layout)
+      // Inherit position from global placeholder cache (slide master)
       const inheritedPos = placeholderPositions.get(placeholderType)!;
       x = inheritedPos.x;
       y = inheritedPos.y;
       width = inheritedPos.width;
       height = inheritedPos.height;
-      console.log(`[PPTX Parser] Shape ${i}: Using inherited position for placeholder '${placeholderType}': x=${x}, y=${y}`);
+      console.log(`[PPTX Parser] Shape ${i}: Using master position for placeholder '${placeholderType}': x=${x}, y=${y}`);
     } else {
       // Fallback to default positions
       x = 50;
@@ -946,6 +1082,38 @@ function extractShapesFromXml(doc: Document, rels: Record<string, string>): Pptx
       if (anchor === "t") verticalAlign = 'top';
       else if (anchor === "ctr") verticalAlign = 'middle';
       else if (anchor === "b") verticalAlign = 'bottom';
+    }
+    
+    // INHERIT from layout styles if shape doesn't define its own
+    if (layoutStyle) {
+      // Inherit font color if not explicitly defined on shape
+      if (!fontColor && layoutStyle.fontColor) {
+        fontColor = layoutStyle.fontColor;
+        console.log(`[PPTX Parser] Shape ${i} ('${placeholderType}'): Inheriting fontColor=${fontColor} from layout`);
+      }
+      // Inherit font size if not explicitly defined
+      if (!fontSize && layoutStyle.fontSize) {
+        fontSize = layoutStyle.fontSize;
+        console.log(`[PPTX Parser] Shape ${i} ('${placeholderType}'): Inheriting fontSize=${fontSize} from layout`);
+      }
+      // Inherit vertical alignment if not explicitly defined
+      if (!verticalAlign && layoutStyle.verticalAlign) {
+        verticalAlign = layoutStyle.verticalAlign;
+      }
+    }
+    
+    // Also apply inherited styles to paragraph runs that don't have explicit colors
+    if (paragraphs.length > 0 && layoutStyle?.fontColor) {
+      for (const para of paragraphs) {
+        for (const run of para.runs) {
+          if (!run.fontColor) {
+            run.fontColor = layoutStyle.fontColor;
+          }
+          if (!run.fontSize && layoutStyle.fontSize) {
+            run.fontSize = layoutStyle.fontSize;
+          }
+        }
+      }
     }
     
     shapes.push({
@@ -1109,8 +1277,28 @@ async function parseSlide(
   // Extract text content
   const textContent = extractTextFromXml(doc);
   
-  // Extract shapes
-  const shapes = extractShapesFromXml(doc, rels);
+  // Find which layout this slide uses and parse its placeholder styles
+  let layoutPath: string | null = null;
+  for (const relId in rels) {
+    const target = rels[relId];
+    if (target.includes("slideLayouts")) {
+      // Normalize path
+      layoutPath = target.startsWith("../") 
+        ? `ppt/${target.replace("../", "")}` 
+        : target.replace("ppt/ppt/", "ppt/");
+      break;
+    }
+  }
+  
+  // Parse layout-specific placeholder styles
+  let layoutStyles: Map<string, PlaceholderStyle> | undefined;
+  if (layoutPath) {
+    layoutStyles = await parseLayoutPlaceholderStyles(zip, layoutPath);
+    console.log(`[PPTX Parser] Slide ${slideIndex + 1} uses layout ${layoutPath} with ${layoutStyles.size} placeholder styles`);
+  }
+  
+  // Extract shapes with layout styles for inheritance
+  const shapes = extractShapesFromXml(doc, rels, layoutStyles);
   
   // Extract background color
   const backgroundColor = await extractSlideBackground(zip, slideIndex, rels);
