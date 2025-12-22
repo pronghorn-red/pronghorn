@@ -204,22 +204,36 @@ export async function rasterizeElement(
   } = options;
 
   // Add element to DOM temporarily (required for html-to-image)
-  element.style.position = "absolute";
-  element.style.left = "-9999px";
+  // Use visibility instead of offscreen positioning for more reliable capture
+  element.style.position = "fixed";
+  element.style.left = "0";
   element.style.top = "0";
+  element.style.zIndex = "-9999";
+  element.style.opacity = "1";
+  element.style.visibility = "visible";
   document.body.appendChild(element);
+
+  // Debug: log the HTML content
+  console.log("[PPTX Rasterizer] HTML to capture:", element.innerHTML.substring(0, 500));
+  console.log("[PPTX Rasterizer] Element dimensions:", element.offsetWidth, "x", element.offsetHeight);
 
   try {
     // Wait for all images to load before capturing
     await waitForImages(element);
+    
+    // Small delay to ensure rendering is complete
+    await new Promise(resolve => setTimeout(resolve, 50));
     
     const dataUrl = await toPng(element, {
       width,
       height,
       pixelRatio,
       backgroundColor,
+      cacheBust: true,
       style: {
         transform: "none",
+        visibility: "visible",
+        opacity: "1",
       },
     });
 

@@ -30,6 +30,7 @@ export interface PptxExportOptions {
   mergeText: boolean;
   extractImages: boolean;
   selectedSlides: Set<number>;
+  selectedImages: Set<string>;
 }
 
 interface ArtifactPptxViewerProps {
@@ -117,11 +118,13 @@ export function ArtifactPptxViewer({
       setLoadingProgress(60);
       setLoadingMessage("Processing slides...");
 
-      // Select all slides by default
+      // Select all slides and images by default
       const allSlides = new Set(data.slides.map((_, i) => i));
+      const allImages = new Set(Array.from(data.media.keys()));
       onExportOptionsChange({
         ...exportOptions,
         selectedSlides: allSlides,
+        selectedImages: allImages,
       });
 
       setLoadingProgress(100);
@@ -147,6 +150,7 @@ export function ArtifactPptxViewer({
       mergeText: true,
       extractImages: true,
       selectedSlides: new Set(),
+      selectedImages: new Set(),
     });
   };
 
@@ -170,6 +174,26 @@ export function ArtifactPptxViewer({
     onExportOptionsChange({ ...exportOptions, selectedSlides: new Set() });
   };
 
+  const toggleImageSelection = (imageId: string) => {
+    const newSelected = new Set<string>(exportOptions.selectedImages || new Set<string>());
+    if (newSelected.has(imageId)) {
+      newSelected.delete(imageId);
+    } else {
+      newSelected.add(imageId);
+    }
+    onExportOptionsChange({ ...exportOptions, selectedImages: newSelected });
+  };
+
+  const selectAllImages = () => {
+    if (!pptxData) return;
+    const allImages = new Set<string>(Array.from(pptxData.media.keys()));
+    onExportOptionsChange({ ...exportOptions, selectedImages: allImages });
+  };
+
+  const deselectAllImages = () => {
+    onExportOptionsChange({ ...exportOptions, selectedImages: new Set<string>() });
+  };
+
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -188,20 +212,16 @@ export function ArtifactPptxViewer({
     if (exportOptions.mode === "rasterize" || exportOptions.mode === "both") {
       count += selectedCount;
     }
-    if (exportOptions.extractImages) {
-      // Count unique images in selected slides
-      const imageIds = new Set<string>();
-      for (const idx of exportOptions.selectedSlides) {
-        const slide = pptxData.slides[idx];
-        slide?.images.forEach((img) => imageIds.add(img.id));
-      }
-      count += imageIds.size;
+    if (exportOptions.extractImages && exportOptions.selectedImages) {
+      count += exportOptions.selectedImages.size;
     }
 
     return count;
   }, [pptxData, exportOptions]);
 
   const previewSlide = previewSlideIndex !== null && pptxData?.slides[previewSlideIndex];
+
+  const selectedImagesCount = exportOptions.selectedImages?.size || 0;
 
   return (
     <div className="flex flex-col gap-3 h-full min-h-0">
@@ -326,65 +346,36 @@ export function ArtifactPptxViewer({
             </div>
           </div>
 
-          {/* Slide selection */}
-          <div className="flex items-center justify-between shrink-0">
-            <div className="text-sm font-medium">
-              Slide Selection ({exportOptions.selectedSlides.size}/{pptxData.slideCount})
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={selectAllSlides}
-              >
-                <CheckSquare className="h-3.5 w-3.5 mr-1" /> All
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={deselectAllSlides}
-              >
-                <Square className="h-3.5 w-3.5 mr-1" /> None
-              </Button>
-            </div>
-          </div>
-
-          {/* Picture Gallery - Shows all extracted images */}
-          {pptxData.media.size > 0 && (
-            <div className="shrink-0 space-y-2">
-              <div className="flex items-center gap-2">
-                <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">
-                  Picture Gallery ({pptxData.media.size} image{pptxData.media.size !== 1 ? "s" : ""})
-                </span>
-              </div>
-              <ScrollArea className="h-28 border rounded-lg p-2 bg-muted/20">
-                <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2">
-                  {Array.from(pptxData.media.values()).map((img) => (
-                    <div 
-                      key={img.id} 
-                      className="aspect-square rounded border overflow-hidden bg-white hover:ring-2 ring-primary cursor-pointer"
-                      title={img.filename}
-                    >
-                      <img 
-                        src={`data:${img.mimeType};base64,${img.base64}`}
-                        alt={img.filename}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ))}
+          {/* Main scrollable content area */}
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="space-y-4 pr-4">
+              {/* Slide selection header */}
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">
+                  Slide Selection ({exportOptions.selectedSlides.size}/{pptxData.slideCount})
                 </div>
-              </ScrollArea>
-            </div>
-          )}
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={selectAllSlides}
+                  >
+                    <CheckSquare className="h-3.5 w-3.5 mr-1" /> All
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={deselectAllSlides}
+                  >
+                    <Square className="h-3.5 w-3.5 mr-1" /> None
+                  </Button>
+                </div>
+              </div>
 
-          {/* Slide grid and preview */}
-          <div className="flex flex-1 gap-3 min-h-0 overflow-hidden">
-            {/* Slide thumbnails */}
-            <ScrollArea className="flex-1 min-w-0">
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 p-1">
+              {/* Slide thumbnails grid */}
+              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2">
                 {pptxData.slides.map((slide, index) => {
                   const isSelected = exportOptions.selectedSlides.has(index);
                   const thumbnail = thumbnails.get(index);
@@ -437,58 +428,116 @@ export function ArtifactPptxViewer({
                   );
                 })}
               </div>
-            </ScrollArea>
 
-            {/* Preview panel */}
-            {previewSlide && (
-              <div className="w-64 shrink-0 border rounded-lg p-3 bg-muted/20 flex flex-col gap-2 overflow-hidden">
-                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Preview: Slide {previewSlide.index + 1}
-                </div>
-
-                {/* Preview thumbnail */}
-                <div className="aspect-video rounded border bg-white overflow-hidden">
-                  {thumbnails.get(previewSlide.index) ? (
-                    <img
-                      src={thumbnails.get(previewSlide.index)}
-                      alt={`Slide ${previewSlide.index + 1}`}
-                      className="w-full h-full object-contain"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+              {/* Picture Gallery - Shows all extracted images */}
+              {pptxData.media.size > 0 && (
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">
+                        Picture Gallery ({selectedImagesCount}/{pptxData.media.size})
+                      </span>
                     </div>
-                  )}
-                </div>
-
-                {previewSlide.title && (
-                  <div className="text-sm font-medium truncate">{previewSlide.title}</div>
-                )}
-
-                <Separator />
-
-                <ScrollArea className="flex-1 min-h-0">
-                  <div className="text-xs text-muted-foreground space-y-1">
-                    {previewSlide.textContent.length > 0 ? (
-                      previewSlide.textContent.slice(0, 10).map((text, i) => (
-                        <p key={i} className="line-clamp-2">
-                          {text}
-                        </p>
-                      ))
-                    ) : (
-                      <p className="italic">No text content</p>
-                    )}
-                    {previewSlide.textContent.length > 10 && (
-                      <p className="text-muted-foreground/50">
-                        +{previewSlide.textContent.length - 10} more...
-                      </p>
-                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={selectAllImages}
+                      >
+                        <CheckSquare className="h-3.5 w-3.5 mr-1" /> All
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={deselectAllImages}
+                      >
+                        <Square className="h-3.5 w-3.5 mr-1" /> None
+                      </Button>
+                    </div>
                   </div>
-                </ScrollArea>
+                  <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2">
+                    {Array.from(pptxData.media.entries()).map(([imageId, img]) => {
+                      const isSelected = exportOptions.selectedImages?.has(imageId) || false;
+                      return (
+                        <div 
+                          key={img.id}
+                          className={cn(
+                            "relative aspect-square rounded border-2 overflow-hidden bg-white cursor-pointer transition-all",
+                            isSelected
+                              ? "border-primary"
+                              : "border-muted hover:border-muted-foreground/50"
+                          )}
+                          onClick={() => toggleImageSelection(imageId)}
+                          title={img.filename}
+                        >
+                          <img 
+                            src={`data:${img.mimeType};base64,${img.base64}`}
+                            alt={img.filename}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute top-1 left-1">
+                            <Checkbox
+                              checked={isSelected}
+                              className="h-4 w-4 bg-background/80 border-muted-foreground/50"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
-              </div>
-            )}
-          </div>
+              {/* Preview panel at bottom */}
+              {previewSlide && (
+                <div className="border-t pt-4 mt-2">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                    Preview: Slide {previewSlide.index + 1}
+                  </div>
+                  <div className="flex gap-4">
+                    {/* Preview thumbnail */}
+                    <div className="w-48 aspect-video rounded border bg-white overflow-hidden shrink-0">
+                      {thumbnails.get(previewSlide.index) ? (
+                        <img
+                          src={thumbnails.get(previewSlide.index)}
+                          alt={`Slide ${previewSlide.index + 1}`}
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Preview text content */}
+                    <div className="flex-1 min-w-0">
+                      {previewSlide.title && (
+                        <div className="text-sm font-medium truncate mb-2">{previewSlide.title}</div>
+                      )}
+                      <div className="text-xs text-muted-foreground space-y-1 max-h-24 overflow-y-auto">
+                        {previewSlide.textContent.length > 0 ? (
+                          previewSlide.textContent.slice(0, 5).map((text, i) => (
+                            <p key={i} className="line-clamp-1">{text}</p>
+                          ))
+                        ) : (
+                          <p className="italic">No text content</p>
+                        )}
+                        {previewSlide.textContent.length > 5 && (
+                          <p className="text-muted-foreground/50">
+                            +{previewSlide.textContent.length - 5} more...
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
         </>
       )}
     </div>

@@ -82,6 +82,7 @@ export function AddArtifactModal({
     mergeText: true,
     extractImages: true,
     selectedSlides: new Set(),
+    selectedImages: new Set(),
   });
 
   // Phase 2 file states (coming soon)
@@ -124,13 +125,8 @@ export function AddArtifactModal({
     if (pptxExportOptions.mode === "rasterize" || pptxExportOptions.mode === "both") {
       count += selectedCount;
     }
-    if (pptxExportOptions.extractImages) {
-      const imageIds = new Set<string>();
-      for (const idx of pptxExportOptions.selectedSlides) {
-        const slide = pptxData.slides[idx];
-        slide?.images.forEach((img) => imageIds.add(img.id));
-      }
-      count += imageIds.size;
+    if (pptxExportOptions.extractImages && pptxExportOptions.selectedImages) {
+      count += pptxExportOptions.selectedImages.size;
     }
 
     return count;
@@ -405,34 +401,30 @@ export function AddArtifactModal({
           }
         }
 
-        // Extract embedded images
-        if (pptxExportOptions.extractImages) {
-          const processedImages = new Set<string>();
+        // Extract selected embedded images
+        if (pptxExportOptions.extractImages && pptxExportOptions.selectedImages) {
+          for (const imageId of pptxExportOptions.selectedImages) {
+            const img = pptxData.media.get(imageId);
+            if (!img) continue;
 
-          for (const slide of selectedSlides) {
-            for (const img of slide.images) {
-              if (processedImages.has(img.id)) continue;
-              processedImages.add(img.id);
+            try {
+              const { data, error } = await supabase.functions.invoke("upload-artifact-image", {
+                body: {
+                  projectId,
+                  shareToken,
+                  imageData: img.base64,
+                  fileName: img.filename,
+                  content: `Embedded image from ${pptxData.filename}: ${img.filename}`,
+                  sourceType: "pptx-image",
+                },
+              });
 
-              try {
-                const { data, error } = await supabase.functions.invoke("upload-artifact-image", {
-                  body: {
-                    projectId,
-                    shareToken,
-                    imageData: img.base64,
-                    fileName: img.filename,
-                    content: `Embedded image from ${pptxData.filename}: ${img.filename}`,
-                    sourceType: "pptx-image",
-                  },
-                });
-
-                if (error) throw error;
-                broadcastRefresh("insert", data?.artifact?.id);
-                successCount++;
-              } catch (err) {
-                console.error(`Failed to create artifact for image ${img.filename}:`, err);
-                errorCount++;
-              }
+              if (error) throw error;
+              broadcastRefresh("insert", data?.artifact?.id);
+              successCount++;
+            } catch (err) {
+              console.error(`Failed to create artifact for image ${img.filename}:`, err);
+              errorCount++;
             }
           }
         }
@@ -466,6 +458,7 @@ export function AddArtifactModal({
       mergeText: true,
       extractImages: true,
       selectedSlides: new Set(),
+      selectedImages: new Set(),
     });
     setDocxFiles([]);
     setPdfFiles([]);
