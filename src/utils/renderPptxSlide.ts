@@ -140,6 +140,23 @@ function escapeHtml(text: string): string {
 }
 
 /**
+ * Wait for all images in an element to load
+ */
+async function waitForImages(container: HTMLElement): Promise<void> {
+  const images = container.querySelectorAll("img");
+  const promises = Array.from(images).map((img) => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve(); // Don't fail if image fails
+      // Also add timeout to prevent hanging
+      setTimeout(resolve, 2000);
+    });
+  });
+  await Promise.all(promises);
+}
+
+/**
  * Rasterize an HTML element to a PNG blob
  */
 export async function rasterizeElement(
@@ -160,6 +177,9 @@ export async function rasterizeElement(
   document.body.appendChild(element);
 
   try {
+    // Wait for all images to load before capturing
+    await waitForImages(element);
+    
     const dataUrl = await toPng(element, {
       width,
       height,

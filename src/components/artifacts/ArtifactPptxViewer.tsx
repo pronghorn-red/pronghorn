@@ -458,9 +458,27 @@ export function ArtifactPptxViewer({
                 </ScrollArea>
 
                 {previewSlide.images.length > 0 && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <ImageIcon className="h-3 w-3" />
-                    {previewSlide.images.length} image{previewSlide.images.length !== 1 ? "s" : ""}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <ImageIcon className="h-3 w-3" />
+                      {previewSlide.images.length} embedded image{previewSlide.images.length !== 1 ? "s" : ""}
+                    </div>
+                    <div className="grid grid-cols-3 gap-1">
+                      {previewSlide.images.slice(0, 6).map((img) => (
+                        <div key={img.id} className="aspect-square rounded border overflow-hidden bg-muted/50">
+                          <img 
+                            src={`data:${img.mimeType};base64,${img.base64}`}
+                            alt={img.filename}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ))}
+                      {previewSlide.images.length > 6 && (
+                        <div className="aspect-square rounded border bg-muted/50 flex items-center justify-center text-xs text-muted-foreground">
+                          +{previewSlide.images.length - 6}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
