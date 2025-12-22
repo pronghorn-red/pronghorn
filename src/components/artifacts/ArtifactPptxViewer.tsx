@@ -17,6 +17,7 @@ import {
   Square,
   Loader2,
   AlertCircle,
+  ScanEye,
 } from "lucide-react";
 import {
   Select,
@@ -50,6 +51,7 @@ interface ArtifactPptxViewerProps {
   onPptxDataChange: (data: PptxData | null) => void;
   exportOptions: PptxExportOptions;
   onExportOptionsChange: (options: PptxExportOptions) => void;
+  textOverrides?: Map<string, string>; // VR-processed content overrides
 }
 
 export function ArtifactPptxViewer({
@@ -57,6 +59,7 @@ export function ArtifactPptxViewer({
   onPptxDataChange,
   exportOptions,
   onExportOptionsChange,
+  textOverrides,
 }: ArtifactPptxViewerProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -467,8 +470,16 @@ export function ArtifactPptxViewer({
               {/* Preview panel at top */}
               {previewSlide && (
                 <div className="border-b pb-4 mb-2">
-                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                    Preview: Slide {previewSlide.index + 1}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Preview: Slide {previewSlide.index + 1}
+                    </span>
+                    {textOverrides?.has(`pptx-${previewSlide.index}`) && (
+                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px] gap-1">
+                        <ScanEye className="h-3 w-3" />
+                        OCR
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex gap-4">
                     {/* Preview thumbnail */}
@@ -486,20 +497,25 @@ export function ArtifactPptxViewer({
                       )}
                     </div>
 
-                    {/* Preview text content */}
+                    {/* Preview text content - show VR override if exists */}
                     <div className="flex-1 min-w-0">
-                      {previewSlide.title && (
+                      {previewSlide.title && !textOverrides?.has(`pptx-${previewSlide.index}`) && (
                         <div className="text-sm font-medium truncate mb-2">{previewSlide.title}</div>
                       )}
                       <div className="text-xs text-muted-foreground space-y-1 max-h-24 overflow-y-auto">
-                        {previewSlide.textContent.length > 0 ? (
+                        {textOverrides?.has(`pptx-${previewSlide.index}`) ? (
+                          <p className="whitespace-pre-wrap line-clamp-6">
+                            {textOverrides.get(`pptx-${previewSlide.index}`)?.substring(0, 500)}
+                            {(textOverrides.get(`pptx-${previewSlide.index}`)?.length || 0) > 500 ? "..." : ""}
+                          </p>
+                        ) : previewSlide.textContent.length > 0 ? (
                           previewSlide.textContent.slice(0, 5).map((text, i) => (
                             <p key={i} className="line-clamp-1">{text}</p>
                           ))
                         ) : (
                           <p className="italic">No text content</p>
                         )}
-                        {previewSlide.textContent.length > 5 && (
+                        {!textOverrides?.has(`pptx-${previewSlide.index}`) && previewSlide.textContent.length > 5 && (
                           <p className="text-muted-foreground/50">
                             +{previewSlide.textContent.length - 5} more...
                           </p>
@@ -580,6 +596,13 @@ export function ArtifactPptxViewer({
                           className="h-4 w-4 bg-background/80 border-muted-foreground/50"
                         />
                       </div>
+
+                      {/* VR indicator */}
+                      {textOverrides?.has(`pptx-${index}`) && (
+                        <div className="absolute top-1 right-1 bg-primary/90 rounded-full p-0.5">
+                          <ScanEye className="h-3 w-3 text-primary-foreground" />
+                        </div>
+                      )}
 
                       {/* Slide number */}
                       <div className="absolute bottom-0 right-0 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium rounded-tl">

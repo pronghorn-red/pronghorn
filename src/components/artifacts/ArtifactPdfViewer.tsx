@@ -18,6 +18,7 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  ScanEye,
 } from "lucide-react";
 import {
   Select,
@@ -53,6 +54,7 @@ interface ArtifactPdfViewerProps {
   onPdfDataChange: (data: PdfData | null) => void;
   exportOptions: PdfExportOptions;
   onExportOptionsChange: (options: PdfExportOptions) => void;
+  textOverrides?: Map<string, string>; // VR-processed content overrides
 }
 
 export function ArtifactPdfViewer({
@@ -60,6 +62,7 @@ export function ArtifactPdfViewer({
   onPdfDataChange,
   exportOptions,
   onExportOptionsChange,
+  textOverrides,
 }: ArtifactPdfViewerProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -442,8 +445,16 @@ export function ArtifactPdfViewer({
               {/* Preview panel */}
               {previewPage && previewPageIndex !== null && (
                 <div className="border rounded-lg p-4 bg-card">
-                  <div className="text-xs font-medium text-muted-foreground mb-2">
-                    Page {previewPageIndex + 1} Preview
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Page {previewPageIndex + 1} Preview
+                    </span>
+                    {textOverrides?.has(`pdf-${previewPageIndex}`) && (
+                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px] gap-1">
+                        <ScanEye className="h-3 w-3" />
+                        OCR
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex gap-4">
                     {/* Thumbnail preview */}
@@ -460,11 +471,16 @@ export function ArtifactPdfViewer({
                         </div>
                       )}
                     </div>
-                    {/* Text preview */}
+                    {/* Text preview - show VR override if exists */}
                     <div className="flex-1 min-w-0">
                       <div className="text-xs text-muted-foreground mb-1">Text Content</div>
                       <div className="text-sm bg-muted/30 rounded p-2 max-h-32 overflow-y-auto">
-                        {pdfData.pagesText[previewPageIndex] ? (
+                        {textOverrides?.has(`pdf-${previewPageIndex}`) ? (
+                          <p className="whitespace-pre-wrap line-clamp-6">
+                            {textOverrides.get(`pdf-${previewPageIndex}`)?.substring(0, 500)}
+                            {(textOverrides.get(`pdf-${previewPageIndex}`)?.length || 0) > 500 ? "..." : ""}
+                          </p>
+                        ) : pdfData.pagesText[previewPageIndex] ? (
                           <p className="whitespace-pre-wrap line-clamp-6">
                             {pdfData.pagesText[previewPageIndex].substring(0, 500)}
                             {pdfData.pagesText[previewPageIndex].length > 500 ? "..." : ""}
@@ -578,6 +594,13 @@ export function ArtifactPdfViewer({
                       >
                         <Checkbox checked={isSelected} className="bg-white/80" />
                       </div>
+
+                      {/* VR indicator */}
+                      {textOverrides?.has(`pdf-${pageIndex}`) && (
+                        <div className="absolute top-1 right-1 bg-primary/90 rounded-full p-0.5">
+                          <ScanEye className="h-3 w-3 text-primary-foreground" />
+                        </div>
+                      )}
 
                       {/* Page number badge */}
                       <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] text-center py-0.5">

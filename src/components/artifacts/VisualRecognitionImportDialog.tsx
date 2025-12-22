@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -86,6 +86,17 @@ export function VisualRecognitionImportDialog({
   const [totalToProcess, setTotalToProcess] = useState(0);
   const [results, setResults] = useState<ProcessingResult[]>([]);
   const [currentBatch, setCurrentBatch] = useState<string[]>([]);
+
+  // Reset state when dialog opens to enable reprocessing
+  useEffect(() => {
+    if (open) {
+      setStatus('idle');
+      setProgress(0);
+      setResults([]);
+      setCurrentBatch([]);
+      setTotalToProcess(0);
+    }
+  }, [open]);
 
   const handleProcess = async () => {
     if (images.length === 0) {
@@ -361,24 +372,27 @@ export function VisualRecognitionImportDialog({
           >
             {status === 'complete' ? 'Close' : 'Cancel'}
           </Button>
-          {status !== 'complete' && (
-            <Button
-              onClick={handleProcess}
-              disabled={status === 'processing' || images.length === 0}
-            >
-              {status === 'processing' ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <ScanEye className="h-4 w-4 mr-2" />
-                  Process {images.length} Image{images.length !== 1 ? 's' : ''}
-                </>
-              )}
-            </Button>
-          )}
+          <Button
+            onClick={handleProcess}
+            disabled={status === 'processing' || images.length === 0}
+          >
+            {status === 'processing' ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : status === 'complete' ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reprocess {images.length} Image{images.length !== 1 ? 's' : ''}
+              </>
+            ) : (
+              <>
+                <ScanEye className="h-4 w-4 mr-2" />
+                Process {images.length} Image{images.length !== 1 ? 's' : ''}
+              </>
+            )}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

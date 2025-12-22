@@ -10,6 +10,7 @@ interface ArtifactPdfPlaceholderProps {
   onPdfDataChange: (data: PdfData | null) => void;
   exportOptions: PdfExportOptions;
   onExportOptionsChange: (options: PdfExportOptions) => void;
+  textOverrides?: Map<string, string>; // VR-processed content overrides
 }
 
 export function ArtifactPdfPlaceholder({
@@ -17,6 +18,7 @@ export function ArtifactPdfPlaceholder({
   onPdfDataChange,
   exportOptions,
   onExportOptionsChange,
+  textOverrides,
 }: ArtifactPdfPlaceholderProps) {
   return (
     <ArtifactPdfViewer
@@ -24,6 +26,7 @@ export function ArtifactPdfPlaceholder({
       onPdfDataChange={onPdfDataChange}
       exportOptions={exportOptions}
       onExportOptionsChange={onExportOptionsChange}
+      textOverrides={textOverrides}
     />
   );
 }
