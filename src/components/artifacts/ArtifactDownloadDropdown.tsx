@@ -1,3 +1,4 @@
+import React from "react";
 import { Download, FileText, FileJson, FileType } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,14 +19,10 @@ interface ArtifactDownloadDropdownProps {
   iconOnly?: boolean;
 }
 
-export function ArtifactDownloadDropdown({
-  title,
-  content,
-  aiSummary,
-  variant = "ghost",
-  size = "icon",
-  iconOnly = true,
-}: ArtifactDownloadDropdownProps) {
+export const ArtifactDownloadDropdown = React.forwardRef<
+  HTMLDivElement,
+  ArtifactDownloadDropdownProps
+>(({ title, content, aiSummary, variant = "ghost", size = "icon", iconOnly = true }, ref) => {
   const sanitizeFilename = (name: string) => {
     return name
       .replace(/[^a-zA-Z0-9\s-]/g, "")
@@ -112,27 +109,31 @@ export function ArtifactDownloadDropdown({
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant={variant} size={size} title="Download">
-          <Download className={size === "icon" ? "h-4 w-4" : "h-3 w-3"} />
-          {!iconOnly && <span className="ml-2">Download</span>}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-popover">
-        <DropdownMenuItem onClick={handleDownloadWord} className="cursor-pointer">
-          <FileType className="h-4 w-4 mr-2" />
-          Download as Word
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={handleDownloadMarkdown} className="cursor-pointer">
-          <FileText className="h-4 w-4 mr-2" />
-          Download as Markdown
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={handleDownloadJson} className="cursor-pointer">
-          <FileJson className="h-4 w-4 mr-2" />
-          Download as JSON
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div ref={ref}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant={variant} size={size} title="Download">
+            <Download className={size === "icon" ? "h-4 w-4" : "h-3 w-3"} />
+            {!iconOnly && <span className="ml-2">Download</span>}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="bg-popover">
+          <DropdownMenuItem onClick={handleDownloadWord} className="cursor-pointer">
+            <FileType className="h-4 w-4 mr-2" />
+            Download as Word
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleDownloadMarkdown} className="cursor-pointer">
+            <FileText className="h-4 w-4 mr-2" />
+            Download as Markdown
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleDownloadJson} className="cursor-pointer">
+            <FileJson className="h-4 w-4 mr-2" />
+            Download as JSON
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
-}
+});
+
+ArtifactDownloadDropdown.displayName = "ArtifactDownloadDropdown";
