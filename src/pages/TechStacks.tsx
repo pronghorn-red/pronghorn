@@ -83,7 +83,7 @@ export default function TechStacks() {
     }
   };
 
-  const handleUpdateTechStack = async (techStackId: string, name: string, description: string) => {
+  const handleUpdateTechStack = async (techStackId: string, name: string, description: string, longDescription?: string) => {
     if (!isAdmin) {
       toast.error("Admin access required");
       return;
@@ -91,7 +91,7 @@ export default function TechStacks() {
 
     const { error } = await supabase
       .from("tech_stacks")
-      .update({ name, description })
+      .update({ name, description, long_description: longDescription || null })
       .eq("id", techStackId);
 
     if (error) {
