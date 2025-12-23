@@ -72,7 +72,7 @@ export function TechStackTreeSelector({
           .from("tech_stacks")
           .select("*")
           .eq("parent_id", stack.id)
-          .order("order_index");
+          .order("name");
 
         const filteredItems = (childItems || []).filter((item) =>
           allowedIds ? allowedIds.has(item.id) : true
@@ -109,6 +109,20 @@ export function TechStackTreeSelector({
       }
     });
 
+    // Sort alphabetically by name
+    const sortByName = (a: TechStackItem, b: TechStackItem) => 
+      (a.name || '').localeCompare(b.name || '');
+
+    const sortChildren = (items: TechStackItem[]) => {
+      items.sort(sortByName);
+      items.forEach(item => {
+        if (item.children?.length) {
+          sortChildren(item.children);
+        }
+      });
+    };
+
+    sortChildren(roots);
     return roots;
   };
 

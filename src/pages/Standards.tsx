@@ -25,7 +25,7 @@ export default function Standards() {
   }, []);
 
   const loadCategories = async () => {
-    const { data } = await supabase.from("standard_categories").select("*").order("order_index");
+    const { data } = await supabase.from("standard_categories").select("*").order("name");
     setCategories(data || []);
   };
 
