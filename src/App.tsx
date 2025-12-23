@@ -4,6 +4,9 @@ import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import Standards from "./pages/Standards";
 import TechStacks from "./pages/TechStacks";
+import BuildBooks from "./pages/BuildBooks";
+import BuildBookDetail from "./pages/BuildBookDetail";
+import BuildBookEditor from "./pages/BuildBookEditor";
 import Settings from "./pages/Settings";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
@@ -34,6 +37,10 @@ const App = () => (
     <Route path="/gallery" element={<Gallery />} />
     <Route path="/standards" element={<Standards />} />
     <Route path="/tech-stacks" element={<TechStacks />} />
+    <Route path="/build-books" element={<BuildBooks />} />
+    <Route path="/build-books/new" element={<BuildBookEditor />} />
+    <Route path="/build-books/:id" element={<BuildBookDetail />} />
+    <Route path="/build-books/:id/edit" element={<BuildBookEditor />} />
     <Route path="/terms" element={<Terms />} />
     <Route path="/privacy" element={<Privacy />} />
     <Route path="/license" element={<License />} />
