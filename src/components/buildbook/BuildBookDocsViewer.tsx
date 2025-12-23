@@ -88,6 +88,14 @@ interface TechStack {
   order_index: number;
 }
 
+interface TechStackCategory {
+  id: string;
+  name: string;
+  description: string | null;
+  long_description: string | null;
+  items: DocsItem[];
+}
+
 interface BuildBookDocsViewerProps {
   buildBook: BuildBook;
   standards: BuildBookStandard[];
@@ -96,7 +104,7 @@ interface BuildBookDocsViewerProps {
 
 export function BuildBookDocsViewer({ buildBook, standards, techStacks }: BuildBookDocsViewerProps) {
   const [standardCategories, setStandardCategories] = useState<Map<string, StandardCategory & { standards: DocsItem[] }>>(new Map());
-  const [techStackItems, setTechStackItems] = useState<DocsItem[]>([]);
+  const [techStackCategories, setTechStackCategories] = useState<TechStackCategory[]>([]);
   const [selectedItem, setSelectedItem] = useState<DocsItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -149,7 +157,7 @@ export function BuildBookDocsViewer({ buildBook, standards, techStacks }: BuildB
         }
       }
 
-      // Load tech stacks
+      // Load tech stacks grouped by parent category
       if (techStacks.length > 0) {
         const techStackIds = techStacks.map(t => t.tech_stack_id);
         
@@ -161,27 +169,64 @@ export function BuildBookDocsViewer({ buildBook, standards, techStacks }: BuildB
           .order("order_index");
 
         if (selectedTechStacks && selectedTechStacks.length > 0) {
-          // Find root items (those without parent_id or whose parent is not in our selection)
-          const selectedIds = new Set(techStackIds);
-          const rootItems = selectedTechStacks.filter(
-            ts => !ts.parent_id || !selectedIds.has(ts.parent_id)
-          );
-
-          // For each root item, load its children
-          const techStacksWithChildren: DocsItem[] = [];
+          // Get unique parent IDs from selected tech stacks
+          const parentIds = [...new Set(selectedTechStacks.map(ts => ts.parent_id).filter(Boolean))] as string[];
           
-          for (const root of rootItems) {
-            const { data: children } = await supabase
+          // Load parent categories
+          let parentCategories: TechStack[] = [];
+          if (parentIds.length > 0) {
+            const { data: parents } = await supabase
               .from("tech_stacks")
               .select("*")
-              .eq("parent_id", root.id)
+              .in("id", parentIds)
               .order("order_index");
+            parentCategories = parents || [];
+          }
 
-            const item = buildTechStackHierarchy(root, children || [], selectedIds);
-            techStacksWithChildren.push(item);
+          // Group tech stacks by parent
+          const categoriesMap = new Map<string, TechStackCategory>();
+          
+          // Add parent categories
+          for (const parent of parentCategories) {
+            categoriesMap.set(parent.id, {
+              id: parent.id,
+              name: parent.name,
+              description: parent.description,
+              long_description: parent.long_description,
+              items: [],
+            });
+          }
+
+          // Add child items to their parent categories, or create "uncategorized" for orphans
+          for (const ts of selectedTechStacks) {
+            if (ts.parent_id && categoriesMap.has(ts.parent_id)) {
+              categoriesMap.get(ts.parent_id)!.items.push({
+                id: ts.id,
+                name: ts.name,
+                description: ts.description,
+                long_description: ts.long_description,
+                type: ts.type,
+                version: ts.version,
+                version_constraint: ts.version_constraint,
+                itemType: "tech_stack",
+                children: [],
+              });
+            } else if (!ts.parent_id || !parentIds.includes(ts.parent_id)) {
+              // This is a root-level item (no parent in our selection)
+              // Treat it as its own category if it has no parent
+              if (!ts.parent_id) {
+                categoriesMap.set(ts.id, {
+                  id: ts.id,
+                  name: ts.name,
+                  description: ts.description,
+                  long_description: ts.long_description,
+                  items: [], // It's a root category with no children in selection
+                });
+              }
+            }
           }
           
-          setTechStackItems(techStacksWithChildren);
+          setTechStackCategories(Array.from(categoriesMap.values()));
         }
       }
 
@@ -575,7 +620,7 @@ export function BuildBookDocsViewer({ buildBook, standards, techStacks }: BuildB
             )}
 
             {/* Tech Stacks Section */}
-            {techStackItems.length > 0 && (
+            {techStackCategories.length > 0 && (
               <AccordionItem value="techstacks" className="border-b-0">
                 <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted">
                   <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -585,16 +630,15 @@ export function BuildBookDocsViewer({ buildBook, standards, techStacks }: BuildB
                 </AccordionTrigger>
                 <AccordionContent className="pb-0">
                   <div className="space-y-1 px-2 pb-2">
-                    {filterItems(techStackItems, searchQuery).map((item) => (
-                      <MobileNavItem
-                        key={item.id}
-                        item={item}
-                        level={0}
+                    {techStackCategories.map((category) => (
+                      <MobileTechStackCategoryNavItem
+                        key={category.id}
+                        category={category}
+                        items={filterItems(category.items, searchQuery)}
                         selectedId={selectedItem?.id}
                         expandedIds={expandedIds}
                         onSelect={setSelectedItem}
                         onToggle={toggleExpand}
-                        icon={<Layers className="h-4 w-4 text-primary shrink-0" />}
                       />
                     ))}
                   </div>
@@ -698,23 +742,22 @@ export function BuildBookDocsViewer({ buildBook, standards, techStacks }: BuildB
                 )}
 
                 {/* Tech Stacks Section */}
-                {techStackItems.length > 0 && (
+                {techStackCategories.length > 0 && (
                   <>
                     <Separator className="my-3" />
                     <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                       <Layers className="h-3.5 w-3.5" />
                       Tech Stacks
                     </div>
-                    {filterItems(techStackItems, searchQuery).map((item) => (
-                      <NavItem
-                        key={item.id}
-                        item={item}
-                        level={0}
+                    {techStackCategories.map((category) => (
+                      <TechStackCategoryNavItem
+                        key={category.id}
+                        category={category}
+                        items={filterItems(category.items, searchQuery)}
                         selectedId={selectedItem?.id}
                         expandedIds={expandedIds}
                         onSelect={setSelectedItem}
                         onToggle={toggleExpand}
-                        icon={<Layers className="h-4 w-4 text-primary" />}
                       />
                     ))}
                   </>
@@ -803,6 +846,73 @@ function CategoryNavItem({ category, standards, selectedId, expandedIds, onSelec
   );
 }
 
+// TechStack category navigation item (similar to CategoryNavItem but for tech stacks)
+interface TechStackCategoryNavItemProps {
+  category: TechStackCategory;
+  items: DocsItem[];
+  selectedId?: string;
+  expandedIds: Set<string>;
+  onSelect: (item: DocsItem) => void;
+  onToggle: (id: string) => void;
+}
+
+function TechStackCategoryNavItem({ category, items, selectedId, expandedIds, onSelect, onToggle }: TechStackCategoryNavItemProps) {
+  const isExpanded = expandedIds.has(category.id);
+  const hasChildren = items.length > 0;
+
+  const categoryItem: DocsItem = {
+    id: category.id,
+    name: category.name,
+    description: category.description,
+    long_description: category.long_description,
+    itemType: "tech_stack",
+    children: items,
+  };
+
+  return (
+    <div>
+      <button
+        onClick={() => {
+          onSelect(categoryItem);
+          if (hasChildren) onToggle(category.id);
+        }}
+        className={`w-full flex items-center gap-2 text-left px-3 py-2 rounded-md text-sm transition-colors ${
+          selectedId === category.id
+            ? "bg-primary/10 text-primary"
+            : "hover:bg-muted"
+        }`}
+      >
+        {hasChildren && (
+          <ChevronRight
+            className={`h-3.5 w-3.5 shrink-0 transition-transform ${
+              isExpanded ? "rotate-90" : ""
+            }`}
+        />
+        )}
+        {!hasChildren && <span className="w-3.5" />}
+        <Layers className="h-4 w-4 text-primary shrink-0" />
+        <span className="truncate font-medium">{category.name}</span>
+      </button>
+      {isExpanded && hasChildren && (
+        <div className="ml-4 mt-1 space-y-1">
+          {items.map((item) => (
+            <NavItem
+              key={item.id}
+              item={item}
+              level={1}
+              selectedId={selectedId}
+              expandedIds={expandedIds}
+              onSelect={onSelect}
+              onToggle={onToggle}
+              icon={<Layers className="h-4 w-4 text-primary/70" />}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface NavItemProps {
   item: DocsItem;
   level: number;
@@ -858,6 +968,64 @@ function NavItem({ item, level, selectedId, expandedIds, onSelect, onToggle, ico
               onSelect={onSelect}
               onToggle={onToggle}
               icon={<FileText className="h-4 w-4 text-blue-500" />}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Mobile TechStack category navigation item
+function MobileTechStackCategoryNavItem({ category, items, selectedId, expandedIds, onSelect, onToggle }: TechStackCategoryNavItemProps) {
+  const isExpanded = expandedIds.has(category.id);
+  const hasChildren = items.length > 0;
+
+  const categoryItem: DocsItem = {
+    id: category.id,
+    name: category.name,
+    description: category.description,
+    long_description: category.long_description,
+    itemType: "tech_stack",
+    children: items,
+  };
+
+  return (
+    <div>
+      <button
+        onClick={() => {
+          onSelect(categoryItem);
+          if (hasChildren) onToggle(category.id);
+        }}
+        className={`w-full flex items-start gap-2 text-left px-3 py-3 rounded-md text-sm transition-colors ${
+          selectedId === category.id
+            ? "bg-primary/10 text-primary"
+            : "hover:bg-muted"
+        }`}
+      >
+        {hasChildren && (
+          <ChevronRight
+            className={`h-4 w-4 shrink-0 mt-0.5 transition-transform ${
+              isExpanded ? "rotate-90" : ""
+            }`}
+          />
+        )}
+        {!hasChildren && <span className="w-4" />}
+        <Layers className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+        <span className="font-medium break-words">{category.name}</span>
+      </button>
+      {isExpanded && hasChildren && (
+        <div className="ml-4 mt-1 space-y-1">
+          {items.map((item) => (
+            <MobileNavItem
+              key={item.id}
+              item={item}
+              level={1}
+              selectedId={selectedId}
+              expandedIds={expandedIds}
+              onSelect={onSelect}
+              onToggle={onToggle}
+              icon={<Layers className="h-4 w-4 text-primary/70 shrink-0" />}
             />
           ))}
         </div>

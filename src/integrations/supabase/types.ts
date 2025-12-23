@@ -722,6 +722,7 @@ export type Database = {
           cover_image_url: string | null
           created_at: string
           created_by: string | null
+          deploy_count: number
           id: string
           is_published: boolean
           long_description: string | null
@@ -736,6 +737,7 @@ export type Database = {
           cover_image_url?: string | null
           created_at?: string
           created_by?: string | null
+          deploy_count?: number
           id?: string
           is_published?: boolean
           long_description?: string | null
@@ -750,6 +752,7 @@ export type Database = {
           cover_image_url?: string | null
           created_at?: string
           created_by?: string | null
+          deploy_count?: number
           id?: string
           is_published?: boolean
           long_description?: string | null
@@ -4522,6 +4525,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_build_book_deploy_count: {
+        Args: { p_build_book_id: string }
+        Returns: undefined
       }
       increment_published_project_views: {
         Args: { p_published_id: string }
