@@ -73,6 +73,7 @@ export default function BuildBookEditor() {
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [tagsInput, setTagsInput] = useState("");
   const [isPublished, setIsPublished] = useState(false);
+  const [prompt, setPrompt] = useState("");
   const [selectedStandards, setSelectedStandards] = useState<Set<string>>(new Set());
   const [selectedTechStacks, setSelectedTechStacks] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
@@ -181,6 +182,7 @@ export default function BuildBookEditor() {
       setCoverImageUrl(buildBook.cover_image_url);
       setTagsInput(buildBook.tags?.join(", ") || "");
       setIsPublished(buildBook.is_published);
+      setPrompt((buildBook as any).prompt || "");
     }
   }, [buildBook]);
 
@@ -223,6 +225,7 @@ export default function BuildBookEditor() {
         cover_image_url: coverImageUrl,
         tags,
         is_published: isPublished,
+        prompt: prompt.trim() || null,
       };
 
       let bookId: string;
@@ -454,6 +457,24 @@ export default function BuildBookEditor() {
                 />
                 <p className="text-xs text-muted-foreground mt-2">
                   Supports Markdown formatting
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* AI Prompt */}
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Assistant Prompt</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="Define how the AI assistant should behave when users ask questions about this build book. Leave empty for default behavior."
+                  rows={8}
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  The AI will have access to all standards and tech stacks in this build book to answer questions.
                 </p>
               </CardContent>
             </Card>

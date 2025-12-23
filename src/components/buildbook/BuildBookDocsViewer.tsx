@@ -12,11 +12,13 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { supabase } from "@/integrations/supabase/client";
 import { ResourceManager } from "@/components/resources/ResourceManager";
 import { BuildBook, BuildBookStandard, BuildBookTechStack } from "@/hooks/useRealtimeBuildBooks";
+import { BuildBookChat } from "./BuildBookChat";
 
 interface DocsItem {
   id: string;
@@ -296,221 +298,228 @@ export function BuildBookDocsViewer({ buildBook, standards, techStacks }: BuildB
   const standardCategoriesArray = Array.from(standardCategories.values());
 
   return (
-    <div className="flex h-[calc(100vh-300px)] min-h-[500px] border rounded-lg overflow-hidden bg-background">
-      {/* Sidebar */}
-      <div className="w-72 border-r flex flex-col shrink-0 bg-muted/30">
-        <div className="p-3 border-b bg-background">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search documentation..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 h-9 text-sm"
-            />
-          </div>
-        </div>
-        
-        <ScrollArea className="flex-1">
-          <div className="p-2 space-y-1">
-            {/* Overview */}
-            <button
-              onClick={() => setSelectedItem({
-                id: "overview",
-                name: buildBook.name,
-                description: buildBook.short_description,
-                long_description: buildBook.long_description,
-                itemType: "overview",
-              })}
-              className={`w-full flex items-center gap-2 text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                selectedItem?.id === "overview"
-                  ? "bg-primary/10 text-primary"
-                  : "hover:bg-muted"
-              }`}
-            >
-              <BookOpen className="h-4 w-4" />
-              Overview
-            </button>
-
-            {/* Standards Section */}
-            {standardCategoriesArray.length > 0 && (
-              <>
-                <Separator className="my-3" />
-                <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                  <Library className="h-3.5 w-3.5" />
-                  Standards
-                </div>
-                {standardCategoriesArray.map((category) => (
-                  <CategoryNavItem
-                    key={category.id}
-                    category={category}
-                    standards={filterItems(category.standards, searchQuery)}
-                    selectedId={selectedItem?.id}
-                    expandedIds={expandedIds}
-                    onSelect={setSelectedItem}
-                    onToggle={toggleExpand}
-                  />
-                ))}
-              </>
-            )}
-
-            {/* Tech Stacks Section */}
-            {techStackItems.length > 0 && (
-              <>
-                <Separator className="my-3" />
-                <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                  <Layers className="h-3.5 w-3.5" />
-                  Tech Stacks
-                </div>
-                {filterItems(techStackItems, searchQuery).map((item) => (
-                  <NavItem
-                    key={item.id}
-                    item={item}
-                    level={0}
-                    selectedId={selectedItem?.id}
-                    expandedIds={expandedIds}
-                    onSelect={setSelectedItem}
-                    onToggle={toggleExpand}
-                    icon={<Layers className="h-4 w-4 text-primary" />}
-                  />
-                ))}
-              </>
-            )}
-          </div>
-        </ScrollArea>
-      </div>
-
-      {/* Content */}
-      <ScrollArea className="flex-1">
-        <div className="p-6 max-w-4xl">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-64 text-muted-foreground">
-              Loading documentation...
+    <div className="h-[calc(100vh-200px)] min-h-[500px] border rounded-lg overflow-hidden bg-background">
+      <ResizablePanelGroup direction="horizontal">
+        {/* Sidebar */}
+        <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+          <div className="h-full flex flex-col bg-muted/30">
+            <div className="p-3 border-b bg-background flex gap-2 items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 h-9 text-sm"
+                />
+              </div>
+              <BuildBookChat
+                buildBook={buildBook}
+                standards={standards}
+                techStacks={techStacks}
+              />
             </div>
-          ) : selectedItem ? (
-            <div className="space-y-6">
-              {/* Header */}
-              <div>
-                <div className="flex items-center gap-2 flex-wrap mb-2">
-                  {selectedItem.itemType === "overview" && (
-                    <Badge className="gap-1">
-                      <BookOpen className="h-3 w-3" />
-                      Build Book
-                    </Badge>
-                  )}
-                  {selectedItem.itemType === "standard_category" && (
-                    <Badge variant="secondary" className="gap-1">
-                      <FolderTree className="h-3 w-3" />
-                      Category
-                    </Badge>
-                  )}
-                  {selectedItem.itemType === "standard" && selectedItem.code && (
-                    <Badge variant="outline" className="font-mono">{selectedItem.code}</Badge>
-                  )}
-                  {selectedItem.itemType === "tech_stack" && (
-                    <>
-                      {selectedItem.type && (
-                        <Badge variant="secondary">{selectedItem.type}</Badge>
-                      )}
-                      {selectedItem.version && (
-                        <Badge variant="outline" className="font-mono">
-                          {selectedItem.version_constraint || "^"}{selectedItem.version}
-                        </Badge>
-                      )}
-                    </>
-                  )}
-                </div>
-                <h1 className="text-2xl font-bold">{displayName}</h1>
-                {selectedItem.description && (
-                  <p className="text-muted-foreground mt-2">{selectedItem.description}</p>
+            
+            <ScrollArea className="flex-1">
+              <div className="p-2 space-y-1">
+                {/* Overview */}
+                <button
+                  onClick={() => setSelectedItem({
+                    id: "overview",
+                    name: buildBook.name,
+                    description: buildBook.short_description,
+                    long_description: buildBook.long_description,
+                    itemType: "overview",
+                  })}
+                  className={`w-full flex items-center gap-2 text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    selectedItem?.id === "overview"
+                      ? "bg-primary/10 text-primary"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Overview
+                </button>
+
+                {/* Standards Section */}
+                {standardCategoriesArray.length > 0 && (
+                  <>
+                    <Separator className="my-3" />
+                    <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                      <Library className="h-3.5 w-3.5" />
+                      Standards
+                    </div>
+                    {standardCategoriesArray.map((category) => (
+                      <CategoryNavItem
+                        key={category.id}
+                        category={category}
+                        standards={filterItems(category.standards, searchQuery)}
+                        selectedId={selectedItem?.id}
+                        expandedIds={expandedIds}
+                        onSelect={setSelectedItem}
+                        onToggle={toggleExpand}
+                      />
+                    ))}
+                  </>
+                )}
+
+                {/* Tech Stacks Section */}
+                {techStackItems.length > 0 && (
+                  <>
+                    <Separator className="my-3" />
+                    <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                      <Layers className="h-3.5 w-3.5" />
+                      Tech Stacks
+                    </div>
+                    {filterItems(techStackItems, searchQuery).map((item) => (
+                      <NavItem
+                        key={item.id}
+                        item={item}
+                        level={0}
+                        selectedId={selectedItem?.id}
+                        expandedIds={expandedIds}
+                        onSelect={setSelectedItem}
+                        onToggle={toggleExpand}
+                        icon={<Layers className="h-4 w-4 text-primary" />}
+                      />
+                    ))}
+                  </>
                 )}
               </div>
+            </ScrollArea>
+          </div>
+        </ResizablePanel>
 
-              <Separator />
+        <ResizableHandle withHandle />
 
-              {/* Long description as markdown */}
-              {selectedItem.long_description ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {selectedItem.long_description}
-                  </ReactMarkdown>
+        {/* Content */}
+        <ResizablePanel defaultSize={75}>
+          <ScrollArea className="h-full">
+            <div className="p-6 max-w-4xl">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-64 text-muted-foreground">
+                  Loading documentation...
+                </div>
+              ) : selectedItem ? (
+                <div className="space-y-6">
+                  {/* Header */}
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                      {selectedItem.itemType === "overview" && (
+                        <Badge className="gap-1">
+                          <BookOpen className="h-3 w-3" />
+                          Build Book
+                        </Badge>
+                      )}
+                      {selectedItem.itemType === "standard_category" && (
+                        <Badge variant="secondary" className="gap-1">
+                          <FolderTree className="h-3 w-3" />
+                          Category
+                        </Badge>
+                      )}
+                      {selectedItem.itemType === "standard" && selectedItem.code && (
+                        <Badge variant="outline" className="font-mono">{selectedItem.code}</Badge>
+                      )}
+                      {selectedItem.itemType === "tech_stack" && (
+                        <>
+                          {selectedItem.type && (
+                            <Badge variant="secondary">{selectedItem.type}</Badge>
+                          )}
+                          {selectedItem.version && (
+                            <Badge variant="outline" className="font-mono">
+                              {selectedItem.version_constraint || "^"}{selectedItem.version}
+                            </Badge>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <h1 className="text-2xl font-bold">{displayName}</h1>
+                    {selectedItem.description && (
+                      <p className="text-muted-foreground mt-2">{selectedItem.description}</p>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  {/* Long description as markdown */}
+                  {selectedItem.long_description ? (
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {selectedItem.long_description}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground italic">
+                      No detailed documentation available for this item.
+                    </p>
+                  )}
+
+                  {/* Children summary */}
+                  {selectedItem.children && selectedItem.children.length > 0 && (
+                    <div className="mt-8">
+                      <h3 className="text-lg font-semibold mb-3">Contains</h3>
+                      <div className="grid gap-2">
+                        {selectedItem.children.map(child => (
+                          <button
+                            key={child.id}
+                            onClick={() => {
+                              setSelectedItem(child);
+                              setExpandedIds(prev => new Set([...prev, selectedItem.id]));
+                            }}
+                            className="flex items-center gap-3 p-3 rounded-lg border hover:border-primary/50 hover:bg-muted/50 transition-colors text-left"
+                          >
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <div className="font-medium text-sm">
+                                {child.code && <span className="text-muted-foreground mr-2">{child.code}</span>}
+                                {child.name || child.title}
+                              </div>
+                              {child.description && (
+                                <p className="text-xs text-muted-foreground line-clamp-1">{child.description}</p>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resources */}
+                  {selectedItem.id !== "overview" && selectedItem.itemType !== "standard_category" && (
+                    <div className="mt-8">
+                      <h3 className="text-lg font-semibold mb-4">Resources</h3>
+                      <ResourceManager
+                        entityType={selectedItem.itemType === "standard" ? "standard" : "tech_stack"}
+                        entityId={selectedItem.id}
+                      />
+                    </div>
+                  )}
                 </div>
               ) : (
-                <p className="text-muted-foreground italic">
-                  No detailed documentation available for this item.
-                </p>
-              )}
-
-              {/* Children summary */}
-              {selectedItem.children && selectedItem.children.length > 0 && (
-                <div className="mt-8">
-                  <h3 className="text-lg font-semibold mb-3">Contains</h3>
-                  <div className="grid gap-2">
-                    {selectedItem.children.map(child => (
-                      <button
-                        key={child.id}
-                        onClick={() => {
-                          setSelectedItem(child);
-                          setExpandedIds(prev => new Set([...prev, selectedItem.id]));
-                        }}
-                        className="flex items-center gap-3 p-3 rounded-lg border hover:border-primary/50 hover:bg-muted/50 transition-colors text-left"
-                      >
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <div className="font-medium text-sm">
-                            {child.code && <span className="text-muted-foreground mr-2">{child.code}</span>}
-                            {child.name || child.title}
-                          </div>
-                          {child.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-1">{child.description}</p>
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Resources */}
-              {selectedItem.id !== "overview" && selectedItem.itemType !== "standard_category" && (
-                <div className="mt-8">
-                  <h3 className="text-lg font-semibold mb-4">Resources</h3>
-                  <ResourceManager
-                    entityType={selectedItem.itemType === "standard" ? "standard" : "tech_stack"}
-                    entityId={selectedItem.id}
-                  />
+                <div className="flex items-center justify-center h-64 text-muted-foreground">
+                  Select an item from the sidebar
                 </div>
               )}
             </div>
-          ) : (
-            <div className="flex items-center justify-center h-64 text-muted-foreground">
-              Select an item from the sidebar
-            </div>
-          )}
-        </div>
-      </ScrollArea>
+          </ScrollArea>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }
 
-// Category navigation item
-function CategoryNavItem({
-  category,
-  standards,
-  selectedId,
-  expandedIds,
-  onSelect,
-  onToggle,
-}: {
+// Helper components for navigation
+interface CategoryNavItemProps {
   category: StandardCategory & { standards: DocsItem[] };
   standards: DocsItem[];
   selectedId?: string;
   expandedIds: Set<string>;
   onSelect: (item: DocsItem) => void;
   onToggle: (id: string) => void;
-}) {
+}
+
+function CategoryNavItem({ category, standards, selectedId, expandedIds, onSelect, onToggle }: CategoryNavItemProps) {
   const isExpanded = expandedIds.has(category.id);
-  const isSelected = selectedId === category.id;
   const hasChildren = standards.length > 0;
 
   const categoryItem: DocsItem = {
@@ -524,37 +533,29 @@ function CategoryNavItem({
 
   return (
     <div>
-      <div className="flex items-center gap-1">
-        {hasChildren ? (
-          <button
-            onClick={() => onToggle(category.id)}
-            className="p-1 hover:bg-muted rounded"
-          >
-            <ChevronRight
-              className={`h-3 w-3 text-muted-foreground transition-transform ${
-                isExpanded ? "rotate-90" : ""
-              }`}
-            />
-          </button>
-        ) : (
-          <span className="w-5" />
+      <button
+        onClick={() => {
+          onSelect(categoryItem);
+          if (hasChildren) onToggle(category.id);
+        }}
+        className={`w-full flex items-center gap-2 text-left px-3 py-2 rounded-md text-sm transition-colors ${
+          selectedId === category.id
+            ? "bg-primary/10 text-primary"
+            : "hover:bg-muted"
+        }`}
+      >
+        {hasChildren && (
+          <ChevronRight
+            className={`h-3.5 w-3.5 shrink-0 transition-transform ${
+              isExpanded ? "rotate-90" : ""
+            }`}
+          />
         )}
-        
-        <button
-          onClick={() => onSelect(categoryItem)}
-          className={`flex-1 flex items-center gap-2 text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
-            isSelected
-              ? "bg-primary/10 text-primary font-medium"
-              : "hover:bg-muted text-foreground"
-          }`}
-        >
-          <Library className="h-4 w-4 text-primary" />
-          <span className="truncate">{category.name}</span>
-        </button>
-      </div>
-
-      {hasChildren && isExpanded && (
-        <div className="border-l border-border ml-2.5 pl-1 mt-0.5">
+        <FolderTree className="h-4 w-4 text-amber-500 shrink-0" />
+        <span className="truncate font-medium">{category.name}</span>
+      </button>
+      {isExpanded && hasChildren && (
+        <div className="ml-4 mt-1 space-y-1">
           {standards.map((item) => (
             <NavItem
               key={item.id}
@@ -564,6 +565,7 @@ function CategoryNavItem({
               expandedIds={expandedIds}
               onSelect={onSelect}
               onToggle={onToggle}
+              icon={<FileText className="h-4 w-4 text-blue-500" />}
             />
           ))}
         </div>
@@ -572,62 +574,51 @@ function CategoryNavItem({
   );
 }
 
-// Generic navigation item
-function NavItem({
-  item,
-  level,
-  selectedId,
-  expandedIds,
-  onSelect,
-  onToggle,
-  icon,
-}: {
+interface NavItemProps {
   item: DocsItem;
   level: number;
   selectedId?: string;
   expandedIds: Set<string>;
   onSelect: (item: DocsItem) => void;
   onToggle: (id: string) => void;
-  icon?: React.ReactNode;
-}) {
-  const hasChildren = item.children && item.children.length > 0;
+  icon: React.ReactNode;
+}
+
+function NavItem({ item, level, selectedId, expandedIds, onSelect, onToggle, icon }: NavItemProps) {
   const isExpanded = expandedIds.has(item.id);
-  const isSelected = selectedId === item.id;
-  const displayName = item.name || item.title || "Untitled";
+  const hasChildren = item.children && item.children.length > 0;
+  const displayName = item.name || item.title || "";
 
   return (
     <div>
-      <div className={`flex items-center gap-1 ${level > 0 ? "ml-3" : ""}`}>
-        {hasChildren ? (
-          <button
-            onClick={() => onToggle(item.id)}
-            className="p-1 hover:bg-muted rounded"
-          >
-            <ChevronRight
-              className={`h-3 w-3 text-muted-foreground transition-transform ${
-                isExpanded ? "rotate-90" : ""
-              }`}
-            />
-          </button>
-        ) : (
-          <span className="w-5" />
+      <button
+        onClick={() => {
+          onSelect(item);
+          if (hasChildren) onToggle(item.id);
+        }}
+        className={`w-full flex items-center gap-2 text-left px-3 py-1.5 rounded-md text-sm transition-colors ${
+          selectedId === item.id
+            ? "bg-primary/10 text-primary"
+            : "hover:bg-muted"
+        }`}
+        style={{ paddingLeft: `${12 + level * 12}px` }}
+      >
+        {hasChildren && (
+          <ChevronRight
+            className={`h-3.5 w-3.5 shrink-0 transition-transform ${
+              isExpanded ? "rotate-90" : ""
+            }`}
+          />
         )}
-        
-        <button
-          onClick={() => onSelect(item)}
-          className={`flex-1 flex items-center gap-2 text-left px-2 py-1.5 rounded-md text-sm transition-colors truncate ${
-            isSelected
-              ? "bg-primary/10 text-primary font-medium"
-              : "hover:bg-muted text-foreground"
-          }`}
-        >
-          {icon || (item.code && <span className="text-xs text-muted-foreground font-mono">{item.code}</span>)}
-          <span className="truncate">{displayName}</span>
-        </button>
-      </div>
-
-      {hasChildren && isExpanded && (
-        <div className="border-l border-border ml-2.5 pl-1 mt-0.5">
+        {!hasChildren && <span className="w-3.5" />}
+        {icon}
+        <span className="truncate">
+          {item.code && <span className="text-muted-foreground mr-1.5">{item.code}</span>}
+          {displayName}
+        </span>
+      </button>
+      {isExpanded && hasChildren && (
+        <div className="mt-1 space-y-1">
           {item.children!.map((child) => (
             <NavItem
               key={child.id}
@@ -637,6 +628,7 @@ function NavItem({
               expandedIds={expandedIds}
               onSelect={onSelect}
               onToggle={onToggle}
+              icon={<FileText className="h-4 w-4 text-blue-500" />}
             />
           ))}
         </div>

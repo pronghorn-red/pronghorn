@@ -70,10 +70,10 @@ export default function BuildBookDetail() {
             <img
               src={buildBook.cover_image_url}
               alt={buildBook.name}
-              className="w-full aspect-[21/9] object-cover"
+              className="w-full aspect-[21/6] object-cover"
             />
           ) : (
-            <div className="w-full aspect-[21/9] bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+            <div className="w-full aspect-[21/6] bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
               <Book className="h-24 w-24 text-primary/30" />
             </div>
           )}

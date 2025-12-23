@@ -13,6 +13,7 @@ export interface BuildBook {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  prompt: string | null;
 }
 
 export interface BuildBookStandard {

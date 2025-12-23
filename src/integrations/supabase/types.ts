@@ -727,6 +727,7 @@ export type Database = {
           long_description: string | null
           name: string
           org_id: string | null
+          prompt: string | null
           short_description: string | null
           tags: string[] | null
           updated_at: string
@@ -740,6 +741,7 @@ export type Database = {
           long_description?: string | null
           name: string
           org_id?: string | null
+          prompt?: string | null
           short_description?: string | null
           tags?: string[] | null
           updated_at?: string
@@ -753,6 +755,7 @@ export type Database = {
           long_description?: string | null
           name?: string
           org_id?: string | null
+          prompt?: string | null
           short_description?: string | null
           tags?: string[] | null
           updated_at?: string
