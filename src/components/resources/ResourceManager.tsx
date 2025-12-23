@@ -9,12 +9,13 @@ import {
   Edit, 
   ExternalLink,
   Loader2,
-  GripVertical
+  Play
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -69,6 +70,25 @@ const resourceTypeLabels = {
   image: "Image",
 };
 
+const resourceTypeColors = {
+  file: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  website: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  youtube: "bg-red-500/10 text-red-600 border-red-500/20",
+  image: "bg-purple-500/10 text-purple-600 border-purple-500/20",
+};
+
+// Extract YouTube video ID from URL
+const getYouTubeVideoId = (url: string): string | null => {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+};
+
 export function ResourceManager({ entityType, entityId, onResourcesChange }: ResourceManagerProps) {
   const { isAdmin } = useAdmin();
   const [resources, setResources] = useState<Resource[]>([]);
@@ -84,13 +104,6 @@ export function ResourceManager({ entityType, entityId, onResourcesChange }: Res
   const [saving, setSaving] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
 
-  const tableName = entityType === "tech_stack" ? "tech_stack_resources" : "standard_resources";
-  const foreignKey = entityType === "tech_stack" 
-    ? "tech_stack_id" 
-    : entityType === "standard_category" 
-      ? "standard_category_id" 
-      : "standard_id";
-
   useEffect(() => {
     loadResources();
   }, [entityId, entityType]);
@@ -98,7 +111,6 @@ export function ResourceManager({ entityType, entityId, onResourcesChange }: Res
   const loadResources = async () => {
     setLoading(true);
     try {
-      let query;
       if (entityType === "tech_stack") {
         const { data, error } = await supabase
           .from("tech_stack_resources")
@@ -147,7 +159,6 @@ export function ResourceManager({ entityType, entityId, onResourcesChange }: Res
         .from("standard-attachments")
         .getPublicUrl(fileName);
 
-      // Determine if it's an image
       const isImage = file.type.startsWith("image/");
       
       setFormData(prev => ({
@@ -272,52 +283,112 @@ export function ResourceManager({ entityType, entityId, onResourcesChange }: Res
   }
 
   return (
-    <div className="space-y-2">
-      {/* Resource List */}
+    <div className="space-y-3">
+      {/* Resource Cards */}
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+          <Loader2 className="h-4 w-4 animate-spin" />
           Loading resources...
         </div>
       ) : resources.length > 0 ? (
-        <div className="space-y-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {resources.map((resource) => {
             const Icon = resourceTypeIcons[resource.resource_type];
+            const colorClass = resourceTypeColors[resource.resource_type];
+            const videoId = resource.resource_type === "youtube" ? getYouTubeVideoId(resource.url) : null;
+            
             return (
-              <div
-                key={resource.id}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/50 group"
+              <Card 
+                key={resource.id} 
+                className="group overflow-hidden hover:shadow-md transition-all duration-200 border-border/60"
               >
-                <Icon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                <a
-                  href={resource.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-primary hover:underline truncate flex-1"
-                >
-                  {resource.name}
-                </a>
-                {isAdmin && (
-                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => openEditDialog(resource)}
-                    >
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-destructive"
-                      onClick={() => handleDelete(resource.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                {/* Thumbnail/Preview Area */}
+                {resource.resource_type === "youtube" && videoId ? (
+                  <div className="relative aspect-video bg-muted">
+                    <img 
+                      src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}
+                      alt={resource.name}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <div className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center">
+                        <Play className="h-5 w-5 text-white ml-0.5" fill="white" />
+                      </div>
+                    </div>
+                  </div>
+                ) : resource.resource_type === "image" ? (
+                  <div className="aspect-video bg-muted">
+                    <img 
+                      src={resource.url}
+                      alt={resource.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className={`h-20 flex items-center justify-center ${colorClass} border-b`}>
+                    <Icon className="h-8 w-8" />
                   </div>
                 )}
-              </div>
+                
+                <CardContent className="p-3 space-y-2">
+                  {/* Type Badge & Name */}
+                  <div className="flex items-start gap-2">
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${colorClass}`}>
+                      {resourceTypeLabels[resource.resource_type]}
+                    </span>
+                  </div>
+                  
+                  <a
+                    href={resource.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-sm hover:text-primary transition-colors line-clamp-2 block"
+                  >
+                    {resource.name}
+                  </a>
+                  
+                  {/* Description */}
+                  {resource.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2">
+                      {resource.description}
+                    </p>
+                  )}
+                  
+                  {/* Actions */}
+                  <div className="flex items-center justify-between pt-1">
+                    <a
+                      href={resource.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Open
+                    </a>
+                    
+                    {isAdmin && (
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => openEditDialog(resource)}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(resource.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>

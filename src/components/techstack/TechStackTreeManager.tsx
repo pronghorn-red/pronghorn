@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ChevronRight, ChevronDown, Plus, Edit, Trash2, FolderOpen } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Edit, Trash2, FolderOpen, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +16,9 @@ interface TechStackItem {
   type: string | null;
   name: string;
   description?: string | null;
+  long_description?: string | null;
+  version?: string | null;
+  version_constraint?: string | null;
   parent_id?: string | null;
   children?: TechStackItem[];
 }
@@ -23,6 +26,7 @@ interface TechStackItem {
 interface TechStackTreeManagerProps {
   techStackId: string;
   onRefresh: () => void;
+  onViewDocs?: (item: TechStackItem) => void;
 }
 
 const ITEM_TYPES = [
@@ -38,7 +42,15 @@ const ITEM_TYPES = [
   "Other"
 ];
 
-export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeManagerProps) {
+const VERSION_CONSTRAINTS = [
+  { value: "^", label: "^  (Compatible)" },
+  { value: "~", label: "~  (Patch only)" },
+  { value: ">=", label: ">= (Or higher)" },
+  { value: "=", label: "=  (Exact)" },
+  { value: "latest", label: "latest" },
+];
+
+export function TechStackTreeManager({ techStackId, onRefresh, onViewDocs }: TechStackTreeManagerProps) {
   const { isAdmin } = useAdmin();
   const [items, setItems] = useState<TechStackItem[]>([]);
 
@@ -47,7 +59,6 @@ export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeMa
   }, [techStackId]);
 
   const loadItems = async () => {
-    // Load all child items of this tech stack
     const { data } = await supabase
       .from("tech_stacks")
       .select("*")
@@ -69,8 +80,6 @@ export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeMa
 
     flatItems.forEach((item) => {
       const node = map.get(item.id)!;
-      // If parent_id matches another item in this set, it's a child
-      // Otherwise it's a direct child of the tech stack
       if (item.parent_id && item.parent_id !== techStackId && map.has(item.parent_id)) {
         map.get(item.parent_id)!.children!.push(node);
       } else {
@@ -93,7 +102,7 @@ export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeMa
     const { error } = await supabase.from("tech_stacks").insert({
       name,
       type,
-      parent_id: parentId || techStackId, // If parentId is null, use techStackId as parent
+      parent_id: parentId || techStackId,
       org_id: profile?.org_id || null,
       created_by: user?.id,
     });
@@ -115,7 +124,6 @@ export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeMa
 
     if (!confirm("Delete this item and all its children?")) return;
 
-    // Cascade delete handled by database ON DELETE CASCADE
     const { error } = await supabase.from("tech_stacks").delete().eq("id", id);
 
     if (error) {
@@ -157,6 +165,7 @@ export function TechStackTreeManager({ techStackId, onRefresh }: TechStackTreeMa
           onAdd={handleAdd}
           onDelete={handleDelete}
           onUpdate={handleUpdate}
+          onViewDocs={onViewDocs}
         />
       ))}
       {isAdmin && <AddItemInline onAdd={(type, name) => handleAdd(null, type, name)} />}
@@ -231,12 +240,14 @@ function TechStackItemNode({
   onAdd,
   onDelete,
   onUpdate,
+  onViewDocs,
 }: {
   item: TechStackItem;
   isAdmin: boolean;
   onAdd: (parentId: string | null, type: string, name: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, updates: Partial<TechStackItem>) => void;
+  onViewDocs?: (item: TechStackItem) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -244,11 +255,15 @@ function TechStackItemNode({
   const [showResources, setShowResources] = useState(false);
   const [name, setName] = useState(item.name);
   const [description, setDescription] = useState(item.description || "");
+  const [version, setVersion] = useState(item.version || "");
+  const [versionConstraint, setVersionConstraint] = useState(item.version_constraint || "^");
 
   const handleSave = async () => {
-    onUpdate(item.id, { name, description });
+    onUpdate(item.id, { name, description, version: version || null, version_constraint: versionConstraint });
     setIsEditing(false);
   };
+
+  const versionDisplay = item.version ? `${item.version_constraint || "^"}${item.version}` : null;
 
   return (
     <div className="border border-border rounded-lg p-2 md:p-3 space-y-2">
@@ -266,7 +281,7 @@ function TechStackItemNode({
 
         <div className="flex-1 min-w-0 space-y-2 overflow-hidden">
           {isEditing ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -276,10 +291,29 @@ function TechStackItemNode({
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description"
+                placeholder="Short description"
                 rows={2}
                 className="text-sm"
               />
+              {/* Version fields */}
+              <div className="flex gap-2 items-center">
+                <Select value={versionConstraint} onValueChange={setVersionConstraint}>
+                  <SelectTrigger className="w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    {VERSION_CONSTRAINTS.map(vc => (
+                      <SelectItem key={vc.value} value={vc.value}>{vc.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={version}
+                  onChange={(e) => setVersion(e.target.value)}
+                  placeholder="Version (e.g., 3.4.0)"
+                  className="flex-1 text-sm"
+                />
+              </div>
               <div className="flex gap-2 flex-wrap">
                 <Button size="sm" onClick={handleSave}>Save</Button>
                 <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
@@ -294,28 +328,40 @@ function TechStackItemNode({
                   <div className="flex items-center gap-1 md:gap-2 flex-wrap">
                     {item.type && <Badge variant="outline" className="text-[10px] md:text-xs flex-shrink-0">{item.type}</Badge>}
                     <span className="font-medium text-sm md:text-base truncate">{item.name}</span>
+                    {versionDisplay && (
+                      <Badge variant="secondary" className="text-[10px] md:text-xs font-mono">
+                        {versionDisplay}
+                      </Badge>
+                    )}
                   </div>
                   {item.description && (
                     <p className="text-xs md:text-sm text-muted-foreground mt-1 break-words">{item.description}</p>
                   )}
                 </div>
 
-                {isAdmin && (
-                  <div className="flex gap-0.5 md:gap-1 flex-shrink-0">
-                    <Button variant="ghost" size="sm" onClick={() => setIsAddingChild(true)} title="Add sub-item" className="h-7 w-7 md:h-8 md:w-8 p-0">
-                      <Plus className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                <div className="flex gap-0.5 md:gap-1 flex-shrink-0">
+                  {item.long_description && onViewDocs && (
+                    <Button variant="ghost" size="sm" onClick={() => onViewDocs(item)} title="View docs" className="h-7 w-7 md:h-8 md:w-8 p-0">
+                      <BookOpen className="h-2.5 w-2.5 md:h-3 md:w-3" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit" className="h-7 w-7 md:h-8 md:w-8 p-0">
-                      <Edit className="h-2.5 w-2.5 md:h-3 md:w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setShowResources(!showResources)} title="Resources" className="h-7 w-7 md:h-8 md:w-8 p-0">
-                      <FolderOpen className="h-2.5 w-2.5 md:h-3 md:w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} title="Delete" className="h-7 w-7 md:h-8 md:w-8 p-0">
-                      <Trash2 className="h-2.5 w-2.5 md:h-3 md:w-3" />
-                    </Button>
-                  </div>
-                )}
+                  )}
+                  {isAdmin && (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => setIsAddingChild(true)} title="Add sub-item" className="h-7 w-7 md:h-8 md:w-8 p-0">
+                        <Plus className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit" className="h-7 w-7 md:h-8 md:w-8 p-0">
+                        <Edit className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setShowResources(!showResources)} title="Resources" className="h-7 w-7 md:h-8 md:w-8 p-0">
+                        <FolderOpen className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} title="Delete" className="h-7 w-7 md:h-8 md:w-8 p-0">
+                        <Trash2 className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Resources Section */}
@@ -336,7 +382,7 @@ function TechStackItemNode({
       {(isExpanded || isAddingChild) && (
         <div className="ml-3 md:ml-6 mt-2 space-y-2 border-l-2 border-border pl-2 md:pl-4">
           {item.children && item.children.length > 0 && item.children.map((child) => (
-            <TechStackItemNode key={child.id} item={child} isAdmin={isAdmin} onAdd={onAdd} onDelete={onDelete} onUpdate={onUpdate} />
+            <TechStackItemNode key={child.id} item={child} isAdmin={isAdmin} onAdd={onAdd} onDelete={onDelete} onUpdate={onUpdate} onViewDocs={onViewDocs} />
           ))}
           {isAddingChild && isAdmin && (
             <AddItemInline 

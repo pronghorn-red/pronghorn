@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { ChevronRight, ChevronDown, Plus, Edit, Trash2, Sparkles, Paperclip, FolderOpen } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Edit, Trash2, Sparkles, FolderOpen, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { ResourceManager } from "@/components/resources/ResourceManager";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -15,6 +15,7 @@ interface Standard {
   code: string;
   title: string;
   description?: string | null;
+  long_description?: string | null;
   content?: string | null;
   children?: Standard[];
   attachments?: any[];
@@ -24,9 +25,10 @@ interface StandardsTreeManagerProps {
   standards: Standard[];
   categoryId: string;
   onRefresh: () => void;
+  onViewDocs?: (standard: Standard) => void;
 }
 
-export function StandardsTreeManager({ standards, categoryId, onRefresh }: StandardsTreeManagerProps) {
+export function StandardsTreeManager({ standards, categoryId, onRefresh, onViewDocs }: StandardsTreeManagerProps) {
   const { isAdmin } = useAdmin();
 
   const handleAdd = async (parentId: string | null, title: string) => {
@@ -104,6 +106,7 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
           onDelete={handleDelete}
           onAIExpand={handleAIExpand}
           onRefresh={onRefresh}
+          onViewDocs={onViewDocs}
         />
       ))}
       {isAdmin && <AddStandardInline onAdd={(title) => handleAdd(null, title)} />}
@@ -163,6 +166,7 @@ function StandardNode({
   onDelete,
   onAIExpand,
   onRefresh,
+  onViewDocs,
 }: {
   standard: Standard;
   isAdmin: boolean;
@@ -170,6 +174,7 @@ function StandardNode({
   onDelete: (id: string) => void;
   onAIExpand: (parentId: string, parentTitle: string) => void;
   onRefresh: () => void;
+  onViewDocs?: (standard: Standard) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -241,25 +246,32 @@ function StandardNode({
                   )}
                 </div>
 
-                {isAdmin && (
-                  <div className="flex gap-1 flex-shrink-0">
-                    <Button variant="ghost" size="sm" onClick={() => setIsAddingChild(true)} title="Add sub-standard">
-                      <Plus className="h-3 w-3" />
+                <div className="flex gap-1 flex-shrink-0">
+                  {standard.long_description && onViewDocs && (
+                    <Button variant="ghost" size="sm" onClick={() => onViewDocs(standard)} title="View docs">
+                      <BookOpen className="h-3 w-3" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit">
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setShowResources(!showResources)} title="Resources">
-                      <FolderOpen className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => onAIExpand(standard.id, standard.title)} title="AI expand">
-                      <Sparkles className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => onDelete(standard.id)} title="Delete">
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
+                  )}
+                  {isAdmin && (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => setIsAddingChild(true)} title="Add sub-standard">
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit">
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setShowResources(!showResources)} title="Resources">
+                        <FolderOpen className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => onAIExpand(standard.id, standard.title)} title="AI expand">
+                        <Sparkles className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => onDelete(standard.id)} title="Delete">
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Resources Section */}
@@ -281,7 +293,7 @@ function StandardNode({
       {(isExpanded || isAddingChild) && (
         <div className="ml-6 mt-2 space-y-2 border-l-2 border-border pl-4">
           {standard.children && standard.children.length > 0 && standard.children.map((child) => (
-            <StandardNode key={child.id} standard={child} isAdmin={isAdmin} onAdd={onAdd} onDelete={onDelete} onAIExpand={onAIExpand} onRefresh={onRefresh} />
+            <StandardNode key={child.id} standard={child} isAdmin={isAdmin} onAdd={onAdd} onDelete={onDelete} onAIExpand={onAIExpand} onRefresh={onRefresh} onViewDocs={onViewDocs} />
           ))}
           {isAddingChild && isAdmin && (
             <AddStandardInline 

@@ -2699,6 +2699,8 @@ export type Database = {
           short_description: string | null
           type: string | null
           updated_at: string
+          version: string | null
+          version_constraint: string | null
         }
         Insert: {
           color?: string | null
@@ -2716,6 +2718,8 @@ export type Database = {
           short_description?: string | null
           type?: string | null
           updated_at?: string
+          version?: string | null
+          version_constraint?: string | null
         }
         Update: {
           color?: string | null
@@ -2733,6 +2737,8 @@ export type Database = {
           short_description?: string | null
           type?: string | null
           updated_at?: string
+          version?: string | null
+          version_constraint?: string | null
         }
         Relationships: [
           {
