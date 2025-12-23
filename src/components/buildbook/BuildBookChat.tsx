@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { MessageSquare, Send, Loader2, Sparkles, Download, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -78,6 +78,20 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
     }
   }, [isOpen, contextLoaded]);
 
+  // Check if at bottom helper
+  const checkIfAtBottom = useCallback(() => {
+    const container = scrollViewportRef.current;
+    if (!container) return;
+    
+    const viewport = container.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+    if (!viewport) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = viewport;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const threshold = 100;
+    setIsAtBottom(distanceFromBottom < threshold);
+  }, []);
+
   // Track scroll position to show/hide jump button
   useEffect(() => {
     if (!isOpen) return;
@@ -90,25 +104,24 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
       const viewport = container.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
       if (!viewport) return;
 
-      const handleScroll = () => {
-        const { scrollTop, scrollHeight, clientHeight } = viewport;
-        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-        const threshold = 100;
-        setIsAtBottom(distanceFromBottom < threshold);
-      };
-
-      viewport.addEventListener("scroll", handleScroll, { passive: true });
-      handleScroll(); // Check initial position
+      viewport.addEventListener("scroll", checkIfAtBottom, { passive: true });
+      checkIfAtBottom(); // Check initial position
       
       // Cleanup stored for later
-      (scrollViewportRef as any)._cleanup = () => viewport.removeEventListener("scroll", handleScroll);
+      (scrollViewportRef as any)._cleanup = () => viewport.removeEventListener("scroll", checkIfAtBottom);
     }, 100);
     
     return () => {
       clearTimeout(timer);
       (scrollViewportRef as any)._cleanup?.();
     };
-  }, [isOpen, messages.length]);
+  }, [isOpen, checkIfAtBottom]);
+
+  // Re-check scroll position when content changes (streaming)
+  useEffect(() => {
+    if (!isOpen) return;
+    checkIfAtBottom();
+  }, [messages, isStreaming, isOpen, checkIfAtBottom]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
