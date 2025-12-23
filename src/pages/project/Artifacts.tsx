@@ -11,8 +11,9 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeArtifacts } from "@/hooks/useRealtimeArtifacts";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X, ScanEye } from "lucide-react";
+import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X, ScanEye, Wand2 } from "lucide-react";
 import { VisualRecognitionDialog } from "@/components/artifacts/VisualRecognitionDialog";
+import { EnhanceImageDialog } from "@/components/artifacts/EnhanceImageDialog";
 import { ArtifactDownloadDropdown } from "@/components/artifacts/ArtifactDownloadDropdown";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -87,6 +88,7 @@ export default function Artifacts() {
   const [provenanceFilter, setProvenanceFilter] = useState<string | null>(null);
   const [deletingArtifact, setDeletingArtifact] = useState<{ id: string; title: string } | null>(null);
   const [isVisualRecognitionOpen, setIsVisualRecognitionOpen] = useState(false);
+  const [isEnhanceImageOpen, setIsEnhanceImageOpen] = useState(false);
 
   // Fetch project settings for model configuration
   const { data: project } = useQuery({
@@ -395,6 +397,10 @@ ${artifact.content}`;
                     <ScanEye className="h-4 w-4 mr-2" />
                     Visual Recognition
                   </Button>
+                  <Button variant="outline" onClick={() => setIsEnhanceImageOpen(true)}>
+                    <Wand2 className="h-4 w-4 mr-2" />
+                    Enhance Image
+                  </Button>
                   <Button onClick={() => setIsAddDialogOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Artifact
@@ -411,6 +417,14 @@ ${artifact.content}`;
                   <VisualRecognitionDialog
                     open={isVisualRecognitionOpen}
                     onOpenChange={setIsVisualRecognitionOpen}
+                    artifacts={artifacts}
+                    projectId={projectId!}
+                    shareToken={shareToken}
+                    onComplete={refresh}
+                  />
+                  <EnhanceImageDialog
+                    open={isEnhanceImageOpen}
+                    onOpenChange={setIsEnhanceImageOpen}
                     artifacts={artifacts}
                     projectId={projectId!}
                     shareToken={shareToken}

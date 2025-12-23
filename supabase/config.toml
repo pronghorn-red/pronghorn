@@ -119,3 +119,6 @@ verify_jwt = false
 
 [functions.visual-recognition]
 verify_jwt = false
+
+[functions.enhance-image]
+verify_jwt = false
