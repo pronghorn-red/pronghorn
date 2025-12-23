@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Home, Library, Settings, User, Layers, LogIn, LogOut, Menu } from "lucide-react";
+import { Home, Library, Settings, User, Layers, LogIn, LogOut, Menu, Book } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
 import { AdminAccessButton } from "@/components/layout/AdminAccessButton";
@@ -74,6 +74,14 @@ export function PrimaryNav() {
             <Layers className="h-4 w-4" />
             Tech Stacks
           </NavLink>
+          <NavLink
+            to="/build-books"
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            activeClassName="bg-muted text-foreground"
+          >
+            <Book className="h-4 w-4" />
+            Build Books
+          </NavLink>
         </nav>
 
         {/* Desktop User Menu */}
@@ -143,6 +151,15 @@ export function PrimaryNav() {
                 >
                   <Layers className="h-5 w-5" />
                   Tech Stacks
+                </NavLink>
+                <NavLink
+                  to="/build-books"
+                  className="flex items-center gap-3 px-4 py-3 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  activeClassName="bg-muted text-foreground"
+                  onClick={handleNavClick}
+                >
+                  <Book className="h-5 w-5" />
+                  Build Books
                 </NavLink>
                 {user && isAdmin && (
                   <NavLink
