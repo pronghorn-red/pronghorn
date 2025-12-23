@@ -62,10 +62,10 @@ interface TechStack {
 
 export default function BuildBookEditor() {
   const { id } = useParams<{ id: string }>();
-  const isNew = id === "new";
+  const isNew = !id; // No id param means we're creating a new build book
   const navigate = useNavigate();
   const { isAdmin } = useAdmin();
-  const { buildBook, standards: bbStandards, techStacks: bbTechStacks, isLoading } = useBuildBookDetail(isNew ? undefined : id);
+  const { buildBook, standards: bbStandards, techStacks: bbTechStacks, isLoading } = useBuildBookDetail(id);
 
   const [name, setName] = useState("");
   const [shortDescription, setShortDescription] = useState("");
