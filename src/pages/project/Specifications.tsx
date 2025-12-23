@@ -88,8 +88,8 @@ export default function Specifications() {
         const response = await fetch('/data/agents.json');
         const data = await response.json();
         setAgents(data);
-        // Select Technical Specification by default
-        setSelectedAgents(['technical-specification']);
+        // Select Overview by default
+        setSelectedAgents(['overview']);
       } catch (error) {
         console.error('Error loading agents:', error);
         toast.error('Failed to load agent configurations');
