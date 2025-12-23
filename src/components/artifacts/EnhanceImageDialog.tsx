@@ -190,7 +190,7 @@ export function EnhanceImageDialog({
     setIsSaving(true);
 
     try {
-      // Upload the generated image
+      // Upload the generated image (uploadOnly mode - we create the artifact separately)
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-artifact-image`,
         {
@@ -203,8 +203,8 @@ export function EnhanceImageDialog({
             imageData: generatedImage,
             projectId,
             shareToken,
-            filename: `${selectedArtifacts.size > 0 ? 'enhanced' : 'generated'}-${Date.now()}.png`,
-            content: prompt,
+            fileName: `${selectedArtifacts.size > 0 ? 'enhanced' : 'generated'}-${Date.now()}.png`,
+            uploadOnly: true,  // Skip artifact creation in upload function
           }),
         }
       );

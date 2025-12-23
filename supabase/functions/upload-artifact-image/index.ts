@@ -26,14 +26,17 @@ serve(async (req) => {
       provenanceId,
       provenancePath,
       provenancePage,
-      provenanceTotalPages
+      provenanceTotalPages,
+      // Upload-only mode: skip artifact creation
+      uploadOnly
     } = await req.json();
 
     if (!projectId) {
       throw new Error('Project ID is required');
     }
 
-    if (!content) {
+    // Content is only required if we're creating an artifact
+    if (!content && !uploadOnly) {
       throw new Error('Content is required');
     }
 
@@ -93,6 +96,15 @@ serve(async (req) => {
       publicUrl = url;
     }
 
+    // If uploadOnly mode, skip artifact creation and just return the URL
+    if (uploadOnly) {
+      console.log(`Upload-only mode: skipping artifact creation, returning URL: ${publicUrl}`);
+      return new Response(
+        JSON.stringify({ artifact: null, url: publicUrl }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Create artifact using token-based RPC with title and provenance fields
     const { data: artifact, error: artifactError } = await supabase.rpc('insert_artifact_with_token', {
       p_project_id: projectId,
@@ -116,7 +128,7 @@ serve(async (req) => {
     console.log(`Created artifact with provenance: id=${provenanceId}, path=${provenancePath}, page=${provenancePage}/${provenanceTotalPages}`);
 
     return new Response(
-      JSON.stringify({ artifact, publicUrl }),
+      JSON.stringify({ artifact, url: publicUrl }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
