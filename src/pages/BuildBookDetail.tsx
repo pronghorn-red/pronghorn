@@ -36,7 +36,7 @@ export default function BuildBookDetail() {
 
   useEffect(() => {
     if (standards.length > 0) {
-      loadStandardCategories();
+      loadStandardDetails();
     }
   }, [standards]);
 
@@ -46,13 +46,22 @@ export default function BuildBookDetail() {
     }
   }, [techStacks]);
 
-  const loadStandardCategories = async () => {
-    const ids = standards.map((s) => s.standard_category_id);
+  const loadStandardDetails = async () => {
+    const ids = standards.map((s) => s.standard_id);
     const { data } = await supabase
-      .from("standard_categories")
-      .select("id, name, description")
+      .from("standards")
+      .select("id, code, title, category_id")
       .in("id", ids);
-    setStandardCategories(data || []);
+    
+    // Get unique category IDs
+    const categoryIds = [...new Set((data || []).map(s => s.category_id))];
+    if (categoryIds.length > 0) {
+      const { data: categories } = await supabase
+        .from("standard_categories")
+        .select("id, name, description")
+        .in("id", categoryIds);
+      setStandardCategories(categories || []);
+    }
   };
 
   const loadTechStackDetails = async () => {

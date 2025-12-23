@@ -18,7 +18,7 @@ export interface BuildBook {
 export interface BuildBookStandard {
   id: string;
   build_book_id: string;
-  standard_category_id: string;
+  standard_id: string;
   created_at: string;
 }
 

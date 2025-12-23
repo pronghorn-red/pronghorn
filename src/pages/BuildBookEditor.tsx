@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Trash2, Eye, EyeOff, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Loader2 } from "lucide-react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { BuildBookCoverUpload } from "@/components/buildbook/BuildBookCoverUpload";
-import { StandardsCategoryPicker } from "@/components/buildbook/StandardsCategoryPicker";
-import { TechStackPicker } from "@/components/buildbook/TechStackPicker";
+import { StandardsTreeSelector } from "@/components/standards/StandardsTreeSelector";
+import { TechStackTreeSelector } from "@/components/techstack/TechStackTreeSelector";
 import { useBuildBookDetail } from "@/hooks/useRealtimeBuildBooks";
 import { useAdmin } from "@/contexts/AdminContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,12 +28,44 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+interface Standard {
+  id: string;
+  code: string;
+  title: string;
+  description?: string;
+  parent_id?: string;
+  children?: Standard[];
+}
+
+interface Category {
+  id: string;
+  name: string;
+  description?: string;
+  standards: Standard[];
+}
+
+interface TechStackItem {
+  id: string;
+  type: string | null;
+  name: string;
+  description?: string | null;
+  parent_id?: string | null;
+  children?: TechStackItem[];
+}
+
+interface TechStack {
+  id: string;
+  name: string;
+  description?: string | null;
+  items: TechStackItem[];
+}
+
 export default function BuildBookEditor() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === "new";
   const navigate = useNavigate();
   const { isAdmin } = useAdmin();
-  const { buildBook, standards, techStacks, isLoading } = useBuildBookDetail(isNew ? undefined : id);
+  const { buildBook, standards: bbStandards, techStacks: bbTechStacks, isLoading } = useBuildBookDetail(isNew ? undefined : id);
 
   const [name, setName] = useState("");
   const [shortDescription, setShortDescription] = useState("");
@@ -41,11 +73,105 @@ export default function BuildBookEditor() {
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [tagsInput, setTagsInput] = useState("");
   const [isPublished, setIsPublished] = useState(false);
-  const [selectedStandardIds, setSelectedStandardIds] = useState<string[]>([]);
-  const [selectedTechStackIds, setSelectedTechStackIds] = useState<string[]>([]);
+  const [selectedStandards, setSelectedStandards] = useState<Set<string>>(new Set());
+  const [selectedTechStacks, setSelectedTechStacks] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Data for tree selectors
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [techStacks, setTechStacks] = useState<TechStack[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  // Load categories and tech stacks for tree selectors
+  useEffect(() => {
+    const loadData = async () => {
+      setDataLoading(true);
+      try {
+        // Load categories and standards
+        const { data: categoriesData } = await supabase
+          .from("standard_categories")
+          .select("*")
+          .order("name");
+
+        const { data: standardsData } = await supabase
+          .from("standards")
+          .select("*")
+          .order("code");
+
+        if (categoriesData && standardsData) {
+          const buildHierarchy = (standards: any[], parentId: string | null): Standard[] => {
+            return standards
+              .filter(s => s.parent_id === parentId)
+              .map(s => ({
+                id: s.id,
+                code: s.code,
+                title: s.title,
+                description: s.description,
+                parent_id: s.parent_id,
+                children: buildHierarchy(standards, s.id)
+              }));
+          };
+
+          const categoriesWithStandards: Category[] = categoriesData.map(cat => ({
+            id: cat.id,
+            name: cat.name,
+            description: cat.description,
+            standards: buildHierarchy(
+              standardsData.filter(s => s.category_id === cat.id),
+              null
+            )
+          }));
+
+          setCategories(categoriesWithStandards);
+        }
+
+        // Load tech stacks
+        const { data: techStacksData } = await supabase
+          .from("tech_stacks")
+          .select("*")
+          .is("parent_id", null)
+          .order("order_index");
+
+        const { data: allTechItems } = await supabase
+          .from("tech_stacks")
+          .select("*")
+          .not("parent_id", "is", null)
+          .order("order_index");
+
+        if (techStacksData) {
+          const buildTechHierarchy = (items: any[], parentId: string): TechStackItem[] => {
+            return (items || [])
+              .filter(i => i.parent_id === parentId)
+              .map(i => ({
+                id: i.id,
+                type: i.type,
+                name: i.name,
+                description: i.description,
+                parent_id: i.parent_id,
+                children: buildTechHierarchy(items, i.id)
+              }));
+          };
+
+          const techStacksWithItems: TechStack[] = techStacksData.map(stack => ({
+            id: stack.id,
+            name: stack.name,
+            description: stack.description,
+            items: buildTechHierarchy(allTechItems || [], stack.id)
+          }));
+
+          setTechStacks(techStacksWithItems);
+        }
+      } catch (error) {
+        console.error("Error loading data:", error);
+      } finally {
+        setDataLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   useEffect(() => {
     if (buildBook) {
@@ -59,16 +185,16 @@ export default function BuildBookEditor() {
   }, [buildBook]);
 
   useEffect(() => {
-    if (standards.length > 0) {
-      setSelectedStandardIds(standards.map((s) => s.standard_category_id));
+    if (bbStandards.length > 0) {
+      setSelectedStandards(new Set(bbStandards.map((s) => s.standard_id)));
     }
-  }, [standards]);
+  }, [bbStandards]);
 
   useEffect(() => {
-    if (techStacks.length > 0) {
-      setSelectedTechStackIds(techStacks.map((t) => t.tech_stack_id));
+    if (bbTechStacks.length > 0) {
+      setSelectedTechStacks(new Set(bbTechStacks.map((t) => t.tech_stack_id)));
     }
-  }, [techStacks]);
+  }, [bbTechStacks]);
 
   // Redirect non-admins
   useEffect(() => {
@@ -127,13 +253,15 @@ export default function BuildBookEditor() {
           .eq("build_book_id", bookId);
       }
 
-      if (selectedStandardIds.length > 0) {
-        await supabase.from("build_book_standards").insert(
-          selectedStandardIds.map((standardCategoryId) => ({
+      const standardIdsArray = Array.from(selectedStandards);
+      if (standardIdsArray.length > 0 && bookId) {
+        const { error: standardsError } = await supabase.from("build_book_standards").insert(
+          standardIdsArray.map((standardId) => ({
             build_book_id: bookId,
-            standard_category_id: standardCategoryId,
+            standard_id: standardId,
           }))
         );
+        if (standardsError) throw standardsError;
       }
 
       // Sync tech stacks
@@ -144,18 +272,21 @@ export default function BuildBookEditor() {
           .eq("build_book_id", bookId);
       }
 
-      if (selectedTechStackIds.length > 0) {
-        await supabase.from("build_book_tech_stacks").insert(
-          selectedTechStackIds.map((techStackId) => ({
+      const techStackIdsArray = Array.from(selectedTechStacks);
+      if (techStackIdsArray.length > 0 && bookId) {
+        const { error: techStacksError } = await supabase.from("build_book_tech_stacks").insert(
+          techStackIdsArray.map((techStackId) => ({
             build_book_id: bookId,
             tech_stack_id: techStackId,
           }))
         );
+        if (techStacksError) throw techStacksError;
       }
 
       toast.success(isNew ? "Build book created" : "Build book updated");
       navigate(`/build-books/${bookId}`);
     } catch (error: any) {
+      console.error("Save error:", error);
       toast.error("Failed to save: " + error.message);
     } finally {
       setIsSaving(false);
@@ -332,18 +463,25 @@ export default function BuildBookEditor() {
             {/* Standards Selection */}
             <Card>
               <CardHeader>
-                <CardTitle>Standards Categories</CardTitle>
+                <CardTitle>Standards</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Select the standard categories to include in this build book
+                  Select individual standards to include in this build book
                 </p>
-                <StandardsCategoryPicker
-                  selectedIds={selectedStandardIds}
-                  onChange={setSelectedStandardIds}
-                />
+                {dataLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <StandardsTreeSelector
+                    categories={categories}
+                    selectedStandards={selectedStandards}
+                    onSelectionChange={setSelectedStandards}
+                  />
+                )}
                 <p className="text-sm text-muted-foreground mt-2">
-                  {selectedStandardIds.length} selected
+                  {selectedStandards.size} standards selected
                 </p>
               </CardContent>
             </Card>
@@ -355,14 +493,22 @@ export default function BuildBookEditor() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Select the tech stacks to include in this build book
+                  Select tech stack items to include in this build book
                 </p>
-                <TechStackPicker
-                  selectedIds={selectedTechStackIds}
-                  onChange={setSelectedTechStackIds}
-                />
+                {dataLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <TechStackTreeSelector
+                    techStacks={techStacks}
+                    selectedItems={selectedTechStacks}
+                    onSelectionChange={setSelectedTechStacks}
+                    preloadedItems={true}
+                  />
+                )}
                 <p className="text-sm text-muted-foreground mt-2">
-                  {selectedTechStackIds.length} selected
+                  {selectedTechStacks.size} items selected
                 </p>
               </CardContent>
             </Card>

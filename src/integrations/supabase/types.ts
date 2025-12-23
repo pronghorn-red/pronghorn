@@ -650,19 +650,19 @@ export type Database = {
           build_book_id: string
           created_at: string
           id: string
-          standard_category_id: string
+          standard_id: string
         }
         Insert: {
           build_book_id: string
           created_at?: string
           id?: string
-          standard_category_id: string
+          standard_id: string
         }
         Update: {
           build_book_id?: string
           created_at?: string
           id?: string
-          standard_category_id?: string
+          standard_id?: string
         }
         Relationships: [
           {
@@ -673,10 +673,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "build_book_standards_standard_category_id_fkey"
-            columns: ["standard_category_id"]
+            foreignKeyName: "build_book_standards_standard_id_fkey"
+            columns: ["standard_id"]
             isOneToOne: false
-            referencedRelation: "standard_categories"
+            referencedRelation: "standards"
             referencedColumns: ["id"]
           },
         ]

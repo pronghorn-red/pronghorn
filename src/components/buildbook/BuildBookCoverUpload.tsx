@@ -44,16 +44,16 @@ export function BuildBookCoverUpload({
     setIsUploading(true);
     try {
       const fileExt = file.name.split(".").pop();
-      const fileName = `build-book-covers/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("attachments")
+        .from("build-book-covers")
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from("attachments")
+        .from("build-book-covers")
         .getPublicUrl(fileName);
 
       onUrlChange(publicUrl);
@@ -103,15 +103,15 @@ export function BuildBookCoverUpload({
         const byteArray = new Uint8Array(byteNumbers);
         const blob = new Blob([byteArray], { type: "image/png" });
 
-        const fileName = `build-book-covers/generated-${Date.now()}.png`;
+        const fileName = `generated-${Date.now()}.png`;
         const { error: uploadError } = await supabase.storage
-          .from("attachments")
+          .from("build-book-covers")
           .upload(fileName, blob);
 
         if (uploadError) throw uploadError;
 
         const { data: { publicUrl } } = supabase.storage
-          .from("attachments")
+          .from("build-book-covers")
           .getPublicUrl(fileName);
 
         onUrlChange(publicUrl);

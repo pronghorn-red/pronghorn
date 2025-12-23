@@ -68,7 +68,7 @@ export function ApplyBuildBookDialog({ projectId, shareToken, onApplied }: Apply
       const [standardsRes, techStacksRes] = await Promise.all([
         supabase
           .from("build_book_standards")
-          .select("standard_category_id")
+          .select("standard_id")
           .eq("build_book_id", selectedBookId),
         supabase
           .from("build_book_tech_stacks")
@@ -79,26 +79,16 @@ export function ApplyBuildBookDialog({ projectId, shareToken, onApplied }: Apply
       if (standardsRes.error) throw standardsRes.error;
       if (techStacksRes.error) throw techStacksRes.error;
 
-      const categoryIds = standardsRes.data?.map((s) => s.standard_category_id) || [];
+      const standardIds = standardsRes.data?.map((s) => s.standard_id) || [];
       const techStackIds = techStacksRes.data?.map((t) => t.tech_stack_id) || [];
 
-      // Get all standards for these categories
-      if (categoryIds.length > 0) {
-        const { data: standards } = await supabase
-          .from("standards")
-          .select("id")
-          .in("category_id", categoryIds);
-
-        const standardIds = standards?.map((s) => s.id) || [];
-
-        // Insert project standards
-        for (const standardId of standardIds) {
-          await supabase.rpc("insert_project_standard_with_token", {
-            p_project_id: projectId,
-            p_token: shareToken || null,
-            p_standard_id: standardId,
-          });
-        }
+      // Insert project standards directly (build_book_standards now stores individual standard IDs)
+      for (const standardId of standardIds) {
+        await supabase.rpc("insert_project_standard_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken || null,
+          p_standard_id: standardId,
+        });
       }
 
       // Get all tech stack items for these stacks
