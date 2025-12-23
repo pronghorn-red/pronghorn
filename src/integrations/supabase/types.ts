@@ -2008,6 +2008,7 @@ export type Database = {
       repo_files: {
         Row: {
           content: string
+          content_length: number | null
           created_at: string
           id: string
           is_binary: boolean
@@ -2019,6 +2020,7 @@ export type Database = {
         }
         Insert: {
           content: string
+          content_length?: number | null
           created_at?: string
           id?: string
           is_binary?: boolean
@@ -2030,6 +2032,7 @@ export type Database = {
         }
         Update: {
           content?: string
+          content_length?: number | null
           created_at?: string
           id?: string
           is_binary?: boolean
@@ -2090,6 +2093,7 @@ export type Database = {
       }
       repo_staging: {
         Row: {
+          content_length: number | null
           created_at: string | null
           created_by: string | null
           file_path: string
@@ -2103,6 +2107,7 @@ export type Database = {
           repo_id: string
         }
         Insert: {
+          content_length?: number | null
           created_at?: string | null
           created_by?: string | null
           file_path: string
@@ -2116,6 +2121,7 @@ export type Database = {
           repo_id: string
         }
         Update: {
+          content_length?: number | null
           created_at?: string | null
           created_by?: string | null
           file_path?: string
@@ -2713,6 +2719,7 @@ export type Database = {
         }
         Returns: {
           content: string
+          content_length: number | null
           created_at: string
           id: string
           is_binary: boolean
@@ -3681,6 +3688,18 @@ export type Database = {
         Args: { p_elements: Json; p_project_id: string; p_token?: string }
         Returns: Json
       }
+      get_project_files_metadata_with_token: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: {
+          content_length: number
+          id: string
+          is_binary: boolean
+          last_commit_sha: string
+          path: string
+          repo_id: string
+          updated_at: string
+        }[]
+      }
       get_project_files_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
@@ -3994,6 +4013,7 @@ export type Database = {
         }
         Returns: {
           content: string
+          content_length: number | null
           created_at: string
           id: string
           is_binary: boolean
@@ -4176,6 +4196,19 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_staged_changes_metadata_with_token: {
+        Args: { p_repo_id: string; p_token?: string }
+        Returns: {
+          content_length: number
+          created_at: string
+          file_path: string
+          id: string
+          is_binary: boolean
+          old_path: string
+          operation_type: string
+          repo_id: string
+        }[]
       }
       get_staged_changes_with_token: {
         Args: { p_repo_id: string; p_token?: string }
@@ -5126,6 +5159,7 @@ export type Database = {
       move_file_with_token: {
         Args: { p_file_id: string; p_new_path: string; p_token: string }
         Returns: {
+          content_length: number | null
           created_at: string | null
           created_by: string | null
           file_path: string
@@ -5160,6 +5194,7 @@ export type Database = {
         Args: { p_file_id: string; p_new_path: string; p_token?: string }
         Returns: {
           content: string
+          content_length: number | null
           created_at: string
           id: string
           is_binary: boolean
@@ -5444,6 +5479,7 @@ export type Database = {
           p_token: string
         }
         Returns: {
+          content_length: number | null
           created_at: string | null
           created_by: string | null
           file_path: string
@@ -6121,6 +6157,7 @@ export type Database = {
       update_staged_file_path_with_token: {
         Args: { p_new_path: string; p_staging_id: string; p_token: string }
         Returns: {
+          content_length: number | null
           created_at: string | null
           created_by: string | null
           file_path: string
@@ -6229,6 +6266,7 @@ export type Database = {
         }
         Returns: {
           content: string
+          content_length: number | null
           created_at: string
           id: string
           is_binary: boolean

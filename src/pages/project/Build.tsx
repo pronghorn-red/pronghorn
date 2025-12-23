@@ -17,16 +17,36 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { useFileBuffer } from "@/hooks/useFileBuffer";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff, Upload, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff, Upload, Trash2, AlertTriangle } from "lucide-react";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
 import { RenameDialog } from "@/components/repository/RenameDialog";
 import { stageFile } from "@/lib/stagingOperations";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const BINARY_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'pdf', 'zip', 'tar', 'gz', 'exe', 'dll', 'so', 'dylib', 'woff', 'woff2', 'ttf', 'eot', 'mp3', 'mp4', 'wav', 'ogg', 'webm', 'avi', 'mov'];
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'avif', 'tiff', 'tif'];
+
+// Size thresholds for file loading
+const SIZE_WARN_THRESHOLD = 1 * 1024 * 1024; // 1 MB - show warning
+const SIZE_BLOCK_THRESHOLD = 10 * 1024 * 1024; // 10 MB - block loading
 
 function isBinaryFile(filename: string): boolean {
   const ext = filename.split('.').pop()?.toLowerCase();
   return BINARY_EXTENSIONS.includes(ext || '');
+}
+
+function isImageFile(filename: string): boolean {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  return IMAGE_EXTENSIONS.includes(ext || '');
 }
 
 export default function Build() {
@@ -40,7 +60,7 @@ export default function Build() {
   // Use Prime repo for file operations (source of truth), fallback to default
   const defaultRepo = repos.find((r) => r.is_prime) || repos.find((r) => r.is_default);
 
-  const [files, setFiles] = useState<Array<{ id: string; path: string; isStaged?: boolean }>>([]);
+  const [files, setFiles] = useState<Array<{ id: string; path: string; isStaged?: boolean; contentLength?: number; isBinary?: boolean }>>([]);
   const [stagedChanges, setStagedChanges] = useState<any[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; path: string }>>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -111,14 +131,14 @@ export default function Build() {
     return newPath;
   };
 
-  // Load files function - defined as useCallback before useEffects that use it
+  // Load files function - uses lightweight metadata RPC (no content!)
   const loadFiles = useCallback(async () => {
     if (!defaultRepo || !projectId) return;
 
     try {
-      // Load committed files
+      // Load committed files METADATA ONLY (no content - much faster!)
       const { data: committedFiles, error: filesError } = await supabase.rpc(
-        "get_project_files_with_token",
+        "get_project_files_metadata_with_token",
         {
           p_project_id: projectId,
           p_token: shareToken || null,
@@ -132,9 +152,9 @@ export default function Build() {
         (f: any) => f.repo_id === defaultRepo.id
       );
 
-      // Load staged changes
+      // Load staged changes METADATA ONLY (no content!)
       const { data: staged, error: stagedError } = await supabase.rpc(
-        "get_staged_changes_with_token",
+        "get_staged_changes_metadata_with_token",
         {
           p_repo_id: defaultRepo.id,
           p_token: shareToken || null,
@@ -145,9 +165,9 @@ export default function Build() {
 
       setStagedChanges(staged || []);
 
-      // Build comprehensive file list
+      // Build comprehensive file list with size info
       const stagedMap = new Map((staged || []).map((s: any) => [s.file_path, s]));
-      const allFiles: Array<{ id: string; path: string; isStaged?: boolean }> = [];
+      const allFiles: Array<{ id: string; path: string; isStaged?: boolean; contentLength?: number; isBinary?: boolean }> = [];
 
       // Create a set of old_paths from rename operations to filter out original files
       const renamedFromPaths = new Set(
@@ -169,10 +189,13 @@ export default function Build() {
           return;
         }
         // Use staging ID if file is staged, otherwise use repo_files ID
+        // Use staged content_length if available, otherwise committed file length
         allFiles.push({
           id: stagedChange ? stagedChange.id : f.id,
           path: f.path,
           isStaged: stagedChange ? true : false,
+          contentLength: stagedChange ? stagedChange.content_length : f.content_length,
+          isBinary: stagedChange ? stagedChange.is_binary : f.is_binary,
         });
       });
 
@@ -187,6 +210,8 @@ export default function Build() {
               id: change.id,
               path: change.file_path,
               isStaged: true,
+              contentLength: change.content_length,
+              isBinary: change.is_binary,
             });
           }
         }
@@ -340,8 +365,17 @@ export default function Build() {
     };
   }, []); // Empty deps - cleanup runs only on unmount
 
-  // Instant file switching - no blocking
-  const handleSelectFile = (fileId: string, path: string, isStaged?: boolean) => {
+  // State for large file confirmation dialog
+  const [largeFileWarning, setLargeFileWarning] = useState<{ 
+    fileId: string; 
+    path: string; 
+    isStaged?: boolean; 
+    contentLength: number;
+    isBinary?: boolean;
+  } | null>(null);
+
+  // Instant file switching - with lazy loading protection for large files
+  const handleSelectFile = (fileId: string, path: string, isStaged?: boolean, contentLength?: number, isBinaryFlag?: boolean) => {
     // Track folder selection for context-aware file/folder creation
     const file = files.find(f => f.path === path);
     if (file && path.includes('/')) {
@@ -351,6 +385,28 @@ export default function Build() {
       setSelectedFolderPath('/');
     }
 
+    const size = contentLength || 0;
+    const isBinary = isBinaryFlag || isBinaryFile(path);
+    const isImage = isImageFile(path);
+
+    // Block loading for very large non-image files
+    if (size >= SIZE_BLOCK_THRESHOLD && !isImage) {
+      toast.error(`File is too large (${(size / (1024 * 1024)).toFixed(1)} MB) to open in browser. Consider downloading instead.`);
+      return;
+    }
+
+    // Block loading for large binary non-image files
+    if (isBinary && !isImage && size > SIZE_WARN_THRESHOLD) {
+      toast.error(`Binary file (${(size / (1024 * 1024)).toFixed(1)} MB) cannot be edited. Consider downloading instead.`);
+      return;
+    }
+
+    // Warn for files between 1-10 MB
+    if (size >= SIZE_WARN_THRESHOLD && size < SIZE_BLOCK_THRESHOLD) {
+      setLargeFileWarning({ fileId, path, isStaged, contentLength: size, isBinary });
+      return;
+    }
+
     // Instant switch - buffer handles dirty file saving in background
     // Force reload for staged files to ensure fresh content from DB
     switchFile(fileId, path, isStaged, isStaged);
@@ -358,6 +414,17 @@ export default function Build() {
     // On mobile, switch to editor tab when a file is selected
     if (isMobile) {
       setMobileActiveTab("editor");
+    }
+  };
+
+  // Handle confirmation to load large file
+  const handleConfirmLoadLargeFile = () => {
+    if (largeFileWarning) {
+      switchFile(largeFileWarning.fileId, largeFileWarning.path, largeFileWarning.isStaged, largeFileWarning.isStaged);
+      setLargeFileWarning(null);
+      if (isMobile) {
+        setMobileActiveTab("editor");
+      }
     }
   };
 
@@ -1085,6 +1152,36 @@ export default function Build() {
         type={itemToRename?.type || "file"}
         onConfirm={handleConfirmRename}
       />
+
+      {/* Large file warning dialog */}
+      <AlertDialog open={!!largeFileWarning} onOpenChange={(open) => !open && setLargeFileWarning(null)}>
+        <AlertDialogContent className="bg-[#252526] border-[#3e3e42]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-[#cccccc]">
+              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+              Large File Warning
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[#858585]">
+              This file is <span className="text-yellow-400 font-semibold">
+                {largeFileWarning ? (largeFileWarning.contentLength / (1024 * 1024)).toFixed(1) : 0} MB
+              </span>. Loading large files may slow down your browser.
+              <br /><br />
+              <span className="text-[#cccccc]">{largeFileWarning?.path}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-[#3e3e42] text-[#cccccc] border-[#3e3e42] hover:bg-[#4e4e52] hover:text-white">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmLoadLargeFile}
+              className="bg-yellow-600 text-white hover:bg-yellow-700"
+            >
+              Load Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

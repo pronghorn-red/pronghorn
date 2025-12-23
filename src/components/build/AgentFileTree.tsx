@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
-import { ChevronRight, ChevronDown, File, Folder, FolderOpen, Edit, Trash2, Paperclip } from "lucide-react";
+import { ChevronRight, ChevronDown, File, Folder, FolderOpen, Edit, Trash2, Paperclip, AlertTriangle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -9,6 +11,11 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 
+// Size thresholds for file warnings
+const SIZE_WARN_THRESHOLD = 1 * 1024 * 1024; // 1 MB - show yellow badge
+const SIZE_DANGER_THRESHOLD = 5 * 1024 * 1024; // 5 MB - show red badge
+const SIZE_BLOCK_THRESHOLD = 10 * 1024 * 1024; // 10 MB - show warning icon
+
 interface FileNode {
   id: string;
   name: string;
@@ -16,22 +23,32 @@ interface FileNode {
   type: "file" | "folder";
   isStaged?: boolean;
   operationType?: "add" | "edit" | "delete" | "rename";
+  contentLength?: number;
+  isBinary?: boolean;
   children?: FileNode[];
 }
 
 interface AgentFileTreeProps {
-  files: Array<{ id: string; path: string; isStaged?: boolean }>;
+  files: Array<{ id: string; path: string; isStaged?: boolean; contentLength?: number; isBinary?: boolean }>;
   stagedChanges?: Array<{ 
     file_path: string; 
     operation_type: string;
     old_path?: string;
   }>;
   selectedFilePath: string | null;
-  onSelectFile: (fileId: string, path: string, isStaged?: boolean) => void;
+  onSelectFile: (fileId: string, path: string, isStaged?: boolean, contentLength?: number, isBinary?: boolean) => void;
   onFolderSelect: (folderPath: string) => void;
   onAttachToPrompt: (fileId: string, path: string) => void;
   onRenameFile: (fileId: string, path: string) => void;
   onDeleteFile: (fileId: string, path: string) => void;
+}
+
+// Format file size for display
+function formatFileSize(bytes: number | undefined): string {
+  if (bytes === undefined || bytes === null) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function AgentFileTree({
@@ -46,13 +63,13 @@ export function AgentFileTree({
 }: AgentFileTreeProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
-  // Build tree structure from flat file list with operation types
+  // Build tree structure from flat file list with operation types and size info
   const tree = useMemo(() => {
     const root: FileNode[] = [];
     const folderMap = new Map<string, FileNode>();
     const stagedMap = new Map(stagedChanges.map((s) => [s.file_path, s.operation_type]));
 
-    files.forEach(({ id, path, isStaged }) => {
+    files.forEach(({ id, path, isStaged, contentLength, isBinary }) => {
       const parts = path.split("/");
       let currentLevel = root;
       let currentPath = "";
@@ -70,6 +87,8 @@ export function AgentFileTree({
             type: "file",
             isStaged,
             operationType,
+            contentLength,
+            isBinary,
           });
         } else {
           let folder = folderMap.get(currentPath);
@@ -204,6 +223,13 @@ export function AgentFileTree({
       );
     }
 
+    // Determine size badge styling
+    const size = node.contentLength || 0;
+    const isLargeFile = size >= SIZE_WARN_THRESHOLD;
+    const isDangerSize = size >= SIZE_DANGER_THRESHOLD;
+    const isBlockedSize = size >= SIZE_BLOCK_THRESHOLD;
+    const isNonImageBinary = node.isBinary && !node.name.match(/\.(png|jpg|jpeg|gif|webp|svg|ico|bmp)$/i);
+
     return (
       <ContextMenu key={node.id}>
         <ContextMenuTrigger>
@@ -212,17 +238,55 @@ export function AgentFileTree({
               isSelected ? "bg-[#37373d]" : ""
             }`}
             style={{ paddingLeft: `${level * 12 + 20}px` }}
-            onClick={() => onSelectFile(node.id, node.path, node.isStaged)}
+            onClick={() => onSelectFile(node.id, node.path, node.isStaged, node.contentLength, node.isBinary)}
           >
             <File className={`h-4 w-4 shrink-0 ${getFileColor(node.operationType)} ${
               node.operationType === "delete" ? "opacity-60" : ""
             }`} />
-            <span className={`text-sm truncate ${getFileColor(node.operationType)} ${
+            <span className={`text-sm truncate flex-1 ${getFileColor(node.operationType)} ${
               node.operationType === "delete" ? "line-through opacity-60" : ""
             }`}>
               {node.name}
             </span>
-            {node.isStaged && (
+            
+            {/* Size badge for large files */}
+            {isLargeFile && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge 
+                      variant="outline" 
+                      className={`text-[10px] px-1 py-0 h-4 shrink-0 ${
+                        isDangerSize 
+                          ? "border-red-500/50 text-red-400 bg-red-500/10" 
+                          : "border-yellow-500/50 text-yellow-400 bg-yellow-500/10"
+                      }`}
+                    >
+                      {formatFileSize(size)}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isBlockedSize ? "File too large to edit in browser" : isDangerSize ? "Large file - may be slow to load" : "File over 1 MB"}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            
+            {/* Warning icon for blocked files */}
+            {(isBlockedSize || (isNonImageBinary && size > SIZE_WARN_THRESHOLD)) && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <AlertTriangle className="h-3.5 w-3.5 text-orange-400 shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isNonImageBinary ? "Binary file - download to view" : "Too large for browser editing"}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            
+            {node.isStaged && !isLargeFile && (
               <span className={`text-xs ml-auto ${
                 node.operationType === "delete" ? "text-red-400" : "text-green-400"
               }`}>
