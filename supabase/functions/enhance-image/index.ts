@@ -21,13 +21,6 @@ serve(async (req) => {
       prompt: string;
     };
 
-    if (!images || images.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'At least one image is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     if (!prompt) {
       return new Response(
         JSON.stringify({ error: 'Prompt is required' }),
@@ -35,23 +28,26 @@ serve(async (req) => {
       );
     }
 
-    console.log(`🎨 Enhancing ${images.length} image(s) with prompt: "${prompt.substring(0, 100)}..."`);
+    const imageCount = images?.length || 0;
+    console.log(`🎨 ${imageCount > 0 ? 'Enhancing' : 'Creating'} image with ${imageCount} source image(s) and prompt: "${prompt.substring(0, 100)}..."`);
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    // Build content parts: text prompt + all images
+    // Build content parts: text prompt + all images (if any)
     const parts: any[] = [{ text: prompt }];
 
-    for (const image of images) {
-      parts.push({
-        inline_data: {
-          mime_type: image.mimeType,
-          data: image.base64,
-        },
-      });
+    if (images && images.length > 0) {
+      for (const image of images) {
+        parts.push({
+          inline_data: {
+            mime_type: image.mimeType,
+            data: image.base64,
+          },
+        });
+      }
     }
 
     const requestBody = {

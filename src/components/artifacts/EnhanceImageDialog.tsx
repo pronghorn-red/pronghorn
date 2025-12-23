@@ -47,6 +47,12 @@ const PRESET_PROMPTS = [
   { label: "Add Text", icon: Type, prompt: "Add professional title text overlay to this image" },
 ];
 
+const CREATE_PRESETS = [
+  { label: "Landscape", icon: Palette, prompt: "Create a beautiful scenic landscape with mountains, a lake, and sunset sky" },
+  { label: "Abstract Art", icon: Sparkles, prompt: "Create an abstract art piece with vibrant colors and flowing shapes" },
+  { label: "Portrait", icon: Type, prompt: "Create a professional portrait illustration" },
+];
+
 export function EnhanceImageDialog({
   open,
   onOpenChange,
@@ -126,12 +132,8 @@ export function EnhanceImageDialog({
   };
 
   const handleEnhance = async () => {
-    if (selectedArtifacts.size === 0) {
-      toast.error("Please select at least one image");
-      return;
-    }
     if (!prompt.trim()) {
-      toast.error("Please enter an enhancement prompt");
+      toast.error("Please enter a prompt");
       return;
     }
 
@@ -139,7 +141,7 @@ export function EnhanceImageDialog({
     setGeneratedImage(null);
 
     try {
-      // Fetch all selected images as base64
+      // Fetch all selected images as base64 (if any selected)
       const selectedImages = imageArtifacts.filter(a => selectedArtifacts.has(a.id));
       const images = await Promise.all(
         selectedImages.map(async (artifact) => {
@@ -172,7 +174,7 @@ export function EnhanceImageDialog({
 
       const data = await response.json();
       setGeneratedImage(data.imageUrl);
-      toast.success("Image enhanced successfully!");
+      toast.success(selectedArtifacts.size > 0 ? "Image enhanced successfully!" : "Image created successfully!");
 
     } catch (error) {
       console.error("Enhance image error:", error);
@@ -201,7 +203,8 @@ export function EnhanceImageDialog({
             imageData: generatedImage,
             projectId,
             shareToken,
-            filename: `enhanced-${Date.now()}.png`,
+            filename: `${selectedArtifacts.size > 0 ? 'enhanced' : 'generated'}-${Date.now()}.png`,
+            content: prompt,
           }),
         }
       );
@@ -229,9 +232,9 @@ export function EnhanceImageDialog({
         const { error } = await supabase.rpc("insert_artifact_with_token", {
           p_project_id: projectId,
           p_token: shareToken || null,
-          p_content: `Enhanced image: ${prompt}`,
+          p_content: prompt,
           p_image_url: uploadedUrl,
-          p_ai_title: "Enhanced Image",
+          p_ai_title: selectedArtifacts.size > 0 ? "Enhanced Image" : "Generated Image",
         });
 
         if (error) throw error;
@@ -260,26 +263,32 @@ export function EnhanceImageDialog({
     document.body.removeChild(link);
   };
 
+  const isCreating = selectedArtifacts.size === 0;
+  const actionLabel = isCreating ? "Create" : "Enhance";
+  const activePresets = isCreating ? CREATE_PRESETS : PRESET_PROMPTS;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="w-[90vw] h-[90vh] max-w-none flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wand2 className="h-5 w-5" />
-            Enhance Image
+            Create/Enhance Image
           </DialogTitle>
           <DialogDescription>
-            Select images and apply AI-powered enhancements using Gemini
+            {isCreating 
+              ? "Enter a prompt to create a new AI-generated image"
+              : "Select images and apply AI-powered enhancements using Gemini"}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 space-y-4 overflow-hidden">
+        <div className="flex-1 space-y-4 overflow-auto">
           {!generatedImage ? (
             <>
-              {/* Image Selection */}
+              {/* Image Selection (Optional) */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Select Images</Label>
+                  <Label>Select Images (optional - leave empty to create from text)</Label>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -291,8 +300,8 @@ export function EnhanceImageDialog({
                 </div>
 
                 {imageArtifacts.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground border rounded-md">
-                    No image artifacts found
+                  <div className="text-center py-4 text-muted-foreground border rounded-md text-sm">
+                    No image artifacts available. Enter a prompt below to create a new image.
                   </div>
                 ) : (
                   <ScrollArea className="h-[180px] border rounded-md p-3">
@@ -329,11 +338,11 @@ export function EnhanceImageDialog({
                 )}
               </div>
 
-              {/* Preset Prompts */}
+              {/* Preset Prompts - Dynamic based on mode */}
               <div className="space-y-2">
-                <Label>Quick Presets</Label>
+                <Label>Quick Presets {isCreating ? "(Create)" : "(Enhance)"}</Label>
                 <div className="flex flex-wrap gap-2">
-                  {PRESET_PROMPTS.map((preset) => (
+                  {activePresets.map((preset) => (
                     <Button
                       key={preset.label}
                       variant="outline"
@@ -351,56 +360,60 @@ export function EnhanceImageDialog({
 
               {/* Prompt Input */}
               <div className="space-y-2">
-                <Label>Enhancement Prompt</Label>
+                <Label>{isCreating ? "Creation Prompt" : "Enhancement Prompt"}</Label>
                 <Textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Describe how you want to enhance or modify the image(s)..."
-                  className="min-h-[80px]"
+                  placeholder={isCreating 
+                    ? "Describe the image you want to create..."
+                    : "Describe how you want to enhance or modify the image(s)..."}
+                  className="min-h-[100px]"
                   disabled={isProcessing}
                 />
               </div>
 
-              {/* Output Mode */}
-              <div className="space-y-2">
-                <Label>Output Mode</Label>
-                <RadioGroup
-                  value={outputMode}
-                  onValueChange={(v) => setOutputMode(v as OutputMode)}
-                  disabled={isProcessing}
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="add" id="add" />
-                    <Label htmlFor="add" className="cursor-pointer">Add as new artifact</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem
-                      value="replace"
-                      id="replace"
-                      disabled={selectedArtifacts.size !== 1}
-                    />
-                    <Label
-                      htmlFor="replace"
-                      className={`cursor-pointer ${selectedArtifacts.size !== 1 ? "text-muted-foreground" : ""}`}
-                    >
-                      Replace selected artifact
-                      {selectedArtifacts.size !== 1 && (
-                        <span className="text-xs ml-1">(select 1 image)</span>
-                      )}
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
+              {/* Output Mode - Only show when images selected */}
+              {selectedArtifacts.size > 0 && (
+                <div className="space-y-2">
+                  <Label>Output Mode</Label>
+                  <RadioGroup
+                    value={outputMode}
+                    onValueChange={(v) => setOutputMode(v as OutputMode)}
+                    disabled={isProcessing}
+                    className="flex gap-4"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="add" id="add" />
+                      <Label htmlFor="add" className="cursor-pointer">Add as new artifact</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem
+                        value="replace"
+                        id="replace"
+                        disabled={selectedArtifacts.size !== 1}
+                      />
+                      <Label
+                        htmlFor="replace"
+                        className={`cursor-pointer ${selectedArtifacts.size !== 1 ? "text-muted-foreground" : ""}`}
+                      >
+                        Replace selected artifact
+                        {selectedArtifacts.size !== 1 && (
+                          <span className="text-xs ml-1">(select 1 image)</span>
+                        )}
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              )}
             </>
           ) : (
             /* Generated Image Preview */
-            <div className="space-y-4">
-              <div className="border rounded-lg overflow-hidden">
+            <div className="space-y-4 flex-1 flex flex-col">
+              <div className="flex-1 border rounded-lg overflow-hidden flex items-center justify-center bg-muted">
                 <img
                   src={generatedImage}
-                  alt="Enhanced image"
-                  className="w-full max-h-[400px] object-contain bg-muted"
+                  alt="Generated image"
+                  className="max-w-full max-h-full object-contain"
                 />
               </div>
               <div className="flex gap-2">
@@ -432,17 +445,17 @@ export function EnhanceImageDialog({
           {!generatedImage ? (
             <Button
               onClick={handleEnhance}
-              disabled={isProcessing || selectedArtifacts.size === 0 || !prompt.trim()}
+              disabled={isProcessing || !prompt.trim()}
             >
               {isProcessing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Enhancing...
+                  {isCreating ? "Creating..." : "Enhancing..."}
                 </>
               ) : (
                 <>
                   <Wand2 className="h-4 w-4 mr-2" />
-                  Enhance ({selectedArtifacts.size})
+                  {actionLabel} {selectedArtifacts.size > 0 ? `(${selectedArtifacts.size})` : ""}
                 </>
               )}
             </Button>

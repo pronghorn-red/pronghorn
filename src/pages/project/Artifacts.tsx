@@ -399,7 +399,7 @@ ${artifact.content}`;
                   </Button>
                   <Button variant="outline" onClick={() => setIsEnhanceImageOpen(true)}>
                     <Wand2 className="h-4 w-4 mr-2" />
-                    Enhance Image
+                    Create/Enhance Image
                   </Button>
                   <Button onClick={() => setIsAddDialogOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
