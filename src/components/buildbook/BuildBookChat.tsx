@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { MessageSquare, Send, Loader2, Sparkles, Download } from "lucide-react";
+import { MessageSquare, Send, Loader2, Sparkles, Download, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -67,6 +67,7 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
   const [standardsInfo, setStandardsInfo] = useState<StandardInfo[]>([]);
   const [techStacksInfo, setTechStacksInfo] = useState<TechStackInfo[]>([]);
   const [contextLoaded, setContextLoaded] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
 
@@ -77,12 +78,29 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
     }
   }, [isOpen, contextLoaded]);
 
-  // Auto-scroll to bottom on new messages
+  // Track scroll position to show/hide jump button
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages]);
+    const scrollArea = scrollViewportRef.current;
+    if (!scrollArea) return;
+
+    const viewport = scrollArea.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+    if (!viewport) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = viewport;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      const threshold = 100;
+      setIsAtBottom(distanceFromBottom < threshold);
+    };
+
+    viewport.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll(); // Check initial position
+    return () => viewport.removeEventListener("scroll", handleScroll);
+  }, [isOpen]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const loadContext = async () => {
     try {
@@ -424,47 +442,61 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
           </div>
         </SheetHeader>
 
-        <ScrollArea className="flex-1 px-4" ref={scrollViewportRef}>
-          <div className="py-4 space-y-4">
-            {messages.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-sm">
-                  Ask any question about the standards and technologies in this Build Book.
-                </p>
-                <p className="text-xs mt-2 opacity-70">
-                  The AI has access to all {standardsInfo.length} standards and {techStacksInfo.length} tech stack items.
-                </p>
-              </div>
-            ) : (
-              messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-lg px-4 py-2 ${
-                      msg.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted"
-                    }`}
-                  >
-                    {msg.role === "assistant" ? (
-                      <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {msg.content || "..."}
-                        </ReactMarkdown>
-                      </div>
-                    ) : (
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                    )}
-                  </div>
+        <div className="flex-1 relative min-h-0">
+          <ScrollArea className="h-full px-4" ref={scrollViewportRef}>
+            <div className="py-4 space-y-4">
+              {messages.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-sm">
+                    Ask any question about the standards and technologies in this Build Book.
+                  </p>
+                  <p className="text-xs mt-2 opacity-70">
+                    The AI has access to all {standardsInfo.length} standards and {techStacksInfo.length} tech stack items.
+                  </p>
                 </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
+              ) : (
+                messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-lg px-4 py-2 ${
+                        msg.role === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted"
+                      }`}
+                    >
+                      {msg.role === "assistant" ? (
+                        <div className="prose prose-sm dark:prose-invert max-w-none">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {msg.content || "..."}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          </ScrollArea>
+
+          {/* Floating scroll-to-bottom button */}
+          {!isAtBottom && (
+            <Button
+              variant="outline"
+              size="icon"
+              className="absolute bottom-4 right-6 rounded-full h-10 w-10 shadow-lg z-10 bg-background hover:bg-accent"
+              onClick={scrollToBottom}
+            >
+              <ChevronDown className="h-5 w-5" />
+            </Button>
+          )}
+        </div>
 
         <div className="p-4 border-t shrink-0">
           <div className="flex gap-2">
