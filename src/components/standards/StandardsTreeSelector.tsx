@@ -1,14 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DocsViewer } from "@/components/docs/DocsViewer";
 
 interface Standard {
   id: string;
   code: string;
   title: string;
   description?: string;
+  long_description?: string;
   parent_id?: string;
   children?: Standard[];
 }
@@ -17,6 +19,7 @@ interface Category {
   id: string;
   name: string;
   description?: string;
+  long_description?: string;
   standards: Standard[];
 }
 
@@ -33,6 +36,7 @@ export function StandardsTreeSelector({
 }: StandardsTreeSelectorProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [expandedStandards, setExpandedStandards] = useState<Set<string>>(new Set());
+  const [docsCategory, setDocsCategory] = useState<Category | null>(null);
 
   // Helper to get all descendant IDs
   const getAllDescendants = (standard: Standard): string[] => {
@@ -252,6 +256,15 @@ export function StandardsTreeSelector({
               >
                 {category.name}
               </Label>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => setDocsCategory(category)}
+                title="View documentation"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+              </Button>
             </div>
             {category.description && (
               <p className="text-xs text-muted-foreground pl-14">{category.description}</p>
@@ -265,6 +278,21 @@ export function StandardsTreeSelector({
         );
       })}
       </div>
+
+      {/* Docs Viewer */}
+      {docsCategory && (
+        <DocsViewer
+          open={!!docsCategory}
+          onClose={() => setDocsCategory(null)}
+          entityType="standard_category"
+          rootEntity={{
+            id: docsCategory.id,
+            name: docsCategory.name,
+            description: docsCategory.description,
+            long_description: docsCategory.long_description,
+          }}
+        />
+      )}
     </div>
   );
 }

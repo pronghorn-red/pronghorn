@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { StandardsTreeManager } from "./StandardsTreeManager";
+import { DocsViewer } from "@/components/docs/DocsViewer";
 import { Standard } from "./StandardsTree";
-import { Edit, Trash2, Check, X } from "lucide-react";
+import { Edit, Trash2, Check, X, BookOpen } from "lucide-react";
 import { useAdmin } from "@/contexts/AdminContext";
 
 interface CategoryCardProps {
@@ -19,6 +20,7 @@ interface CategoryCardProps {
 export function CategoryCard({ category, standards, onDelete, onUpdate, onRefresh }: CategoryCardProps) {
   const { isAdmin } = useAdmin();
   const [isEditing, setIsEditing] = useState(false);
+  const [showDocs, setShowDocs] = useState(false);
   const [name, setName] = useState(category.name);
   const [description, setDescription] = useState(category.description || "");
 
@@ -66,16 +68,22 @@ export function CategoryCard({ category, standards, onDelete, onUpdate, onRefres
           <>
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-lg md:text-xl truncate">{category.name}</CardTitle>
-              {isAdmin && (
-                <div className="flex gap-1 md:gap-2 flex-shrink-0">
-                  <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)} className="h-7 w-7 md:h-8 md:w-8 p-0">
-                    <Edit className="h-3 w-3 md:h-4 md:w-4" />
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => onDelete(category.id)} className="h-7 w-7 md:h-8 md:w-8 p-0">
-                    <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
-                  </Button>
-                </div>
-              )}
+              <div className="flex gap-1 md:gap-2 flex-shrink-0">
+                <Button size="sm" variant="outline" onClick={() => setShowDocs(true)} className="gap-1">
+                  <BookOpen className="h-3 w-3 md:h-4 md:w-4" />
+                  <span className="hidden md:inline">Docs</span>
+                </Button>
+                {isAdmin && (
+                  <>
+                    <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)} className="h-7 w-7 md:h-8 md:w-8 p-0">
+                      <Edit className="h-3 w-3 md:h-4 md:w-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => onDelete(category.id)} className="h-7 w-7 md:h-8 md:w-8 p-0">
+                      <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
             {category.description && <CardDescription className="text-xs md:text-sm">{category.description}</CardDescription>}
           </>
@@ -88,6 +96,18 @@ export function CategoryCard({ category, standards, onDelete, onUpdate, onRefres
           onRefresh={onRefresh}
         />
       </CardContent>
+
+      <DocsViewer
+        open={showDocs}
+        onClose={() => setShowDocs(false)}
+        entityType="standard_category"
+        rootEntity={{
+          id: category.id,
+          name: category.name,
+          description: category.description,
+          long_description: category.long_description,
+        }}
+      />
     </Card>
   );
 }

@@ -6650,7 +6650,13 @@ export type Database = {
       project_status: "DESIGN" | "AUDIT" | "BUILD"
       project_token_role: "owner" | "editor" | "viewer"
       requirement_type: "EPIC" | "FEATURE" | "STORY" | "ACCEPTANCE_CRITERIA"
-      resource_type: "file" | "website" | "youtube" | "image"
+      resource_type:
+        | "file"
+        | "website"
+        | "youtube"
+        | "image"
+        | "repo"
+        | "library"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -6857,7 +6863,7 @@ export const Constants = {
       project_status: ["DESIGN", "AUDIT", "BUILD"],
       project_token_role: ["owner", "editor", "viewer"],
       requirement_type: ["EPIC", "FEATURE", "STORY", "ACCEPTANCE_CRITERIA"],
-      resource_type: ["file", "website", "youtube", "image"],
+      resource_type: ["file", "website", "youtube", "image", "repo", "library"],
     },
   },
 } as const

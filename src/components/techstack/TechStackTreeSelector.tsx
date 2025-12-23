@@ -1,15 +1,19 @@
 import { useState, useEffect } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { DocsViewer } from "@/components/docs/DocsViewer";
 
 interface TechStackItem {
   id: string;
   type: string | null;
   name: string;
   description?: string | null;
+  long_description?: string | null;
+  version?: string | null;
+  version_constraint?: string | null;
   parent_id?: string | null;
   children?: TechStackItem[];
 }
@@ -18,6 +22,7 @@ interface TechStack {
   id: string;
   name: string;
   description?: string | null;
+  long_description?: string | null;
   items: TechStackItem[];
 }
 
@@ -26,7 +31,7 @@ interface TechStackTreeSelectorProps {
   selectedItems: Set<string>;
   onSelectionChange: (selectedIds: Set<string>) => void;
   allowedItemIds?: Set<string> | string[];
-  preloadedItems?: boolean; // Skip internal loading when true - data already has items populated
+  preloadedItems?: boolean;
 }
 
 export function TechStackTreeSelector({
@@ -40,10 +45,10 @@ export function TechStackTreeSelector({
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [techStacksWithItems, setTechStacksWithItems] = useState<TechStack[]>([]);
   const [loading, setLoading] = useState(!preloadedItems);
+  const [docsStack, setDocsStack] = useState<TechStack | null>(null);
 
   useEffect(() => {
     if (preloadedItems) {
-      // Use techStacks directly - they already have items populated
       setTechStacksWithItems(initialTechStacks);
       setLoading(false);
     } else {
@@ -63,7 +68,6 @@ export function TechStackTreeSelector({
           : null;
 
       for (const stack of initialTechStacks) {
-        // Load all child items for this tech stack (where parent_id = stack.id)
         const { data: childItems } = await supabase
           .from("tech_stacks")
           .select("*")
@@ -98,8 +102,6 @@ export function TechStackTreeSelector({
 
     flatItems.forEach((item) => {
       const node = map.get(item.id)!;
-      // For tech stack items, we need to check if parent_id exists in our fetched items
-      // If not, it's a root item (direct child of the tech stack parent)
       if (item.parent_id && map.has(item.parent_id)) {
         map.get(item.parent_id)!.children!.push(node);
       } else {
@@ -110,7 +112,6 @@ export function TechStackTreeSelector({
     return roots;
   };
 
-  // Helper to get all descendant IDs from an item
   const getAllDescendants = (item: TechStackItem): string[] => {
     const descendants: string[] = [item.id];
     if (item.children) {
@@ -121,7 +122,6 @@ export function TechStackTreeSelector({
     return descendants;
   };
 
-  // Helper to get all item IDs in a tech stack
   const getAllStackItems = (items: TechStackItem[]): string[] => {
     const ids: string[] = [];
     items.forEach((item) => {
@@ -130,26 +130,22 @@ export function TechStackTreeSelector({
     return ids;
   };
 
-  // Check if all descendants are selected
   const areAllDescendantsSelected = (item: TechStackItem): boolean => {
     const descendants = getAllDescendants(item);
     return descendants.every((id) => selectedItems.has(id));
   };
 
-  // Check if some (but not all) descendants are selected
   const areSomeDescendantsSelected = (item: TechStackItem): boolean => {
     const descendants = getAllDescendants(item);
     const selectedCount = descendants.filter((id) => selectedItems.has(id)).length;
     return selectedCount > 0 && selectedCount < descendants.length;
   };
 
-  // Check if all items in stack are selected
   const areAllStackItemsSelected = (items: TechStackItem[]): boolean => {
     const allIds = getAllStackItems(items);
     return allIds.length > 0 && allIds.every((id) => selectedItems.has(id));
   };
 
-  // Check if some items in stack are selected
   const areSomeStackItemsSelected = (items: TechStackItem[]): boolean => {
     const allIds = getAllStackItems(items);
     const selectedCount = allIds.filter((id) => selectedItems.has(id)).length;
@@ -161,14 +157,12 @@ export function TechStackTreeSelector({
     const hasChildren = item.children && item.children.length > 0;
     
     if (!hasChildren) {
-      // Leaf node - just toggle the item itself
       if (newSelected.has(item.id)) {
         newSelected.delete(item.id);
       } else {
         newSelected.add(item.id);
       }
     } else {
-      // Has children - toggle all descendants
       const descendants = getAllDescendants(item);
       const allSelected = areAllDescendantsSelected(item);
 
@@ -188,10 +182,8 @@ export function TechStackTreeSelector({
     const allSelected = areAllStackItemsSelected(items);
 
     if (allSelected) {
-      // Unselect all
       allIds.forEach((id) => newSelected.delete(id));
     } else {
-      // Select all
       allIds.forEach((id) => newSelected.add(id));
     }
 
@@ -238,6 +230,7 @@ export function TechStackTreeSelector({
       ? areAllDescendantsSelected(item)
       : selectedItems.has(item.id);
     const isIndeterminate = hasChildren && !isChecked && areSomeDescendantsSelected(item);
+    const versionDisplay = item.version ? `${item.version_constraint || "^"}${item.version}` : null;
 
     return (
       <div key={item.id} className="space-y-1">
@@ -267,10 +260,15 @@ export function TechStackTreeSelector({
           />
           <Label
             htmlFor={`item-${item.id}`}
-            className="text-sm cursor-pointer flex-1"
+            className="text-sm cursor-pointer flex-1 flex items-center gap-2"
           >
             {item.type && <span className="font-medium">{item.type}</span>}
             {item.type && " - "}{item.name}
+            {versionDisplay && (
+              <span className="text-xs font-mono text-muted-foreground bg-muted px-1 py-0.5 rounded">
+                {versionDisplay}
+              </span>
+            )}
           </Label>
         </div>
         {hasChildren && isExpanded && (
@@ -333,6 +331,15 @@ export function TechStackTreeSelector({
               >
                 {stack.name}
               </Label>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => setDocsStack(stack)}
+                title="View documentation"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+              </Button>
             </div>
             {stack.description && (
               <p className="text-xs text-muted-foreground pl-14">{stack.description}</p>
@@ -346,6 +353,21 @@ export function TechStackTreeSelector({
         );
       })}
       </div>
+
+      {/* Docs Viewer */}
+      {docsStack && (
+        <DocsViewer
+          open={!!docsStack}
+          onClose={() => setDocsStack(null)}
+          entityType="tech_stack"
+          rootEntity={{
+            id: docsStack.id,
+            name: docsStack.name,
+            description: docsStack.description,
+            long_description: docsStack.long_description,
+          }}
+        />
+      )}
     </div>
   );
 }

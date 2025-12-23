@@ -9,7 +9,9 @@ import {
   Edit, 
   ExternalLink,
   Loader2,
-  Play
+  Play,
+  Github,
+  Package
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +44,7 @@ import { useAdmin } from "@/contexts/AdminContext";
 
 interface Resource {
   id: string;
-  resource_type: "file" | "website" | "youtube" | "image";
+  resource_type: "file" | "website" | "youtube" | "image" | "repo" | "library";
   name: string;
   url: string;
   description?: string | null;
@@ -61,6 +63,8 @@ const resourceTypeIcons = {
   website: Globe,
   youtube: Youtube,
   image: ImageIcon,
+  repo: Github,
+  library: Package,
 };
 
 const resourceTypeLabels = {
@@ -68,6 +72,8 @@ const resourceTypeLabels = {
   website: "Website",
   youtube: "YouTube Video",
   image: "Image",
+  repo: "Repository",
+  library: "Library",
 };
 
 const resourceTypeColors = {
@@ -75,6 +81,17 @@ const resourceTypeColors = {
   website: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
   youtube: "bg-red-500/10 text-red-600 border-red-500/20",
   image: "bg-purple-500/10 text-purple-600 border-purple-500/20",
+  repo: "bg-gray-500/10 text-gray-600 border-gray-500/20",
+  library: "bg-orange-500/10 text-orange-600 border-orange-500/20",
+};
+
+const resourceTypePlaceholders = {
+  file: "URL or upload a file",
+  website: "https://example.com",
+  youtube: "https://youtube.com/watch?v=...",
+  image: "URL or upload an image",
+  repo: "https://github.com/owner/repo",
+  library: "https://www.npmjs.com/package/... or package name",
 };
 
 // Extract YouTube video ID from URL
@@ -86,6 +103,17 @@ const getYouTubeVideoId = (url: string): string | null => {
     const match = url.match(pattern);
     if (match) return match[1];
   }
+  return null;
+};
+
+// Detect library type from URL
+const getLibraryType = (url: string): string | null => {
+  if (url.includes("npmjs.com") || url.includes("npm")) return "npm";
+  if (url.includes("maven") || url.includes("mvnrepository")) return "maven";
+  if (url.includes("pypi.org") || url.includes("anaconda")) return "python";
+  if (url.includes("nuget.org")) return "nuget";
+  if (url.includes("crates.io")) return "cargo";
+  if (url.includes("packagist.org")) return "composer";
   return null;
 };
 
@@ -184,8 +212,9 @@ export function ResourceManager({ entityType, entityId, onResourcesChange }: Res
 
     setSaving(true);
     try {
+      // Cast resource_type to any to support new enum values (repo, library) before types regenerate
       const baseData = {
-        resource_type: formData.resource_type,
+        resource_type: formData.resource_type as any,
         name: formData.name.trim(),
         url: formData.url.trim(),
         description: formData.description.trim() || null,
@@ -194,25 +223,25 @@ export function ResourceManager({ entityType, entityId, onResourcesChange }: Res
 
       if (editingResource) {
         if (entityType === "tech_stack") {
-          const { error } = await supabase.from("tech_stack_resources").update({ ...baseData, tech_stack_id: entityId }).eq("id", editingResource.id);
+          const { error } = await supabase.from("tech_stack_resources").update({ ...baseData, tech_stack_id: entityId } as any).eq("id", editingResource.id);
           if (error) throw error;
         } else {
           const data = entityType === "standard_category" 
             ? { ...baseData, standard_category_id: entityId } 
             : { ...baseData, standard_id: entityId };
-          const { error } = await supabase.from("standard_resources").update(data).eq("id", editingResource.id);
+          const { error } = await supabase.from("standard_resources").update(data as any).eq("id", editingResource.id);
           if (error) throw error;
         }
         toast.success("Resource updated");
       } else {
         if (entityType === "tech_stack") {
-          const { error } = await supabase.from("tech_stack_resources").insert({ ...baseData, tech_stack_id: entityId });
+          const { error } = await supabase.from("tech_stack_resources").insert({ ...baseData, tech_stack_id: entityId } as any);
           if (error) throw error;
         } else {
           const data = entityType === "standard_category" 
             ? { ...baseData, standard_category_id: entityId } 
             : { ...baseData, standard_id: entityId };
-          const { error } = await supabase.from("standard_resources").insert(data);
+          const { error } = await supabase.from("standard_resources").insert(data as any);
           if (error) throw error;
         }
         toast.success("Resource added");
@@ -293,9 +322,10 @@ export function ResourceManager({ entityType, entityId, onResourcesChange }: Res
       ) : resources.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {resources.map((resource) => {
-            const Icon = resourceTypeIcons[resource.resource_type];
-            const colorClass = resourceTypeColors[resource.resource_type];
+            const Icon = resourceTypeIcons[resource.resource_type] || Globe;
+            const colorClass = resourceTypeColors[resource.resource_type] || resourceTypeColors.website;
             const videoId = resource.resource_type === "youtube" ? getYouTubeVideoId(resource.url) : null;
+            const libraryType = resource.resource_type === "library" ? getLibraryType(resource.url) : null;
             
             return (
               <Card 
@@ -332,10 +362,15 @@ export function ResourceManager({ entityType, entityId, onResourcesChange }: Res
                 
                 <CardContent className="p-3 space-y-2">
                   {/* Type Badge & Name */}
-                  <div className="flex items-start gap-2">
+                  <div className="flex items-start gap-2 flex-wrap">
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${colorClass}`}>
-                      {resourceTypeLabels[resource.resource_type]}
+                      {resourceTypeLabels[resource.resource_type] || resource.resource_type}
                     </span>
+                    {libraryType && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                        {libraryType}
+                      </span>
+                    )}
                   </div>
                   
                   <a
@@ -420,6 +455,14 @@ export function ResourceManager({ entityType, entityId, onResourcesChange }: Res
               <ImageIcon className="h-4 w-4 mr-2" />
               Image
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openAddDialog("repo")}>
+              <Github className="h-4 w-4 mr-2" />
+              Repository (GitHub)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openAddDialog("library")}>
+              <Package className="h-4 w-4 mr-2" />
+              Library (npm, maven, etc.)
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}
@@ -450,6 +493,8 @@ export function ResourceManager({ entityType, entityId, onResourcesChange }: Res
                   <SelectItem value="website">Website</SelectItem>
                   <SelectItem value="youtube">YouTube Video</SelectItem>
                   <SelectItem value="image">Image</SelectItem>
+                  <SelectItem value="repo">Repository (GitHub)</SelectItem>
+                  <SelectItem value="library">Library (npm, maven, etc.)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -475,13 +520,7 @@ export function ResourceManager({ entityType, entityId, onResourcesChange }: Res
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, url: e.target.value }))
                   }
-                  placeholder={
-                    formData.resource_type === "youtube"
-                      ? "https://youtube.com/watch?v=..."
-                      : formData.resource_type === "website"
-                      ? "https://example.com"
-                      : "URL or upload a file"
-                  }
+                  placeholder={resourceTypePlaceholders[formData.resource_type] || "URL"}
                   className="flex-1"
                 />
                 {(formData.resource_type === "file" || formData.resource_type === "image") && (
@@ -511,6 +550,11 @@ export function ResourceManager({ entityType, entityId, onResourcesChange }: Res
                   </>
                 )}
               </div>
+              {formData.resource_type === "library" && (
+                <p className="text-xs text-muted-foreground">
+                  Supports npm, maven, pypi, nuget, cargo, and composer package URLs
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
