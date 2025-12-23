@@ -42,7 +42,7 @@ export function TechStackTreeManager({ techStackId, onRefresh, onViewDocs }: Tec
       .from("tech_stacks")
       .select("*")
       .eq("parent_id", techStackId)
-      .order("order_index");
+      .order("name");
 
     if (data) {
       setItems(buildHierarchy(data));
@@ -66,6 +66,20 @@ export function TechStackTreeManager({ techStackId, onRefresh, onViewDocs }: Tec
       }
     });
 
+    // Sort alphabetically by name
+    const sortByName = (a: TechStackItem, b: TechStackItem) => 
+      (a.name || '').localeCompare(b.name || '');
+
+    const sortChildren = (items: TechStackItem[]) => {
+      items.sort(sortByName);
+      items.forEach(item => {
+        if (item.children?.length) {
+          sortChildren(item.children);
+        }
+      });
+    };
+
+    sortChildren(roots);
     return roots;
   };
 
