@@ -120,7 +120,7 @@ export default function Standards() {
     }
   };
 
-  const handleUpdateCategory = async (categoryId: string, name: string, description: string) => {
+  const handleUpdateCategory = async (categoryId: string, name: string, description: string, longDescription?: string) => {
     if (!isAdmin) {
       toast.error("Admin access required");
       return;
@@ -128,7 +128,7 @@ export default function Standards() {
 
     const { error } = await supabase
       .from("standard_categories")
-      .update({ name, description })
+      .update({ name, description, long_description: longDescription || null })
       .eq("id", categoryId);
 
     if (error) {

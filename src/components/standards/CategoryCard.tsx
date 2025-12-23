@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { StandardsTreeManager } from "./StandardsTreeManager";
 import { DocsViewer } from "@/components/docs/DocsViewer";
@@ -13,7 +14,7 @@ interface CategoryCardProps {
   category: any;
   standards: Standard[];
   onDelete: (categoryId: string) => void;
-  onUpdate: (categoryId: string, name: string, description: string) => void;
+  onUpdate: (categoryId: string, name: string, description: string, longDescription?: string) => void;
   onRefresh: () => void;
 }
 
@@ -23,15 +24,17 @@ export function CategoryCard({ category, standards, onDelete, onUpdate, onRefres
   const [showDocs, setShowDocs] = useState(false);
   const [name, setName] = useState(category.name);
   const [description, setDescription] = useState(category.description || "");
+  const [longDescription, setLongDescription] = useState(category.long_description || "");
 
   const handleSave = () => {
-    onUpdate(category.id, name, description);
+    onUpdate(category.id, name, description, longDescription);
     setIsEditing(false);
   };
 
   const handleCancel = () => {
     setName(category.name);
     setDescription(category.description || "");
+    setLongDescription(category.long_description || "");
     setIsEditing(false);
   };
 
@@ -39,20 +42,36 @@ export function CategoryCard({ category, standards, onDelete, onUpdate, onRefres
     <Card className="overflow-hidden">
       <CardHeader className="p-4 md:p-6">
         {isEditing ? (
-          <div className="space-y-2">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Category name"
-              className="text-lg md:text-xl font-semibold"
-            />
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Category description"
-              rows={2}
-              className="text-sm"
-            />
+          <div className="space-y-3">
+            <div>
+              <Label>Category Name</Label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Category name"
+                className="text-lg md:text-xl font-semibold"
+              />
+            </div>
+            <div>
+              <Label>Short Description</Label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Brief description"
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+            <div>
+              <Label>Long Description (KB Article / Documentation)</Label>
+              <Textarea
+                value={longDescription}
+                onChange={(e) => setLongDescription(e.target.value)}
+                placeholder="Paste in full documentation, KB articles, or detailed explanations here..."
+                rows={6}
+                className="text-sm font-mono"
+              />
+            </div>
             <div className="flex gap-2 flex-wrap">
               <Button size="sm" onClick={handleSave}>
                 <Check className="h-3 w-3 md:h-4 md:w-4 mr-2" />
