@@ -645,6 +645,128 @@ export type Database = {
           },
         ]
       }
+      build_book_standards: {
+        Row: {
+          build_book_id: string
+          created_at: string
+          id: string
+          standard_category_id: string
+        }
+        Insert: {
+          build_book_id: string
+          created_at?: string
+          id?: string
+          standard_category_id: string
+        }
+        Update: {
+          build_book_id?: string
+          created_at?: string
+          id?: string
+          standard_category_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "build_book_standards_build_book_id_fkey"
+            columns: ["build_book_id"]
+            isOneToOne: false
+            referencedRelation: "build_books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "build_book_standards_standard_category_id_fkey"
+            columns: ["standard_category_id"]
+            isOneToOne: false
+            referencedRelation: "standard_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      build_book_tech_stacks: {
+        Row: {
+          build_book_id: string
+          created_at: string
+          id: string
+          tech_stack_id: string
+        }
+        Insert: {
+          build_book_id: string
+          created_at?: string
+          id?: string
+          tech_stack_id: string
+        }
+        Update: {
+          build_book_id?: string
+          created_at?: string
+          id?: string
+          tech_stack_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "build_book_tech_stacks_build_book_id_fkey"
+            columns: ["build_book_id"]
+            isOneToOne: false
+            referencedRelation: "build_books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "build_book_tech_stacks_tech_stack_id_fkey"
+            columns: ["tech_stack_id"]
+            isOneToOne: false
+            referencedRelation: "tech_stacks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      build_books: {
+        Row: {
+          cover_image_url: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_published: boolean
+          long_description: string | null
+          name: string
+          org_id: string | null
+          short_description: string | null
+          tags: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          cover_image_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_published?: boolean
+          long_description?: string | null
+          name: string
+          org_id?: string | null
+          short_description?: string | null
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          cover_image_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_published?: boolean
+          long_description?: string | null
+          name?: string
+          org_id?: string | null
+          short_description?: string | null
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "build_books_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       build_sessions: {
         Row: {
           branch: string
@@ -2291,9 +2413,11 @@ export type Database = {
           icon: string | null
           id: string
           is_system: boolean | null
+          long_description: string | null
           name: string
           order_index: number
           org_id: string | null
+          short_description: string | null
           updated_at: string
         }
         Insert: {
@@ -2304,9 +2428,11 @@ export type Database = {
           icon?: string | null
           id?: string
           is_system?: boolean | null
+          long_description?: string | null
           name: string
           order_index?: number
           org_id?: string | null
+          short_description?: string | null
           updated_at?: string
         }
         Update: {
@@ -2317,9 +2443,11 @@ export type Database = {
           icon?: string | null
           id?: string
           is_system?: boolean | null
+          long_description?: string | null
           name?: string
           order_index?: number
           org_id?: string | null
+          short_description?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2328,6 +2456,66 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      standard_resources: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          order_index: number | null
+          resource_type: Database["public"]["Enums"]["resource_type"]
+          standard_category_id: string | null
+          standard_id: string | null
+          thumbnail_url: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          order_index?: number | null
+          resource_type: Database["public"]["Enums"]["resource_type"]
+          standard_category_id?: string | null
+          standard_id?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          order_index?: number | null
+          resource_type?: Database["public"]["Enums"]["resource_type"]
+          standard_category_id?: string | null
+          standard_id?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "standard_resources_standard_category_id_fkey"
+            columns: ["standard_category_id"]
+            isOneToOne: false
+            referencedRelation: "standard_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "standard_resources_standard_id_fkey"
+            columns: ["standard_id"]
+            isOneToOne: false
+            referencedRelation: "standards"
             referencedColumns: ["id"]
           },
         ]
@@ -2342,9 +2530,11 @@ export type Database = {
           description: string | null
           id: string
           is_system: boolean | null
+          long_description: string | null
           order_index: number
           org_id: string | null
           parent_id: string | null
+          short_description: string | null
           title: string
           updated_at: string
         }
@@ -2357,9 +2547,11 @@ export type Database = {
           description?: string | null
           id?: string
           is_system?: boolean | null
+          long_description?: string | null
           order_index?: number
           org_id?: string | null
           parent_id?: string | null
+          short_description?: string | null
           title: string
           updated_at?: string
         }
@@ -2372,9 +2564,11 @@ export type Database = {
           description?: string | null
           id?: string
           is_system?: boolean | null
+          long_description?: string | null
           order_index?: number
           org_id?: string | null
           parent_id?: string | null
+          short_description?: string | null
           title?: string
           updated_at?: string
         }
@@ -2398,6 +2592,56 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "standards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tech_stack_resources: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          order_index: number | null
+          resource_type: Database["public"]["Enums"]["resource_type"]
+          tech_stack_id: string
+          thumbnail_url: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          order_index?: number | null
+          resource_type: Database["public"]["Enums"]["resource_type"]
+          tech_stack_id: string
+          thumbnail_url?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          order_index?: number | null
+          resource_type?: Database["public"]["Enums"]["resource_type"]
+          tech_stack_id?: string
+          thumbnail_url?: string | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tech_stack_resources_tech_stack_id_fkey"
+            columns: ["tech_stack_id"]
+            isOneToOne: false
+            referencedRelation: "tech_stacks"
             referencedColumns: ["id"]
           },
         ]
@@ -2446,11 +2690,13 @@ export type Database = {
           description: string | null
           icon: string | null
           id: string
+          long_description: string | null
           metadata: Json | null
           name: string
           order_index: number
           org_id: string | null
           parent_id: string | null
+          short_description: string | null
           type: string | null
           updated_at: string
         }
@@ -2461,11 +2707,13 @@ export type Database = {
           description?: string | null
           icon?: string | null
           id?: string
+          long_description?: string | null
           metadata?: Json | null
           name: string
           order_index?: number
           org_id?: string | null
           parent_id?: string | null
+          short_description?: string | null
           type?: string | null
           updated_at?: string
         }
@@ -2476,11 +2724,13 @@ export type Database = {
           description?: string | null
           icon?: string | null
           id?: string
+          long_description?: string | null
           metadata?: Json | null
           name?: string
           order_index?: number
           org_id?: string | null
           parent_id?: string | null
+          short_description?: string | null
           type?: string | null
           updated_at?: string
         }
@@ -6394,6 +6644,7 @@ export type Database = {
       project_status: "DESIGN" | "AUDIT" | "BUILD"
       project_token_role: "owner" | "editor" | "viewer"
       requirement_type: "EPIC" | "FEATURE" | "STORY" | "ACCEPTANCE_CRITERIA"
+      resource_type: "file" | "website" | "youtube" | "image"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -6600,6 +6851,7 @@ export const Constants = {
       project_status: ["DESIGN", "AUDIT", "BUILD"],
       project_token_role: ["owner", "editor", "viewer"],
       requirement_type: ["EPIC", "FEATURE", "STORY", "ACCEPTANCE_CRITERIA"],
+      resource_type: ["file", "website", "youtube", "image"],
     },
   },
 } as const
