@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { ChevronRight, ChevronDown, Plus, Edit, Trash2 } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Edit, Trash2, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { ResourceManager } from "@/components/resources/ResourceManager";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAdmin } from "@/contexts/AdminContext";
@@ -239,6 +241,7 @@ function TechStackItemNode({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isAddingChild, setIsAddingChild] = useState(false);
+  const [showResources, setShowResources] = useState(false);
   const [name, setName] = useState(item.name);
   const [description, setDescription] = useState(item.description || "");
 
@@ -305,12 +308,25 @@ function TechStackItemNode({
                     <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit" className="h-7 w-7 md:h-8 md:w-8 p-0">
                       <Edit className="h-2.5 w-2.5 md:h-3 md:w-3" />
                     </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setShowResources(!showResources)} title="Resources" className="h-7 w-7 md:h-8 md:w-8 p-0">
+                      <FolderOpen className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)} title="Delete" className="h-7 w-7 md:h-8 md:w-8 p-0">
                       <Trash2 className="h-2.5 w-2.5 md:h-3 md:w-3" />
                     </Button>
                   </div>
                 )}
               </div>
+
+              {/* Resources Section */}
+              <Collapsible open={showResources} onOpenChange={setShowResources}>
+                <CollapsibleContent className="mt-2">
+                  <ResourceManager
+                    entityType="tech_stack"
+                    entityId={item.id}
+                  />
+                </CollapsibleContent>
+              </Collapsible>
             </>
           )}
         </div>

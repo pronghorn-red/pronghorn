@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { ChevronRight, ChevronDown, Plus, Edit, Trash2, Sparkles, Paperclip } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Edit, Trash2, Sparkles, Paperclip, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ResourceManager } from "@/components/resources/ResourceManager";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAdmin } from "@/contexts/AdminContext";
@@ -91,58 +93,6 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
     );
   };
 
-  const handleAttachFile = async (standardId: string) => {
-    if (!isAdmin) {
-      toast.error("Admin access required");
-      return;
-    }
-
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "*/*";
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      toast.promise(
-        (async () => {
-          const fileExt = file.name.split(".").pop();
-          const fileName = `${standardId}-${Date.now()}.${fileExt}`;
-          const filePath = `${fileName}`;
-
-          const { error: uploadError } = await supabase.storage
-            .from("standard-attachments")
-            .upload(filePath, file);
-
-          if (uploadError) throw uploadError;
-
-          const { data: { publicUrl } } = supabase.storage
-            .from("standard-attachments")
-            .getPublicUrl(filePath);
-
-          const { error: attachError } = await supabase
-            .from("standard_attachments")
-            .insert({
-              standard_id: standardId,
-              name: file.name,
-              type: file.type || "application/octet-stream",
-              url: publicUrl,
-            });
-
-          if (attachError) throw attachError;
-
-          onRefresh();
-        })(),
-        {
-          loading: "Uploading file...",
-          success: "File attached successfully",
-          error: "Failed to attach file",
-        }
-      );
-    };
-    input.click();
-  };
-
   return (
     <div className="space-y-2">
       {standards.map((standard) => (
@@ -153,7 +103,6 @@ export function StandardsTreeManager({ standards, categoryId, onRefresh }: Stand
           onAdd={handleAdd}
           onDelete={handleDelete}
           onAIExpand={handleAIExpand}
-          onAttachFile={handleAttachFile}
           onRefresh={onRefresh}
         />
       ))}
@@ -213,7 +162,6 @@ function StandardNode({
   onAdd,
   onDelete,
   onAIExpand,
-  onAttachFile,
   onRefresh,
 }: {
   standard: Standard;
@@ -221,12 +169,12 @@ function StandardNode({
   onAdd: (parentId: string | null, title: string) => void;
   onDelete: (id: string) => void;
   onAIExpand: (parentId: string, parentTitle: string) => void;
-  onAttachFile: (standardId: string) => void;
   onRefresh: () => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isAddingChild, setIsAddingChild] = useState(false);
+  const [showResources, setShowResources] = useState(false);
   const [title, setTitle] = useState(standard.title);
   const [description, setDescription] = useState(standard.description || "");
 
@@ -301,8 +249,8 @@ function StandardNode({
                     <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} title="Edit">
                       <Edit className="h-3 w-3" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => onAttachFile(standard.id)} title="Attach file">
-                      <Paperclip className="h-3 w-3" />
+                    <Button variant="ghost" size="sm" onClick={() => setShowResources(!showResources)} title="Resources">
+                      <FolderOpen className="h-3 w-3" />
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => onAIExpand(standard.id, standard.title)} title="AI expand">
                       <Sparkles className="h-3 w-3" />
@@ -314,23 +262,16 @@ function StandardNode({
                 )}
               </div>
 
-              {/* Attachments */}
-              {standard.attachments && standard.attachments.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {standard.attachments.map((att: any) => (
-                    <a
-                      key={att.id}
-                      href={att.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline flex items-center gap-1"
-                    >
-                      <Paperclip className="h-3 w-3" />
-                      {att.name}
-                    </a>
-                  ))}
-                </div>
-              )}
+              {/* Resources Section */}
+              <Collapsible open={showResources} onOpenChange={setShowResources}>
+                <CollapsibleContent className="mt-2">
+                  <ResourceManager
+                    entityType="standard"
+                    entityId={standard.id}
+                    onResourcesChange={onRefresh}
+                  />
+                </CollapsibleContent>
+              </Collapsible>
             </>
           )}
         </div>
@@ -340,7 +281,7 @@ function StandardNode({
       {(isExpanded || isAddingChild) && (
         <div className="ml-6 mt-2 space-y-2 border-l-2 border-border pl-4">
           {standard.children && standard.children.length > 0 && standard.children.map((child) => (
-            <StandardNode key={child.id} standard={child} isAdmin={isAdmin} onAdd={onAdd} onDelete={onDelete} onAIExpand={onAIExpand} onAttachFile={onAttachFile} onRefresh={onRefresh} />
+            <StandardNode key={child.id} standard={child} isAdmin={isAdmin} onAdd={onAdd} onDelete={onDelete} onAIExpand={onAIExpand} onRefresh={onRefresh} />
           ))}
           {isAddingChild && isAdmin && (
             <AddStandardInline 
