@@ -305,7 +305,7 @@ export function EnhanceImageDialog({
                     No image artifacts available. Enter a prompt below to create a new image.
                   </div>
                 ) : (
-                  <ScrollArea className="h-[180px] border rounded-md p-3">
+                  <ScrollArea className="h-[250px] border rounded-md p-3">
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {imageArtifacts.map((artifact) => (
                         <div
