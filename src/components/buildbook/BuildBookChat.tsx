@@ -28,6 +28,7 @@ interface StandardInfo {
   code?: string;
   description: string | null;
   long_description: string | null;
+  content: string | null;
   category?: string;
   resources: ResourceInfo[];
 }
@@ -36,6 +37,7 @@ interface TechStackInfo {
   name: string;
   type?: string | null;
   version?: string | null;
+  version_constraint?: string | null;
   description: string | null;
   long_description: string | null;
   resources: ResourceInfo[];
@@ -87,7 +89,7 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
         const standardIds = standards.map(s => s.standard_id);
         const { data: standardsData } = await supabase
           .from("standards")
-          .select("id, code, title, description, long_description, category:standard_categories(id, name)")
+          .select("id, code, title, description, long_description, content, category:standard_categories(id, name)")
           .in("id", standardIds);
 
         // Fetch resources for standards
@@ -115,6 +117,7 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
               code: s.code,
               description: s.description,
               long_description: s.long_description,
+              content: s.content,
               category: (s.category as any)?.name,
               resources,
             };
@@ -127,7 +130,7 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
         const techStackIds = techStacks.map(t => t.tech_stack_id);
         const { data: techStacksData } = await supabase
           .from("tech_stacks")
-          .select("id, name, type, version, description, long_description")
+          .select("id, name, type, version, version_constraint, description, long_description")
           .in("id", techStackIds);
 
         // Fetch resources for tech stacks
@@ -152,6 +155,7 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
               name: t.name,
               type: t.type,
               version: t.version,
+              version_constraint: t.version_constraint,
               description: t.description,
               long_description: t.long_description,
               resources,
@@ -183,7 +187,8 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
         if (s.category) context += ` (Category: ${s.category})`;
         context += `\n`;
         if (s.description) context += `${s.description}\n`;
-        if (s.long_description) context += `\nDetails:\n${s.long_description}\n`;
+        if (s.content) context += `\nRequirements:\n${s.content}\n`;
+        if (s.long_description) context += `\nDetailed Description:\n${s.long_description}\n`;
         if (s.resources.length > 0) {
           context += `\nResources:\n`;
           s.resources.forEach(r => {
@@ -200,7 +205,7 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
       techStacksInfo.forEach(t => {
         context += `\n### ${t.name}`;
         if (t.type) context += ` (${t.type})`;
-        if (t.version) context += ` v${t.version}`;
+        if (t.version) context += ` v${t.version}${t.version_constraint ? ` (${t.version_constraint})` : ''}`;
         context += `\n`;
         if (t.description) context += `${t.description}\n`;
         if (t.long_description) context += `\nDetails:\n${t.long_description}\n`;
