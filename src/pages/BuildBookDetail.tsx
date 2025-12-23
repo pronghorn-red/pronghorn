@@ -1,77 +1,19 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Book, Edit, Calendar, Tag, Library, Layers, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Book, Edit, Calendar, Tag, Eye, EyeOff } from "lucide-react";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBuildBookDetail } from "@/hooks/useRealtimeBuildBooks";
 import { useAdmin } from "@/contexts/AdminContext";
 import { format } from "date-fns";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-
-interface StandardCategory {
-  id: string;
-  name: string;
-  description: string | null;
-}
-
-interface TechStack {
-  id: string;
-  name: string;
-  description: string | null;
-}
+import { BuildBookDocsViewer } from "@/components/buildbook/BuildBookDocsViewer";
 
 export default function BuildBookDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { buildBook, standards, techStacks, isLoading } = useBuildBookDetail(id);
   const { isAdmin } = useAdmin();
-  const [standardCategories, setStandardCategories] = useState<StandardCategory[]>([]);
-  const [techStackDetails, setTechStackDetails] = useState<TechStack[]>([]);
-
-  useEffect(() => {
-    if (standards.length > 0) {
-      loadStandardDetails();
-    }
-  }, [standards]);
-
-  useEffect(() => {
-    if (techStacks.length > 0) {
-      loadTechStackDetails();
-    }
-  }, [techStacks]);
-
-  const loadStandardDetails = async () => {
-    const ids = standards.map((s) => s.standard_id);
-    const { data } = await supabase
-      .from("standards")
-      .select("id, code, title, category_id")
-      .in("id", ids);
-    
-    // Get unique category IDs
-    const categoryIds = [...new Set((data || []).map(s => s.category_id))];
-    if (categoryIds.length > 0) {
-      const { data: categories } = await supabase
-        .from("standard_categories")
-        .select("id, name, description")
-        .in("id", categoryIds);
-      setStandardCategories(categories || []);
-    }
-  };
-
-  const loadTechStackDetails = async () => {
-    const ids = techStacks.map((t) => t.tech_stack_id);
-    const { data } = await supabase
-      .from("tech_stacks")
-      .select("id, name, description")
-      .in("id", ids);
-    setTechStackDetails(data || []);
-  };
 
   if (isLoading) {
     return (
@@ -184,100 +126,12 @@ export default function BuildBookDetail() {
           </div>
         )}
 
-        {/* Tabs */}
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="standards" className="gap-2">
-              <Library className="h-4 w-4" />
-              Standards ({standards.length})
-            </TabsTrigger>
-            <TabsTrigger value="tech-stacks" className="gap-2">
-              <Layers className="h-4 w-4" />
-              Tech Stacks ({techStacks.length})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview">
-            {buildBook.long_description ? (
-              <Card>
-                <CardContent className="prose prose-sm dark:prose-invert max-w-none pt-6">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {buildBook.long_description}
-                  </ReactMarkdown>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  No detailed description provided.
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          <TabsContent value="standards">
-            {standardCategories.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  <Library className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  No standards included in this build book.
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {standardCategories.map((cat) => (
-                  <Card key={cat.id} className="hover:border-primary/50 transition-colors cursor-pointer">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <Library className="h-5 w-5 text-primary" />
-                        {cat.name}
-                      </CardTitle>
-                    </CardHeader>
-                    {cat.description && (
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {cat.description}
-                        </p>
-                      </CardContent>
-                    )}
-                  </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="tech-stacks">
-            {techStackDetails.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  <Layers className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  No tech stacks included in this build book.
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {techStackDetails.map((stack) => (
-                  <Card key={stack.id} className="hover:border-primary/50 transition-colors cursor-pointer">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <Layers className="h-5 w-5 text-primary" />
-                        {stack.name}
-                      </CardTitle>
-                    </CardHeader>
-                    {stack.description && (
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {stack.description}
-                        </p>
-                      </CardContent>
-                    )}
-                  </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+        {/* Documentation Viewer */}
+        <BuildBookDocsViewer
+          buildBook={buildBook}
+          standards={standards}
+          techStacks={techStacks}
+        />
       </main>
     </div>
   );
