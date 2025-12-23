@@ -225,9 +225,10 @@ export default function BuildBookEditor() {
         is_published: isPublished,
       };
 
-      let bookId = id;
+      let bookId: string;
 
       if (isNew) {
+        // Create the build book first
         const { data, error } = await supabase
           .from("build_books")
           .insert(bookData)
@@ -237,24 +238,30 @@ export default function BuildBookEditor() {
         if (error) throw error;
         bookId = data.id;
       } else {
+        // Update existing build book
+        bookId = id!;
         const { error } = await supabase
           .from("build_books")
           .update(bookData)
-          .eq("id", id);
+          .eq("id", bookId);
 
         if (error) throw error;
-      }
 
-      // Sync standards
-      if (!isNew) {
+        // Clear existing associations for update
         await supabase
           .from("build_book_standards")
           .delete()
           .eq("build_book_id", bookId);
+
+        await supabase
+          .from("build_book_tech_stacks")
+          .delete()
+          .eq("build_book_id", bookId);
       }
 
+      // Insert standards associations
       const standardIdsArray = Array.from(selectedStandards);
-      if (standardIdsArray.length > 0 && bookId) {
+      if (standardIdsArray.length > 0) {
         const { error: standardsError } = await supabase.from("build_book_standards").insert(
           standardIdsArray.map((standardId) => ({
             build_book_id: bookId,
@@ -264,16 +271,9 @@ export default function BuildBookEditor() {
         if (standardsError) throw standardsError;
       }
 
-      // Sync tech stacks
-      if (!isNew) {
-        await supabase
-          .from("build_book_tech_stacks")
-          .delete()
-          .eq("build_book_id", bookId);
-      }
-
+      // Insert tech stacks associations
       const techStackIdsArray = Array.from(selectedTechStacks);
-      if (techStackIdsArray.length > 0 && bookId) {
+      if (techStackIdsArray.length > 0) {
         const { error: techStacksError } = await supabase.from("build_book_tech_stacks").insert(
           techStackIdsArray.map((techStackId) => ({
             build_book_id: bookId,
