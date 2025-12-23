@@ -442,8 +442,8 @@ export function BuildBookChat({ buildBook, standards, techStacks }: BuildBookCha
           </div>
         </SheetHeader>
 
-        <div className="flex-1 relative min-h-0">
-          <ScrollArea className="h-full px-4" ref={scrollViewportRef}>
+        <div className="flex-1 relative overflow-hidden">
+          <ScrollArea className="absolute inset-0 px-4" ref={scrollViewportRef}>
             <div className="py-4 space-y-4">
               {messages.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
