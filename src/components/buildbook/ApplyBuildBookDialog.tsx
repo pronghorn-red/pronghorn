@@ -64,8 +64,16 @@ export function ApplyBuildBookDialog({ projectId, shareToken, onApplied }: Apply
 
     setApplying(true);
     try {
-      // Get the build book's standards and tech stacks
-      const [standardsRes, techStacksRes] = await Promise.all([
+      // Get existing project standards and tech stacks to avoid duplicates
+      const [existingStandardsRes, existingTechStacksRes, standardsRes, techStacksRes] = await Promise.all([
+        supabase.rpc("get_project_standards_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken || null,
+        }),
+        supabase.rpc("get_project_tech_stacks_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken || null,
+        }),
         supabase
           .from("build_book_standards")
           .select("standard_id")
@@ -79,28 +87,56 @@ export function ApplyBuildBookDialog({ projectId, shareToken, onApplied }: Apply
       if (standardsRes.error) throw standardsRes.error;
       if (techStacksRes.error) throw techStacksRes.error;
 
+      const existingStandardIds = new Set(
+        (existingStandardsRes.data || []).map((s: { standard_id: string }) => s.standard_id)
+      );
+      const existingTechStackIds = new Set(
+        (existingTechStacksRes.data || []).map((t: { tech_stack_id: string }) => t.tech_stack_id)
+      );
+
       const standardIds = standardsRes.data?.map((s) => s.standard_id) || [];
       const techStackIds = techStacksRes.data?.map((t) => t.tech_stack_id) || [];
 
-      // Insert project standards directly (build_book_standards now stores individual standard IDs)
+      // Only insert standards that don't already exist
+      let standardsAdded = 0;
       for (const standardId of standardIds) {
-        await supabase.rpc("insert_project_standard_with_token", {
-          p_project_id: projectId,
-          p_token: shareToken || null,
-          p_standard_id: standardId,
-        });
+        if (!existingStandardIds.has(standardId)) {
+          await supabase.rpc("insert_project_standard_with_token", {
+            p_project_id: projectId,
+            p_token: shareToken || null,
+            p_standard_id: standardId,
+          });
+          standardsAdded++;
+        }
       }
 
-      // Insert project tech stacks directly (build_book_tech_stacks stores individual item IDs)
+      // Only insert tech stacks that don't already exist
+      let techStacksAdded = 0;
       for (const techStackId of techStackIds) {
-        await supabase.rpc("insert_project_tech_stack_with_token", {
-          p_project_id: projectId,
-          p_token: shareToken || null,
-          p_tech_stack_id: techStackId,
-        });
+        if (!existingTechStackIds.has(techStackId)) {
+          await supabase.rpc("insert_project_tech_stack_with_token", {
+            p_project_id: projectId,
+            p_token: shareToken || null,
+            p_tech_stack_id: techStackId,
+          });
+          techStacksAdded++;
+        }
       }
 
-      toast.success("Build book applied successfully");
+      // Increment deploy count for the build book
+      await supabase.rpc("increment_build_book_deploy_count", {
+        p_build_book_id: selectedBookId,
+      });
+
+      const skippedStandards = standardIds.length - standardsAdded;
+      const skippedTechStacks = techStackIds.length - techStacksAdded;
+      
+      let message = "Build book applied successfully";
+      if (skippedStandards > 0 || skippedTechStacks > 0) {
+        message += ` (${skippedStandards + skippedTechStacks} items already existed)`;
+      }
+      
+      toast.success(message);
       setOpen(false);
       onApplied();
     } catch (error: any) {
