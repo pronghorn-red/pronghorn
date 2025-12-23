@@ -307,27 +307,36 @@ export function AddArtifactModal({
     return hasPptxRasterized || hasPdfRasterized || hasDocxRasterized;
   }, [pptxData, pptxExportOptions, pdfData, pdfExportOptions, docxData, docxExportOptions]);
 
-  // Helper to collect rasterized images for VR processing
+  // Helper to collect rasterized images for VR processing (uses cached images when available)
   const collectRasterizedImages = async (): Promise<RasterizedImage[]> => {
     const images: RasterizedImage[] = [];
 
-    // PPTX slides
+    // PPTX slides - use cached thumbnails if available
     if (pptxData && (pptxExportOptions.mode === "rasterize" || pptxExportOptions.mode === "both")) {
       for (const slideIdx of pptxExportOptions.selectedSlides) {
         const slide = pptxData.slides[slideIdx];
         if (!slide) continue;
         
         try {
-          const blob = await rasterizeSlide(slide, pptxData.media, { width: 1920, height: 1080, pixelRatio: 1 });
-          const reader = new FileReader();
-          const base64 = await new Promise<string>((resolve, reject) => {
-            reader.onload = () => {
-              const result = reader.result as string;
-              resolve(result.split(",")[1]);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
+          let base64: string;
+          
+          // Check if we have a cached rasterized version
+          if (pptxExportOptions.cachedRasterizedSlides?.has(slideIdx)) {
+            const cachedDataUrl = pptxExportOptions.cachedRasterizedSlides.get(slideIdx)!;
+            base64 = cachedDataUrl.includes(",") ? cachedDataUrl.split(",")[1] : cachedDataUrl;
+          } else {
+            // Fallback to rasterizing (shouldn't happen if caching is working)
+            const blob = await rasterizeSlide(slide, pptxData.media, { width: 1920, height: 1080, pixelRatio: 1 });
+            const reader = new FileReader();
+            base64 = await new Promise<string>((resolve, reject) => {
+              reader.onload = () => {
+                const result = reader.result as string;
+                resolve(result.split(",")[1]);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+          }
 
           images.push({
             id: `pptx-${slideIdx}`,
@@ -342,29 +351,48 @@ export function AddArtifactModal({
       }
     }
 
-    // PDF pages
+    // PDF pages - use cached rasterized pages if available
     if (pdfData && (pdfExportOptions.mode === "rasterize" || pdfExportOptions.mode === "both")) {
       const selectedIndices = Array.from(pdfExportOptions.selectedPages).sort((a, b) => a - b);
-      try {
-        const rasterizedPages = await rasterizeSelectedPages(pdfData.arrayBuffer, selectedIndices, 2.5);
-        for (const result of rasterizedPages) {
-          if (!result.success || !result.dataUrl) continue;
-          
-          const pageIdx = result.pageIndex;
-          images.push({
-            id: `pdf-${pageIdx}`,
-            imageBase64: result.dataUrl.split(",")[1],
-            imageMimeType: "image/png",
-            existingText: vrOverriddenContent.get(`pdf-${pageIdx}`) || pdfData.pagesText[pageIdx] || "",
-            label: `Page ${result.pageNumber}`,
-          });
+      
+      // Check if we have cached pages
+      if (pdfExportOptions.cachedRasterizedPages && pdfExportOptions.cachedRasterizedPages.size > 0) {
+        for (const pageIdx of selectedIndices) {
+          const cachedDataUrl = pdfExportOptions.cachedRasterizedPages.get(pageIdx);
+          if (cachedDataUrl) {
+            const base64 = cachedDataUrl.includes(",") ? cachedDataUrl.split(",")[1] : cachedDataUrl;
+            images.push({
+              id: `pdf-${pageIdx}`,
+              imageBase64: base64,
+              imageMimeType: "image/png",
+              existingText: vrOverriddenContent.get(`pdf-${pageIdx}`) || pdfData.pagesText[pageIdx] || "",
+              label: `Page ${pageIdx + 1}`,
+            });
+          }
         }
-      } catch (err) {
-        console.error("Failed to rasterize PDF pages:", err);
+      } else {
+        // Fallback to rasterizing (if cache not available)
+        try {
+          const rasterizedPages = await rasterizeSelectedPages(pdfData.arrayBuffer, selectedIndices, 2.5);
+          for (const result of rasterizedPages) {
+            if (!result.success || !result.dataUrl) continue;
+            
+            const pageIdx = result.pageIndex;
+            images.push({
+              id: `pdf-${pageIdx}`,
+              imageBase64: result.dataUrl.split(",")[1],
+              imageMimeType: "image/png",
+              existingText: vrOverriddenContent.get(`pdf-${pageIdx}`) || pdfData.pagesText[pageIdx] || "",
+              label: `Page ${result.pageNumber}`,
+            });
+          }
+        } catch (err) {
+          console.error("Failed to rasterize PDF pages:", err);
+        }
       }
     }
 
-    // DOCX pages
+    // DOCX pages - already uses cached pages
     if (docxData && (docxExportOptions.mode === "rasterize" || docxExportOptions.mode === "both")) {
       const selectedIndices = Array.from(docxExportOptions.selectedRasterPages).sort((a, b) => a - b);
       try {

@@ -144,7 +144,13 @@ serve(async (req) => {
     });
 
     // Validate model - use correct Gemini model names
-    const validModels = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+    const validModels = [
+      'gemini-2.5-flash',
+      'gemini-2.5-pro',
+      'gemini-3-flash-preview',
+      'gemini-3-pro-preview',
+      'gemini-3-pro-image-preview'
+    ];
     const selectedModel = validModels.includes(model) ? model : 'gemini-2.5-flash';
 
     // Get API key

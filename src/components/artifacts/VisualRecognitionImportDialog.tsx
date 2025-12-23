@@ -256,8 +256,17 @@ export function VisualRecognitionImportDialog({
                   <SelectItem value="gemini-2.5-flash">
                     Gemini 2.5 Flash (Recommended)
                   </SelectItem>
-                  <SelectItem value="gemini-2.0-flash">
-                    Gemini 2.0 Flash
+                  <SelectItem value="gemini-2.5-pro">
+                    Gemini 2.5 Pro
+                  </SelectItem>
+                  <SelectItem value="gemini-3-flash-preview">
+                    Gemini 3 Flash Preview
+                  </SelectItem>
+                  <SelectItem value="gemini-3-pro-preview">
+                    Gemini 3 Pro Preview
+                  </SelectItem>
+                  <SelectItem value="gemini-3-pro-image-preview">
+                    Gemini 3 Pro Image Preview
                   </SelectItem>
                 </SelectContent>
               </Select>

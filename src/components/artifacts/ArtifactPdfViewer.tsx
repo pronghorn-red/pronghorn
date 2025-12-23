@@ -32,6 +32,7 @@ import {
   processPDFFile,
   createPageThumbnails,
   extractPDFImages,
+  rasterizeSelectedPages,
   type PdfData,
   type PdfExportMode,
   type PdfExportOptions,
@@ -129,6 +130,41 @@ export function ArtifactPdfViewer({
 
     loadVisibleThumbnails();
   }, [visiblePageRange, pdfData?.arrayBuffer]);
+
+  // Pre-cache high-resolution rasterized pages when rasterize mode is selected
+  // This speeds up Visual Recognition dialog opening
+  useEffect(() => {
+    if (!pdfData || !pdfData.arrayBuffer) return;
+    if (exportOptions.mode !== "rasterize" && exportOptions.mode !== "both") return;
+    if (exportOptions.selectedPages.size === 0) return;
+
+    const cacheHighResPages = async () => {
+      const selectedIndices = Array.from(exportOptions.selectedPages).sort((a, b) => a - b);
+      
+      try {
+        const rasterizedPages = await rasterizeSelectedPages(pdfData.arrayBuffer, selectedIndices, 2.5);
+        const cachedPages = new Map<number, string>();
+        
+        for (const result of rasterizedPages) {
+          if (result.success && result.dataUrl) {
+            cachedPages.set(result.pageIndex, result.dataUrl);
+          }
+        }
+
+        // Update export options with cached pages
+        if (cachedPages.size > 0) {
+          onExportOptionsChange({
+            ...exportOptions,
+            cachedRasterizedPages: cachedPages,
+          });
+        }
+      } catch (error) {
+        console.warn("Failed to cache high-res PDF pages:", error);
+      }
+    };
+
+    cacheHighResPages();
+  }, [pdfData?.arrayBuffer, exportOptions.mode, exportOptions.selectedPages]);
 
   const handleDragOver = () => setIsDragging(true);
   const handleDragLeave = () => setIsDragging(false);

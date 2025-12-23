@@ -74,6 +74,8 @@ export interface PdfExportOptions {
   extractImages: boolean;
   selectedPages: Set<number>;
   selectedImages: Set<string>;
+  // Cached rasterized pages for VR (avoids re-rasterization)
+  cachedRasterizedPages?: Map<number, string>;
 }
 
 /**

@@ -44,6 +44,8 @@ export interface PptxExportOptions {
   overrideFontColor?: string;
   useAutoBackground?: boolean;
   useAutoFontColor?: boolean;
+  // Cached rasterized slides for VR (avoids re-rasterization)
+  cachedRasterizedSlides?: Map<number, string>;
 }
 
 interface ArtifactPptxViewerProps {
@@ -115,6 +117,53 @@ export function ArtifactPptxViewer({
 
     generateThumbnails();
   }, [pptxData, exportOptions.useAutoBackground, exportOptions.useAutoFontColor, exportOptions.overrideBackgroundColor, exportOptions.overrideFontColor]);
+
+  // Pre-cache high-resolution rasterized slides when rasterize mode is selected
+  // This speeds up Visual Recognition dialog opening
+  useEffect(() => {
+    if (!pptxData) return;
+    if (exportOptions.mode !== "rasterize" && exportOptions.mode !== "both") return;
+    if (exportOptions.selectedSlides.size === 0) return;
+
+    const cacheHighResSlides = async () => {
+      const cachedSlides = new Map<number, string>();
+      const bgColor = exportOptions.useAutoBackground === false ? exportOptions.overrideBackgroundColor : undefined;
+      const fontColor = exportOptions.useAutoFontColor === false ? exportOptions.overrideFontColor : undefined;
+
+      for (const slideIdx of exportOptions.selectedSlides) {
+        const slide = pptxData.slides[slideIdx];
+        if (!slide) continue;
+        
+        try {
+          // Generate high-res version for VR (1920x1080)
+          const thumbnail = await generateSlideThumbnail(
+            slide, 
+            pptxData.media, 
+            { width: 1920, height: 1080 },
+            {
+              overrideBackgroundColor: bgColor,
+              overrideFontColor: fontColor,
+            }
+          );
+          if (thumbnail) {
+            cachedSlides.set(slideIdx, thumbnail);
+          }
+        } catch (error) {
+          console.warn(`Failed to cache high-res slide ${slideIdx + 1}`);
+        }
+      }
+
+      // Update export options with cached slides
+      if (cachedSlides.size > 0) {
+        onExportOptionsChange({
+          ...exportOptions,
+          cachedRasterizedSlides: cachedSlides,
+        });
+      }
+    };
+
+    cacheHighResSlides();
+  }, [pptxData, exportOptions.mode, exportOptions.selectedSlides, exportOptions.useAutoBackground, exportOptions.useAutoFontColor, exportOptions.overrideBackgroundColor, exportOptions.overrideFontColor]);
 
   const handleDragOver = () => setIsDragging(true);
   const handleDragLeave = () => setIsDragging(false);
