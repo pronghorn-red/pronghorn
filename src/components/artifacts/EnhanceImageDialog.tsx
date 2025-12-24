@@ -78,7 +78,7 @@ export function EnhanceImageDialog({
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [compactView, setCompactView] = useState(false);
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
 
   // Filter only artifacts with images
   const imageArtifacts = artifacts.filter(a => !!a.image_url);
@@ -92,7 +92,7 @@ export function EnhanceImageDialog({
       setGeneratedImage(null);
       setIsProcessing(false);
       setIsSaving(false);
-      setAspectRatio('1:1');
+      setAspectRatio('16:9');
     }
   }, [open]);
 
@@ -175,9 +175,9 @@ export function EnhanceImageDialog({
         })
       );
 
-      // When creating (no images selected), add transparent canvas for aspect ratio control
+      // Add transparent canvas for aspect ratio control (skip for 16:9 landscape - Nano Banana default)
       let finalPrompt = prompt.trim();
-      if (selectedImages.length === 0) {
+      if (aspectRatio !== '16:9') {
         const transparentCanvas = generateTransparentCanvas(aspectRatio);
         images.push(transparentCanvas);
         finalPrompt = `${prompt.trim()}. Use the last image as the reference for the final aspect ratio and dimensions.`;
@@ -435,35 +435,6 @@ export function EnhanceImageDialog({
                 </div>
               </div>
 
-              {/* Aspect Ratio - Only show when creating (no images selected) */}
-              {isCreating && (
-                <div className="space-y-2">
-                  <Label>Aspect Ratio</Label>
-                  <ToggleGroup
-                    type="single"
-                    value={aspectRatio}
-                    onValueChange={(value) => value && setAspectRatio(value as AspectRatio)}
-                    className="justify-start"
-                  >
-                    <ToggleGroupItem value="1:1" aria-label="Square" className="gap-1">
-                      <Square className="h-4 w-4" />
-                      <span className="text-xs">Square</span>
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="16:9" aria-label="Landscape" className="gap-1">
-                      <RectangleHorizontal className="h-4 w-4" />
-                      <span className="text-xs">Landscape</span>
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="9:16" aria-label="Portrait" className="gap-1">
-                      <RectangleVertical className="h-4 w-4" />
-                      <span className="text-xs">Portrait</span>
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="4:5" aria-label="Vertical" className="gap-1">
-                      <RectangleVertical className="h-4 w-4" />
-                      <span className="text-xs">4:5</span>
-                    </ToggleGroupItem>
-                  </ToggleGroup>
-                </div>
-              )}
 
               {/* Prompt Input */}
               <div className="space-y-2">
@@ -541,46 +512,75 @@ export function EnhanceImageDialog({
           )}
         </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isProcessing || isSaving}
-          >
-            Cancel
-          </Button>
-          {!generatedImage ? (
-            <Button
-              onClick={handleEnhance}
-              disabled={isProcessing || !prompt.trim()}
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <div className="flex-1 flex items-center">
+            <ToggleGroup
+              type="single"
+              value={aspectRatio}
+              onValueChange={(value) => value && setAspectRatio(value as AspectRatio)}
+              size="sm"
+              className="justify-start"
+              disabled={isProcessing || isSaving}
             >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {isCreating ? "Creating..." : "Enhancing..."}
-                </>
-              ) : (
-                <>
-                  <Wand2 className="h-4 w-4 mr-2" />
-                  {actionLabel} {selectedArtifacts.size > 0 ? `(${selectedArtifacts.size})` : ""}
-                </>
-              )}
+              <ToggleGroupItem value="16:9" aria-label="Landscape" className="gap-1 h-8 px-2">
+                <RectangleHorizontal className="h-3.5 w-3.5" />
+                <span className="text-xs hidden sm:inline">Landscape</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="1:1" aria-label="Square" className="gap-1 h-8 px-2">
+                <Square className="h-3.5 w-3.5" />
+                <span className="text-xs hidden sm:inline">Square</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="9:16" aria-label="Portrait" className="gap-1 h-8 px-2">
+                <RectangleVertical className="h-3.5 w-3.5" />
+                <span className="text-xs hidden sm:inline">Portrait</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="4:5" aria-label="4:5" className="gap-1 h-8 px-2">
+                <RectangleVertical className="h-3.5 w-3.5" />
+                <span className="text-xs">4:5</span>
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isProcessing || isSaving}
+            >
+              Cancel
             </Button>
-          ) : (
-            <Button onClick={handleSaveImage} disabled={isSaving}>
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  {outputMode === 'replace' ? 'Replace Artifact' : 'Add to Artifacts'}
-                </>
-              )}
-            </Button>
-          )}
+            {!generatedImage ? (
+              <Button
+                onClick={handleEnhance}
+                disabled={isProcessing || !prompt.trim()}
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {isCreating ? "Creating..." : "Enhancing..."}
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="h-4 w-4 mr-2" />
+                    {actionLabel} {selectedArtifacts.size > 0 ? `(${selectedArtifacts.size})` : ""}
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button onClick={handleSaveImage} disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    {outputMode === 'replace' ? 'Replace Artifact' : 'Add to Artifacts'}
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
