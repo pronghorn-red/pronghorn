@@ -150,7 +150,10 @@ export function ProjectCard({
   }
 
   return (
-    <Card className="card-hover group relative overflow-hidden">
+    <Card 
+      className="card-hover group relative overflow-hidden cursor-pointer"
+      onClick={() => onClick?.(projectId)}
+    >
       {/* Splash Image Banner */}
       {splashImageUrl && (
         <div className="h-32 w-full overflow-hidden">
@@ -161,7 +164,10 @@ export function ProjectCard({
           />
         </div>
       )}
-      <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-background/80 backdrop-blur-sm rounded-md p-1">
+      <div 
+        className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-background/80 backdrop-blur-sm rounded-md p-1"
+        onClick={e => e.stopPropagation()}
+      >
         {!isAnonymous && (
           <CloneProjectDialog
             projectId={projectId}
@@ -188,14 +194,10 @@ export function ProjectCard({
           />
         )}
       </div>
-      <div 
-        className="cursor-pointer"
-        onClick={() => onClick?.(projectId)}
-      >
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between">
-            <CardTitle className="text-lg group-hover:text-primary transition-colors">
-              {projectName}
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <CardTitle className="text-lg group-hover:text-primary transition-colors">
+            {projectName}
             </CardTitle>
             <Badge variant="secondary" className={statusInfo.className}>
               {statusInfo.label}
@@ -236,9 +238,8 @@ export function ProjectCard({
             >
               Save to Account
             </Button>
-          )}
-        </CardContent>
-      </div>
+        )}
+      </CardContent>
     </Card>
   );
 }
