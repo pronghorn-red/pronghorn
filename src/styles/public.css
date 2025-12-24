@@ -1,0 +1,371 @@
+/* Public Pages Theme (Landing, Terms, Privacy, License) */
+/* Light and Dark mode CSS variables and utility classes */
+
+/* ========================================
+   CSS Variables for Public Pages
+   ======================================== */
+
+:root {
+  /* Page backgrounds */
+  --public-bg: hsl(38, 60%, 97%);
+  --public-bg-secondary: hsl(0, 0%, 100%);
+  --public-bg-secondary-50: hsla(0, 0%, 100%, 0.5);
+  --public-bg-tertiary: hsl(220, 14%, 96%);
+  
+  /* Text colors */
+  --public-text: hsl(240, 30%, 15%);
+  --public-text-muted: hsl(220, 9%, 46%);
+  --public-text-subtle: hsl(220, 9%, 53%);
+  
+  /* Brand colors */
+  --public-brand: hsl(350, 80%, 40%);
+  --public-brand-hover: hsl(350, 80%, 35%);
+  
+  /* Borders */
+  --public-border: hsl(30, 20%, 88%);
+  --public-border-light: hsla(30, 20%, 88%, 0.5);
+  --public-border-card: hsl(220, 13%, 91%);
+  
+  /* Cards and surfaces */
+  --public-card: hsl(0, 0%, 100%);
+  --public-card-hover: hsl(0, 0%, 100%);
+  
+  /* Nav */
+  --public-nav-bg: hsla(38, 60%, 97%, 0.9);
+  
+  /* Prose */
+  --public-prose-heading: hsl(240, 30%, 15%);
+  --public-prose-link: hsl(350, 80%, 40%);
+  
+  /* Gradients (for sections that stay dark) */
+  --public-gradient-from: hsl(240, 30%, 15%);
+  --public-gradient-to: hsl(240, 30%, 20%);
+  
+  /* Feature chip colors - light mode */
+  --public-chip-blue-bg: hsl(217, 91%, 95%);
+  --public-chip-blue-text: hsl(221, 83%, 53%);
+  --public-chip-rose-bg: hsl(351, 83%, 94%);
+  --public-chip-rose-text: hsl(350, 80%, 40%);
+  --public-chip-emerald-bg: hsl(152, 76%, 93%);
+  --public-chip-emerald-text: hsl(158, 64%, 35%);
+  --public-chip-violet-bg: hsl(270, 76%, 95%);
+  --public-chip-violet-text: hsl(263, 70%, 50%);
+  --public-chip-amber-bg: hsl(48, 96%, 89%);
+  --public-chip-amber-text: hsl(32, 95%, 44%);
+  --public-chip-cyan-bg: hsl(183, 79%, 92%);
+  --public-chip-cyan-text: hsl(192, 82%, 35%);
+  --public-chip-indigo-bg: hsl(226, 76%, 95%);
+  --public-chip-indigo-text: hsl(239, 84%, 67%);
+  
+  /* Buttons */
+  --public-btn-primary-bg: hsl(240, 30%, 15%);
+  --public-btn-primary-text: hsl(0, 0%, 100%);
+  --public-btn-primary-hover: hsl(240, 30%, 20%);
+  
+  /* Alert/Notice colors */
+  --public-alert-amber-bg: hsl(48, 96%, 95%);
+  --public-alert-amber-border: hsl(48, 96%, 76%);
+  --public-alert-amber-text: hsl(32, 81%, 29%);
+  --public-alert-amber-heading: hsl(26, 90%, 30%);
+  --public-alert-amber-highlight: hsl(48, 96%, 89%);
+  
+  /* Code blocks */
+  --public-code-bg: hsl(220, 13%, 18%);
+  --public-code-text: hsl(142, 71%, 45%);
+  
+  /* Shadows */
+  --public-shadow: hsla(240, 30%, 15%, 0.1);
+  --public-shadow-lg: hsla(240, 30%, 15%, 0.15);
+  
+  /* Footer */
+  --public-footer-border: hsl(220, 14%, 96%);
+}
+
+.dark {
+  /* Page backgrounds */
+  --public-bg: hsl(220, 18%, 8%);
+  --public-bg-secondary: hsl(220, 16%, 12%);
+  --public-bg-secondary-50: hsla(220, 16%, 12%, 0.5);
+  --public-bg-tertiary: hsl(220, 14%, 10%);
+  
+  /* Text colors */
+  --public-text: hsl(220, 10%, 95%);
+  --public-text-muted: hsl(220, 9%, 65%);
+  --public-text-subtle: hsl(220, 9%, 55%);
+  
+  /* Brand colors - slightly brighter for dark mode */
+  --public-brand: hsl(350, 80%, 55%);
+  --public-brand-hover: hsl(350, 80%, 60%);
+  
+  /* Borders */
+  --public-border: hsl(220, 15%, 20%);
+  --public-border-light: hsla(220, 15%, 20%, 0.5);
+  --public-border-card: hsl(220, 15%, 18%);
+  
+  /* Cards and surfaces */
+  --public-card: hsl(220, 16%, 14%);
+  --public-card-hover: hsl(220, 16%, 16%);
+  
+  /* Nav */
+  --public-nav-bg: hsla(220, 18%, 8%, 0.9);
+  
+  /* Prose */
+  --public-prose-heading: hsl(220, 10%, 95%);
+  --public-prose-link: hsl(350, 80%, 60%);
+  
+  /* Feature chip colors - dark mode */
+  --public-chip-blue-bg: hsla(217, 91%, 40%, 0.3);
+  --public-chip-blue-text: hsl(213, 94%, 68%);
+  --public-chip-rose-bg: hsla(351, 83%, 40%, 0.3);
+  --public-chip-rose-text: hsl(350, 80%, 65%);
+  --public-chip-emerald-bg: hsla(152, 76%, 35%, 0.3);
+  --public-chip-emerald-text: hsl(158, 64%, 52%);
+  --public-chip-violet-bg: hsla(270, 76%, 45%, 0.3);
+  --public-chip-violet-text: hsl(263, 70%, 70%);
+  --public-chip-amber-bg: hsla(48, 96%, 40%, 0.3);
+  --public-chip-amber-text: hsl(43, 96%, 58%);
+  --public-chip-cyan-bg: hsla(183, 79%, 35%, 0.3);
+  --public-chip-cyan-text: hsl(192, 82%, 58%);
+  --public-chip-indigo-bg: hsla(226, 76%, 45%, 0.3);
+  --public-chip-indigo-text: hsl(226, 76%, 70%);
+  
+  /* Buttons */
+  --public-btn-primary-bg: hsl(215, 75%, 55%);
+  --public-btn-primary-text: hsl(0, 0%, 100%);
+  --public-btn-primary-hover: hsl(215, 75%, 60%);
+  
+  /* Alert/Notice colors */
+  --public-alert-amber-bg: hsla(48, 96%, 40%, 0.15);
+  --public-alert-amber-border: hsla(48, 96%, 50%, 0.4);
+  --public-alert-amber-text: hsl(43, 96%, 70%);
+  --public-alert-amber-heading: hsl(43, 96%, 70%);
+  --public-alert-amber-highlight: hsla(48, 96%, 40%, 0.25);
+  
+  /* Code blocks */
+  --public-code-bg: hsl(220, 13%, 10%);
+  --public-code-text: hsl(142, 71%, 45%);
+  
+  /* Shadows */
+  --public-shadow: hsla(0, 0%, 0%, 0.3);
+  --public-shadow-lg: hsla(0, 0%, 0%, 0.4);
+  
+  /* Footer */
+  --public-footer-border: hsl(220, 15%, 16%);
+}
+
+/* ========================================
+   Utility Classes
+   ======================================== */
+
+/* Page container */
+.public-page {
+  min-height: 100vh;
+  background-color: var(--public-bg);
+  color: var(--public-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Navigation */
+.public-nav {
+  background-color: var(--public-nav-bg);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--public-border-light);
+}
+
+/* Cards */
+.public-card {
+  background-color: var(--public-card);
+  border: 1px solid var(--public-border-card);
+}
+
+.public-card:hover {
+  background-color: var(--public-card-hover);
+}
+
+/* Text */
+.public-heading {
+  color: var(--public-text);
+}
+
+.public-text {
+  color: var(--public-text);
+}
+
+.public-text-muted {
+  color: var(--public-text-muted);
+}
+
+.public-text-subtle {
+  color: var(--public-text-subtle);
+}
+
+/* Brand/Accent */
+.public-brand {
+  color: var(--public-brand);
+}
+
+.public-brand-hover:hover {
+  color: var(--public-brand-hover);
+}
+
+/* Links */
+.public-link {
+  color: var(--public-brand);
+}
+
+.public-link:hover {
+  color: var(--public-brand-hover);
+}
+
+/* Buttons */
+.public-btn-primary {
+  background-color: var(--public-btn-primary-bg);
+  color: var(--public-btn-primary-text);
+}
+
+.public-btn-primary:hover {
+  background-color: var(--public-btn-primary-hover);
+}
+
+/* Backgrounds */
+.public-bg {
+  background-color: var(--public-bg);
+}
+
+.public-bg-secondary {
+  background-color: var(--public-bg-secondary);
+}
+
+.public-bg-secondary-50 {
+  background-color: var(--public-bg-secondary-50);
+}
+
+.public-bg-tertiary {
+  background-color: var(--public-bg-tertiary);
+}
+
+/* Borders */
+.public-border {
+  border-color: var(--public-border);
+}
+
+.public-border-light {
+  border-color: var(--public-border-light);
+}
+
+.public-border-card {
+  border-color: var(--public-border-card);
+}
+
+/* Footer */
+.public-footer {
+  border-top: 1px solid var(--public-footer-border);
+}
+
+/* Alert */
+.public-alert-amber {
+  background-color: var(--public-alert-amber-bg);
+  border: 2px solid var(--public-alert-amber-border);
+  color: var(--public-alert-amber-text);
+}
+
+.public-alert-amber-heading {
+  color: var(--public-alert-amber-heading);
+}
+
+.public-alert-amber-highlight {
+  background-color: var(--public-alert-amber-highlight);
+}
+
+/* Code */
+.public-code {
+  background-color: var(--public-code-bg);
+  color: var(--public-code-text);
+}
+
+/* Prose overrides for public pages */
+.public-prose h1,
+.public-prose h2,
+.public-prose h3,
+.public-prose h4,
+.public-prose h5,
+.public-prose h6 {
+  color: var(--public-prose-heading);
+}
+
+.public-prose a {
+  color: var(--public-prose-link);
+}
+
+.public-prose p,
+.public-prose li {
+  color: var(--public-text-muted);
+}
+
+.public-prose strong {
+  color: var(--public-text);
+}
+
+/* Feature chips */
+.public-chip-blue {
+  background-color: var(--public-chip-blue-bg);
+  color: var(--public-chip-blue-text);
+}
+
+.public-chip-rose {
+  background-color: var(--public-chip-rose-bg);
+  color: var(--public-chip-rose-text);
+}
+
+.public-chip-emerald {
+  background-color: var(--public-chip-emerald-bg);
+  color: var(--public-chip-emerald-text);
+}
+
+.public-chip-violet {
+  background-color: var(--public-chip-violet-bg);
+  color: var(--public-chip-violet-text);
+}
+
+.public-chip-amber {
+  background-color: var(--public-chip-amber-bg);
+  color: var(--public-chip-amber-text);
+}
+
+.public-chip-cyan {
+  background-color: var(--public-chip-cyan-bg);
+  color: var(--public-chip-cyan-text);
+}
+
+.public-chip-indigo {
+  background-color: var(--public-chip-indigo-bg);
+  color: var(--public-chip-indigo-text);
+}
+
+/* Gradient sections (these stay dark in both modes) */
+.public-gradient-dark {
+  background: linear-gradient(to bottom right, var(--public-gradient-from), var(--public-gradient-to));
+}
+
+/* Section backgrounds with theme support */
+.public-section-alt {
+  background-color: var(--public-bg-secondary-50);
+}
+
+.public-section-gradient {
+  background: linear-gradient(to bottom, var(--public-bg-secondary), var(--public-bg-tertiary));
+}
+
+/* Shadows */
+.public-shadow {
+  box-shadow: 0 1px 3px 0 var(--public-shadow);
+}
+
+.public-shadow-lg {
+  box-shadow: 0 10px 15px -3px var(--public-shadow), 0 4px 6px -4px var(--public-shadow);
+}
+
+.public-shadow-xl {
+  box-shadow: 0 20px 25px -5px var(--public-shadow-lg), 0 8px 10px -6px var(--public-shadow);
+}

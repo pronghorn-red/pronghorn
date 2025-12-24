@@ -2,12 +2,15 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PronghornLogo } from "@/components/layout/PronghornLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate, Link } from "react-router-dom";
 import { FileText, Library, Layout, Bot, Code, Users, ArrowRight, Check, ShieldCheck, GitBranch, CheckCircle, Rocket, Shield, Award, Settings, Archive, MessageSquare, ListTree, Hammer, Sparkles, Github, Heart, Zap, X, ChevronLeft, ChevronRight, Database, BookOpen, Download, Layers, Cpu } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 export default function Landing() {
   const navigate = useNavigate();
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
+  
   const workflowSteps = [{
     icon: Settings,
     label: "Settings",
@@ -127,6 +130,7 @@ export default function Landing() {
       capabilities: ["Deploy to Render.com cloud hosting", "Local development runner with hot reload", "Environment-based deployments (dev/uat/prod)", "Bug telemetry integration for automated fixes"]
     }
   }];
+  
   const canvasAgents = [{
     name: "Architect",
     color: "bg-blue-500",
@@ -169,67 +173,74 @@ export default function Landing() {
     color: "bg-gray-500",
     description: "Reduces complexity"
   }];
+  
   const features = [{
     icon: FileText,
     title: "AI-Powered Requirements",
     description: "Transform unstructured ideas into structured Epics, Features, and Stories. AI decomposes and expands requirements while linking them to organizational standards for complete traceability.",
-    color: "bg-blue-100 text-blue-600"
+    color: "public-chip-blue"
   }, {
     icon: Library,
     title: "Global Standards Library",
     description: "Build your organization's compliance foundation once, use everywhere. Create reusable standards categories and tech stack templates that automatically link to all your projects.",
-    color: "bg-violet-100 text-violet-600"
+    color: "public-chip-violet"
   }, {
     icon: Layout,
     title: "Visual Architecture Design",
     description: "Design complex architectures with an interactive canvas. Drag-and-drop nodes for pages, APIs, databases, and security layers. Real-time sync keeps your whole team aligned.",
-    color: "bg-emerald-100 text-emerald-600"
+    color: "public-chip-emerald"
   }, {
     icon: Bot,
     title: "Multi-Agent AI Teams",
     description: "Orchestrate teams of AI agents—Architects, Developers, DBAs, Security, QA—that iteratively refine your architecture. Watch agents collaborate on a shared blackboard until designs stabilize.",
-    color: "bg-rose-100 text-rose-600"
+    color: "public-chip-rose"
   }, {
     icon: Code,
     title: "AI Coding Agent",
     description: "An autonomous coding agent that reads your requirements, searches your codebase, and makes changes—all with full audit trail. Stage changes, review diffs, and push to GitHub when ready.",
-    color: "bg-amber-100 text-amber-600"
+    color: "public-chip-amber"
   }, {
     icon: Users,
     title: "Instant Collaboration",
     description: "Share any project with a link—no login required. Real-time sync means everyone sees changes instantly. Start anonymous, claim your projects when ready.",
-    color: "bg-cyan-100 text-cyan-600"
+    color: "public-chip-cyan"
   }, {
     icon: Database,
     title: "Database Explorer & Import",
     description: "Provision or connect PostgreSQL databases, browse schemas, execute SQL queries, and import data from Excel, CSV, or JSON with AI-powered schema inference.",
-    color: "bg-indigo-100 text-indigo-600"
+    color: "public-chip-indigo"
   }];
+  
   const benefits = ["Complete traceability from standards to code", "AI teams that iterate until architecture stabilizes", "No account required to start—instant collaboration", "Built-in code editor with GitHub sync", "Multi-model AI support (Gemini, Claude, Grok)", "13+ specification templates for any audience", "Database provisioning with AI-powered data import"];
-  return <div className="min-h-screen bg-[hsl(38,60%,97%)] text-[hsl(240,30%,15%)] antialiased overflow-x-hidden">
+  
+  return (
+    <div className="public-page overflow-x-hidden">
       {/* Skip Navigation Link */}
       <a 
         href="#main-content" 
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[hsl(240,30%,15%)] focus:text-white focus:rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[hsl(350,80%,40%)]"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 public-btn-primary focus:rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--public-brand)]"
       >
         Skip to main content
       </a>
 
       {/* Header with Navigation */}
       <header>
-        <nav role="navigation" aria-label="Main navigation" className="fixed w-full top-0 z-50 bg-[hsl(38,60%,97%)]/90 backdrop-blur-md border-b border-[hsl(30,20%,88%)]/50 transition-all duration-300">
+        <nav role="navigation" aria-label="Main navigation" className="fixed w-full top-0 z-50 public-nav transition-all duration-300">
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <PronghornLogo className="h-8 w-8 rounded-lg" />
-              <span className="text-xl font-semibold tracking-tight">
+              <span className="text-xl font-semibold tracking-tight public-heading">
                 Pronghorn{" "}
-                <Link to="/terms" className="text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">(Alpha)</Link>
+                <Link to="/terms" className="public-brand underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--public-brand)]">(Alpha)</Link>
               </span>
             </div>
 
-            <Button onClick={() => navigate("/auth")} className="bg-[hsl(240,30%,15%)] text-white px-5 py-2.5 rounded-lg font-medium text-sm hover:bg-[hsl(240,30%,20%)] hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[hsl(240,30%,15%)]/20">
-              Login
-            </Button>
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              <Button onClick={() => navigate("/auth")} className="public-btn-primary px-5 py-2.5 rounded-lg font-medium text-sm hover:scale-105 active:scale-95 transition-all shadow-lg">
+                Login
+              </Button>
+            </div>
           </div>
         </nav>
       </header>
@@ -241,36 +252,36 @@ export default function Landing() {
       <section className="relative pt-32 pb-20 lg:pt-32 lg:pb-32 px-6 overflow-hidden">
         {/* Background decorations */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-          <svg className="absolute top-20 left-10 w-[800px] h-[800px] opacity-20 text-muted-foreground/30" viewBox="0 0 100 100">
+          <svg className="absolute top-20 left-10 w-[800px] h-[800px] opacity-20 public-text-subtle" viewBox="0 0 100 100">
             <path d="M0,50 Q25,25 50,50 T100,50" fill="none" stroke="currentColor" strokeWidth="0.5" />
             <path d="M0,60 Q25,35 50,60 T100,60" fill="none" stroke="currentColor" strokeWidth="0.5" />
           </svg>
-          <div className="absolute right-0 top-0 w-1/2 h-full bg-gradient-to-l from-rose-100/30 to-transparent blur-3xl" />
+          <div className="absolute right-0 top-0 w-1/2 h-full bg-gradient-to-l from-rose-100/30 dark:from-rose-900/20 to-transparent blur-3xl" />
         </div>
 
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-8 lg:gap-16 items-center relative z-10">
           <div className="space-y-8 text-center lg:text-left">
             <div className="flex justify-center lg:justify-start">
-              <Link to="/terms" className="text-sm font-medium text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">
+              <Link to="/terms" className="text-sm font-medium public-brand underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--public-brand)]">
                 Currently Alpha Testing
               </Link>
             </div>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-medium tracking-tight leading-[1.1] text-[hsl(240,30%,15%)]">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-medium tracking-tight leading-[1.1] public-heading">
               Build Software with <br />
-              <span className="text-[hsl(350,80%,40%)] relative inline-block">
+              <span className="public-brand relative inline-block">
                 AI-Powered
-                <svg className="absolute w-full h-3 -bottom-1 left-0 text-rose-200 -z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
+                <svg className="absolute w-full h-3 -bottom-1 left-0 text-rose-200 dark:text-rose-800 -z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
                   <path d="M0,5 Q50,10 100,5" stroke="currentColor" strokeWidth="8" fill="none" />
                 </svg>
               </span>{" "}
               Precision
             </h1>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-lg leading-relaxed mx-auto lg:mx-0">
+            <p className="text-lg md:text-xl public-text-muted max-w-lg leading-relaxed mx-auto lg:mx-0">
               Transform requirements into production code with AI agents that understand your standards, design your
               architecture, and write compliant code—all with complete traceability.
             </p>
             <div className="flex justify-center lg:justify-start">
-              <Button size="lg" onClick={() => navigate("/dashboard")} className="group bg-[hsl(240,30%,15%)] text-white px-8 py-4 rounded-xl font-medium text-lg hover:bg-[hsl(240,30%,20%)] hover:shadow-xl hover:shadow-[hsl(240,30%,15%)]/20 hover:-translate-y-1 transition-all duration-300 flex items-center gap-2">
+              <Button size="lg" onClick={() => navigate("/dashboard")} className="group public-btn-primary px-8 py-4 rounded-xl font-medium text-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex items-center gap-2">
                 Start Building
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
@@ -281,7 +292,7 @@ export default function Landing() {
           <div className="relative h-[500px] w-full hidden lg:flex items-center justify-center">
             <div className="relative w-full max-w-md aspect-square">
               {/* Glow background */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-rose-100/50 rounded-full blur-3xl" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-rose-100/50 dark:bg-rose-900/30 rounded-full blur-3xl" />
 
               {/* Floating shield icon */}
               <div className="absolute top-0 right-10 z-20 animate-float">
@@ -305,29 +316,29 @@ export default function Landing() {
               </div>
 
               {/* Main card */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 bg-white rounded-2xl shadow-2xl border border-rose-100 overflow-hidden transform hover:scale-105 transition-transform duration-500">
-                <div className="w-full bg-gradient-to-br from-rose-50 to-white p-6 flex flex-col gap-4">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 public-card rounded-2xl shadow-2xl border-rose-100 dark:border-rose-900/50 overflow-hidden transform hover:scale-105 transition-transform duration-500">
+                <div className="w-full bg-gradient-to-br from-rose-50 dark:from-rose-900/20 to-[var(--public-card)] p-6 flex flex-col gap-4">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-red-400" />
                     <div className="w-3 h-3 rounded-full bg-yellow-400" />
                     <div className="w-3 h-3 rounded-full bg-green-400" />
                   </div>
                   <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg">
+                    <div className="flex items-center gap-3 p-3 public-chip-emerald rounded-lg">
                       <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                      <span className="text-sm font-medium text-gray-700">Requirements validated</span>
+                      <span className="text-sm font-medium">Requirements validated</span>
                     </div>
-                    <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+                    <div className="flex items-center gap-3 p-3 public-chip-blue rounded-lg">
                       <div className="w-2 h-2 rounded-full bg-blue-400" />
-                      <span className="text-sm font-medium text-gray-700">Architecture designed</span>
+                      <span className="text-sm font-medium">Architecture designed</span>
                     </div>
-                    <div className="flex items-center gap-3 p-3 bg-violet-50 rounded-lg">
+                    <div className="flex items-center gap-3 p-3 public-chip-violet rounded-lg">
                       <div className="w-2 h-2 rounded-full bg-violet-400" />
-                      <span className="text-sm font-medium text-gray-700">Standards linked</span>
+                      <span className="text-sm font-medium">Standards linked</span>
                     </div>
-                    <div className="flex items-center gap-3 p-3 bg-rose-50 rounded-lg border border-rose-200">
+                    <div className="flex items-center gap-3 p-3 public-chip-rose rounded-lg border border-rose-200 dark:border-rose-700">
                       <div className="w-2 h-2 rounded-full bg-[hsl(350,80%,55%)] animate-pulse" />
-                      <span className="text-sm font-medium text-[hsl(350,80%,45%)]">AI agents building...</span>
+                      <span className="text-sm font-medium">AI agents building...</span>
                     </div>
                   </div>
                 </div>
@@ -338,26 +349,28 @@ export default function Landing() {
       </section>
 
       {/* Features Section */}
-      <section className="py-24 px-6 bg-white/50">
+      <section className="py-24 px-6 public-bg-secondary-50">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">
+            <h2 className="text-4xl font-medium tracking-tight mb-4 public-heading">
               Everything You Need to Build Better Software
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            <p className="text-xl public-text-muted max-w-3xl mx-auto">
               From requirements to production code, Pronghorn provides the complete toolkit for standards-driven
               development with AI assistance at every step.
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, index) => <Card key={index} className="bg-white p-8 rounded-2xl border border-border hover:shadow-xl hover:-translate-y-2 transition-all duration-300">
+            {features.map((feature, index) => (
+              <Card key={index} className="public-card p-8 rounded-2xl hover:shadow-xl hover:-translate-y-2 transition-all duration-300">
                 <div className={`w-12 h-12 ${feature.color} rounded-xl flex items-center justify-center mb-6`}>
                   <feature.icon className="w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-medium mb-3 text-[hsl(240,30%,15%)]">{feature.title}</h3>
-                <p className="text-gray-600">{feature.description}</p>
-              </Card>)}
+                <h3 className="text-xl font-medium mb-3 public-heading">{feature.title}</h3>
+                <p className="public-text-muted">{feature.description}</p>
+              </Card>
+            ))}
           </div>
         </div>
       </section>
@@ -366,23 +379,23 @@ export default function Landing() {
       <section className="py-24 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">Your 12-Step Journey</h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            <h2 className="text-4xl font-medium tracking-tight mb-4 public-heading">Your 12-Step Journey</h2>
+            <p className="text-xl public-text-muted max-w-3xl mx-auto">
               From initial idea to deployed application—a complete workflow powered by AI at every step
             </p>
           </div>
 
           {/* Phase Headers */}
           <div className="flex justify-center gap-4 mb-8">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+            <div className="inline-flex items-center gap-2 px-4 py-2 public-chip-blue rounded-full text-sm font-medium">
               <Settings className="w-4 h-4" />
               Plan
             </div>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-rose-100 text-rose-700 rounded-full text-sm font-medium">
+            <div className="inline-flex items-center gap-2 px-4 py-2 public-chip-rose rounded-full text-sm font-medium">
               <Sparkles className="w-4 h-4" />
               Design
             </div>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium">
+            <div className="inline-flex items-center gap-2 px-4 py-2 public-chip-emerald rounded-full text-sm font-medium">
               <Rocket className="w-4 h-4" />
               Build
             </div>
@@ -391,72 +404,83 @@ export default function Landing() {
           {/* Steps Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
             {workflowSteps.map((step, index) => {
-            const phaseColors = {
-              plan: "border-blue-200 hover:border-blue-400 hover:bg-blue-50/50",
-              design: "border-rose-200 hover:border-rose-400 hover:bg-rose-50/50",
-              ship: "border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/50"
-            };
-            const iconColors = {
-              plan: "text-blue-600 bg-blue-100",
-              design: "text-rose-600 bg-rose-100",
-              ship: "text-emerald-600 bg-emerald-100"
-            };
-            return <div key={index} onClick={() => setSelectedStepIndex(index)} className={`relative bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer min-w-0 ${phaseColors[step.phase as keyof typeof phaseColors]}`}>
+              const phaseColors = {
+                plan: "border-blue-200 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600 hover:bg-blue-50/50 dark:hover:bg-blue-900/20",
+                design: "border-rose-200 dark:border-rose-800 hover:border-rose-400 dark:hover:border-rose-600 hover:bg-rose-50/50 dark:hover:bg-rose-900/20",
+                ship: "border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/20"
+              };
+              const iconColors = {
+                plan: "public-chip-blue",
+                design: "public-chip-rose",
+                ship: "public-chip-emerald"
+              };
+              return (
+                <div 
+                  key={index} 
+                  onClick={() => setSelectedStepIndex(index)} 
+                  className={`relative public-card rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-pointer min-w-0 ${phaseColors[step.phase as keyof typeof phaseColors]}`}
+                >
                   {/* Step Number */}
-                  <div className="absolute -top-2 -left-2 w-6 h-6 bg-[hsl(240,30%,15%)] text-white text-xs font-bold rounded-full flex items-center justify-center">
+                  <div className="absolute -top-2 -left-2 w-6 h-6 public-btn-primary text-xs font-bold rounded-full flex items-center justify-center">
                     {index + 1}
                   </div>
 
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${iconColors[step.phase as keyof typeof iconColors]}`}>
                     <step.icon className="w-5 h-5" />
                   </div>
-                  <h3 className="font-medium text-sm text-[hsl(240,30%,15%)] mb-1 truncate">{step.label}</h3>
-                  <p className="text-xs text-gray-500 leading-tight hidden lg:block line-clamp-2">{step.description}</p>
-                </div>;
-          })}
+                  <h3 className="font-medium text-sm public-heading mb-1 truncate">{step.label}</h3>
+                  <p className="text-xs public-text-subtle leading-tight hidden lg:block line-clamp-2">{step.description}</p>
+                </div>
+              );
+            })}
           </div>
 
           {/* Step Details Dialog */}
           <Dialog open={selectedStepIndex !== null} onOpenChange={open => !open && setSelectedStepIndex(null)}>
             <DialogContent className="sm:max-w-md" onKeyDown={e => {
-            if (selectedStepIndex === null) return;
-            if (e.key === "ArrowLeft") {
-              e.preventDefault();
-              setSelectedStepIndex(selectedStepIndex > 0 ? selectedStepIndex - 1 : workflowSteps.length - 1);
-            } else if (e.key === "ArrowRight") {
-              e.preventDefault();
-              setSelectedStepIndex(selectedStepIndex < workflowSteps.length - 1 ? selectedStepIndex + 1 : 0);
-            }
-          }}>
+              if (selectedStepIndex === null) return;
+              if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                setSelectedStepIndex(selectedStepIndex > 0 ? selectedStepIndex - 1 : workflowSteps.length - 1);
+              } else if (e.key === "ArrowRight") {
+                e.preventDefault();
+                setSelectedStepIndex(selectedStepIndex < workflowSteps.length - 1 ? selectedStepIndex + 1 : 0);
+              }
+            }}>
               {selectedStepIndex !== null && (() => {
-              const selectedStep = workflowSteps[selectedStepIndex];
-              return <>
+                const selectedStep = workflowSteps[selectedStepIndex];
+                return (
+                  <>
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${selectedStep.phase === "plan" ? "bg-blue-100 text-blue-600" : selectedStep.phase === "design" ? "bg-rose-100 text-rose-600" : "bg-emerald-100 text-emerald-600"}`}>
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${selectedStep.phase === "plan" ? "public-chip-blue" : selectedStep.phase === "design" ? "public-chip-rose" : "public-chip-emerald"}`}>
                           <selectedStep.icon className="w-5 h-5" />
                         </div>
                         <div>
                           <span className="text-lg">{selectedStep.label}</span>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${selectedStep.phase === "plan" ? "bg-blue-100 text-blue-700" : selectedStep.phase === "design" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${selectedStep.phase === "plan" ? "public-chip-blue" : selectedStep.phase === "design" ? "public-chip-rose" : "public-chip-emerald"}`}>
                               {selectedStep.phase.charAt(0).toUpperCase() + selectedStep.phase.slice(1)} Phase
                             </span>
                           </div>
                         </div>
                       </DialogTitle>
                     </DialogHeader>
-                    {selectedStep.aiDetails && <div className="mt-4">
+                    {selectedStep.aiDetails && (
+                      <div className="mt-4">
                         <p className="font-medium text-sm text-muted-foreground mb-3">
                           {selectedStep.aiDetails.title}
                         </p>
                         <ul className="space-y-2">
-                          {selectedStep.aiDetails.capabilities.map((capability, idx) => <li key={idx} className="flex items-start gap-2 text-sm">
+                          {selectedStep.aiDetails.capabilities.map((capability, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-sm">
                               <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                               <span>{capability}</span>
-                            </li>)}
+                            </li>
+                          ))}
                         </ul>
-                      </div>}
+                      </div>
+                    )}
                     
                     {/* Navigation Arrows */}
                     <div className="flex items-center justify-between mt-6 pt-4 border-t">
@@ -472,8 +496,9 @@ export default function Landing() {
                         <ChevronRight className="w-4 h-4" />
                       </Button>
                     </div>
-                  </>;
-            })()}
+                  </>
+                );
+              })()}
             </DialogContent>
           </Dialog>
 
@@ -481,66 +506,70 @@ export default function Landing() {
       </section>
 
       {/* Meet the AI Teams Section */}
-      <section className="py-24 px-6 bg-gradient-to-b from-white to-gray-50">
+      <section className="py-24 px-6 public-section-gradient">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">
+            <h2 className="text-4xl font-medium tracking-tight mb-4 public-heading">
               Meet the AI Teams
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            <p className="text-xl public-text-muted max-w-3xl mx-auto">
               Specialized agents that collaborate, iterate, and refine your architecture until it stabilizes
             </p>
           </div>
 
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Canvas Orchestration Agents */}
-            <Card className="bg-white p-8 rounded-2xl border border-border hover:shadow-xl transition-all duration-300">
+            <Card className="public-card p-8 rounded-2xl hover:shadow-xl transition-all duration-300">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
                   <Layout className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-medium text-[hsl(240,30%,15%)]">Architecture Team</h3>
-                  <p className="text-sm text-gray-500">10 specialized canvas agents</p>
+                  <h3 className="text-xl font-medium public-heading">Architecture Team</h3>
+                  <p className="text-sm public-text-subtle">10 specialized canvas agents</p>
                 </div>
               </div>
               
               <div className="grid grid-cols-2 gap-2 mb-6">
-                {canvasAgents.map((agent, i) => <div key={i} className={`flex items-center gap-2 p-2 rounded-lg bg-gray-50 ${agent.featured ? "ring-1 ring-red-300 bg-red-50" : ""}`}>
+                {canvasAgents.map((agent, i) => (
+                  <div key={i} className={`flex items-center gap-2 p-2 rounded-lg ${agent.featured ? "ring-1 ring-red-300 dark:ring-red-700 public-chip-rose" : "public-bg-tertiary"}`}>
                     <div className={`w-2 h-2 rounded-full ${agent.color}`}></div>
-                    <span className={`text-xs font-medium ${agent.featured ? "text-red-700" : "text-gray-700"}`}>
+                    <span className={`text-xs font-medium ${agent.featured ? "" : "public-text-muted"}`}>
                       {agent.name}
                     </span>
-                  </div>)}
+                  </div>
+                ))}
               </div>
               
-              <p className="text-sm text-gray-600">
-                Agents iterate on a shared <span className="font-medium text-[hsl(240,30%,15%)]">blackboard</span> until your architecture stabilizes—each bringing their expertise to refine the design.
+              <p className="text-sm public-text-muted">
+                Agents iterate on a shared <span className="font-medium public-heading">blackboard</span> until your architecture stabilizes—each bringing their expertise to refine the design.
               </p>
             </Card>
 
             {/* Coding Agent */}
-            <Card className="bg-white p-8 rounded-2xl border border-border hover:shadow-xl transition-all duration-300">
+            <Card className="public-card p-8 rounded-2xl hover:shadow-xl transition-all duration-300">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center">
                   <Code className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-medium text-[hsl(240,30%,15%)]">Autonomous Coder</h3>
-                  <p className="text-sm text-gray-500">AI that writes code with audit trail</p>
+                  <h3 className="text-xl font-medium public-heading">Autonomous Coder</h3>
+                  <p className="text-sm public-text-subtle">AI that writes code with audit trail</p>
                 </div>
               </div>
               
               <ul className="space-y-3 mb-6">
-                {["Reads requirements & searches codebase", "Creates, edits, renames, deletes files", "Stages changes with diff review", "Commits and pushes to GitHub"].map((capability, i) => <li key={i} className="flex items-center gap-3">
-                    <div className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <Check className="w-3 h-3 text-amber-600" />
+                {["Reads requirements & searches codebase", "Creates, edits, renames, deletes files", "Stages changes with diff review", "Commits and pushes to GitHub"].map((capability, i) => (
+                  <li key={i} className="flex items-center gap-3">
+                    <div className="w-5 h-5 public-chip-amber rounded-full flex items-center justify-center flex-shrink-0">
+                      <Check className="w-3 h-3" />
                     </div>
-                    <span className="text-sm text-gray-700">{capability}</span>
-                  </li>)}
+                    <span className="text-sm public-text-muted">{capability}</span>
+                  </li>
+                ))}
               </ul>
               
-              <div className="bg-gray-900 rounded-lg p-4 font-mono text-xs text-green-400">
+              <div className="public-code rounded-lg p-4 font-mono text-xs">
                 <div className="opacity-60">// Agent executing...</div>
                 <div>staged: <span className="text-amber-400">3 files</span></div>
                 <div>commit: <span className="text-cyan-400">"Add user auth"</span></div>
@@ -548,34 +577,40 @@ export default function Landing() {
             </Card>
 
             {/* Specification Agents */}
-            <Card className="bg-white p-8 rounded-2xl border border-border hover:shadow-xl transition-all duration-300">
+            <Card className="public-card p-8 rounded-2xl hover:shadow-xl transition-all duration-300">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl flex items-center justify-center">
                   <FileText className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-medium text-[hsl(240,30%,15%)]">Document Generators</h3>
-                  <p className="text-sm text-gray-500">13+ specification templates</p>
+                  <h3 className="text-xl font-medium public-heading">Document Generators</h3>
+                  <p className="text-sm public-text-subtle">13+ specification templates</p>
                 </div>
               </div>
               
               <div className="space-y-3 mb-6">
                 <div>
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Business</div>
+                  <div className="text-xs font-medium public-text-subtle uppercase tracking-wide mb-2">Business</div>
                   <div className="flex flex-wrap gap-1">
-                    {["Overview", "Executive Summary", "Procurement"].map(t => <span key={t} className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">{t}</span>)}
+                    {["Overview", "Executive Summary", "Procurement"].map(t => (
+                      <span key={t} className="px-2 py-1 public-chip-blue text-xs rounded-full">{t}</span>
+                    ))}
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Technical</div>
+                  <div className="text-xs font-medium public-text-subtle uppercase tracking-wide mb-2">Technical</div>
                   <div className="flex flex-wrap gap-1">
-                    {["Tech Spec", "Solution Arch", "Agent Instructions"].map(t => <span key={t} className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full">{t}</span>)}
+                    {["Tech Spec", "Solution Arch", "Agent Instructions"].map(t => (
+                      <span key={t} className="px-2 py-1 public-chip-emerald text-xs rounded-full">{t}</span>
+                    ))}
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Cloud & Security</div>
+                  <div className="text-xs font-medium public-text-subtle uppercase tracking-wide mb-2">Cloud & Security</div>
                   <div className="flex flex-wrap gap-1">
-                    {["AWS", "Azure", "GCP", "Cyber Specialist"].map(t => <span key={t} className={`px-2 py-1 text-xs rounded-full ${t === "Cyber Specialist" ? "bg-red-50 text-red-700 font-medium" : "bg-violet-50 text-violet-700"}`}>{t}</span>)}
+                    {["AWS", "Azure", "GCP", "Cyber Specialist"].map(t => (
+                      <span key={t} className={`px-2 py-1 text-xs rounded-full ${t === "Cyber Specialist" ? "public-chip-rose font-medium" : "public-chip-violet"}`}>{t}</span>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -587,7 +622,7 @@ export default function Landing() {
       {/* Open Source & Evolving Section */}
       <section className="py-16 px-6">
         <div className="max-w-5xl mx-auto">
-          <div className="bg-gradient-to-br from-[hsl(240,30%,15%)] to-[hsl(240,30%,20%)] rounded-3xl p-10 md:p-16 relative overflow-hidden">
+          <div className="public-gradient-dark rounded-3xl p-10 md:p-16 relative overflow-hidden">
             {/* Background decorations */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-[hsl(350,80%,40%)]/20 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl" />
@@ -658,35 +693,35 @@ export default function Landing() {
       </section>
 
       {/* Context Engineering Section */}
-      <section className="py-24 px-6 bg-gradient-to-b from-gray-50 to-white">
+      <section className="py-24 px-6 public-section-gradient">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-violet-100 text-violet-700 rounded-full text-sm font-medium mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 public-chip-violet rounded-full text-sm font-medium mb-6">
               <Cpu className="w-4 h-4" />
               Powered by Context Engineering
             </div>
-            <h2 className="text-4xl font-medium tracking-tight mb-4 text-[hsl(240,30%,15%)]">
+            <h2 className="text-4xl font-medium tracking-tight mb-4 public-heading">
               AI That Understands Your Whole Project
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Pronghorn is built on <span className="font-semibold text-[hsl(240,30%,15%)]">Context Engineering</span>—the practice of curating rich, structured context that makes AI dramatically more effective. Every artifact, standard, and decision becomes context for better AI output.
+            <p className="text-xl public-text-muted max-w-3xl mx-auto">
+              Pronghorn is built on <span className="font-semibold public-heading">Context Engineering</span>—the practice of curating rich, structured context that makes AI dramatically more effective. Every artifact, standard, and decision becomes context for better AI output.
             </p>
           </div>
 
           {/* Open Source Resources Grid */}
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
             {/* Tech Stacks */}
-            <Card className="bg-white p-6 rounded-2xl border border-border hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+            <Card className="public-card p-6 rounded-2xl hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
                   <Layers className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-medium text-[hsl(240,30%,15%)]">Tech Stacks</h3>
-                  <p className="text-sm text-gray-500">Open-source templates</p>
+                  <h3 className="text-lg font-medium public-heading">Tech Stacks</h3>
+                  <p className="text-sm public-text-subtle">Open-source templates</p>
                 </div>
               </div>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm public-text-muted mb-4">
                 Curated technology stack templates covering frameworks, languages, databases, and infrastructure. Use them as-is or customize for your organization.
               </p>
               <Button variant="outline" size="sm" onClick={() => navigate("/tech-stacks")} className="w-full">
@@ -695,17 +730,17 @@ export default function Landing() {
             </Card>
 
             {/* Standards */}
-            <Card className="bg-white p-6 rounded-2xl border border-border hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+            <Card className="public-card p-6 rounded-2xl hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
                   <ShieldCheck className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-medium text-[hsl(240,30%,15%)]">Standards</h3>
-                  <p className="text-sm text-gray-500">Compliance & best practices</p>
+                  <h3 className="text-lg font-medium public-heading">Standards</h3>
+                  <p className="text-sm public-text-subtle">Compliance & best practices</p>
                 </div>
               </div>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm public-text-muted mb-4">
                 Organizational standards, compliance requirements, and best practices. Link standards to projects for automatic traceability and validation.
               </p>
               <Button variant="outline" size="sm" onClick={() => navigate("/standards")} className="w-full">
@@ -714,17 +749,17 @@ export default function Landing() {
             </Card>
 
             {/* Build Books */}
-            <Card className="bg-white p-6 rounded-2xl border border-border hover:shadow-xl transition-all duration-300 hover:-translate-y-1 lg:col-span-1 md:col-span-2 lg:row-span-1">
+            <Card className="public-card p-6 rounded-2xl hover:shadow-xl transition-all duration-300 hover:-translate-y-1 lg:col-span-1 md:col-span-2 lg:row-span-1">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 bg-gradient-to-br from-rose-500 to-orange-600 rounded-xl flex items-center justify-center">
                   <BookOpen className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-medium text-[hsl(240,30%,15%)]">Build Books</h3>
-                  <p className="text-sm text-gray-500">Complete project blueprints</p>
+                  <h3 className="text-lg font-medium public-heading">Build Books</h3>
+                  <p className="text-sm public-text-subtle">Complete project blueprints</p>
                 </div>
               </div>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm public-text-muted mb-4">
                 Comprehensive project templates bundling standards, tech stacks, resources, and documentation. Chat with AI about any Build Book, then download everything for local development.
               </p>
               <div className="flex gap-2">
@@ -736,17 +771,17 @@ export default function Landing() {
           </div>
 
           {/* Take Away Feature Highlight */}
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-8 md:p-10 border border-amber-200/50">
+          <div className="bg-gradient-to-br from-amber-50 dark:from-amber-900/20 to-orange-50 dark:to-orange-900/10 rounded-3xl p-8 md:p-10 border border-amber-200/50 dark:border-amber-800/30">
             <div className="grid md:grid-cols-2 gap-8 items-center">
               <div>
                 <div className="flex items-center gap-2 mb-4">
-                  <Download className="w-5 h-5 text-amber-600" />
-                  <span className="text-sm font-medium text-amber-700 uppercase tracking-wide">Take Away Resource</span>
+                  <Download className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  <span className="text-sm font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wide">Take Away Resource</span>
                 </div>
-                <h3 className="text-2xl font-medium text-[hsl(240,30%,15%)] mb-4">
+                <h3 className="text-2xl font-medium public-heading mb-4">
                   Download Complete Build Books for Any AI Tool
                 </h3>
-                <p className="text-gray-600 mb-6">
+                <p className="public-text-muted mb-6">
                   Each Build Book can be downloaded as a complete package—standards, tech stacks, documentation, and AI prompts—ready to use with <span className="font-medium">Cursor, Claude, ChatGPT, Copilot</span>, or any other AI development tool.
                 </p>
                 <ul className="space-y-3">
@@ -757,33 +792,33 @@ export default function Landing() {
                     "Perfect for local development workflows"
                   ].map((item, i) => (
                     <li key={i} className="flex items-center gap-3">
-                      <div className="w-5 h-5 bg-amber-200 rounded-full flex items-center justify-center flex-shrink-0">
-                        <Check className="w-3 h-3 text-amber-700" />
+                      <div className="w-5 h-5 public-chip-amber rounded-full flex items-center justify-center flex-shrink-0">
+                        <Check className="w-3 h-3" />
                       </div>
-                      <span className="text-sm text-gray-700">{item}</span>
+                      <span className="text-sm public-text-muted">{item}</span>
                     </li>
                   ))}
                 </ul>
               </div>
-              <div className="bg-white rounded-2xl p-6 shadow-lg border border-amber-100">
+              <div className="public-card rounded-2xl p-6 shadow-lg border border-amber-100 dark:border-amber-800/30">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-3 h-3 rounded-full bg-red-400" />
                   <div className="w-3 h-3 rounded-full bg-yellow-400" />
                   <div className="w-3 h-3 rounded-full bg-green-400" />
-                  <span className="text-xs text-gray-400 ml-2">build-book-export.md</span>
+                  <span className="text-xs public-text-subtle ml-2">build-book-export.md</span>
                 </div>
-                <div className="font-mono text-xs space-y-2 text-gray-600">
-                  <div className="text-violet-600"># Enterprise React Application</div>
-                  <div className="text-gray-400">---</div>
-                  <div><span className="text-emerald-600">## Tech Stack</span></div>
-                  <div className="pl-4 text-gray-500">- React 18 + TypeScript</div>
-                  <div className="pl-4 text-gray-500">- Tailwind CSS + shadcn/ui</div>
-                  <div className="pl-4 text-gray-500">- Supabase Backend</div>
-                  <div className="mt-2"><span className="text-emerald-600">## Standards</span></div>
-                  <div className="pl-4 text-gray-500">- WCAG 2.1 AA Compliance</div>
-                  <div className="pl-4 text-gray-500">- SOC2 Security Controls</div>
-                  <div className="mt-2"><span className="text-emerald-600">## AI Instructions</span></div>
-                  <div className="pl-4 text-gray-500">- Follow component patterns...</div>
+                <div className="font-mono text-xs space-y-2 public-text-muted">
+                  <div className="text-violet-600 dark:text-violet-400"># Enterprise React Application</div>
+                  <div className="public-text-subtle">---</div>
+                  <div><span className="text-emerald-600 dark:text-emerald-400">## Tech Stack</span></div>
+                  <div className="pl-4 public-text-subtle">- React 18 + TypeScript</div>
+                  <div className="pl-4 public-text-subtle">- Tailwind CSS + shadcn/ui</div>
+                  <div className="pl-4 public-text-subtle">- Supabase Backend</div>
+                  <div className="mt-2"><span className="text-emerald-600 dark:text-emerald-400">## Standards</span></div>
+                  <div className="pl-4 public-text-subtle">- WCAG 2.1 AA Compliance</div>
+                  <div className="pl-4 public-text-subtle">- SOC2 Security Controls</div>
+                  <div className="mt-2"><span className="text-emerald-600 dark:text-emerald-400">## AI Instructions</span></div>
+                  <div className="pl-4 public-text-subtle">- Follow component patterns...</div>
                   <div className="pl-4 text-amber-500 animate-pulse">|</div>
                 </div>
               </div>
@@ -793,26 +828,28 @@ export default function Landing() {
       </section>
 
       {/* Why Choose Section */}
-      <section className="py-24 px-6 bg-white">
+      <section className="py-24 px-6 public-bg-secondary">
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
           <div>
-            <h2 className="text-4xl font-medium tracking-tight mb-6 text-[hsl(240,30%,15%)]">Why Choose Pronghorn?</h2>
-            <p className="text-xl text-gray-600 leading-relaxed mb-10">
+            <h2 className="text-4xl font-medium tracking-tight mb-6 public-heading">Why Choose Pronghorn?</h2>
+            <p className="text-xl public-text-muted leading-relaxed mb-10">
               Built for teams who refuse to compromise on quality. Every feature designed to maintain traceability from
               concept to deployment.
             </p>
             <ul className="space-y-4">
-              {benefits.map((benefit, index) => <li key={index} className="flex items-center gap-4">
-                  <div className="w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Check className="w-4 h-4 text-emerald-600" />
+              {benefits.map((benefit, index) => (
+                <li key={index} className="flex items-center gap-4">
+                  <div className="w-6 h-6 public-chip-emerald rounded-full flex items-center justify-center flex-shrink-0">
+                    <Check className="w-4 h-4" />
                   </div>
-                  <span className="text-gray-700">{benefit}</span>
-                </li>)}
+                  <span className="public-text-muted">{benefit}</span>
+                </li>
+              ))}
             </ul>
           </div>
 
           {/* Stats Card */}
-          <div className="relative h-[450px] w-full rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-br from-[hsl(240,30%,15%)] to-[hsl(240,30%,20%)] p-10 flex flex-col justify-center">
+          <div className="relative h-[450px] w-full rounded-3xl overflow-hidden shadow-2xl public-gradient-dark p-10 flex flex-col justify-center">
             <div className="absolute top-0 right-0 w-64 h-64 bg-[hsl(350,80%,40%)]/20 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl" />
             <div className="relative z-10 space-y-6">
@@ -851,18 +888,18 @@ export default function Landing() {
       {/* CTA Section */}
       <section className="py-16 md:py-24 px-4 md:px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="bg-gradient-to-br from-rose-100/50 to-rose-50 rounded-3xl p-8 md:p-12 lg:p-16 relative overflow-hidden">
+          <div className="bg-gradient-to-br from-rose-100/50 dark:from-rose-900/20 to-rose-50 dark:to-rose-950/10 rounded-3xl p-8 md:p-12 lg:p-16 relative overflow-hidden">
             <div className="absolute -top-20 -right-20 w-64 h-64 bg-[hsl(350,80%,40%)]/10 rounded-full blur-3xl" />
             <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl" />
             <div className="relative z-10">
-              <h2 className="text-3xl md:text-4xl lg:text-5xl font-medium tracking-tight mb-6 text-[hsl(240,30%,15%)]">
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-medium tracking-tight mb-6 public-heading">
                 Ready to Build with AI Precision?
               </h2>
-              <p className="text-lg md:text-xl text-gray-600 mb-8 md:mb-10 max-w-2xl mx-auto">
+              <p className="text-lg md:text-xl public-text-muted mb-8 md:mb-10 max-w-2xl mx-auto">
                 Join teams who are shipping better software, faster, with complete traceability from requirements to
                 code.
               </p>
-              <Button size="lg" onClick={() => navigate("/dashboard")} className="group bg-[hsl(240,30%,15%)] text-white px-6 md:px-10 py-4 rounded-xl font-medium text-base md:text-lg hover:bg-[hsl(240,30%,20%)] hover:shadow-xl hover:shadow-[hsl(240,30%,15%)]/20 hover:-translate-y-1 transition-all duration-300 inline-flex items-center gap-2">
+              <Button size="lg" onClick={() => navigate("/dashboard")} className="group public-btn-primary px-6 md:px-10 py-4 rounded-xl font-medium text-base md:text-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300 inline-flex items-center gap-2">
                 <span>Create Your First Project</span>
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
@@ -874,32 +911,33 @@ export default function Landing() {
       </main>
 
       {/* Footer */}
-      <footer role="contentinfo" className="py-12 px-6 border-t border-gray-100">
+      <footer role="contentinfo" className="py-12 px-6 public-footer">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-3">
             <PronghornLogo className="h-8 w-8 rounded-lg" />
-            <span className="text-lg font-semibold tracking-tight text-[hsl(240,30%,15%)]">Pronghorn</span>
+            <span className="text-lg font-semibold tracking-tight public-heading">Pronghorn</span>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
             <nav aria-label="Footer navigation" className="flex gap-6 text-sm">
-              <Link to="/terms" className="text-gray-600 hover:text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">
+              <Link to="/terms" className="public-text-muted hover:public-brand underline decoration-1 underline-offset-2 hover:no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--public-brand)]">
                 Terms of Use
               </Link>
-              <Link to="/privacy" className="text-gray-600 hover:text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">
+              <Link to="/privacy" className="public-text-muted hover:public-brand underline decoration-1 underline-offset-2 hover:no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--public-brand)]">
                 Privacy Policy
               </Link>
-              <Link to="/license" className="text-gray-600 hover:text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">
+              <Link to="/license" className="public-text-muted hover:public-brand underline decoration-1 underline-offset-2 hover:no-underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--public-brand)]">
                 License
               </Link>
             </nav>
-            <div className="text-sm text-gray-600 text-center md:text-right">
-              <p>© 2025 Pronghorn. <Link to="/license" className="text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">MIT License</Link> Open Source by the Government of Alberta.</p>
-              <a href="https://pronghorn.red" target="_blank" rel="noopener noreferrer" className="text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">
+            <div className="text-sm public-text-muted text-center md:text-right">
+              <p>© 2025 Pronghorn. <Link to="/license" className="public-brand underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--public-brand)]">MIT License</Link> Open Source by the Government of Alberta.</p>
+              <a href="https://pronghorn.red" target="_blank" rel="noopener noreferrer" className="public-brand underline decoration-1 underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--public-brand)]">
                 pronghorn.red
               </a>
             </div>
           </div>
         </div>
       </footer>
-    </div>;
+    </div>
+  );
 }

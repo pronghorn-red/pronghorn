@@ -1,30 +1,32 @@
 import { Link } from "react-router-dom";
 import { PronghornLogo } from "@/components/layout/PronghornLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function Privacy() {
   return (
-    <div className="min-h-screen bg-[hsl(38,60%,97%)] text-[hsl(240,30%,15%)]">
+    <div className="public-page">
       {/* Skip Navigation */}
       <a 
         href="#main-content" 
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[hsl(240,30%,15%)] focus:text-white focus:rounded-lg"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 public-btn-primary focus:rounded-lg"
       >
         Skip to main content
       </a>
 
       {/* Navbar */}
       <header>
-        <nav role="navigation" aria-label="Main navigation" className="fixed w-full top-0 z-50 bg-[hsl(38,60%,97%)]/90 backdrop-blur-md border-b border-[hsl(30,20%,88%)]/50">
+        <nav role="navigation" aria-label="Main navigation" className="fixed w-full top-0 z-50 public-nav">
           <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
             <Link to="/" className="flex items-center gap-3">
               <PronghornLogo className="h-8 w-8 rounded-lg" />
-              <span className="text-xl font-semibold tracking-tight">Pronghorn</span>
-              <Link to="/terms" className="text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 text-sm font-medium hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(350,80%,40%)]">(Alpha)</Link>
+              <span className="text-xl font-semibold tracking-tight public-heading">Pronghorn</span>
+              <Link to="/terms" className="public-brand underline decoration-1 underline-offset-2 text-sm font-medium hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--public-brand)]">(Alpha)</Link>
             </Link>
-            <div className="flex items-center gap-6 text-sm">
-              <Link to="/terms" className="text-gray-600 hover:text-[hsl(350,80%,40%)] transition-colors underline decoration-1 underline-offset-2">
+            <div className="flex items-center gap-4 text-sm">
+              <Link to="/terms" className="public-text-muted hover:text-[var(--public-brand)] transition-colors underline decoration-1 underline-offset-2">
                 Terms of Use
               </Link>
+              <ThemeToggle />
             </div>
           </div>
         </nav>
@@ -32,21 +34,21 @@ export default function Privacy() {
 
       {/* Content */}
       <main role="main" id="main-content" className="pt-24 pb-16 px-6">
-        <article className="max-w-4xl mx-auto prose prose-gray prose-headings:text-[hsl(240,30%,15%)] prose-a:text-[hsl(350,80%,40%)] prose-a:underline prose-a:decoration-1 prose-a:underline-offset-2 hover:prose-a:no-underline">
-          <p className="text-sm text-gray-600 uppercase tracking-wider mb-2">Your Data Matters</p>
-          <h1 className="text-4xl font-medium tracking-tight mb-4">Privacy Policy</h1>
-          <p className="text-lg text-gray-600 mb-8">
+        <article className="max-w-4xl mx-auto prose prose-gray public-prose">
+          <p className="text-sm public-text-muted uppercase tracking-wider mb-2">Your Data Matters</p>
+          <h1 className="text-4xl font-medium tracking-tight mb-4 public-heading">Privacy Policy</h1>
+          <p className="text-lg public-text-muted mb-8">
             We believe in transparency and protecting your privacy. Learn how we collect, use, and safeguard your information.
           </p>
-          <p className="text-sm text-gray-600">Last updated: December 10, 2025</p>
+          <p className="text-sm public-text-muted">Last updated: December 10, 2025</p>
 
-          <h2>Our Commitment</h2>
+          <h2 className="public-heading">Our Commitment</h2>
           <p>
             The Government of Alberta, Ministry of Technology and Innovation is committed to ensuring your privacy while 
             you use the Pronghorn platform.
           </p>
 
-          <h2>Standard Information Collected by Web Server</h2>
+          <h2 className="public-heading">Standard Information Collected by Web Server</h2>
           <p>
             When you access this service, our web server automatically collects a limited amount of standard information 
             essential to the operation and evaluation of the service. This includes the page from which you arrived, the 
@@ -58,7 +60,7 @@ export default function Privacy() {
             bodies or individuals.
           </p>
 
-          <h2>Collection of Personal Information</h2>
+          <h2 className="public-heading">Collection of Personal Information</h2>
           <p>
             Personal information is collected directly from you when you voluntarily register for an account or interact 
             with the service. For example, when creating an account, you will be asked to provide your name and email address.
@@ -79,7 +81,7 @@ export default function Privacy() {
             <li>
               <strong>(c) Contact Information:</strong> If you have questions about the collection of your personal 
               information, please contact us at{" "}
-              <a href="mailto:ti.pronghorn@gov.ab.ca">ti.pronghorn@gov.ab.ca</a>.
+              <a href="mailto:ti.pronghorn@gov.ab.ca" className="public-link">ti.pronghorn@gov.ab.ca</a>.
             </li>
             <li>
               <strong>(d) Automated System Use:</strong> The personal information, along with any content you create 
@@ -93,7 +95,7 @@ export default function Privacy() {
             in transit between your computer and ours.
           </p>
 
-          <h2>Cookies</h2>
+          <h2 className="public-heading">Cookies</h2>
           <p>
             When you visit a website it may deposit a piece of data, called a web cookie, with the temporary web browser 
             files on your computer.
@@ -109,47 +111,47 @@ export default function Privacy() {
             knowledge, as you browse the site.
           </p>
 
-          <h3>Cookies from Third Party Applications</h3>
+          <h3 className="public-heading">Cookies from Third Party Applications</h3>
           <p>
             This site uses a number of third party products. Read their privacy statements to find out how they track 
             and use your information:
           </p>
           <ul>
             <li>
-              <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer">
+              <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer" className="public-link">
                 Supabase Privacy Policy
               </a>
             </li>
             <li>
-              <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">
+              <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="public-link">
                 Google Privacy Policy
               </a>
             </li>
             <li>
-              <a href="https://privacy.microsoft.com/" target="_blank" rel="noopener noreferrer">
+              <a href="https://privacy.microsoft.com/" target="_blank" rel="noopener noreferrer" className="public-link">
                 Microsoft Privacy Policy
               </a>
             </li>
             <li>
-              <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">
+              <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer" className="public-link">
                 GitHub Privacy Statement
               </a>
             </li>
             <li>
-              <a href="https://render.com/privacy" target="_blank" rel="noopener noreferrer">
+              <a href="https://render.com/privacy" target="_blank" rel="noopener noreferrer" className="public-link">
                 Render.com Privacy Policy
               </a>
             </li>
           </ul>
 
-          <h2>Security</h2>
+          <h2 className="public-heading">Security</h2>
           <p>
             The Government of Alberta's computer system uses software to monitor unauthorized attempts to upload or change 
             information, or damage the service we provide. No attempt is made to identify users or their usage patterns 
             except during law enforcement investigations.
           </p>
 
-          <h2>Data Retention and Deletion</h2>
+          <h2 className="public-heading">Data Retention and Deletion</h2>
           <p>
             In accordance with Section 6(b) of the Protection of Privacy Act (POPA), we will retain your personal 
             information for the minimum period necessary to fulfill the purposes outlined in this Privacy Statement, and 
@@ -159,36 +161,36 @@ export default function Privacy() {
           </p>
           <p>
             You may request the deletion of your account and associated data by contacting us at{" "}
-            <a href="mailto:ti.pronghorn@gov.ab.ca">ti.pronghorn@gov.ab.ca</a>. We will evaluate such requests in alignment with
+            <a href="mailto:ti.pronghorn@gov.ab.ca" className="public-link">ti.pronghorn@gov.ab.ca</a>. We will evaluate such requests in alignment with
             POPA requirements and the Records Retention and Disposition Schedule, taking reasonable steps to delete your
             personal information from our records where permissible, except where retention is required for legal purposes 
             under Alberta law.
           </p>
 
-          <h2>Your Rights</h2>
-          <h3>Correction of Personal Information</h3>
+          <h2 className="public-heading">Your Rights</h2>
+          <h3 className="public-heading">Correction of Personal Information</h3>
           <p>
             The Protection of Privacy Act provides the right to request correction of your personal information. Please 
-            contact us at <a href="mailto:ti.pronghorn@gov.ab.ca">ti.pronghorn@gov.ab.ca</a> and we will redirect your request
+            contact us at <a href="mailto:ti.pronghorn@gov.ab.ca" className="public-link">ti.pronghorn@gov.ab.ca</a> and we will redirect your request
             to the office authorized to receive such a request.
           </p>
-          <h3>Access to Information</h3>
+          <h3 className="public-heading">Access to Information</h3>
           <p>
             The Access to Information Act provides the right of access to information, including your own personal 
             information. The ATI request form is available through the{" "}
-            <a href="https://www.alberta.ca/eservices.aspx" target="_blank" rel="noopener noreferrer">
+            <a href="https://www.alberta.ca/eservices.aspx" target="_blank" rel="noopener noreferrer" className="public-link">
               eServices page
             </a>.
           </p>
 
-          <h2>Contact Information</h2>
+          <h2 className="public-heading">Contact Information</h2>
           <p>
             If you have any questions about this Privacy Statement or the collection, use, or disclosure of your personal 
             information, please contact us at:
           </p>
           <p>
             <strong>Email:</strong>{" "}
-            <a href="mailto:ti.pronghorn@gov.ab.ca">ti.pronghorn@gov.ab.ca</a>
+            <a href="mailto:ti.pronghorn@gov.ab.ca" className="public-link">ti.pronghorn@gov.ab.ca</a>
           </p>
           <p>
             <strong>Organization:</strong> Government of Alberta, Ministry of Technology and Innovation
@@ -197,18 +199,18 @@ export default function Privacy() {
       </main>
 
       {/* Footer */}
-      <footer role="contentinfo" className="py-8 px-6 border-t border-gray-100">
+      <footer role="contentinfo" className="py-8 px-6 public-footer">
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <Link to="/" className="flex items-center gap-3">
             <PronghornLogo className="h-6 w-6 rounded-lg" />
-            <span className="text-sm font-semibold tracking-tight text-[hsl(240,30%,15%)]">Pronghorn</span>
+            <span className="text-sm font-semibold tracking-tight public-heading">Pronghorn</span>
           </Link>
-          <nav role="navigation" aria-label="Footer navigation" className="flex items-center gap-6 text-sm text-gray-600">
-            <Link to="/terms" className="hover:text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 transition-colors">Terms of Use</Link>
-            <Link to="/privacy" className="hover:text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 transition-colors">Privacy Policy</Link>
-            <Link to="/license" className="hover:text-[hsl(350,80%,40%)] underline decoration-1 underline-offset-2 transition-colors">License</Link>
+          <nav role="navigation" aria-label="Footer navigation" className="flex items-center gap-6 text-sm public-text-muted">
+            <Link to="/terms" className="hover:text-[var(--public-brand)] underline decoration-1 underline-offset-2 transition-colors">Terms of Use</Link>
+            <Link to="/privacy" className="hover:text-[var(--public-brand)] underline decoration-1 underline-offset-2 transition-colors">Privacy Policy</Link>
+            <Link to="/license" className="hover:text-[var(--public-brand)] underline decoration-1 underline-offset-2 transition-colors">License</Link>
           </nav>
-          <p className="text-sm text-gray-600">© 2025 Government of Alberta</p>
+          <p className="text-sm public-text-muted">© 2025 Government of Alberta</p>
         </div>
       </footer>
     </div>

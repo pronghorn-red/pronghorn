@@ -9,6 +9,7 @@ import { AdminProvider } from "@/contexts/AdminContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import App from "./App";
 import "./index.css";
+import "./styles/public.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
