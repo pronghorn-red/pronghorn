@@ -122,3 +122,9 @@ verify_jwt = false
 
 [functions.enhance-image]
 verify_jwt = false
+
+[functions.delete-project]
+verify_jwt = false
+
+[functions.log-activity]
+verify_jwt = false

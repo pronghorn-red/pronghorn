@@ -3114,7 +3114,7 @@ export type Database = {
         Returns: undefined
       }
       delete_project_with_token: {
-        Args: { p_project_id: string; p_token: string }
+        Args: { p_project_id: string; p_token?: string }
         Returns: undefined
       }
       delete_repo_pat_with_token: {
@@ -3945,6 +3945,19 @@ export type Database = {
       get_project_category_with_token: {
         Args: { p_category: string; p_project_id: string; p_token?: string }
         Returns: Json
+      }
+      get_project_deletion_counts: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: {
+          cloud_databases: number
+          cloud_deployments: number
+          external_connections: number
+          github_repos: number
+          total_artifacts: number
+          total_canvas_nodes: number
+          total_chat_sessions: number
+          total_requirements: number
+        }[]
       }
       get_project_elements_with_token: {
         Args: { p_elements: Json; p_project_id: string; p_token?: string }
