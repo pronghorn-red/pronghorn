@@ -786,40 +786,45 @@ async function getEventsRenderService(
       
       if (deploys.length > 0) {
         latestDeploy = deploys[0];
-        
-        // Fetch build logs for the latest deploy (especially useful for failed builds)
-        if (latestDeploy.id) {
-          try {
-            console.log('[render-service] Fetching build logs for deploy:', latestDeploy.id);
-            const logsResponse = await fetch(
-              `${RENDER_API_URL}/deploys/${latestDeploy.id}/logs`,
-              { method: 'GET', headers }
-            );
-            
-            if (logsResponse.ok) {
-              const logsData = await logsResponse.json();
-              if (Array.isArray(logsData) && logsData.length > 0) {
-                // Extract log messages - Render returns array of log objects
-                buildLogs = logsData
-                  .map((log: any) => {
-                    const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '';
-                    const message = log.message || log.text || '';
-                    return timestamp ? `${timestamp} ${message}` : message;
-                  })
-                  .join('\n');
-                console.log('[render-service] Got build logs, lines:', logsData.length);
-              }
-            } else {
-              console.log('[render-service] No logs available yet or failed to fetch');
-            }
-          } catch (logError) {
-            console.error('[render-service] Error fetching build logs:', logError);
-          }
-        }
       }
     }
   } catch (e) {
     console.error('[render-service] Error getting deploys:', e);
+  }
+
+  // Fetch build logs using the /logs endpoint with RENDER_ID (ownerId)
+  const ownerId = Deno.env.get('RENDER_ID');
+  if (ownerId && deployment.render_service_id) {
+    try {
+      console.log('[render-service] Fetching build logs using /logs endpoint for service:', deployment.render_service_id);
+      const logsResponse = await fetch(
+        `${RENDER_API_URL}/logs?ownerId=${ownerId}&resource[]=${deployment.render_service_id}&type[]=build&limit=100`,
+        { method: 'GET', headers }
+      );
+      
+      if (logsResponse.ok) {
+        const logsData = await logsResponse.json();
+        console.log('[render-service] Logs API response items:', logsData.length);
+        if (Array.isArray(logsData) && logsData.length > 0) {
+          // Extract log messages - Render returns array of log objects
+          buildLogs = logsData
+            .map((log: any) => {
+              const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '';
+              const message = log.message || log.text || '';
+              return timestamp ? `${timestamp} ${message}` : message;
+            })
+            .join('\n');
+          console.log('[render-service] Got build logs, lines:', logsData.length);
+        }
+      } else {
+        const errorText = await logsResponse.text();
+        console.log('[render-service] Failed to fetch logs, status:', logsResponse.status, 'error:', errorText);
+      }
+    } catch (logError) {
+      console.error('[render-service] Error fetching build logs:', logError);
+    }
+  } else {
+    console.log('[render-service] Missing RENDER_ID or render_service_id, cannot fetch build logs');
   }
 
   return { events, deploys, latestDeploy, buildLogs };
