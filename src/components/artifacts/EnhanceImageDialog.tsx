@@ -14,7 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Wand2, Loader2, Download, RefreshCw, Sparkles, Eraser, Palette, Layers, Type, Grid2x2, Grid3x3 } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Wand2, Loader2, Download, RefreshCw, Sparkles, Eraser, Palette, Layers, Type, Grid2x2, Grid3x3, Square, RectangleHorizontal, RectangleVertical } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +40,14 @@ interface EnhanceImageDialogProps {
 }
 
 type OutputMode = 'add' | 'replace';
+type AspectRatio = '1:1' | '16:9' | '9:16' | '4:5';
+
+const ASPECT_RATIO_DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
+  '1:1': { width: 1024, height: 1024 },
+  '16:9': { width: 1344, height: 768 },
+  '9:16': { width: 768, height: 1344 },
+  '4:5': { width: 1024, height: 1280 },
+};
 
 const PRESET_PROMPTS = [
   { label: "Enhance Quality", icon: Sparkles, prompt: "Enhance the image quality, improve clarity, and make colors more vibrant" },
@@ -69,6 +78,7 @@ export function EnhanceImageDialog({
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [compactView, setCompactView] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
 
   // Filter only artifacts with images
   const imageArtifacts = artifacts.filter(a => !!a.image_url);
@@ -82,8 +92,21 @@ export function EnhanceImageDialog({
       setGeneratedImage(null);
       setIsProcessing(false);
       setIsSaving(false);
+      setAspectRatio('1:1');
     }
   }, [open]);
+
+  // Generate a transparent PNG canvas with specified dimensions
+  const generateTransparentCanvas = (ratio: AspectRatio): { base64: string; mimeType: string } => {
+    const { width, height } = ASPECT_RATIO_DIMENSIONS[ratio];
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    // Leave canvas transparent - don't fill anything
+    const dataUrl = canvas.toDataURL("image/png");
+    const base64 = dataUrl.split(",")[1];
+    return { base64, mimeType: "image/png" };
+  };
 
   const handleSelectAll = () => {
     if (selectedArtifacts.size === imageArtifacts.length) {
@@ -152,6 +175,14 @@ export function EnhanceImageDialog({
         })
       );
 
+      // When creating (no images selected), add transparent canvas for aspect ratio control
+      let finalPrompt = prompt.trim();
+      if (selectedImages.length === 0) {
+        const transparentCanvas = generateTransparentCanvas(aspectRatio);
+        images.push(transparentCanvas);
+        finalPrompt = `${prompt.trim()}. Use the last image as the reference for the final aspect ratio and dimensions.`;
+      }
+
       console.log(`Sending ${images.length} images to enhance-image function`);
 
       const response = await fetch(
@@ -164,7 +195,7 @@ export function EnhanceImageDialog({
           },
           body: JSON.stringify({
             images,
-            prompt: prompt.trim(),
+            prompt: finalPrompt,
           }),
         }
       );
@@ -320,37 +351,66 @@ export function EnhanceImageDialog({
                   </div>
                 ) : (
                   <ScrollArea className="h-[300px] border rounded-md p-2">
-                    <div className={`grid gap-2 ${compactView ? 'grid-cols-3 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3'}`}>
-                      {imageArtifacts.map((artifact) => (
-                        <div
-                          key={artifact.id}
-                          onClick={() => !isProcessing && handleToggleArtifact(artifact.id)}
-                          className={`relative cursor-pointer rounded-md overflow-hidden border-2 transition-all ${
-                            selectedArtifacts.has(artifact.id)
-                              ? "border-primary ring-2 ring-primary/20"
-                              : "border-transparent hover:border-muted-foreground/30"
-                          }`}
-                        >
-                          <img
-                            src={artifact.image_url!}
-                            alt={getArtifactTitle(artifact)}
-                            className={`w-full object-cover ${compactView ? 'h-16' : ''}`}
-                          />
-                          <div className="absolute top-1 left-1">
-                            <Checkbox
-                              checked={selectedArtifacts.has(artifact.id)}
-                              disabled={isProcessing}
-                              className="bg-background/80"
+                    {compactView ? (
+                      /* Masonry layout for compact view */
+                      <div className="columns-2 sm:columns-4 md:columns-6 gap-2">
+                        {imageArtifacts.map((artifact) => (
+                          <div
+                            key={artifact.id}
+                            onClick={() => !isProcessing && handleToggleArtifact(artifact.id)}
+                            className={`relative cursor-pointer rounded-md overflow-hidden border-2 transition-all mb-2 break-inside-avoid ${
+                              selectedArtifacts.has(artifact.id)
+                                ? "border-primary ring-2 ring-primary/20"
+                                : "border-transparent hover:border-muted-foreground/30"
+                            }`}
+                          >
+                            <img
+                              src={artifact.image_url!}
+                              alt={getArtifactTitle(artifact)}
+                              className="w-full h-auto"
                             />
+                            <div className="absolute top-1 left-1">
+                              <Checkbox
+                                checked={selectedArtifacts.has(artifact.id)}
+                                disabled={isProcessing}
+                                className="bg-background/80"
+                              />
+                            </div>
                           </div>
-                          {!compactView && (
+                        ))}
+                      </div>
+                    ) : (
+                      /* Grid layout for large view */
+                      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
+                        {imageArtifacts.map((artifact) => (
+                          <div
+                            key={artifact.id}
+                            onClick={() => !isProcessing && handleToggleArtifact(artifact.id)}
+                            className={`relative cursor-pointer rounded-md overflow-hidden border-2 transition-all ${
+                              selectedArtifacts.has(artifact.id)
+                                ? "border-primary ring-2 ring-primary/20"
+                                : "border-transparent hover:border-muted-foreground/30"
+                            }`}
+                          >
+                            <img
+                              src={artifact.image_url!}
+                              alt={getArtifactTitle(artifact)}
+                              className="w-full h-auto"
+                            />
+                            <div className="absolute top-1 left-1">
+                              <Checkbox
+                                checked={selectedArtifacts.has(artifact.id)}
+                                disabled={isProcessing}
+                                className="bg-background/80"
+                              />
+                            </div>
                             <div className="absolute bottom-0 left-0 right-0 bg-background/80 px-1 py-0.5">
                               <p className="text-xs truncate">{getArtifactTitle(artifact)}</p>
                             </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </ScrollArea>
                 )}
               </div>
@@ -374,6 +434,36 @@ export function EnhanceImageDialog({
                   ))}
                 </div>
               </div>
+
+              {/* Aspect Ratio - Only show when creating (no images selected) */}
+              {isCreating && (
+                <div className="space-y-2">
+                  <Label>Aspect Ratio</Label>
+                  <ToggleGroup
+                    type="single"
+                    value={aspectRatio}
+                    onValueChange={(value) => value && setAspectRatio(value as AspectRatio)}
+                    className="justify-start"
+                  >
+                    <ToggleGroupItem value="1:1" aria-label="Square" className="gap-1">
+                      <Square className="h-4 w-4" />
+                      <span className="text-xs">Square</span>
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="16:9" aria-label="Landscape" className="gap-1">
+                      <RectangleHorizontal className="h-4 w-4" />
+                      <span className="text-xs">Landscape</span>
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="9:16" aria-label="Portrait" className="gap-1">
+                      <RectangleVertical className="h-4 w-4" />
+                      <span className="text-xs">Portrait</span>
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="4:5" aria-label="Vertical" className="gap-1">
+                      <RectangleVertical className="h-4 w-4" />
+                      <span className="text-xs">4:5</span>
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+              )}
 
               {/* Prompt Input */}
               <div className="space-y-2">
