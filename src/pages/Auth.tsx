@@ -595,7 +595,7 @@ export default function Auth() {
           </Tabs>
 
           <div className="mt-6 text-center">
-            <Button variant="link" onClick={() => navigate("/")} className="text-sm">
+            <Button variant="link" onClick={() => navigate("/dashboard")} className="text-sm">
               Continue without signing in
             </Button>
           </div>
