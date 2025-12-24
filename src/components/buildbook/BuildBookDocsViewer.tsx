@@ -157,72 +157,72 @@ export function BuildBookDocsViewer({ buildBook, standards, techStacks }: BuildB
         }
       }
 
-      // Load tech stacks grouped by parent category
+      // Load tech stacks - fetch ALL and build hierarchy like TechStackTreeManager
       if (techStacks.length > 0) {
         const techStackIds = techStacks.map(t => t.tech_stack_id);
+        const selectedIdsSet = new Set(techStackIds);
         
-        // Get the selected tech stacks
-        const { data: selectedTechStacks } = await supabase
+        // Fetch ALL tech stacks to properly build hierarchy
+        const { data: allTechStacks } = await supabase
           .from("tech_stacks")
           .select("*")
-          .in("id", techStackIds)
           .order("order_index");
 
-        if (selectedTechStacks && selectedTechStacks.length > 0) {
-          // Get unique parent IDs from selected tech stacks
-          const parentIds = [...new Set(selectedTechStacks.map(ts => ts.parent_id).filter(Boolean))] as string[];
+        if (allTechStacks && allTechStacks.length > 0) {
+          // Find root tech stacks (those with no parent or whose parent is not in the dataset)
+          const allIds = new Set(allTechStacks.map(ts => ts.id));
+          const rootTechStacks = allTechStacks.filter(ts => !ts.parent_id || !allIds.has(ts.parent_id));
           
-          // Load parent categories
-          let parentCategories: TechStack[] = [];
-          if (parentIds.length > 0) {
-            const { data: parents } = await supabase
-              .from("tech_stacks")
-              .select("*")
-              .in("id", parentIds)
-              .order("order_index");
-            parentCategories = parents || [];
-          }
-
-          // Group tech stacks by parent
+          // Recursively collect all descendant IDs for each root
+          const collectDescendants = (parentId: string): Set<string> => {
+            const descendants = new Set<string>();
+            allTechStacks
+              .filter((item) => item.parent_id === parentId)
+              .forEach((item) => {
+                descendants.add(item.id);
+                collectDescendants(item.id).forEach(id => descendants.add(id));
+              });
+            return descendants;
+          };
+          
+          // Build hierarchy for each selected root tech stack
           const categoriesMap = new Map<string, TechStackCategory>();
           
-          // Add parent categories
-          for (const parent of parentCategories) {
-            categoriesMap.set(parent.id, {
-              id: parent.id,
-              name: parent.name,
-              description: parent.description,
-              long_description: parent.long_description,
-              items: [],
-            });
-          }
-
-          // Add child items to their parent categories, or create "uncategorized" for orphans
-          for (const ts of selectedTechStacks) {
-            if (ts.parent_id && categoriesMap.has(ts.parent_id)) {
-              categoriesMap.get(ts.parent_id)!.items.push({
-                id: ts.id,
-                name: ts.name,
-                description: ts.description,
-                long_description: ts.long_description,
-                type: ts.type,
-                version: ts.version,
-                version_constraint: ts.version_constraint,
-                itemType: "tech_stack",
-                children: [],
+          for (const root of rootTechStacks) {
+            // Check if this root or any of its descendants are selected
+            const descendantIds = collectDescendants(root.id);
+            const hasSelectedDescendant = selectedIdsSet.has(root.id) || 
+              [...descendantIds].some(id => selectedIdsSet.has(id));
+            
+            if (hasSelectedDescendant) {
+              // Get all descendants of this root
+              const descendants = allTechStacks.filter(ts => descendantIds.has(ts.id));
+              
+              // Build hierarchy for descendants
+              const buildTechStackHierarchy = (items: TechStack[], parentId: string): DocsItem[] => {
+                return items
+                  .filter(item => item.parent_id === parentId)
+                  .map(item => ({
+                    id: item.id,
+                    name: item.name,
+                    description: item.description,
+                    long_description: item.long_description,
+                    type: item.type,
+                    version: item.version,
+                    version_constraint: item.version_constraint,
+                    itemType: "tech_stack" as const,
+                    children: buildTechStackHierarchy(items, item.id),
+                  }))
+                  .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+              };
+              
+              categoriesMap.set(root.id, {
+                id: root.id,
+                name: root.name,
+                description: root.description,
+                long_description: root.long_description,
+                items: buildTechStackHierarchy(descendants, root.id),
               });
-            } else if (!ts.parent_id || !parentIds.includes(ts.parent_id)) {
-              // This is a root-level item (no parent in our selection)
-              // Treat it as its own category if it has no parent
-              if (!ts.parent_id) {
-                categoriesMap.set(ts.id, {
-                  id: ts.id,
-                  name: ts.name,
-                  description: ts.description,
-                  long_description: ts.long_description,
-                  items: [], // It's a root category with no children in selection
-                });
-              }
             }
           }
           
