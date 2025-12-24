@@ -77,7 +77,7 @@ export default defineConfig(({ mode }) => ({
     }),
     VitePWA({
       registerType: "prompt",
-      includeAssets: ["favicon.ico", "pronghorn-logo.jpeg", "apple-touch-icon.png"],
+      includeAssets: ["favicon.ico", "apple-touch-icon.png", "pwa-192x192.png", "pwa-512x512.png"],
       manifest: {
         name: "Pronghorn - AI-Powered Enterprise Application Platform",
         short_name: "Pronghorn",
@@ -88,17 +88,27 @@ export default defineConfig(({ mode }) => ({
         orientation: "portrait-primary",
         start_url: "/",
         scope: "/",
+        id: "/",
         categories: ["productivity", "developer tools", "business"],
+        prefer_related_applications: false,
         icons: [
           {
             src: "/pwa-192x192.png",
             sizes: "192x192",
             type: "image/png",
+            purpose: "any",
           },
           {
             src: "/pwa-512x512.png",
             sizes: "512x512",
             type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/apple-touch-icon.png",
+            sizes: "180x180",
+            type: "image/png",
+            purpose: "apple touch icon",
           },
           {
             src: "/pwa-512x512.png",
@@ -106,6 +116,22 @@ export default defineConfig(({ mode }) => ({
             type: "image/png",
             purpose: "maskable",
           },
+        ],
+        screenshots: [
+          {
+            src: "/pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            form_factor: "wide",
+            label: "Pronghorn Dashboard"
+          },
+          {
+            src: "/pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            form_factor: "narrow",
+            label: "Pronghorn Mobile"
+          }
         ],
       },
       workbox: {
