@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     if (deleteGitHubRepos) {
       console.log('[delete-project] Deleting GitHub repositories...');
       try {
-        const { data: repos, error: reposError } = await supabase.rpc('get_repos_with_token', {
+        const { data: repos, error: reposError } = await supabase.rpc('get_project_repos_with_token', {
           p_project_id: projectId,
           p_token: shareToken || null,
         });
@@ -82,25 +82,42 @@ Deno.serve(async (req) => {
 
         for (const repo of repos || []) {
           try {
-            // Get PAT for this repo (need admin to read PATs)
-            const { data: patData, error: patError } = await supabaseAdmin
-              .from('repo_pats')
-              .select('pat')
-              .eq('repo_id', repo.id)
-              .maybeSingle();
+            let pat: string | null = null;
 
-            if (patError || !patData?.pat) {
-              console.log(`[delete-project] No PAT found for repo ${repo.organization}/${repo.repo}, skipping GitHub deletion`);
-              errors.push(`No PAT for ${repo.organization}/${repo.repo}`);
-              continue;
+            // For Pronghorn-managed repos (is_default=true), use system GITHUB_PAT
+            if (repo.is_default) {
+              pat = Deno.env.get('GITHUB_PAT') || null;
+              if (!pat) {
+                console.log(`[delete-project] No system GITHUB_PAT configured for default repo ${repo.organization}/${repo.repo}`);
+                errors.push(`No system GITHUB_PAT for ${repo.organization}/${repo.repo}`);
+                continue;
+              }
+              console.log(`[delete-project] Using system GITHUB_PAT for default repo: ${repo.organization}/${repo.repo}`);
+            } else {
+              // For user-linked repos, get PAT from repo_pats table
+              const { data: patData, error: patError } = await supabaseAdmin
+                .from('repo_pats')
+                .select('pat')
+                .eq('repo_id', repo.id)
+                .maybeSingle();
+
+              if (patError || !patData?.pat) {
+                console.log(`[delete-project] No PAT found for linked repo ${repo.organization}/${repo.repo}, skipping GitHub deletion`);
+                errors.push(`No PAT for ${repo.organization}/${repo.repo}`);
+                continue;
+              }
+              pat = patData.pat;
+              console.log(`[delete-project] Using user PAT for linked repo: ${repo.organization}/${repo.repo}`);
             }
 
             // Delete from GitHub
             const githubUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}`;
+            console.log(`[delete-project] Attempting to delete GitHub repo: ${githubUrl}`);
+            
             const response = await fetch(githubUrl, {
               method: 'DELETE',
               headers: {
-                'Authorization': `Bearer ${patData.pat}`,
+                'Authorization': `Bearer ${pat}`,
                 'Accept': 'application/vnd.github+json',
                 'X-GitHub-Api-Version': '2022-11-28',
               },
@@ -108,14 +125,15 @@ Deno.serve(async (req) => {
 
             if (response.ok || response.status === 404) {
               deletedCount++;
-              console.log(`[delete-project] Deleted GitHub repo: ${repo.organization}/${repo.repo}`);
+              console.log(`[delete-project] Successfully deleted GitHub repo: ${repo.organization}/${repo.repo}`);
             } else {
               const errorText = await response.text();
-              console.error(`[delete-project] Failed to delete ${repo.organization}/${repo.repo}:`, errorText);
+              console.error(`[delete-project] Failed to delete ${repo.organization}/${repo.repo}: ${response.status} - ${errorText}`);
               errors.push(`Failed to delete ${repo.organization}/${repo.repo}: ${response.status}`);
             }
           } catch (repoError) {
-            const msg = repoError instanceof Error ? repoError.message : String(repoError);
+            console.error(`[delete-project] Exception deleting ${repo.organization}/${repo.repo}:`, repoError);
+            const msg = repoError instanceof Error ? repoError.message : JSON.stringify(repoError);
             errors.push(`Error deleting ${repo.organization}/${repo.repo}: ${msg}`);
           }
         }
