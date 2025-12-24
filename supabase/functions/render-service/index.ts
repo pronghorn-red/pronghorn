@@ -808,11 +808,13 @@ async function getEventsRenderService(
         const logsArray = logsData.logs || [];
         console.log('[render-service] Logs API response items:', logsArray.length);
         if (Array.isArray(logsArray) && logsArray.length > 0) {
+          // Strip ANSI escape codes from log messages
+          const stripAnsi = (str: string) => str.replace(/\x1B\[[0-9;]*[a-zA-Z]|\(B\[m/g, '');
           // Extract log messages from the logs array
           buildLogs = logsArray
             .map((log: any) => {
               const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '';
-              const message = log.message || log.text || '';
+              const message = stripAnsi(log.message || log.text || '');
               return timestamp ? `${timestamp} ${message}` : message;
             })
             .join('\n');
