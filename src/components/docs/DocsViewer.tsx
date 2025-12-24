@@ -479,7 +479,7 @@ function NavItem({
   };
 
   return (
-    <div>
+    <div style={{ marginLeft: `${level * 16}px` }}>
       <button
         onClick={() => {
           onSelect(item);
@@ -490,16 +490,16 @@ function NavItem({
             ? "bg-primary/10 text-primary font-medium"
             : "hover:bg-muted text-foreground"
         }`}
-        style={{ paddingLeft: `${12 + level * 12}px` }}
       >
-        {hasChildren && (
+        {hasChildren ? (
           <ChevronRight
             className={`h-3.5 w-3.5 shrink-0 transition-transform ${
               isExpanded ? "rotate-90" : ""
             }`}
           />
+        ) : (
+          <span className="w-3.5 shrink-0" />
         )}
-        {!hasChildren && <span className="w-3.5" />}
         {getIcon()}
         <span className="truncate">{displayName}</span>
       </button>
@@ -560,7 +560,7 @@ function MobileNavItem({
   };
 
   return (
-    <div>
+    <div style={{ marginLeft: `${level * 16}px` }}>
       <button
         onClick={() => {
           onSelect(item);
@@ -571,16 +571,16 @@ function MobileNavItem({
             ? "bg-primary/10 text-primary font-medium"
             : "hover:bg-muted text-foreground"
         }`}
-        style={{ paddingLeft: `${12 + level * 12}px` }}
       >
-        {hasChildren && (
+        {hasChildren ? (
           <ChevronRight
             className={`h-4 w-4 shrink-0 transition-transform ${
               isExpanded ? "rotate-90" : ""
             }`}
           />
+        ) : (
+          <span className="w-4 shrink-0" />
         )}
-        {!hasChildren && <span className="w-4" />}
         {getIcon()}
         <span className="truncate">{displayName}</span>
       </button>
