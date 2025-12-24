@@ -1,13 +1,15 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { TechStackTreeManager } from "./TechStackTreeManager";
 import { DocsViewer } from "@/components/docs/DocsViewer";
 import { Edit, Trash2, Check, X, BookOpen } from "lucide-react";
 import { useAdmin } from "@/contexts/AdminContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TechStackCardProps {
   techStack: any;
@@ -23,6 +25,19 @@ export function TechStackCard({ techStack, onDelete, onUpdate, onRefresh }: Tech
   const [name, setName] = useState(techStack.name);
   const [description, setDescription] = useState(techStack.description || "");
   const [longDescription, setLongDescription] = useState(techStack.long_description || "");
+  const [childCount, setChildCount] = useState(0);
+
+  useEffect(() => {
+    // Count direct children for the accordion trigger
+    const countChildren = async () => {
+      const { count } = await supabase
+        .from("tech_stacks")
+        .select("*", { count: "exact", head: true })
+        .eq("parent_id", techStack.id);
+      setChildCount(count || 0);
+    };
+    countChildren();
+  }, [techStack.id]);
 
   const handleSave = () => {
     onUpdate(techStack.id, name, description, longDescription);
@@ -106,12 +121,20 @@ export function TechStackCard({ techStack, onDelete, onUpdate, onRefresh }: Tech
           </>
         )}
       </CardHeader>
-      <CardContent className="p-4 md:p-6 pt-0">
-        <TechStackTreeManager
-          techStackId={techStack.id}
-          onRefresh={onRefresh}
-        />
-      </CardContent>
+
+      <Accordion type="single" collapsible className="px-4 md:px-6 pb-4 md:pb-6">
+        <AccordionItem value="items" className="border-none">
+          <AccordionTrigger className="py-2 text-sm text-muted-foreground hover:no-underline">
+            {childCount} item{childCount !== 1 ? 's' : ''}
+          </AccordionTrigger>
+          <AccordionContent className="pt-2">
+            <TechStackTreeManager
+              techStackId={techStack.id}
+              onRefresh={onRefresh}
+            />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       <DocsViewer
         open={showDocs}

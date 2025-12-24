@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { StandardsTreeManager } from "./StandardsTreeManager";
 import { DocsViewer } from "@/components/docs/DocsViewer";
 import { Standard } from "./StandardsTree";
@@ -108,13 +109,21 @@ export function CategoryCard({ category, standards, onDelete, onUpdate, onRefres
           </>
         )}
       </CardHeader>
-      <CardContent className="p-4 md:p-6 pt-0">
-        <StandardsTreeManager
-          standards={standards}
-          categoryId={category.id}
-          onRefresh={onRefresh}
-        />
-      </CardContent>
+
+      <Accordion type="single" collapsible className="px-4 md:px-6 pb-4 md:pb-6">
+        <AccordionItem value="standards" className="border-none">
+          <AccordionTrigger className="py-2 text-sm text-muted-foreground hover:no-underline">
+            {standards.length} standard{standards.length !== 1 ? 's' : ''}
+          </AccordionTrigger>
+          <AccordionContent className="pt-2">
+            <StandardsTreeManager
+              standards={standards}
+              categoryId={category.id}
+              onRefresh={onRefresh}
+            />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       <DocsViewer
         open={showDocs}
