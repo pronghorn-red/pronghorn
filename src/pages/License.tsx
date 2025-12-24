@@ -15,16 +15,12 @@ const License = () => {
 
       {/* Navbar */}
       <header>
-        <nav role="navigation" aria-label="Main navigation" className="fixed top-0 left-0 right-0 z-50 public-nav">
-          <div className="container mx-auto px-6 py-4 flex justify-between items-center">
+        <nav role="navigation" aria-label="Main navigation" className="fixed w-full top-0 z-50 public-nav">
+          <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
             <Link to="/" className="flex items-center gap-3">
-              <PronghornLogo className="h-8 w-8" />
-              <span className="text-xl font-semibold tracking-tight public-heading">
-                Pronghorn{" "}
-                <Link to="/terms" className="public-brand underline decoration-1 underline-offset-2 text-sm font-normal hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--public-brand)]">
-                  (Alpha)
-                </Link>
-              </span>
+              <PronghornLogo className="h-8 w-8 rounded-lg" />
+              <span className="text-xl font-semibold tracking-tight public-heading">Pronghorn</span>
+              <Link to="/terms" className="public-brand underline decoration-1 underline-offset-2 text-sm font-medium hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--public-brand)]">(Alpha)</Link>
             </Link>
             <div className="flex items-center gap-4 text-sm">
               <Link to="/terms" className="public-text-muted hover:text-[var(--public-brand)] transition-colors underline decoration-1 underline-offset-2">
