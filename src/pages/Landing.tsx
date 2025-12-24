@@ -267,14 +267,14 @@ export default function Landing() {
               </Link>
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-medium tracking-tight leading-[1.1] public-heading">
-              Build Software with <br />
+              Build{" "}
               <span className="public-brand relative inline-block">
-                AI-Powered
+                Context-Driven
                 <svg className="absolute w-full h-3 -bottom-1 left-0 text-rose-200 dark:text-rose-800 -z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
                   <path d="M0,5 Q50,10 100,5" stroke="currentColor" strokeWidth="8" fill="none" />
                 </svg>
               </span>{" "}
-              Precision
+              Apps with AI
             </h1>
             <p className="text-lg md:text-xl public-text-muted max-w-lg leading-relaxed mx-auto lg:mx-0">
               Transform requirements into production code with AI agents that understand your standards, design your
