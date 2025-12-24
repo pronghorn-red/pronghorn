@@ -74,14 +74,28 @@ export function DocsViewer({ open, onClose, entityType, rootEntity }: DocsViewer
 
   const loadItems = async () => {
     if (entityType === "tech_stack") {
-      const { data } = await supabase
+      // Fetch ALL tech_stacks and filter to descendants (matching Standards pattern)
+      const { data: allItems } = await supabase
         .from("tech_stacks")
         .select("*")
-        .eq("parent_id", rootEntity.id)
         .order("order_index");
       
-      if (data) {
-        setItems(buildHierarchy(data, rootEntity.id));
+      if (allItems) {
+        // Recursively collect all descendant IDs starting from rootEntity.id
+        const descendantIds = new Set<string>();
+        const collectDescendants = (parentId: string) => {
+          allItems
+            .filter((item) => item.parent_id === parentId)
+            .forEach((item) => {
+              descendantIds.add(item.id);
+              collectDescendants(item.id);
+            });
+        };
+        collectDescendants(rootEntity.id);
+
+        // Filter to only descendants
+        const descendants = allItems.filter((item) => descendantIds.has(item.id));
+        setItems(buildHierarchy(descendants, rootEntity.id));
       }
     } else if (entityType === "standard_category") {
       const { data } = await supabase

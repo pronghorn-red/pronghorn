@@ -59,7 +59,17 @@ export function TechStackTreeSelector({
   const loadTechStackItems = async () => {
     setLoading(true);
     try {
-      const stacksWithItems: TechStack[] = [];
+      // Fetch ALL tech_stacks in one query (matching Standards pattern)
+      const { data: allItems } = await supabase
+        .from("tech_stacks")
+        .select("*")
+        .order("name");
+
+      if (!allItems) {
+        setTechStacksWithItems(initialTechStacks.map(s => ({ ...s, items: [] })));
+        return;
+      }
+
       const allowedIds =
         allowedItemIds instanceof Set
           ? allowedItemIds
@@ -67,20 +77,32 @@ export function TechStackTreeSelector({
           ? new Set(allowedItemIds)
           : null;
 
-      for (const stack of initialTechStacks) {
-        const { data: childItems } = await supabase
-          .from("tech_stacks")
-          .select("*")
-          .eq("parent_id", stack.id)
-          .order("name");
+      const stacksWithItems: TechStack[] = [];
 
-        const filteredItems = (childItems || []).filter((item) =>
-          allowedIds ? allowedIds.has(item.id) : true
-        );
+      for (const stack of initialTechStacks) {
+        // Recursively collect all descendant IDs starting from this stack
+        const descendantIds = new Set<string>();
+        const collectDescendants = (parentId: string) => {
+          allItems
+            .filter((item) => item.parent_id === parentId)
+            .forEach((item) => {
+              descendantIds.add(item.id);
+              collectDescendants(item.id);
+            });
+        };
+        collectDescendants(stack.id);
+
+        // Filter to only descendants of this stack
+        let descendants = allItems.filter((item) => descendantIds.has(item.id));
+
+        // Apply allowed filter if provided
+        if (allowedIds) {
+          descendants = descendants.filter((item) => allowedIds.has(item.id));
+        }
 
         stacksWithItems.push({
           ...stack,
-          items: buildItemsHierarchy(filteredItems),
+          items: buildItemsHierarchy(descendants),
         });
       }
 
