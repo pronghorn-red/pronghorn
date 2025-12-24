@@ -281,13 +281,27 @@ async function createRenderService(
   console.log('[render-service] Saving to DB - render_service_id:', renderServiceId, 'render_deploy_id:', renderDeployId);
 
   // Update deployment with Render service ID - MUST succeed
+  // Pass ALL parameters to avoid PostgreSQL function overload ambiguity (PGRST203)
   const { data: updateData, error: updateError } = await supabase.rpc('update_deployment_with_token', {
     p_deployment_id: deployment.id,
     p_token: shareToken || null,
+    p_name: deployment.name,
+    p_environment: deployment.environment,
+    p_project_type: deployment.project_type,
+    p_run_folder: deployment.run_folder,
+    p_build_folder: deployment.build_folder,
+    p_run_command: deployment.run_command,
+    p_build_command: deployment.build_command,
+    p_branch: deployment.branch,
+    p_env_vars: deployment.env_vars || {},
+    p_status: 'building', // Service was created, initial build starts immediately
     p_render_service_id: renderServiceId,
     p_render_deploy_id: renderDeployId || null,
-    p_status: 'building', // Service was created, initial build starts immediately
     p_url: serviceUrl || null,
+    p_disk_enabled: deployment.disk_enabled || false,
+    p_disk_name: deployment.disk_name || null,
+    p_disk_mount_path: deployment.disk_mount_path || '/data',
+    p_disk_size_gb: deployment.disk_size_gb || 1,
   });
 
   if (updateError) {
