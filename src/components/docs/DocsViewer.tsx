@@ -4,7 +4,8 @@ import {
   FileText, 
   Search, 
   FolderTree,
-  BookOpen
+  BookOpen,
+  Layers
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -465,40 +466,46 @@ function NavItem({
   const isSelected = selectedId === item.id;
   const displayName = item.name || item.title || "Untitled";
 
+  // Get icon based on entity type and whether it has children
+  const getIcon = () => {
+    if (entityType === "tech_stack") {
+      return <Layers className="h-4 w-4 text-primary shrink-0" />;
+    } else {
+      // Standards
+      return hasChildren 
+        ? <FolderTree className="h-4 w-4 text-amber-500 shrink-0" />
+        : <FileText className="h-4 w-4 text-blue-500 shrink-0" />;
+    }
+  };
+
   return (
     <div>
-      <div
-        className={`flex items-center gap-1 group ${level > 0 ? "ml-3" : ""}`}
+      <button
+        onClick={() => {
+          onSelect(item);
+          if (hasChildren) onToggle(item.id);
+        }}
+        className={`w-full flex items-center gap-2 text-left px-3 py-1.5 rounded-md text-sm transition-colors ${
+          isSelected
+            ? "bg-primary/10 text-primary font-medium"
+            : "hover:bg-muted text-foreground"
+        }`}
+        style={{ paddingLeft: `${12 + level * 12}px` }}
       >
-        {hasChildren ? (
-          <button
-            onClick={() => onToggle(item.id)}
-            className="p-1 hover:bg-muted rounded"
-          >
-            <ChevronRight
-              className={`h-3 w-3 text-muted-foreground transition-transform ${
-                isExpanded ? "rotate-90" : ""
-              }`}
-            />
-          </button>
-        ) : (
-          <span className="w-5" />
+        {hasChildren && (
+          <ChevronRight
+            className={`h-3.5 w-3.5 shrink-0 transition-transform ${
+              isExpanded ? "rotate-90" : ""
+            }`}
+          />
         )}
-        
-        <button
-          onClick={() => onSelect(item)}
-          className={`flex-1 text-left px-2 py-1.5 rounded-md text-sm transition-colors truncate ${
-            isSelected
-              ? "bg-primary/10 text-primary font-medium"
-              : "hover:bg-muted text-foreground"
-          }`}
-        >
-          {displayName}
-        </button>
-      </div>
+        {!hasChildren && <span className="w-3.5" />}
+        {getIcon()}
+        <span className="truncate">{displayName}</span>
+      </button>
 
       {hasChildren && isExpanded && (
-        <div className="border-l border-border ml-2.5 pl-1 mt-0.5">
+        <div className="mt-0.5">
           {item.children!.map((child) => (
             <NavItem
               key={child.id}
@@ -540,40 +547,46 @@ function MobileNavItem({
   const isSelected = selectedId === item.id;
   const displayName = item.name || item.title || "Untitled";
 
+  // Get icon based on entity type and whether it has children
+  const getIcon = () => {
+    if (entityType === "tech_stack") {
+      return <Layers className="h-4 w-4 text-primary shrink-0" />;
+    } else {
+      // Standards
+      return hasChildren 
+        ? <FolderTree className="h-4 w-4 text-amber-500 shrink-0" />
+        : <FileText className="h-4 w-4 text-blue-500 shrink-0" />;
+    }
+  };
+
   return (
     <div>
-      <div
-        className={`flex items-center gap-1 group ${level > 0 ? "ml-3" : ""}`}
+      <button
+        onClick={() => {
+          onSelect(item);
+          if (hasChildren) onToggle(item.id);
+        }}
+        className={`w-full flex items-center gap-2 text-left px-3 py-2 rounded-md text-sm transition-colors ${
+          isSelected
+            ? "bg-primary/10 text-primary font-medium"
+            : "hover:bg-muted text-foreground"
+        }`}
+        style={{ paddingLeft: `${12 + level * 12}px` }}
       >
-        {hasChildren ? (
-          <button
-            onClick={() => onToggle(item.id)}
-            className="p-1.5 hover:bg-muted rounded"
-          >
-            <ChevronRight
-              className={`h-4 w-4 text-muted-foreground transition-transform ${
-                isExpanded ? "rotate-90" : ""
-              }`}
-            />
-          </button>
-        ) : (
-          <span className="w-7" />
+        {hasChildren && (
+          <ChevronRight
+            className={`h-4 w-4 shrink-0 transition-transform ${
+              isExpanded ? "rotate-90" : ""
+            }`}
+          />
         )}
-        
-        <button
-          onClick={() => onSelect(item)}
-          className={`flex-1 text-left px-2 py-2 rounded-md text-sm transition-colors truncate ${
-            isSelected
-              ? "bg-primary/10 text-primary font-medium"
-              : "hover:bg-muted text-foreground"
-          }`}
-        >
-          {displayName}
-        </button>
-      </div>
+        {!hasChildren && <span className="w-4" />}
+        {getIcon()}
+        <span className="truncate">{displayName}</span>
+      </button>
 
       {hasChildren && isExpanded && (
-        <div className="border-l border-border ml-3 pl-1 mt-0.5">
+        <div className="mt-0.5">
           {item.children!.map((child) => (
             <MobileNavItem
               key={child.id}
