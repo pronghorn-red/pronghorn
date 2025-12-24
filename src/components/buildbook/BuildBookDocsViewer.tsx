@@ -929,7 +929,7 @@ function NavItem({ item, level, selectedId, expandedIds, onSelect, onToggle, ico
   const displayName = item.name || item.title || "";
 
   return (
-    <div>
+    <div style={{ marginLeft: `${level * 16}px` }}>
       <button
         onClick={() => {
           onSelect(item);
@@ -940,17 +940,17 @@ function NavItem({ item, level, selectedId, expandedIds, onSelect, onToggle, ico
             ? "bg-primary/10 text-primary"
             : "hover:bg-muted"
         }`}
-        style={{ paddingLeft: `${12 + level * 12}px` }}
       >
-        {hasChildren && (
+        {hasChildren ? (
           <ChevronRight
             className={`h-3.5 w-3.5 shrink-0 transition-transform ${
               isExpanded ? "rotate-90" : ""
             }`}
           />
+        ) : (
+          <span className="w-3.5 shrink-0" />
         )}
-        {!hasChildren && <span className="w-3.5" />}
-        {icon}
+        <span className="shrink-0">{icon}</span>
         <span className="truncate">
           {item.code && <span className="text-muted-foreground mr-1.5">{item.code}</span>}
           {displayName}
@@ -1107,7 +1107,7 @@ function MobileNavItem({ item, level, selectedId, expandedIds, onSelect, onToggl
   const displayName = item.name || item.title || "";
 
   return (
-    <div>
+    <div style={{ marginLeft: `${level * 16}px` }}>
       <button
         onClick={() => {
           onSelect(item);
@@ -1118,17 +1118,17 @@ function MobileNavItem({ item, level, selectedId, expandedIds, onSelect, onToggl
             ? "bg-primary/10 text-primary"
             : "hover:bg-muted"
         }`}
-        style={{ paddingLeft: `${12 + level * 8}px` }}
       >
-        {hasChildren && (
+        {hasChildren ? (
           <ChevronRight
             className={`h-4 w-4 shrink-0 mt-0.5 transition-transform ${
               isExpanded ? "rotate-90" : ""
             }`}
           />
+        ) : (
+          <span className="w-4 shrink-0" />
         )}
-        {!hasChildren && <span className="w-4" />}
-        {icon}
+        <span className="shrink-0">{icon}</span>
         <span className="break-words">
           {item.code && <span className="text-muted-foreground mr-1.5">{item.code}</span>}
           {displayName}
