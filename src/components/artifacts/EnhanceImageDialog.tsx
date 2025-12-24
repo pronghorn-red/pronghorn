@@ -305,13 +305,13 @@ export function EnhanceImageDialog({
                     No image artifacts available. Enter a prompt below to create a new image.
                   </div>
                 ) : (
-                  <ScrollArea className="h-[250px] border rounded-md p-3">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <ScrollArea className="h-[300px] border rounded-md p-3">
+                    <div className="columns-2 sm:columns-3 gap-2 space-y-2">
                       {imageArtifacts.map((artifact) => (
                         <div
                           key={artifact.id}
                           onClick={() => !isProcessing && handleToggleArtifact(artifact.id)}
-                          className={`relative cursor-pointer rounded-md overflow-hidden border-2 transition-all ${
+                          className={`relative cursor-pointer rounded-md overflow-hidden border-2 transition-all break-inside-avoid ${
                             selectedArtifacts.has(artifact.id)
                               ? "border-primary ring-2 ring-primary/20"
                               : "border-transparent hover:border-muted-foreground/30"
@@ -320,7 +320,7 @@ export function EnhanceImageDialog({
                           <img
                             src={artifact.image_url!}
                             alt={getArtifactTitle(artifact)}
-                            className="w-full h-20 object-cover"
+                            className="w-full object-cover"
                           />
                           <div className="absolute top-1 left-1">
                             <Checkbox
