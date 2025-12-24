@@ -105,33 +105,11 @@ export default defineConfig(({ mode }) => ({
             purpose: "any",
           },
           {
-            src: "/apple-touch-icon.png",
-            sizes: "180x180",
-            type: "image/png",
-            purpose: "apple touch icon",
-          },
-          {
             src: "/pwa-512x512.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
           },
-        ],
-        screenshots: [
-          {
-            src: "/pwa-512x512.png",
-            sizes: "512x512",
-            type: "image/png",
-            form_factor: "wide",
-            label: "Pronghorn Dashboard"
-          },
-          {
-            src: "/pwa-512x512.png",
-            sizes: "512x512",
-            type: "image/png",
-            form_factor: "narrow",
-            label: "Pronghorn Mobile"
-          }
         ],
       },
       workbox: {
