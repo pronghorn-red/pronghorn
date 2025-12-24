@@ -6063,117 +6063,63 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      update_deployment_with_token:
-        | {
-            Args: {
-              p_branch?: string
-              p_build_command?: string
-              p_build_folder?: string
-              p_deployment_id: string
-              p_disk_enabled?: boolean
-              p_disk_mount_path?: string
-              p_disk_name?: string
-              p_disk_size_gb?: number
-              p_env_vars?: Json
-              p_environment?: Database["public"]["Enums"]["deployment_environment"]
-              p_name?: string
-              p_project_type?: string
-              p_render_deploy_id?: string
-              p_render_service_id?: string
-              p_run_command?: string
-              p_run_folder?: string
-              p_status?: Database["public"]["Enums"]["deployment_status"]
-              p_token?: string
-              p_url?: string
-            }
-            Returns: {
-              branch: string | null
-              build_command: string | null
-              build_folder: string
-              created_at: string
-              created_by: string | null
-              disk_enabled: boolean | null
-              disk_mount_path: string | null
-              disk_name: string | null
-              disk_size_gb: number | null
-              env_vars: Json | null
-              environment: Database["public"]["Enums"]["deployment_environment"]
-              id: string
-              last_deployed_at: string | null
-              name: string
-              platform: Database["public"]["Enums"]["deployment_platform"]
-              project_id: string
-              project_type: string
-              render_deploy_id: string | null
-              render_service_id: string | null
-              repo_id: string | null
-              run_command: string
-              run_folder: string
-              secrets: Json | null
-              status: Database["public"]["Enums"]["deployment_status"]
-              updated_at: string
-              url: string | null
-            }
-            SetofOptions: {
-              from: "*"
-              to: "project_deployments"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_branch?: string
-              p_build_command?: string
-              p_build_folder?: string
-              p_deployment_id: string
-              p_env_vars?: Json
-              p_environment?: Database["public"]["Enums"]["deployment_environment"]
-              p_name?: string
-              p_project_type?: string
-              p_render_deploy_id?: string
-              p_render_service_id?: string
-              p_run_command?: string
-              p_run_folder?: string
-              p_status?: Database["public"]["Enums"]["deployment_status"]
-              p_token?: string
-              p_url?: string
-            }
-            Returns: {
-              branch: string | null
-              build_command: string | null
-              build_folder: string
-              created_at: string
-              created_by: string | null
-              disk_enabled: boolean | null
-              disk_mount_path: string | null
-              disk_name: string | null
-              disk_size_gb: number | null
-              env_vars: Json | null
-              environment: Database["public"]["Enums"]["deployment_environment"]
-              id: string
-              last_deployed_at: string | null
-              name: string
-              platform: Database["public"]["Enums"]["deployment_platform"]
-              project_id: string
-              project_type: string
-              render_deploy_id: string | null
-              render_service_id: string | null
-              repo_id: string | null
-              run_command: string
-              run_folder: string
-              secrets: Json | null
-              status: Database["public"]["Enums"]["deployment_status"]
-              updated_at: string
-              url: string | null
-            }
-            SetofOptions: {
-              from: "*"
-              to: "project_deployments"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      update_deployment_with_token: {
+        Args: {
+          p_branch?: string
+          p_build_command?: string
+          p_build_folder?: string
+          p_deployment_id: string
+          p_disk_enabled?: boolean
+          p_disk_mount_path?: string
+          p_disk_name?: string
+          p_disk_size_gb?: number
+          p_env_vars?: Json
+          p_environment?: Database["public"]["Enums"]["deployment_environment"]
+          p_name?: string
+          p_project_type?: string
+          p_render_deploy_id?: string
+          p_render_service_id?: string
+          p_run_command?: string
+          p_run_folder?: string
+          p_status?: Database["public"]["Enums"]["deployment_status"]
+          p_token?: string
+          p_url?: string
+        }
+        Returns: {
+          branch: string | null
+          build_command: string | null
+          build_folder: string
+          created_at: string
+          created_by: string | null
+          disk_enabled: boolean | null
+          disk_mount_path: string | null
+          disk_name: string | null
+          disk_size_gb: number | null
+          env_vars: Json | null
+          environment: Database["public"]["Enums"]["deployment_environment"]
+          id: string
+          last_deployed_at: string | null
+          name: string
+          platform: Database["public"]["Enums"]["deployment_platform"]
+          project_id: string
+          project_type: string
+          render_deploy_id: string | null
+          render_service_id: string | null
+          repo_id: string | null
+          run_command: string
+          run_folder: string
+          secrets: Json | null
+          status: Database["public"]["Enums"]["deployment_status"]
+          updated_at: string
+          url: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_deployments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_project_llm_settings_with_token: {
         Args: {
           p_max_tokens: number
