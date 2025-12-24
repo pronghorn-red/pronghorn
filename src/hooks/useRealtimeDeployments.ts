@@ -11,6 +11,7 @@ export const useRealtimeDeployments = (
 ) => {
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const loadDeployments = useCallback(async () => {
@@ -32,6 +33,46 @@ export const useRealtimeDeployments = (
       setIsLoading(false);
     }
   }, [projectId, shareToken, enabled]);
+
+  // Refresh from Render.com for cloud deployments, then reload from DB
+  const refreshFromRender = useCallback(async () => {
+    if (!projectId || !enabled) return;
+
+    setIsRefreshing(true);
+    try {
+      // Get current deployments from DB first
+      const { data: currentDeployments } = await supabase.rpc("get_deployments_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken || null,
+      });
+
+      const cloudDeployments = (currentDeployments as Deployment[] || []).filter(
+        d => d.platform === "pronghorn_cloud" && d.render_service_id
+      );
+
+      // For each cloud deployment with a render_service_id, fetch real status
+      for (const deployment of cloudDeployments) {
+        try {
+          await supabase.functions.invoke("render-service", {
+            body: {
+              action: "status",
+              deploymentId: deployment.id,
+              shareToken: shareToken,
+            },
+          });
+        } catch (err) {
+          console.error(`Failed to refresh status for ${deployment.id}:`, err);
+        }
+      }
+
+      // Reload from DB to get updated statuses
+      await loadDeployments();
+    } catch (error) {
+      console.error("Error refreshing from Render:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [projectId, shareToken, enabled, loadDeployments]);
 
   // Broadcast refresh to other clients
   const broadcastRefresh = useCallback(() => {
@@ -77,7 +118,8 @@ export const useRealtimeDeployments = (
   return {
     deployments,
     isLoading,
-    refresh: loadDeployments,
+    isRefreshing,
+    refresh: refreshFromRender,
     broadcastRefresh,
   };
 };

@@ -17,7 +17,7 @@ import TestingLogsViewer from "@/components/deploy/TestingLogsViewer";
 const Deploy = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
-  const { deployments, isLoading, refresh, broadcastRefresh } = useRealtimeDeployments(
+  const { deployments, isLoading, isRefreshing, refresh, broadcastRefresh } = useRealtimeDeployments(
     projectId,
     shareToken,
     isTokenSet
@@ -84,9 +84,15 @@ const Deploy = () => {
               </TabsList>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                <Button variant="outline" size="sm" onClick={refresh} className="flex-1 sm:flex-none">
-                  <RefreshCw className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Refresh</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={refresh} 
+                  disabled={isRefreshing}
+                  className="flex-1 sm:flex-none"
+                >
+                  <RefreshCw className={`h-4 w-4 sm:mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                 </Button>
                 <Button size="sm" onClick={() => setIsCreateOpen(true)} className="flex-1 sm:flex-none">
                   <Plus className="h-4 w-4 sm:mr-2" />
