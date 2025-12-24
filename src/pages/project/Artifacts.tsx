@@ -629,20 +629,55 @@ ${artifact.content}`;
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {artifact.image_url && (
-                          <div 
-                            className="rounded-lg border overflow-hidden bg-muted cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
-                            onClick={() => setPreviewImage({ 
-                              url: artifact.image_url!, 
-                              title: artifact.ai_title || "Artifact image" 
-                            })}
-                          >
-                            <img 
-                              src={artifact.image_url} 
-                              alt={artifact.ai_title || "Artifact image"}
-                              className="w-full h-auto object-contain max-h-64"
-                            />
+                        {/* Split layout when both image and text content exist */}
+                        {artifact.image_url && artifact.content?.trim() ? (
+                          <div className="flex flex-col md:flex-row gap-4">
+                            {/* Text column - takes remaining space with min width */}
+                            <div className="flex-1 min-w-0 md:min-w-[300px]">
+                              <pre className="whitespace-pre-wrap text-sm bg-muted p-4 rounded-md h-[300px] overflow-y-auto">
+                                {artifact.content}
+                              </pre>
+                            </div>
+                            {/* Image column - dynamic width, fixed height */}
+                            <div 
+                              className="shrink-0 rounded-lg border overflow-hidden bg-muted cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all h-[300px] flex items-center justify-center"
+                              onClick={() => setPreviewImage({ 
+                                url: artifact.image_url!, 
+                                title: artifact.ai_title || "Artifact image" 
+                              })}
+                            >
+                              <img 
+                                src={artifact.image_url} 
+                                alt={artifact.ai_title || "Artifact image"}
+                                className="h-full w-auto object-contain"
+                              />
+                            </div>
                           </div>
+                        ) : (
+                          <>
+                            {/* Image only layout */}
+                            {artifact.image_url && (
+                              <div 
+                                className="rounded-lg border overflow-hidden bg-muted cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                                onClick={() => setPreviewImage({ 
+                                  url: artifact.image_url!, 
+                                  title: artifact.ai_title || "Artifact image" 
+                                })}
+                              >
+                                <img 
+                                  src={artifact.image_url} 
+                                  alt={artifact.ai_title || "Artifact image"}
+                                  className="w-full h-auto object-contain max-h-64"
+                                />
+                              </div>
+                            )}
+                            {/* Text only layout */}
+                            {artifact.content?.trim() && (
+                              <pre className="whitespace-pre-wrap text-sm bg-muted p-4 rounded-md max-h-64 overflow-y-auto">
+                                {artifact.content}
+                              </pre>
+                            )}
+                          </>
                         )}
                         {(artifact.ai_summary || streamingSummary[artifact.id]) && (
                           <Accordion type="single" collapsible defaultValue="summary">
@@ -660,9 +695,6 @@ ${artifact.content}`;
                             </AccordionItem>
                           </Accordion>
                         )}
-                        <pre className="whitespace-pre-wrap text-sm bg-muted p-4 rounded-md max-h-64 overflow-y-auto">
-                          {artifact.content}
-                        </pre>
                       </CardContent>
                     </Card>
                   ))}
