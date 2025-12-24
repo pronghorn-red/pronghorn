@@ -837,7 +837,7 @@ function CategoryNavItem({ category, standards, selectedId, expandedIds, onSelec
               expandedIds={expandedIds}
               onSelect={onSelect}
               onToggle={onToggle}
-              icon={<FileText className="h-4 w-4 text-blue-500" />}
+              icon={<FileText className="h-4 w-4 text-blue-500 shrink-0" />}
             />
           ))}
         </div>
@@ -967,7 +967,7 @@ function NavItem({ item, level, selectedId, expandedIds, onSelect, onToggle, ico
               expandedIds={expandedIds}
               onSelect={onSelect}
               onToggle={onToggle}
-              icon={<FileText className="h-4 w-4 text-blue-500" />}
+              icon={<FileText className="h-4 w-4 text-blue-500 shrink-0" />}
             />
           ))}
         </div>
