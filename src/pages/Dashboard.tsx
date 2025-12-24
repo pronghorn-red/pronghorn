@@ -415,21 +415,23 @@ export default function Dashboard() {
             {user && (
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="mb-6">
-                  <TabsTrigger value="my-projects" className="flex items-center gap-2">
+                  <TabsTrigger value="my-projects" className="flex items-center gap-1 sm:gap-2">
                     <FolderOpen className="h-4 w-4" />
-                    My Projects
+                    <span className="sm:hidden">Projects</span>
+                    <span className="hidden sm:inline">My Projects</span>
                     {projects.length > 0 && (
                       <Badge variant="secondary" className="text-xs ml-1">{projects.length}</Badge>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger value="shared-projects" className="flex items-center gap-2">
+                  <TabsTrigger value="shared-projects" className="flex items-center gap-1 sm:gap-2">
                     <Users className="h-4 w-4" />
-                    Shared Projects
+                    <span className="sm:hidden">Shared</span>
+                    <span className="hidden sm:inline">Shared Projects</span>
                     {linkedProjects.length > 0 && (
                       <Badge variant="secondary" className="text-xs ml-1">{linkedProjects.length}</Badge>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger value="gallery" className="flex items-center gap-2">
+                  <TabsTrigger value="gallery" className="flex items-center gap-1 sm:gap-2">
                     <Sparkles className="h-4 w-4" />
                     Gallery
                   </TabsTrigger>
