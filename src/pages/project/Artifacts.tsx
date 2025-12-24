@@ -638,9 +638,9 @@ ${artifact.content}`;
                                 {artifact.content}
                               </pre>
                             </div>
-                            {/* Image column - dynamic width, fixed height */}
+                            {/* Image column - auto height on mobile, fixed on desktop */}
                             <div 
-                              className="shrink-0 rounded-lg border overflow-hidden bg-muted cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all h-[300px] flex items-center justify-center"
+                              className="shrink-0 rounded-lg border overflow-hidden bg-muted cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all md:h-[300px] flex items-center justify-center"
                               onClick={() => setPreviewImage({ 
                                 url: artifact.image_url!, 
                                 title: artifact.ai_title || "Artifact image" 
@@ -649,7 +649,7 @@ ${artifact.content}`;
                               <img 
                                 src={artifact.image_url} 
                                 alt={artifact.ai_title || "Artifact image"}
-                                className="h-full w-auto object-contain"
+                                className="w-full h-auto md:h-full md:w-auto object-contain"
                               />
                             </div>
                           </div>
