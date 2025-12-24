@@ -900,7 +900,7 @@ export default function Specifications() {
       <div className="flex relative">
         <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
         <main className="flex-1 w-full overflow-auto">
-          <div className="container px-4 md:px-6 py-6 md:py-8 max-w-6xl">
+          <div className="px-4 md:px-6 py-6 md:py-8">
             <ProjectPageHeader 
               title="Project Specifications" 
               subtitle="Generate comprehensive documentation and analysis for your project"

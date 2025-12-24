@@ -232,7 +232,7 @@ export default function Standards() {
       <div className="flex relative">
         <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
         <main className="flex-1 w-full overflow-auto">
-          <div className="container px-4 md:px-6 py-6 md:py-8 max-w-6xl">
+          <div className="px-4 md:px-6 py-6 md:py-8">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
               <ProjectPageHeader
                 title="Project Standards"

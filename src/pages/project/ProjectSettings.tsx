@@ -246,7 +246,7 @@ export default function ProjectSettings() {
       <div className="flex relative">
         <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
         <main className="flex-1 overflow-auto w-full">
-          <div className="container px-4 md:px-6 py-6 md:py-8 max-w-6xl">
+          <div className="px-4 md:px-6 py-6 md:py-8">
             <ProjectPageHeader
               title="Project Settings"
               subtitle="Configure your project settings and sharing options"
