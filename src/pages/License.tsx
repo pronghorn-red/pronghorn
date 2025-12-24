@@ -28,10 +28,10 @@ const License = () => {
             </Link>
             <div className="flex items-center gap-4 text-sm">
               <Link to="/terms" className="public-text-muted hover:text-[var(--public-brand)] transition-colors underline decoration-1 underline-offset-2">
-                Terms of Use
+                Terms
               </Link>
               <Link to="/privacy" className="public-text-muted hover:text-[var(--public-brand)] transition-colors underline decoration-1 underline-offset-2">
-                Privacy Policy
+                Privacy
               </Link>
               <ThemeToggle />
             </div>

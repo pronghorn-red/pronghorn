@@ -15,16 +15,23 @@ export default function Privacy() {
 
       {/* Navbar */}
       <header>
-        <nav role="navigation" aria-label="Main navigation" className="fixed w-full top-0 z-50 public-nav">
-          <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+        <nav role="navigation" aria-label="Main navigation" className="fixed top-0 left-0 right-0 z-50 public-nav">
+          <div className="container mx-auto px-6 py-4 flex justify-between items-center">
             <Link to="/" className="flex items-center gap-3">
-              <PronghornLogo className="h-8 w-8 rounded-lg" />
-              <span className="text-xl font-semibold tracking-tight public-heading">Pronghorn</span>
-              <Link to="/terms" className="public-brand underline decoration-1 underline-offset-2 text-sm font-medium hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--public-brand)]">(Alpha)</Link>
+              <PronghornLogo className="h-8 w-8" />
+              <span className="text-xl font-semibold tracking-tight public-heading">
+                Pronghorn{" "}
+                <Link to="/terms" className="public-brand underline decoration-1 underline-offset-2 text-sm font-normal hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--public-brand)]">
+                  (Alpha)
+                </Link>
+              </span>
             </Link>
             <div className="flex items-center gap-4 text-sm">
               <Link to="/terms" className="public-text-muted hover:text-[var(--public-brand)] transition-colors underline decoration-1 underline-offset-2">
-                Terms of Use
+                Terms
+              </Link>
+              <Link to="/license" className="public-text-muted hover:text-[var(--public-brand)] transition-colors underline decoration-1 underline-offset-2">
+                License
               </Link>
               <ThemeToggle />
             </div>
@@ -32,15 +39,16 @@ export default function Privacy() {
         </nav>
       </header>
 
-      {/* Content */}
-      <main role="main" id="main-content" className="pt-24 pb-16 px-6">
-        <article className="max-w-4xl mx-auto prose prose-gray public-prose">
-          <p className="text-sm public-text-muted uppercase tracking-wider mb-2">Your Data Matters</p>
-          <h1 className="text-4xl font-medium tracking-tight mb-4 public-heading">Privacy Policy</h1>
-          <p className="text-lg public-text-muted mb-8">
-            We believe in transparency and protecting your privacy. Learn how we collect, use, and safeguard your information.
-          </p>
-          <p className="text-sm public-text-muted">Last updated: December 10, 2025</p>
+      {/* Main Content */}
+      <main role="main" id="main-content" className="container mx-auto px-6 pt-32 pb-16 max-w-4xl">
+        <p className="text-sm public-text-muted uppercase tracking-wider mb-2">Your Data Matters</p>
+        <h1 className="text-4xl font-medium tracking-tight mb-4 public-heading">Privacy Policy</h1>
+        <p className="text-lg public-text-muted mb-8">
+          We believe in transparency and protecting your privacy. Learn how we collect, use, and safeguard your information.
+        </p>
+        <p className="text-sm public-text-muted mb-8">Last updated: December 10, 2025</p>
+
+        <div className="prose max-w-none space-y-6 public-prose">
 
           <h2 className="public-heading">Our Commitment</h2>
           <p>
@@ -195,7 +203,7 @@ export default function Privacy() {
           <p>
             <strong>Organization:</strong> Government of Alberta, Ministry of Technology and Innovation
           </p>
-        </article>
+        </div>
       </main>
 
       {/* Footer */}
