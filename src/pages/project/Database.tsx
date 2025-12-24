@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Database as DatabaseIcon, Plus, RefreshCw, Settings, ChevronLeft, Link } from "lucide-react";
+import { Database as DatabaseIcon, Plus, RefreshCw, Settings, ChevronLeft, Link, Shield } from "lucide-react";
 import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeDatabases } from "@/hooks/useRealtimeDatabases";
@@ -17,10 +17,14 @@ import { DatabaseDialog } from "@/components/deploy/DatabaseDialog";
 import { ConnectDatabaseDialog } from "@/components/deploy/ConnectDatabaseDialog";
 import { DatabaseExplorer } from "@/components/deploy/DatabaseExplorer";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAdmin } from "@/contexts/AdminContext";
+import { SuperadminRenderManager } from "@/components/superadmin/SuperadminRenderManager";
 
 const Database = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
+  const isMobile = useIsMobile();
+  const { isSuperAdmin } = useAdmin();
   const isMobile = useIsMobile();
   
   // Project databases (Render)
@@ -165,6 +169,12 @@ const Database = () => {
                   <Settings className="h-4 w-4" />
                   <span className="hidden sm:inline">Manage</span>
                 </TabsTrigger>
+                {isSuperAdmin && (
+                  <TabsTrigger value="superadmin" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                    <Shield className="h-4 w-4" />
+                    <span className="hidden sm:inline">Admin</span>
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -348,6 +358,12 @@ const Database = () => {
                 </Card>
               )}
             </TabsContent>
+
+            {isSuperAdmin && (
+              <TabsContent value="superadmin" className="space-y-6 mt-4">
+                <SuperadminRenderManager type="databases" />
+              </TabsContent>
+            )}
           </Tabs>
         </div>
 

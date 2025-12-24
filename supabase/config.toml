@@ -128,3 +128,9 @@ verify_jwt = false
 
 [functions.log-activity]
 verify_jwt = false
+
+[functions.superadmin-render-management]
+verify_jwt = false
+
+[functions.superadmin-github-management]
+verify_jwt = false

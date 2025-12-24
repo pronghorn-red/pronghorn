@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Cloud, Laptop, Server, Plus, RefreshCw } from "lucide-react";
+import { Cloud, Laptop, Server, Plus, RefreshCw, Settings } from "lucide-react";
 import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeDeployments } from "@/hooks/useRealtimeDeployments";
@@ -13,10 +13,13 @@ import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import DeploymentCard from "@/components/deploy/DeploymentCard";
 import DeploymentDialog from "@/components/deploy/DeploymentDialog";
 import TestingLogsViewer from "@/components/deploy/TestingLogsViewer";
+import { useAdmin } from "@/contexts/AdminContext";
+import { SuperadminRenderManager } from "@/components/superadmin/SuperadminRenderManager";
 
 const Deploy = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
+  const { isSuperAdmin } = useAdmin();
   const { deployments, isLoading, isRefreshing, refresh, broadcastRefresh } = useRealtimeDeployments(
     projectId,
     shareToken,
@@ -81,6 +84,12 @@ const Deploy = () => {
                   <span className="hidden sm:inline">VMs</span>
                   <Badge variant="secondary" className="text-[10px] px-1">Soon</Badge>
                 </TabsTrigger>
+                {isSuperAdmin && (
+                  <TabsTrigger value="manage" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                    <Settings className="h-4 w-4" />
+                    <span className="hidden sm:inline">Manage</span>
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -216,6 +225,12 @@ const Deploy = () => {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            {isSuperAdmin && (
+              <TabsContent value="manage" className="space-y-4 mt-4">
+                <SuperadminRenderManager type="services" />
+              </TabsContent>
+            )}
           </Tabs>
         </div>
 
