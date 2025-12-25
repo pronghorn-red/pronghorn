@@ -278,9 +278,9 @@ export default function Auth() {
       <Info className="h-4 w-4" />
       <AlertDescription className="text-sm">
         <ul className="mt-1 space-y-1 text-muted-foreground">
+          <li><span className="font-medium text-foreground">Email/Password:</span> Public access</li>
           <li><span className="font-medium text-foreground">Google SSO:</span> Government of Alberta</li>
           <li><span className="font-medium text-foreground">Microsoft SSO:</span> Organizations with Entra ID</li>
-          <li><span className="font-medium text-foreground">Email/Password:</span> Public access</li>
         </ul>
       </AlertDescription>
     </Alert>
