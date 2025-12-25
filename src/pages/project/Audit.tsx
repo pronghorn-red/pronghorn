@@ -7,6 +7,7 @@ import { AuditBlackboard } from "@/components/audit/AuditBlackboard";
 import { VennDiagramResults } from "@/components/audit/VennDiagramResults";
 import { AuditConfigurationDialog, AuditConfiguration } from "@/components/audit/AuditConfigurationDialog";
 import { AgentInstancesCard } from "@/components/audit/AgentInstancesCard";
+import { KnowledgeGraph } from "@/components/audit/KnowledgeGraph";
 import { useRealtimeAudit } from "@/hooks/useRealtimeAudit";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,7 @@ import {
   CircleDot,
   RefreshCw,
   Users,
+  Network,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useShareToken } from "@/hooks/useShareToken";
@@ -52,6 +54,8 @@ export default function Audit() {
     blackboardEntries,
     tesseractCells,
     agentInstances,
+    graphNodes,
+    graphEdges,
     isLoading,
     error,
     createSession,
@@ -310,8 +314,17 @@ export default function Audit() {
                 </CardContent>
               </Card>
             ) : (
-              <Tabs defaultValue="agents" className="space-y-4">
+              <Tabs defaultValue="graph" className="space-y-4">
                 <TabsList>
+                  <TabsTrigger value="graph" className="gap-2">
+                    <Network className="h-4 w-4" />
+                    Graph
+                    {graphNodes.length > 0 && (
+                      <Badge variant="secondary" className="ml-1">
+                        {graphNodes.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
                   <TabsTrigger value="agents" className="gap-2">
                     <Users className="h-4 w-4" />
                     Agents
@@ -344,6 +357,17 @@ export default function Audit() {
                     Results
                   </TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="graph">
+                  <KnowledgeGraph
+                    nodes={graphNodes}
+                    edges={graphEdges}
+                    currentPhase={(session as any)?.phase || "conference"}
+                    onNodeClick={(nodeId) => {
+                      toast.info(`Node: ${graphNodes.find(n => n.id === nodeId)?.label || nodeId}`);
+                    }}
+                  />
+                </TabsContent>
 
                 <TabsContent value="agents">
                   <AgentInstancesCard 

@@ -9,11 +9,46 @@ type AuditBlackboard = Database["public"]["Tables"]["audit_blackboard"]["Row"];
 type AuditTesseractCell = Database["public"]["Tables"]["audit_tesseract_cells"]["Row"];
 type AuditAgentInstance = Database["public"]["Tables"]["audit_agent_instances"]["Row"];
 
+// Type for graph nodes (from new tables)
+interface AuditGraphNode {
+  id: string;
+  session_id: string;
+  label: string;
+  description: string | null;
+  node_type: string;
+  source_dataset: string | null;
+  source_element_ids: string[];
+  created_by_agent: string;
+  x_position: number;
+  y_position: number;
+  color: string | null;
+  size: number;
+  metadata: Json;
+  created_at: string;
+  updated_at: string;
+}
+
+// Type for graph edges (from new tables)
+interface AuditGraphEdge {
+  id: string;
+  session_id: string;
+  source_node_id: string;
+  target_node_id: string;
+  label: string | null;
+  edge_type: string;
+  weight: number;
+  created_by_agent: string;
+  metadata: Json;
+  created_at: string;
+}
+
 export interface UseRealtimeAuditReturn {
   session: AuditSession | null;
   blackboardEntries: AuditBlackboard[];
   tesseractCells: AuditTesseractCell[];
   agentInstances: AuditAgentInstance[];
+  graphNodes: AuditGraphNode[];
+  graphEdges: AuditGraphEdge[];
   isLoading: boolean;
   error: string | null;
   createSession: (params: CreateSessionParams) => Promise<AuditSession | null>;
@@ -68,6 +103,8 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
   const [blackboardEntries, setBlackboardEntries] = useState<AuditBlackboard[]>([]);
   const [tesseractCells, setTesseractCells] = useState<AuditTesseractCell[]>([]);
   const [agentInstances, setAgentInstances] = useState<AuditAgentInstance[]>([]);
+  const [graphNodes, setGraphNodes] = useState<AuditGraphNode[]>([]);
+  const [graphEdges, setGraphEdges] = useState<AuditGraphEdge[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,6 +126,13 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
       
       const { data: agents } = await supabase.rpc("get_audit_agent_instances_with_token", { p_session_id: sid, p_token: shareToken });
       setAgentInstances(agents || []);
+
+      // Load graph data
+      const { data: nodes } = await supabase.rpc("get_audit_graph_nodes_with_token", { p_session_id: sid, p_token: shareToken });
+      setGraphNodes((nodes as AuditGraphNode[]) || []);
+
+      const { data: edges } = await supabase.rpc("get_audit_graph_edges_with_token", { p_session_id: sid, p_token: shareToken });
+      setGraphEdges((edges as AuditGraphEdge[]) || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -113,6 +157,15 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
       .on("postgres_changes", { event: "*", schema: "public", table: "audit_tesseract_cells", filter: `session_id=eq.${sessionId}` }, (p) => {
         if (p.eventType === "INSERT") setTesseractCells((prev) => [...prev, p.new as AuditTesseractCell]);
         else if (p.eventType === "UPDATE") setTesseractCells((prev) => prev.map((c) => c.id === (p.new as AuditTesseractCell).id ? (p.new as AuditTesseractCell) : c));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "audit_graph_nodes", filter: `session_id=eq.${sessionId}` }, (p) => {
+        if (p.eventType === "INSERT") setGraphNodes((prev) => [...prev, p.new as AuditGraphNode]);
+        else if (p.eventType === "UPDATE") setGraphNodes((prev) => prev.map((n) => n.id === (p.new as AuditGraphNode).id ? (p.new as AuditGraphNode) : n));
+        else if (p.eventType === "DELETE") setGraphNodes((prev) => prev.filter((n) => n.id !== (p.old as AuditGraphNode).id));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "audit_graph_edges", filter: `session_id=eq.${sessionId}` }, (p) => {
+        if (p.eventType === "INSERT") setGraphEdges((prev) => [...prev, p.new as AuditGraphEdge]);
+        else if (p.eventType === "DELETE") setGraphEdges((prev) => prev.filter((e) => e.id !== (p.old as AuditGraphEdge).id));
       })
       .on("broadcast", { event: "audit_refresh" }, () => loadSessionData(sessionId))
       .subscribe();
@@ -161,5 +214,5 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
 
   const refreshSession = useCallback(async (sid: string) => { await loadSessionData(sid); }, [loadSessionData]);
 
-  return { session, blackboardEntries, tesseractCells, agentInstances, isLoading, error, createSession, updateSessionStatus, writeToBlackboard, writeTesseractCell, refreshSession };
+  return { session, blackboardEntries, tesseractCells, agentInstances, graphNodes, graphEdges, isLoading, error, createSession, updateSessionStatus, writeToBlackboard, writeTesseractCell, refreshSession };
 }

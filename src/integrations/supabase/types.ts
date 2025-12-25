@@ -710,6 +710,129 @@ export type Database = {
           },
         ]
       }
+      audit_graph_edges: {
+        Row: {
+          created_at: string
+          created_by_agent: string
+          edge_type: string
+          id: string
+          label: string | null
+          metadata: Json | null
+          session_id: string
+          source_node_id: string
+          target_node_id: string
+          weight: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by_agent: string
+          edge_type?: string
+          id?: string
+          label?: string | null
+          metadata?: Json | null
+          session_id: string
+          source_node_id: string
+          target_node_id: string
+          weight?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by_agent?: string
+          edge_type?: string
+          id?: string
+          label?: string | null
+          metadata?: Json | null
+          session_id?: string
+          source_node_id?: string
+          target_node_id?: string
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_graph_edges_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "audit_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_graph_edges_source_node_id_fkey"
+            columns: ["source_node_id"]
+            isOneToOne: false
+            referencedRelation: "audit_graph_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_graph_edges_target_node_id_fkey"
+            columns: ["target_node_id"]
+            isOneToOne: false
+            referencedRelation: "audit_graph_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_graph_nodes: {
+        Row: {
+          color: string | null
+          created_at: string
+          created_by_agent: string
+          description: string | null
+          id: string
+          label: string
+          metadata: Json | null
+          node_type: string
+          session_id: string
+          size: number | null
+          source_dataset: string | null
+          source_element_ids: string[] | null
+          updated_at: string
+          x_position: number | null
+          y_position: number | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          created_by_agent: string
+          description?: string | null
+          id?: string
+          label: string
+          metadata?: Json | null
+          node_type?: string
+          session_id: string
+          size?: number | null
+          source_dataset?: string | null
+          source_element_ids?: string[] | null
+          updated_at?: string
+          x_position?: number | null
+          y_position?: number | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          created_by_agent?: string
+          description?: string | null
+          id?: string
+          label?: string
+          metadata?: Json | null
+          node_type?: string
+          session_id?: string
+          size?: number | null
+          source_dataset?: string | null
+          source_element_ids?: string[] | null
+          updated_at?: string
+          x_position?: number | null
+          y_position?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_graph_nodes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "audit_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_runs: {
         Row: {
           completed_at: string | null
@@ -759,9 +882,11 @@ export type Database = {
           dataset_2_ids: string[] | null
           dataset_2_type: string
           description: string | null
+          graph_complete_votes: Json | null
           id: string
           max_iterations: number
           name: string
+          phase: string | null
           problem_shape: Json | null
           project_id: string
           status: string
@@ -782,9 +907,11 @@ export type Database = {
           dataset_2_ids?: string[] | null
           dataset_2_type: string
           description?: string | null
+          graph_complete_votes?: Json | null
           id?: string
           max_iterations?: number
           name: string
+          phase?: string | null
           problem_shape?: Json | null
           project_id: string
           status?: string
@@ -805,9 +932,11 @@ export type Database = {
           dataset_2_ids?: string[] | null
           dataset_2_type?: string
           description?: string | null
+          graph_complete_votes?: Json | null
           id?: string
           max_iterations?: number
           name?: string
+          phase?: string | null
           problem_shape?: Json | null
           project_id?: string
           status?: string
@@ -3660,6 +3789,53 @@ export type Database = {
         Args: { p_session_id: string; p_token?: string }
         Returns: Json
       }
+      get_audit_graph_edges_with_token: {
+        Args: { p_session_id: string; p_token: string }
+        Returns: {
+          created_at: string
+          created_by_agent: string
+          edge_type: string
+          id: string
+          label: string | null
+          metadata: Json | null
+          session_id: string
+          source_node_id: string
+          target_node_id: string
+          weight: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "audit_graph_edges"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_audit_graph_nodes_with_token: {
+        Args: { p_session_id: string; p_token: string }
+        Returns: {
+          color: string | null
+          created_at: string
+          created_by_agent: string
+          description: string | null
+          id: string
+          label: string
+          metadata: Json | null
+          node_type: string
+          session_id: string
+          size: number | null
+          source_dataset: string | null
+          source_element_ids: string[] | null
+          updated_at: string
+          x_position: number | null
+          y_position: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "audit_graph_nodes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_audit_session_with_token: {
         Args: { p_session_id: string; p_token?: string }
         Returns: {
@@ -3675,9 +3851,11 @@ export type Database = {
           dataset_2_ids: string[] | null
           dataset_2_type: string
           description: string | null
+          graph_complete_votes: Json | null
           id: string
           max_iterations: number
           name: string
+          phase: string | null
           problem_shape: Json | null
           project_id: string
           status: string
@@ -3712,9 +3890,11 @@ export type Database = {
           dataset_2_ids: string[] | null
           dataset_2_type: string
           description: string | null
+          graph_complete_votes: Json | null
           id: string
           max_iterations: number
           name: string
+          phase: string | null
           problem_shape: Json | null
           project_id: string
           status: string
@@ -5118,6 +5298,37 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      insert_audit_graph_edge_with_token: {
+        Args: {
+          p_created_by_agent?: string
+          p_edge_type?: string
+          p_label?: string
+          p_metadata?: Json
+          p_session_id: string
+          p_source_node_id: string
+          p_target_node_id: string
+          p_token: string
+          p_weight?: number
+        }
+        Returns: {
+          created_at: string
+          created_by_agent: string
+          edge_type: string
+          id: string
+          label: string | null
+          metadata: Json | null
+          session_id: string
+          source_node_id: string
+          target_node_id: string
+          weight: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "audit_graph_edges"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       insert_audit_session_with_token: {
         Args: {
           p_agent_definitions?: Json
@@ -5144,9 +5355,11 @@ export type Database = {
           dataset_2_ids: string[] | null
           dataset_2_type: string
           description: string | null
+          graph_complete_votes: Json | null
           id: string
           max_iterations: number
           name: string
+          phase: string | null
           problem_shape: Json | null
           project_id: string
           status: string
@@ -6486,6 +6699,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_audit_session_phase_with_token: {
+        Args: {
+          p_graph_complete_votes?: Json
+          p_phase: string
+          p_session_id: string
+          p_token: string
+        }
+        Returns: undefined
+      }
       update_audit_session_with_token: {
         Args: {
           p_consensus_reached?: boolean
@@ -6511,9 +6733,11 @@ export type Database = {
           dataset_2_ids: string[] | null
           dataset_2_type: string
           description: string | null
+          graph_complete_votes: Json | null
           id: string
           max_iterations: number
           name: string
+          phase: string | null
           problem_shape: Json | null
           project_id: string
           status: string
@@ -6988,6 +7212,46 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "repo_staging"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_audit_graph_node_with_token: {
+        Args: {
+          p_color?: string
+          p_created_by_agent?: string
+          p_description?: string
+          p_label: string
+          p_metadata?: Json
+          p_node_type?: string
+          p_session_id: string
+          p_size?: number
+          p_source_dataset?: string
+          p_source_element_ids?: string[]
+          p_token: string
+          p_x_position?: number
+          p_y_position?: number
+        }
+        Returns: {
+          color: string | null
+          created_at: string
+          created_by_agent: string
+          description: string | null
+          id: string
+          label: string
+          metadata: Json | null
+          node_type: string
+          session_id: string
+          size: number | null
+          source_dataset: string | null
+          source_element_ids: string[] | null
+          updated_at: string
+          x_position: number | null
+          y_position: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "audit_graph_nodes"
           isOneToOne: true
           isSetofReturn: false
         }

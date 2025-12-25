@@ -88,23 +88,8 @@ export function TesseractVisualizer({
 
   const cellSize = 40 * zoom;
 
-  if (cells.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Grid3X3 className="h-5 w-5" />
-            Tesseract Visualization
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center h-48 text-muted-foreground">
-            <p>No tesseract data yet. Start an audit to populate the grid.</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  // Show empty grid skeleton when no cells but session exists
+  const showEmptyGrid = cells.length === 0;
 
   return (
     <Card>
@@ -147,6 +132,41 @@ export function TesseractVisualizer({
         </div>
       </CardHeader>
       <CardContent>
+        {showEmptyGrid ? (
+          <div className="space-y-4">
+            <div className="text-center text-muted-foreground mb-4">
+              <p className="font-medium">Empty Tesseract Framework</p>
+              <p className="text-sm">Agents will populate this grid during analysis</p>
+            </div>
+            {/* Empty grid skeleton */}
+            <div className="grid gap-1 justify-center">
+              <div className="flex items-center gap-1">
+                <div className="w-20 h-8" />
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div
+                    key={`header-${i}`}
+                    className="w-10 h-8 bg-muted/30 rounded flex items-center justify-center text-xs text-muted-foreground"
+                  >
+                    E{i}
+                  </div>
+                ))}
+              </div>
+              {["Identify", "Complete", "Correct", "Quality", "Integrate"].map((step, stepIdx) => (
+                <div key={step} className="flex items-center gap-1">
+                  <div className="w-20 h-10 flex items-center text-xs text-muted-foreground truncate pr-1">
+                    {step}
+                  </div>
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div
+                      key={`cell-${stepIdx}-${i}`}
+                      className="w-10 h-10 bg-muted/20 border border-border/30 rounded"
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
         <ScrollArea className="w-full">
           <div className="min-w-max">
             {/* Header row with X labels */}
@@ -254,6 +274,7 @@ export function TesseractVisualizer({
           </div>
           <ScrollBar orientation="horizontal" />
         </ScrollArea>
+        )}
 
         {/* Legend */}
         <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t text-xs">

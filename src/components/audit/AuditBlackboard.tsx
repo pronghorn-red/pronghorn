@@ -135,8 +135,8 @@ export function AuditBlackboard({
     entryTypeConfig[type] || { variant: "outline" as const, label: type };
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="pb-3">
+    <Card className="h-full flex flex-col overflow-hidden">
+      <CardHeader className="pb-3 shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
@@ -152,18 +152,18 @@ export function AuditBlackboard({
 
         {/* Filters */}
         <div className="flex flex-wrap gap-2 mt-3">
-          <div className="relative flex-1 min-w-[150px]">
+          <div className="relative flex-1 min-w-[120px] max-w-[200px]">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search entries..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-8 h-9"
             />
           </div>
           <Select value={filterRole} onValueChange={setFilterRole}>
-            <SelectTrigger className="w-[140px] h-9">
-              <SelectValue placeholder="Filter by role" />
+            <SelectTrigger className="w-[130px] h-9">
+              <SelectValue placeholder="Role" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Roles</SelectItem>
@@ -175,8 +175,8 @@ export function AuditBlackboard({
             </SelectContent>
           </Select>
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[140px] h-9">
-              <SelectValue placeholder="Filter by type" />
+            <SelectTrigger className="w-[130px] h-9">
+              <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
@@ -191,7 +191,7 @@ export function AuditBlackboard({
       </CardHeader>
 
       <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-[400px]">
+        <ScrollArea className="h-full max-h-[500px]">
           <div className="px-4 pb-4 space-y-2">
             {filteredEntries.length === 0 ? (
               <div className="flex items-center justify-center h-32 text-muted-foreground">
@@ -215,45 +215,45 @@ export function AuditBlackboard({
                     open={isExpanded}
                     onOpenChange={() => toggleExpanded(entry.id)}
                   >
-                    <div className="border rounded-lg bg-card">
+                    <div className="border rounded-lg bg-card overflow-hidden">
                       <CollapsibleTrigger asChild>
                         <Button
                           variant="ghost"
                           className="w-full justify-start p-3 h-auto hover:bg-muted/50"
                         >
-                          <div className="flex items-start gap-3 w-full">
+                          <div className="flex items-start gap-3 w-full min-w-0">
                             <div
-                              className={`p-1.5 rounded-md bg-muted ${agent.color}`}
+                              className={`p-1.5 rounded-md bg-muted ${agent.color} shrink-0`}
                             >
                               <Icon className="h-4 w-4" />
                             </div>
-                            <div className="flex-1 text-left">
+                            <div className="flex-1 text-left min-w-0 overflow-hidden">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium text-sm">
+                                <span className="font-medium text-sm truncate">
                                   {agent.label}
                                 </span>
                                 <Badge
                                   variant={entryType.variant}
-                                  className="text-[10px]"
+                                  className="text-[10px] shrink-0"
                                 >
                                   {entryType.label}
                                 </Badge>
                                 {entry.confidence !== null && (
                                   <Badge
                                     variant="outline"
-                                    className="text-[10px]"
+                                    className="text-[10px] shrink-0"
                                   >
                                     {Math.round(entry.confidence * 100)}%
                                   </Badge>
                                 )}
-                                <span className="text-xs text-muted-foreground ml-auto">
+                                <span className="text-xs text-muted-foreground ml-auto shrink-0">
                                   {formatDistanceToNow(
                                     new Date(entry.created_at),
                                     { addSuffix: true }
                                   )}
                                 </span>
                               </div>
-                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2 break-words">
                                 {entry.content}
                               </p>
                             </div>
@@ -270,8 +270,8 @@ export function AuditBlackboard({
 
                       <CollapsibleContent>
                         <div className="px-3 pb-3 pt-0 border-t">
-                          <div className="mt-3 space-y-2">
-                            <p className="text-sm whitespace-pre-wrap">
+                          <div className="mt-3 space-y-2 overflow-hidden">
+                            <p className="text-sm whitespace-pre-wrap break-words">
                               {entry.content}
                             </p>
                             {entry.target_agent && (
@@ -283,11 +283,11 @@ export function AuditBlackboard({
                               </div>
                             )}
                             {hasEvidence && (
-                              <div className="bg-muted/50 rounded p-2 text-xs">
+                              <div className="bg-muted/50 rounded p-2 text-xs overflow-hidden">
                                 <div className="font-medium mb-1">
                                   Evidence:
                                 </div>
-                                <pre className="whitespace-pre-wrap text-muted-foreground">
+                                <pre className="whitespace-pre-wrap text-muted-foreground break-words overflow-x-auto max-w-full">
                                   {JSON.stringify(entry.evidence, null, 2)}
                                 </pre>
                               </div>

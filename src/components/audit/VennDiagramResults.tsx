@@ -286,8 +286,8 @@ export function VennDiagramResults({
         </div>
       </CardHeader>
 
-      <CardContent className="p-0">
-        <ScrollArea className="max-h-[500px]">
+      <CardContent className="p-0 flex-1 overflow-hidden">
+        <ScrollArea className="h-full max-h-[600px]">
           <div className="divide-y">
             {renderSection(
               `Unique to ${dataset1Label}`,
