@@ -78,7 +78,7 @@ export default function Chat() {
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
   const [isAttachDialogOpen, setIsAttachDialogOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true); // Default collapsed, will expand on desktop
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -157,6 +157,12 @@ export default function Chat() {
   // Scroll the latest user message to the top of the viewport once after sending
   // We now do this imperatively in handleSendMessage to avoid repeated scrolling during streaming.
 
+  // Expand sidebar on desktop by default
+  useEffect(() => {
+    if (!isMobile) {
+      setIsSidebarCollapsed(false);
+    }
+  }, [isMobile]);
 
   // Detect user scroll and update auto-scroll state
   useEffect(() => {
@@ -702,26 +708,38 @@ export default function Chat() {
             }`}
           >
             {/* Header with Menu and Collapse Toggle */}
-            <div className="flex items-center justify-between p-2 border-b border-border">
-              {!isSidebarCollapsed && (
+            <div className="flex flex-col items-center p-2 border-b border-border gap-2">
+              <div className="flex items-center justify-between w-full">
+                {!isSidebarCollapsed && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setIsProjectSidebarOpen(true)}
+                    aria-label="Open menu"
+                  >
+                    <Menu className="h-4 w-4" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setIsProjectSidebarOpen(true)}
-                  aria-label="Open menu"
+                  className="h-8 w-8 ml-auto"
+                  onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                 >
-                  <Menu className="h-4 w-4" />
+                  {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                </Button>
+              </div>
+              {isSidebarCollapsed && (
+                <Button
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={handleNewChat}
+                  aria-label="New Chat"
+                >
+                  <Plus className="h-4 w-4" />
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 ml-auto"
-                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-              >
-                {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-              </Button>
             </div>
 
             {!isSidebarCollapsed && (
