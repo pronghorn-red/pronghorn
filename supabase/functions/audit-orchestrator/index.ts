@@ -26,6 +26,67 @@ interface ProblemShape {
   steps: Array<{ step: number; label: string }>;
 }
 
+// Normalize varied LLM response formats into our expected structure
+function normalizeAgentResponse(raw: any): any {
+  // If already in expected format with observations array
+  if (raw.observations && Array.isArray(raw.observations) && raw.observations.length > 0 && raw.observations[0].elementId) {
+    return raw;
+  }
+
+  const normalized: any = {
+    reasoning: raw.reasoning || raw.summary || "",
+    observations: [],
+    blackboardEntry: raw.blackboardEntry || null,
+    sectorComplete: raw.sectorComplete ?? raw.sector_complete ?? true,
+    consensusVote: raw.consensusVote ?? raw.consensus_vote ?? false,
+  };
+
+  // Find the analysis array in various formats
+  const analysisSource = raw.observations || raw.audit_results || raw.auditReport || raw.analysis || [];
+  const items = Array.isArray(analysisSource) ? analysisSource : (analysisSource?.analysis || []);
+
+  for (const item of items) {
+    // Extract element ID from various field names
+    const elementId = item.elementId || item.elementID || item.element_id || 
+                      item.d1_element_id || item.requirement_id || item.id || "";
+    const elementLabel = item.elementLabel || item.elementName || item.element_name || 
+                         item.d1_element_name || item.requirement_name || "";
+
+    // Extract steps/analysis from various formats
+    const steps = item.analysis || item.analysis_steps || item.steps || [];
+    
+    for (const step of steps) {
+      const stepNum = step.step || 
+                      (step.step_name === "Identification" ? 1 :
+                       step.step_name === "Completeness" ? 2 :
+                       step.step_name === "Correctness" ? 3 :
+                       step.step_name === "Quality" ? 4 :
+                       step.step_name === "Integration" ? 5 : 1);
+
+      normalized.observations.push({
+        elementId,
+        elementLabel,
+        step: typeof stepNum === 'number' ? stepNum : parseInt(stepNum) || 1,
+        polarity: typeof step.polarity === 'number' ? step.polarity : 0,
+        criticality: step.criticality || (step.polarity < -0.5 ? "major" : step.polarity < 0 ? "minor" : "info"),
+        evidence: step.evidence || step.observation || "",
+      });
+    }
+  }
+
+  // Create blackboard entry from summary if not present
+  if (!normalized.blackboardEntry && (raw.summary || normalized.observations.length > 0)) {
+    normalized.blackboardEntry = {
+      entryType: "observation",
+      content: raw.summary || `Analyzed ${normalized.observations.length} observations`,
+      confidence: 0.7,
+    };
+  }
+
+  console.log(`Normalized response: ${normalized.observations.length} observations, hasBlackboard: ${!!normalized.blackboardEntry}`);
+  return normalized;
+}
+
 // Parse JSON from LLM response with multiple fallback methods
 function parseAgentResponse(rawText: string): any {
   const text = rawText.trim();
@@ -35,7 +96,7 @@ function parseAgentResponse(rawText: string): any {
     try {
       const parsed = JSON.parse(jsonStr);
       console.log(`JSON parsed via ${method}`);
-      return parsed;
+      return normalizeAgentResponse(parsed);
     } catch (e) {
       console.log(`Parse failed (${method}):`, (e as Error).message);
       return null;
@@ -62,7 +123,7 @@ function parseAgentResponse(rawText: string): any {
   }
 
   console.error("All parsing methods failed");
-  return { error: "parse_failed", raw: text.slice(0, 500) };
+  return { error: "parse_failed", raw: text.slice(0, 500), observations: [], blackboardEntry: null };
 }
 
 // Get Grok response schema for audit agent
