@@ -1,0 +1,703 @@
+{
+  "agent_identity": {
+    "name": "AuditOrchestrator",
+    "version": "1.0.0",
+    "description": "Multi-agent orchestrator for cognitive cross-comparison audits between project datasets. Coordinates specialized agent personas to build semantic understanding of alignment between requirements, canvas, code, standards, and artifacts.",
+    "capabilities": [
+      "Problem shape analysis and cognitive mapping",
+      "Parallel agent spawning and coordination",
+      "Shared blackboard memory management",
+      "Tesseract evidence grid population",
+      "Consensus detection and voting",
+      "Venn diagram synthesis"
+    ]
+  },
+
+  "audit_session": {
+    "lifecycle": [
+      "pending",
+      "analyzing_shape",
+      "agents_spawning",
+      "agents_active",
+      "consensus_check",
+      "finalizing",
+      "completed",
+      "failed",
+      "paused"
+    ],
+    
+    "rpc_create": "insert_audit_session_with_token",
+    "rpc_get": "get_audit_session_with_token",
+    "rpc_update": "update_audit_session_with_token",
+    
+    "parameters": {
+      "p_project_id": "UUID of the project",
+      "p_name": "Audit session name",
+      "p_dataset_1_type": "Type: requirements, canvas, repository, standards, artifacts",
+      "p_dataset_1_ids": "Array of specific IDs or null for all",
+      "p_dataset_2_type": "Type: requirements, canvas, repository, standards, artifacts",
+      "p_dataset_2_ids": "Array of specific IDs or null for all",
+      "p_agent_definitions": "JSONB array of agent configurations",
+      "p_max_iterations": "Maximum iterations (default 500)",
+      "p_token": "Share token for authorization"
+    },
+    
+    "minimum_role": "editor"
+  },
+
+  "data_source_tools": {
+    "description": "Tools for reading from project datasets. These REUSE existing RPC functions - no new implementations needed.",
+
+    "get_problem_shape": {
+      "rpc_function": "get_audit_problem_shape_with_token",
+      "description": "Build cognitive map of both datasets before agent execution. Analyzes structure, extracts key terms, calculates complexity.",
+      "parameters": {
+        "p_session_id": "UUID of the audit session",
+        "p_token": "Share token for authorization"
+      },
+      "returns": {
+        "sessionId": "Session UUID",
+        "dataset1": {
+          "type": "Dataset type",
+          "totalElements": "Number of elements",
+          "hierarchy": "Array of HierarchyNode objects",
+          "keyTerms": "Extracted keywords for semantic matching",
+          "structure": "flat | tree | graph",
+          "summary": "LLM-generated overview"
+        },
+        "dataset2": "Same structure as dataset1",
+        "estimatedComplexity": "1-10 scale",
+        "recommendedIterations": "Suggested max iterations",
+        "sectorAssignments": "Pre-computed agent assignments"
+      },
+      "minimum_role": "viewer"
+    },
+
+    "read_dataset_element": {
+      "description": "Read a specific element from either dataset. Routes to appropriate existing RPC based on dataset type.",
+      "routing": {
+        "requirements": {
+          "rpc_function": "get_requirement_by_id_with_token",
+          "parameters": {
+            "p_requirement_id": "UUID of requirement",
+            "p_token": "Share token"
+          }
+        },
+        "canvas": {
+          "nodes": {
+            "rpc_function": "get_canvas_node_by_id_with_token",
+            "parameters": {
+              "p_node_id": "UUID of node",
+              "p_token": "Share token"
+            }
+          },
+          "edges": {
+            "rpc_function": "get_canvas_edge_by_id_with_token",
+            "parameters": {
+              "p_edge_id": "UUID of edge",
+              "p_token": "Share token"
+            }
+          }
+        },
+        "repository": {
+          "rpc_function": "get_file_content_with_token",
+          "parameters": {
+            "p_file_id": "UUID of file",
+            "p_token": "Share token"
+          }
+        },
+        "standards": {
+          "rpc_function": "get_standard_by_id_with_token",
+          "parameters": {
+            "p_standard_id": "UUID of standard",
+            "p_token": "Share token"
+          }
+        },
+        "artifacts": {
+          "rpc_function": "get_artifact_by_id_with_token",
+          "parameters": {
+            "p_artifact_id": "UUID of artifact",
+            "p_token": "Share token"
+          }
+        }
+      },
+      "minimum_role": "viewer"
+    },
+
+    "search_dataset": {
+      "description": "Keyword search within a dataset. Routes to existing search RPC functions.",
+      "routing": {
+        "requirements": {
+          "rpc_function": "search_requirements_with_token",
+          "parameters": {
+            "p_project_id": "Project UUID",
+            "p_search_term": "Search keywords",
+            "p_token": "Share token"
+          }
+        },
+        "canvas": {
+          "rpc_function": "search_canvas_with_token",
+          "note": "May need to implement - searches node labels and descriptions"
+        },
+        "repository": {
+          "rpc_function": "search_file_content_with_token",
+          "parameters": {
+            "p_repo_id": "Repository UUID",
+            "p_search_term": "Search keywords",
+            "p_token": "Share token"
+          }
+        },
+        "standards": {
+          "rpc_function": "search_standards_with_token",
+          "parameters": {
+            "p_project_id": "Project UUID",
+            "p_search_term": "Search keywords",
+            "p_token": "Share token"
+          }
+        },
+        "artifacts": {
+          "rpc_function": "search_artifacts_with_token",
+          "note": "May need to implement - searches artifact content"
+        }
+      },
+      "minimum_role": "viewer"
+    },
+
+    "get_dataset_summary": {
+      "description": "Get hierarchical overview of a dataset without loading full content.",
+      "routing": {
+        "requirements": {
+          "rpc_function": "get_requirements_with_token",
+          "postprocess": "Build hierarchy tree from flat list"
+        },
+        "canvas": {
+          "rpc_function": "get_canvas_summary_with_token",
+          "parameters": {
+            "p_project_id": "Project UUID",
+            "p_token": "Share token"
+          }
+        },
+        "repository": {
+          "rpc_function": "get_repo_files_with_token",
+          "postprocess": "Build directory tree from file paths"
+        },
+        "standards": {
+          "rpc_function": "get_project_standards_detail_with_token",
+          "parameters": {
+            "p_project_id": "Project UUID",
+            "p_token": "Share token"
+          }
+        },
+        "artifacts": {
+          "rpc_function": "get_artifacts_with_token",
+          "postprocess": "Return titles and summaries only"
+        }
+      },
+      "minimum_role": "viewer"
+    }
+  },
+
+  "shared_memory_tools": {
+    "description": "Tools for reading and writing to shared agent memory structures.",
+
+    "blackboard": {
+      "read": {
+        "rpc_function": "get_audit_blackboard_with_token",
+        "description": "Read blackboard entries. Supports pagination and filtering.",
+        "parameters": {
+          "p_session_id": "UUID of audit session",
+          "p_limit": "Max entries to return (default 50)",
+          "p_offset": "Pagination offset",
+          "p_agent_role": "Optional filter by agent role",
+          "p_entry_type": "Optional filter by entry type",
+          "p_token": "Share token"
+        },
+        "returns": "Array of BlackboardEntry objects",
+        "minimum_role": "viewer"
+      },
+      
+      "write": {
+        "rpc_function": "insert_audit_blackboard_with_token",
+        "description": "Add entry to blackboard. Append-only for consistency.",
+        "parameters": {
+          "p_session_id": "UUID of audit session",
+          "p_iteration": "Current iteration number",
+          "p_agent_role": "Role of writing agent",
+          "p_entry_type": "thesis | action | finding | reflection | consensus | request",
+          "p_content": "Entry content (markdown supported)",
+          "p_evidence": "JSONB array of EvidenceRef objects",
+          "p_confidence": "0-1 confidence score",
+          "p_target_agent": "For request type - which agent to ask",
+          "p_token": "Share token"
+        },
+        "minimum_role": "editor"
+      }
+    },
+
+    "tesseract": {
+      "read": {
+        "rpc_function": "get_audit_tesseract_cells_with_token",
+        "description": "Read tesseract cells. Supports filtering by x_element, y_step, or polarity.",
+        "parameters": {
+          "p_session_id": "UUID of audit session",
+          "p_x_element_id": "Optional filter by D1 element",
+          "p_y_step_min": "Optional minimum step",
+          "p_y_step_max": "Optional maximum step",
+          "p_polarity_min": "Optional minimum polarity",
+          "p_polarity_max": "Optional maximum polarity",
+          "p_limit": "Max cells to return",
+          "p_token": "Share token"
+        },
+        "returns": "Array of TesseractCell objects",
+        "minimum_role": "viewer"
+      },
+
+      "read_summary": {
+        "rpc_function": "get_audit_tesseract_summary_with_token",
+        "description": "Get aggregated tesseract statistics without loading individual cells.",
+        "parameters": {
+          "p_session_id": "UUID of audit session",
+          "p_token": "Share token"
+        },
+        "returns": {
+          "totalCells": "Number of populated cells",
+          "polarityDistribution": {
+            "positive": "Count of cells with polarity > 0.5",
+            "neutral": "Count of cells with polarity between -0.5 and 0.5",
+            "negative": "Count of cells with polarity < -0.5"
+          },
+          "criticalityDistribution": {
+            "critical": "Count",
+            "major": "Count",
+            "minor": "Count",
+            "info": "Count"
+          },
+          "coverageByElement": "Array of {elementId, cellCount, avgPolarity}",
+          "recentActivity": "Last 10 cells added"
+        },
+        "minimum_role": "viewer"
+      },
+
+      "write": {
+        "rpc_function": "upsert_audit_tesseract_cell_with_token",
+        "description": "Add or update a tesseract cell. Uses UPSERT on (session_id, x_element_id, y_step).",
+        "parameters": {
+          "p_session_id": "UUID of audit session",
+          "p_x_element_id": "UUID of Dataset 1 element",
+          "p_x_element_type": "Type of element (requirement, canvas_node, etc.)",
+          "p_x_element_label": "Human-readable label",
+          "p_x_index": "Position in Dataset 1 ordering",
+          "p_y_step": "Evidence step/iteration number",
+          "p_y_step_label": "Optional step description",
+          "p_z_polarity": "Polarity score (-1 to +1)",
+          "p_z_criticality": "critical | major | minor | info",
+          "p_evidence_summary": "Brief summary of evidence",
+          "p_evidence_refs": "JSONB array of EvidenceRef objects",
+          "p_contributing_agents": "Array of agent roles that contributed",
+          "p_token": "Share token"
+        },
+        "minimum_role": "editor"
+      }
+    },
+
+    "progress": {
+      "rpc_function": "get_audit_progress_with_token",
+      "description": "Get current session state including iteration count and agent statuses.",
+      "parameters": {
+        "p_session_id": "UUID of audit session",
+        "p_token": "Share token"
+      },
+      "returns": {
+        "sessionId": "Session UUID",
+        "status": "Current session status",
+        "currentIteration": "Current iteration number",
+        "maxIterations": "Maximum allowed iterations",
+        "agentStatuses": "Array of {role, status, sectorComplete, consensusVote}",
+        "consensusReached": "Whether consensus has been achieved",
+        "tesseractFillRate": "Percentage of expected cells populated",
+        "elapsedTime": "Time since session started"
+      },
+      "minimum_role": "viewer"
+    }
+  },
+
+  "collaboration_tools": {
+    "description": "Tools for inter-agent communication and coordination.",
+
+    "request_agent_assistance": {
+      "description": "Ask another agent for domain expertise. Creates a 'request' type blackboard entry.",
+      "implementation": "Uses insert_audit_blackboard_with_token with entry_type='request'",
+      "parameters": {
+        "target_agent": "Role of agent to ask (e.g., 'security_analyst')",
+        "question": "Specific question or request",
+        "context": "Relevant context for the request",
+        "related_elements": "Array of element IDs being analyzed"
+      },
+      "example": {
+        "target_agent": "security_analyst",
+        "question": "Is this authentication flow secure?",
+        "context": "Found implementation in auth.ts that doesn't match the requirement",
+        "related_elements": ["req-uuid-123", "file-uuid-456"]
+      },
+      "minimum_role": "editor"
+    },
+
+    "propose_thesis": {
+      "description": "Propose a theory about alignment/gap for other agents to validate.",
+      "implementation": "Uses insert_audit_blackboard_with_token with entry_type='thesis'",
+      "parameters": {
+        "thesis": "The proposed theory",
+        "evidence": "Array of EvidenceRef supporting the thesis",
+        "confidence": "0-1 confidence in this thesis",
+        "validation_needed": "What validation would strengthen/refute this"
+      },
+      "example": {
+        "thesis": "Requirement R1.2 appears fully implemented across 3 canvas nodes",
+        "evidence": [
+          {"type": "requirement", "id": "req-uuid", "excerpt": "User login flow"},
+          {"type": "canvas_node", "id": "node-1", "excerpt": "Login Page component"},
+          {"type": "canvas_node", "id": "node-2", "excerpt": "Auth API endpoint"},
+          {"type": "canvas_node", "id": "node-3", "excerpt": "Session Manager"}
+        ],
+        "confidence": 0.85,
+        "validation_needed": "Developer agent should verify code implementation exists"
+      },
+      "minimum_role": "editor"
+    },
+
+    "vote_on_consensus": {
+      "rpc_function": "update_audit_agent_consensus_vote_with_token",
+      "description": "Vote that analysis is complete from this agent's perspective.",
+      "parameters": {
+        "p_session_id": "UUID of audit session",
+        "p_agent_role": "Role of voting agent",
+        "p_vote": "true = analysis complete, false = more work needed",
+        "p_justification": "Reason for the vote",
+        "p_token": "Share token"
+      },
+      "consensus_rules": {
+        "requirement": "All active agents must vote true",
+        "minimum_iterations": "At least 10 iterations must have completed",
+        "coverage_threshold": "At least 80% of D1 elements must have tesseract cells"
+      },
+      "minimum_role": "editor"
+    },
+
+    "signal_sector_complete": {
+      "rpc_function": "update_audit_agent_sector_with_token",
+      "description": "Mark assigned sector of Dataset 1 as fully analyzed.",
+      "parameters": {
+        "p_session_id": "UUID of audit session",
+        "p_agent_role": "Role of signaling agent",
+        "p_sector_complete": "true when sector analysis is done",
+        "p_summary": "Summary of findings in this sector",
+        "p_token": "Share token"
+      },
+      "minimum_role": "editor"
+    }
+  },
+
+  "orchestrator_tools": {
+    "description": "Tools only available to the orchestrator for session management.",
+
+    "spawn_agent": {
+      "rpc_function": "insert_audit_agent_instance_with_token",
+      "description": "Create a new agent instance for this session.",
+      "parameters": {
+        "p_session_id": "UUID of audit session",
+        "p_agent_role": "Role identifier (e.g., 'security_analyst')",
+        "p_agent_name": "Display name",
+        "p_system_prompt": "Full system prompt for this agent",
+        "p_sector_start": "Start index of assigned D1 elements",
+        "p_sector_end": "End index of assigned D1 elements",
+        "p_token": "Share token"
+      },
+      "minimum_role": "editor"
+    },
+
+    "terminate_agent": {
+      "rpc_function": "update_audit_agent_status_with_token",
+      "description": "Stop an agent instance.",
+      "parameters": {
+        "p_session_id": "UUID of audit session",
+        "p_agent_role": "Role of agent to terminate",
+        "p_status": "'completed' or 'terminated'",
+        "p_token": "Share token"
+      },
+      "minimum_role": "editor"
+    },
+
+    "check_consensus": {
+      "rpc_function": "get_audit_consensus_state_with_token",
+      "description": "Check if all agents have voted for completion.",
+      "parameters": {
+        "p_session_id": "UUID of audit session",
+        "p_token": "Share token"
+      },
+      "returns": {
+        "totalAgents": "Number of active agents",
+        "votedComplete": "Number who voted complete",
+        "votedContinue": "Number who voted to continue",
+        "notYetVoted": "Number who haven't voted",
+        "consensusReached": "true if all voted complete",
+        "votes": "Array of {role, vote, justification}"
+      },
+      "minimum_role": "viewer"
+    },
+
+    "finalize_venn_diagram": {
+      "rpc_function": "update_audit_session_venn_with_token",
+      "description": "Generate and store the final Venn diagram result.",
+      "parameters": {
+        "p_session_id": "UUID of audit session",
+        "p_venn_result": "JSONB VennResult object",
+        "p_token": "Share token"
+      },
+      "generation_process": [
+        "1. Read all tesseract cells",
+        "2. Group by polarity: positive (>0.5), neutral, negative (<-0.5)",
+        "3. Positive polarity → 'aligned' category",
+        "4. Negative polarity on D1 elements → 'unique to D1' (gaps)",
+        "5. D2 elements not referenced in positive cells → 'unique to D2' (orphans)",
+        "6. Calculate coverage statistics",
+        "7. Generate summary with criticality breakdown"
+      ],
+      "minimum_role": "editor"
+    }
+  },
+
+  "agent_personas": {
+    "description": "Default agent configurations. Can be customized per session.",
+    
+    "security_analyst": {
+      "role": "security_analyst",
+      "name": "Security Analyst",
+      "emoji": "🔒",
+      "color": "#ef4444",
+      "focus": [
+        "Authentication and authorization gaps",
+        "Data exposure risks",
+        "Input validation coverage",
+        "Access control implementation",
+        "Security standard compliance"
+      ],
+      "system_prompt": "You are a cybersecurity expert participating in a multi-agent audit of a software project. Your role is to identify security gaps between the source dataset (Dataset 1) and target dataset (Dataset 2).\n\nYour responsibilities:\n1. Analyze your assigned sector of Dataset 1 elements\n2. Search Dataset 2 for security-related implementations\n3. Identify gaps where security requirements lack implementation\n4. Identify orphan implementations without requirement backing\n5. Document findings with specific evidence\n\nYou have access to a shared BLACKBOARD where all agents communicate. Read it before each action to understand what others have found. Write your findings clearly for other agents.\n\nYou are filling a TESSERACT - a 3D evidence grid. Each cell represents: X=D1 element, Y=your analysis step, Z=polarity (-1 gap, 0 unknown, +1 aligned).\n\nWhen you find alignment, write a positive polarity cell with evidence. When you find a gap, write a negative polarity cell. Be specific about criticality.\n\nVote for consensus only when you have thoroughly analyzed your sector and believe the audit is complete."
+    },
+
+    "business_analyst": {
+      "role": "business_analyst",
+      "name": "Business Analyst",
+      "emoji": "📊",
+      "color": "#3b82f6",
+      "focus": [
+        "Requirements fulfillment",
+        "Business logic coverage",
+        "User story implementation",
+        "Acceptance criteria verification",
+        "Feature completeness"
+      ],
+      "system_prompt": "You are a business analyst participating in a multi-agent audit of a software project. Your role is to verify that business requirements from Dataset 1 are properly represented in Dataset 2.\n\nYour responsibilities:\n1. Analyze business requirements in your assigned sector\n2. Search for corresponding implementations in Dataset 2\n3. Verify acceptance criteria are met\n4. Identify business logic gaps\n5. Document findings with traceability\n\nYou have access to a shared BLACKBOARD where all agents communicate. Coordinate with other agents, especially the Developer for implementation verification.\n\nFill the TESSERACT with your findings. Be thorough but efficient - you don't need to check every combination, focus on meaningful connections.\n\nVote for consensus when you have verified your sector and agree with the overall findings."
+    },
+
+    "developer": {
+      "role": "developer",
+      "name": "Developer",
+      "emoji": "💻",
+      "color": "#10b981",
+      "focus": [
+        "Code implementation completeness",
+        "Technical debt identification",
+        "Architecture alignment",
+        "API coverage",
+        "Component implementation"
+      ],
+      "system_prompt": "You are a senior developer participating in a multi-agent audit of a software project. Your role is to verify technical implementation alignment between Dataset 1 specifications and Dataset 2 implementation artifacts.\n\nYour responsibilities:\n1. Analyze technical specifications in your sector\n2. Verify code/component implementations exist\n3. Assess implementation quality and completeness\n4. Identify technical debt and gaps\n5. Document findings with code references\n\nYou have access to a shared BLACKBOARD. Read what the Business Analyst and Architect have found - you can validate their hypotheses with actual implementation review.\n\nWhen filling the TESSERACT, include specific file paths, function names, or component references as evidence. Other agents rely on your technical verification.\n\nVote for consensus when implementation coverage is verified."
+    },
+
+    "end_user": {
+      "role": "end_user",
+      "name": "End User Advocate",
+      "emoji": "👤",
+      "color": "#8b5cf6",
+      "focus": [
+        "User experience coverage",
+        "Accessibility implementation",
+        "User story completeness",
+        "Usability requirements",
+        "Error handling from user perspective"
+      ],
+      "system_prompt": "You are an end user advocate participating in a multi-agent audit. Your role is to ensure user-facing requirements from Dataset 1 are properly addressed in Dataset 2.\n\nYour responsibilities:\n1. Identify user-facing requirements in your sector\n2. Verify user experience is properly designed/implemented\n3. Check accessibility requirements\n4. Identify usability gaps\n5. Document findings from user perspective\n\nYou have access to a shared BLACKBOARD. Collaborate with the Business Analyst on user stories and the Developer on UI implementation.\n\nIn the TESSERACT, focus on user impact. A missing login button is more critical than a missing internal logging function. Rate criticality from user perspective.\n\nVote for consensus when you're satisfied user needs are addressed."
+    },
+
+    "architect": {
+      "role": "architect",
+      "name": "System Architect",
+      "emoji": "🏗️",
+      "color": "#f59e0b",
+      "focus": [
+        "System design alignment",
+        "Integration completeness",
+        "Component relationships",
+        "Data flow coverage",
+        "Scalability considerations"
+      ],
+      "system_prompt": "You are a system architect participating in a multi-agent audit. Your role is to verify architectural alignment between Dataset 1 design specifications and Dataset 2 implementation.\n\nYour responsibilities:\n1. Analyze architectural requirements in your sector\n2. Verify system design is properly implemented\n3. Check component relationships and integrations\n4. Identify architectural gaps or violations\n5. Document findings with system-level perspective\n\nYou have access to a shared BLACKBOARD. Provide architectural context that helps other agents understand the big picture. When the Developer finds code, help interpret its architectural significance.\n\nIn the TESSERACT, consider system-wide implications. A gap in one component may affect many others. Rate criticality based on architectural impact.\n\nVote for consensus when architectural alignment is verified."
+    }
+  },
+
+  "execution_workflow": {
+    "description": "How the orchestrator coordinates the audit",
+
+    "phases": [
+      {
+        "phase": "1. Initialization",
+        "steps": [
+          "Create audit session with user configuration",
+          "Validate dataset selections",
+          "Initialize empty tesseract dimensions"
+        ]
+      },
+      {
+        "phase": "2. Problem Shape Analysis",
+        "steps": [
+          "Load Dataset 1 summary via existing RPC functions",
+          "Load Dataset 2 summary via existing RPC functions",
+          "Extract key terms for semantic matching",
+          "Calculate estimated complexity",
+          "Determine sector assignments for agents",
+          "Write problem_shape to session"
+        ]
+      },
+      {
+        "phase": "3. Agent Spawning",
+        "steps": [
+          "Create agent instances based on configuration",
+          "Assign sectors to each agent",
+          "Initialize agent system prompts with context"
+        ]
+      },
+      {
+        "phase": "4. Iterative Execution",
+        "steps": [
+          "For each iteration until consensus or max_iterations:",
+          "  - Each agent reads blackboard (last 50 entries)",
+          "  - Each agent reads tesseract summary (not individual cells)",
+          "  - Each agent analyzes assigned sector",
+          "  - Each agent writes findings to tesseract",
+          "  - Each agent writes summary to blackboard",
+          "  - Orchestrator checks for consensus votes",
+          "  - Broadcast iteration progress"
+        ]
+      },
+      {
+        "phase": "5. Consensus Check",
+        "steps": [
+          "Verify all agents have voted",
+          "Check minimum iteration threshold",
+          "Check coverage threshold",
+          "If consensus reached, proceed to finalization",
+          "If not, continue iterations or prompt user"
+        ]
+      },
+      {
+        "phase": "6. Finalization",
+        "steps": [
+          "Generate Venn diagram from tesseract data",
+          "Calculate coverage statistics",
+          "Write venn_result to session",
+          "Mark session as completed",
+          "Broadcast final results"
+        ]
+      }
+    ],
+
+    "iteration_budget": {
+      "description": "How to manage context windows across iterations",
+      "blackboard_context": "Last 50 entries only",
+      "tesseract_context": "Summary statistics, not individual cells",
+      "element_loading": "On-demand via tool calls, not preloaded",
+      "evidence_excerpts": "Max 500 characters per excerpt"
+    }
+  },
+
+  "streaming_events": {
+    "description": "SSE events sent to frontend during execution",
+    
+    "events": [
+      {
+        "type": "session_created",
+        "payload": {"sessionId": "UUID", "status": "pending"}
+      },
+      {
+        "type": "shape_analyzed",
+        "payload": {"dataset1Summary": {}, "dataset2Summary": {}, "complexity": 7}
+      },
+      {
+        "type": "agent_spawned",
+        "payload": {"role": "security_analyst", "sectorStart": 0, "sectorEnd": 25}
+      },
+      {
+        "type": "iteration_start",
+        "payload": {"iteration": 1, "activeAgents": ["security_analyst", "business_analyst"]}
+      },
+      {
+        "type": "blackboard_entry",
+        "payload": {"id": "UUID", "agentRole": "string", "entryType": "string", "content": "string"}
+      },
+      {
+        "type": "tesseract_cell",
+        "payload": {"xElementId": "UUID", "yStep": 1, "zPolarity": 0.8, "criticality": "minor"}
+      },
+      {
+        "type": "iteration_complete",
+        "payload": {"iteration": 1, "cellsAdded": 15, "blackboardEntries": 5}
+      },
+      {
+        "type": "consensus_update",
+        "payload": {"votedComplete": 3, "totalAgents": 5, "reached": false}
+      },
+      {
+        "type": "venn_generated",
+        "payload": {"uniqueToD1": 12, "aligned": 85, "uniqueToD2": 8}
+      },
+      {
+        "type": "audit_complete",
+        "payload": {"sessionId": "UUID", "status": "completed", "totalIterations": 47}
+      },
+      {
+        "type": "error",
+        "payload": {"message": "string", "code": "string", "recoverable": true}
+      }
+    ]
+  },
+
+  "guidelines": {
+    "critical_rules": [
+      "ALWAYS reuse existing RPC functions for data retrieval - never recreate",
+      "ALL new RPC functions must use _with_token pattern with require_role",
+      "Minimum role for write operations is 'editor'",
+      "Blackboard is append-only - never delete or update entries",
+      "Tesseract uses UPSERT - last write wins on conflicts",
+      "Agents must cite specific element IDs as evidence",
+      "Context window management is critical - summarize, don't dump"
+    ],
+
+    "agent_behavior": [
+      "Read blackboard before every action",
+      "Trust what's on the blackboard as ground truth",
+      "Write findings immediately - don't batch",
+      "Vote for consensus only when sector is complete",
+      "Request assistance when outside expertise is needed"
+    ],
+
+    "error_handling": [
+      "Retry transient failures up to 3 times",
+      "Log errors to blackboard for visibility",
+      "Gracefully degrade if one agent fails",
+      "Allow session resume from last checkpoint"
+    ]
+  },
+
+  "version": "1.0.0",
+  "last_updated": "2025-12-25"
+}
