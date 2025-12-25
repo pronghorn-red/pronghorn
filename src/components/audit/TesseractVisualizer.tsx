@@ -1,0 +1,288 @@
+import { useState, useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Grid3X3, Layers, ZoomIn, ZoomOut } from "lucide-react";
+import type { Database } from "@/integrations/supabase/types";
+
+type TesseractCell = Database["public"]["Tables"]["audit_tesseract_cells"]["Row"];
+
+interface TesseractVisualizerProps {
+  cells: TesseractCell[];
+  currentIteration?: number;
+  onCellClick?: (cell: TesseractCell) => void;
+}
+
+export function TesseractVisualizer({
+  cells,
+  currentIteration = 0,
+  onCellClick,
+}: TesseractVisualizerProps) {
+  const [zoom, setZoom] = useState(1);
+  const [showLabels, setShowLabels] = useState(true);
+
+  // Build grid structure from cells
+  const { xElements, ySteps, cellMap, maxPolarity } = useMemo(() => {
+    const xSet = new Map<number, { id: string; label: string; type: string }>();
+    const ySet = new Map<number, string>();
+    const cMap = new Map<string, TesseractCell>();
+    let maxP = 1;
+
+    cells.forEach((cell) => {
+      xSet.set(cell.x_index, {
+        id: cell.x_element_id,
+        label: cell.x_element_label || `Element ${cell.x_index}`,
+        type: cell.x_element_type,
+      });
+      ySet.set(cell.y_step, cell.y_step_label || `Step ${cell.y_step}`);
+      cMap.set(`${cell.x_index}-${cell.y_step}`, cell);
+      maxP = Math.max(maxP, Math.abs(cell.z_polarity));
+    });
+
+    return {
+      xElements: Array.from(xSet.entries()).sort((a, b) => a[0] - b[0]),
+      ySteps: Array.from(ySet.entries()).sort((a, b) => a[0] - b[0]),
+      cellMap: cMap,
+      maxPolarity: maxP,
+    };
+  }, [cells]);
+
+  // Get color based on polarity (-1 to +1)
+  const getPolarityColor = (polarity: number): string => {
+    if (polarity === 0) return "bg-muted";
+    if (polarity > 0) {
+      const intensity = Math.min(polarity / maxPolarity, 1);
+      if (intensity > 0.7) return "bg-green-500";
+      if (intensity > 0.4) return "bg-green-400";
+      return "bg-green-300";
+    } else {
+      const intensity = Math.min(Math.abs(polarity) / maxPolarity, 1);
+      if (intensity > 0.7) return "bg-red-500";
+      if (intensity > 0.4) return "bg-red-400";
+      return "bg-red-300";
+    }
+  };
+
+  // Get criticality badge variant
+  const getCriticalityVariant = (
+    criticality?: string | null
+  ): "destructive" | "default" | "secondary" | "outline" => {
+    switch (criticality) {
+      case "critical":
+        return "destructive";
+      case "major":
+        return "default";
+      case "minor":
+        return "secondary";
+      default:
+        return "outline";
+    }
+  };
+
+  const cellSize = 40 * zoom;
+
+  if (cells.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Grid3X3 className="h-5 w-5" />
+            Tesseract Visualization
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center h-48 text-muted-foreground">
+            <p>No tesseract data yet. Start an audit to populate the grid.</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Grid3X3 className="h-5 w-5" />
+            Tesseract Visualization
+            {currentIteration > 0 && (
+              <Badge variant="outline" className="ml-2">
+                Iteration {currentIteration}
+              </Badge>
+            )}
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setShowLabels(!showLabels)}
+            >
+              <Layers className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
+              disabled={zoom <= 0.5}
+            >
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setZoom(Math.min(2, zoom + 0.25))}
+              disabled={zoom >= 2}
+            >
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <ScrollArea className="w-full">
+          <div className="min-w-max">
+            {/* Header row with X labels */}
+            <div className="flex">
+              <div
+                style={{ width: cellSize * 2, height: cellSize }}
+                className="shrink-0"
+              />
+              {xElements.map(([xIndex, xData]) => (
+                <TooltipProvider key={xIndex}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        style={{ width: cellSize, height: cellSize }}
+                        className="flex items-center justify-center text-xs font-medium text-muted-foreground truncate px-1 cursor-help"
+                      >
+                        {showLabels ? xData.label.slice(0, 6) : xIndex}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-medium">{xData.label}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Type: {xData.type}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ))}
+            </div>
+
+            {/* Data rows */}
+            {ySteps.map(([yStep, yLabel]) => (
+              <div key={yStep} className="flex">
+                {/* Y axis label */}
+                <div
+                  style={{ width: cellSize * 2, height: cellSize }}
+                  className="flex items-center text-xs font-medium text-muted-foreground truncate pr-2 shrink-0"
+                >
+                  {showLabels ? yLabel : `Step ${yStep}`}
+                </div>
+
+                {/* Cells */}
+                {xElements.map(([xIndex]) => {
+                  const cell = cellMap.get(`${xIndex}-${yStep}`);
+                  return (
+                    <TooltipProvider key={`${xIndex}-${yStep}`}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            style={{ width: cellSize, height: cellSize }}
+                            className={`
+                              border border-border/50 flex items-center justify-center cursor-pointer
+                              transition-all duration-200 hover:ring-2 hover:ring-primary/50
+                              ${cell ? getPolarityColor(cell.z_polarity) : "bg-muted/30"}
+                            `}
+                            onClick={() => cell && onCellClick?.(cell)}
+                          >
+                            {cell?.z_criticality && (
+                              <span className="text-[8px] font-bold text-white drop-shadow">
+                                {cell.z_criticality[0].toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          {cell ? (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant={getCriticalityVariant(
+                                    cell.z_criticality
+                                  )}
+                                >
+                                  {cell.z_criticality || "info"}
+                                </Badge>
+                                <span className="text-sm">
+                                  Polarity: {cell.z_polarity.toFixed(2)}
+                                </span>
+                              </div>
+                              {cell.evidence_summary && (
+                                <p className="text-xs">
+                                  {cell.evidence_summary}
+                                </p>
+                              )}
+                              {cell.contributing_agents &&
+                                cell.contributing_agents.length > 0 && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Contributors:{" "}
+                                    {cell.contributing_agents.join(", ")}
+                                  </p>
+                                )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              No data for this cell
+                            </p>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
+
+        {/* Legend */}
+        <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t text-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-red-500 rounded" />
+            <span>Negative (-1)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-muted rounded" />
+            <span>Neutral (0)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-green-500 rounded" />
+            <span>Positive (+1)</span>
+          </div>
+          <div className="border-l pl-4 flex items-center gap-2">
+            <Badge variant="destructive" className="text-[10px]">
+              C
+            </Badge>
+            <span>Critical</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="default" className="text-[10px]">
+              M
+            </Badge>
+            <span>Major</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
