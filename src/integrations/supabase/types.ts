@@ -562,6 +562,106 @@ export type Database = {
           },
         ]
       }
+      audit_agent_instances: {
+        Row: {
+          agent_name: string
+          agent_role: string
+          completed_at: string | null
+          consensus_vote: boolean | null
+          created_at: string
+          id: string
+          sector_complete: boolean | null
+          sector_end: number | null
+          sector_start: number | null
+          session_id: string
+          status: string
+          system_prompt: string
+        }
+        Insert: {
+          agent_name: string
+          agent_role: string
+          completed_at?: string | null
+          consensus_vote?: boolean | null
+          created_at?: string
+          id?: string
+          sector_complete?: boolean | null
+          sector_end?: number | null
+          sector_start?: number | null
+          session_id: string
+          status?: string
+          system_prompt: string
+        }
+        Update: {
+          agent_name?: string
+          agent_role?: string
+          completed_at?: string | null
+          consensus_vote?: boolean | null
+          created_at?: string
+          id?: string
+          sector_complete?: boolean | null
+          sector_end?: number | null
+          sector_start?: number | null
+          session_id?: string
+          status?: string
+          system_prompt?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_agent_instances_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "audit_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_blackboard: {
+        Row: {
+          agent_role: string
+          confidence: number | null
+          content: string
+          created_at: string
+          entry_type: string
+          evidence: Json | null
+          id: string
+          iteration: number
+          session_id: string
+          target_agent: string | null
+        }
+        Insert: {
+          agent_role: string
+          confidence?: number | null
+          content: string
+          created_at?: string
+          entry_type: string
+          evidence?: Json | null
+          id?: string
+          iteration: number
+          session_id: string
+          target_agent?: string | null
+        }
+        Update: {
+          agent_role?: string
+          confidence?: number | null
+          content?: string
+          created_at?: string
+          entry_type?: string
+          evidence?: Json | null
+          id?: string
+          iteration?: number
+          session_id?: string
+          target_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_blackboard_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "audit_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_findings: {
         Row: {
           audit_run_id: string
@@ -641,6 +741,148 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_sessions: {
+        Row: {
+          agent_definitions: Json | null
+          completed_at: string | null
+          consensus_reached: boolean | null
+          consensus_votes: Json | null
+          created_at: string
+          created_by: string | null
+          current_iteration: number
+          dataset_1_ids: string[] | null
+          dataset_1_type: string
+          dataset_2_ids: string[] | null
+          dataset_2_type: string
+          description: string | null
+          id: string
+          max_iterations: number
+          name: string
+          problem_shape: Json | null
+          project_id: string
+          status: string
+          tesseract_dimensions: Json | null
+          updated_at: string
+          venn_result: Json | null
+        }
+        Insert: {
+          agent_definitions?: Json | null
+          completed_at?: string | null
+          consensus_reached?: boolean | null
+          consensus_votes?: Json | null
+          created_at?: string
+          created_by?: string | null
+          current_iteration?: number
+          dataset_1_ids?: string[] | null
+          dataset_1_type: string
+          dataset_2_ids?: string[] | null
+          dataset_2_type: string
+          description?: string | null
+          id?: string
+          max_iterations?: number
+          name: string
+          problem_shape?: Json | null
+          project_id: string
+          status?: string
+          tesseract_dimensions?: Json | null
+          updated_at?: string
+          venn_result?: Json | null
+        }
+        Update: {
+          agent_definitions?: Json | null
+          completed_at?: string | null
+          consensus_reached?: boolean | null
+          consensus_votes?: Json | null
+          created_at?: string
+          created_by?: string | null
+          current_iteration?: number
+          dataset_1_ids?: string[] | null
+          dataset_1_type?: string
+          dataset_2_ids?: string[] | null
+          dataset_2_type?: string
+          description?: string | null
+          id?: string
+          max_iterations?: number
+          name?: string
+          problem_shape?: Json | null
+          project_id?: string
+          status?: string
+          tesseract_dimensions?: Json | null
+          updated_at?: string
+          venn_result?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_tesseract_cells: {
+        Row: {
+          contributing_agents: string[] | null
+          created_at: string
+          evidence_refs: Json | null
+          evidence_summary: string | null
+          id: string
+          session_id: string
+          updated_at: string
+          x_element_id: string
+          x_element_label: string | null
+          x_element_type: string
+          x_index: number
+          y_step: number
+          y_step_label: string | null
+          z_criticality: string | null
+          z_polarity: number
+        }
+        Insert: {
+          contributing_agents?: string[] | null
+          created_at?: string
+          evidence_refs?: Json | null
+          evidence_summary?: string | null
+          id?: string
+          session_id: string
+          updated_at?: string
+          x_element_id: string
+          x_element_label?: string | null
+          x_element_type: string
+          x_index: number
+          y_step: number
+          y_step_label?: string | null
+          z_criticality?: string | null
+          z_polarity?: number
+        }
+        Update: {
+          contributing_agents?: string[] | null
+          created_at?: string
+          evidence_refs?: Json | null
+          evidence_summary?: string | null
+          id?: string
+          session_id?: string
+          updated_at?: string
+          x_element_id?: string
+          x_element_label?: string | null
+          x_element_type?: string
+          x_index?: number
+          y_step?: number
+          y_step_label?: string | null
+          z_criticality?: string | null
+          z_polarity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_tesseract_cells_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "audit_sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -3061,6 +3303,10 @@ export type Database = {
         Args: { p_id: string; p_token: string }
         Returns: undefined
       }
+      delete_audit_session_with_token: {
+        Args: { p_session_id: string; p_token?: string }
+        Returns: boolean
+      }
       delete_canvas_edge_with_token: {
         Args: { p_id: string; p_token: string }
         Returns: undefined
@@ -3358,6 +3604,169 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_audit_agent_instances_with_token: {
+        Args: { p_session_id: string; p_token?: string }
+        Returns: {
+          agent_name: string
+          agent_role: string
+          completed_at: string | null
+          consensus_vote: boolean | null
+          created_at: string
+          id: string
+          sector_complete: boolean | null
+          sector_end: number | null
+          sector_start: number | null
+          session_id: string
+          status: string
+          system_prompt: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "audit_agent_instances"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_audit_blackboard_with_token: {
+        Args: {
+          p_agent_role?: string
+          p_entry_type?: string
+          p_limit?: number
+          p_offset?: number
+          p_session_id: string
+          p_token?: string
+        }
+        Returns: {
+          agent_role: string
+          confidence: number | null
+          content: string
+          created_at: string
+          entry_type: string
+          evidence: Json | null
+          id: string
+          iteration: number
+          session_id: string
+          target_agent: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "audit_blackboard"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_audit_consensus_state_with_token: {
+        Args: { p_session_id: string; p_token?: string }
+        Returns: Json
+      }
+      get_audit_session_with_token: {
+        Args: { p_session_id: string; p_token?: string }
+        Returns: {
+          agent_definitions: Json | null
+          completed_at: string | null
+          consensus_reached: boolean | null
+          consensus_votes: Json | null
+          created_at: string
+          created_by: string | null
+          current_iteration: number
+          dataset_1_ids: string[] | null
+          dataset_1_type: string
+          dataset_2_ids: string[] | null
+          dataset_2_type: string
+          description: string | null
+          id: string
+          max_iterations: number
+          name: string
+          problem_shape: Json | null
+          project_id: string
+          status: string
+          tesseract_dimensions: Json | null
+          updated_at: string
+          venn_result: Json | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "audit_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_audit_sessions_with_token: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_project_id: string
+          p_token?: string
+        }
+        Returns: {
+          agent_definitions: Json | null
+          completed_at: string | null
+          consensus_reached: boolean | null
+          consensus_votes: Json | null
+          created_at: string
+          created_by: string | null
+          current_iteration: number
+          dataset_1_ids: string[] | null
+          dataset_1_type: string
+          dataset_2_ids: string[] | null
+          dataset_2_type: string
+          description: string | null
+          id: string
+          max_iterations: number
+          name: string
+          problem_shape: Json | null
+          project_id: string
+          status: string
+          tesseract_dimensions: Json | null
+          updated_at: string
+          venn_result: Json | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "audit_sessions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_audit_tesseract_cells_with_token: {
+        Args: {
+          p_limit?: number
+          p_polarity_max?: number
+          p_polarity_min?: number
+          p_session_id: string
+          p_token?: string
+          p_x_element_id?: string
+          p_y_step_max?: number
+          p_y_step_min?: number
+        }
+        Returns: {
+          contributing_agents: string[] | null
+          created_at: string
+          evidence_refs: Json | null
+          evidence_summary: string | null
+          id: string
+          session_id: string
+          updated_at: string
+          x_element_id: string
+          x_element_label: string | null
+          x_element_type: string
+          x_index: number
+          y_step: number
+          y_step_label: string | null
+          z_criticality: string | null
+          z_polarity: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "audit_tesseract_cells"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_audit_tesseract_summary_with_token: {
+        Args: { p_session_id: string; p_token?: string }
+        Returns: Json
       }
       get_blackboard_entries_with_token: {
         Args: { p_session_id: string; p_token: string }
@@ -3985,6 +4394,10 @@ export type Database = {
           repo_id: string
           updated_at: string
         }[]
+      }
+      get_project_id_from_audit_session: {
+        Args: { p_session_id: string }
+        Returns: string
       }
       get_project_id_from_collaboration: {
         Args: { p_collaboration_id: string }
@@ -4639,6 +5052,111 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "artifacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_audit_agent_instance_with_token: {
+        Args: {
+          p_agent_name: string
+          p_agent_role: string
+          p_sector_end?: number
+          p_sector_start?: number
+          p_session_id: string
+          p_system_prompt: string
+          p_token?: string
+        }
+        Returns: {
+          agent_name: string
+          agent_role: string
+          completed_at: string | null
+          consensus_vote: boolean | null
+          created_at: string
+          id: string
+          sector_complete: boolean | null
+          sector_end: number | null
+          sector_start: number | null
+          session_id: string
+          status: string
+          system_prompt: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "audit_agent_instances"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_audit_blackboard_with_token: {
+        Args: {
+          p_agent_role: string
+          p_confidence?: number
+          p_content: string
+          p_entry_type: string
+          p_evidence?: Json
+          p_iteration: number
+          p_session_id: string
+          p_target_agent?: string
+          p_token?: string
+        }
+        Returns: {
+          agent_role: string
+          confidence: number | null
+          content: string
+          created_at: string
+          entry_type: string
+          evidence: Json | null
+          id: string
+          iteration: number
+          session_id: string
+          target_agent: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "audit_blackboard"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      insert_audit_session_with_token: {
+        Args: {
+          p_agent_definitions?: Json
+          p_dataset_1_ids?: string[]
+          p_dataset_1_type?: string
+          p_dataset_2_ids?: string[]
+          p_dataset_2_type?: string
+          p_description?: string
+          p_max_iterations?: number
+          p_name: string
+          p_project_id: string
+          p_token?: string
+        }
+        Returns: {
+          agent_definitions: Json | null
+          completed_at: string | null
+          consensus_reached: boolean | null
+          consensus_votes: Json | null
+          created_at: string
+          created_by: string | null
+          current_iteration: number
+          dataset_1_ids: string[] | null
+          dataset_1_type: string
+          dataset_2_ids: string[] | null
+          dataset_2_type: string
+          description: string | null
+          id: string
+          max_iterations: number
+          name: string
+          problem_shape: Json | null
+          project_id: string
+          status: string
+          tesseract_dimensions: Json | null
+          updated_at: string
+          venn_result: Json | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "audit_sessions"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -5938,6 +6456,78 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_audit_agent_status_with_token: {
+        Args: {
+          p_agent_role: string
+          p_consensus_vote?: boolean
+          p_sector_complete?: boolean
+          p_session_id: string
+          p_status?: string
+          p_token?: string
+        }
+        Returns: {
+          agent_name: string
+          agent_role: string
+          completed_at: string | null
+          consensus_vote: boolean | null
+          created_at: string
+          id: string
+          sector_complete: boolean | null
+          sector_end: number | null
+          sector_start: number | null
+          session_id: string
+          status: string
+          system_prompt: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "audit_agent_instances"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_audit_session_with_token: {
+        Args: {
+          p_consensus_reached?: boolean
+          p_consensus_votes?: Json
+          p_current_iteration?: number
+          p_problem_shape?: Json
+          p_session_id: string
+          p_status?: string
+          p_tesseract_dimensions?: Json
+          p_token?: string
+          p_venn_result?: Json
+        }
+        Returns: {
+          agent_definitions: Json | null
+          completed_at: string | null
+          consensus_reached: boolean | null
+          consensus_votes: Json | null
+          created_at: string
+          created_by: string | null
+          current_iteration: number
+          dataset_1_ids: string[] | null
+          dataset_1_type: string
+          dataset_2_ids: string[] | null
+          dataset_2_type: string
+          description: string | null
+          id: string
+          max_iterations: number
+          name: string
+          problem_shape: Json | null
+          project_id: string
+          status: string
+          tesseract_dimensions: Json | null
+          updated_at: string
+          venn_result: Json | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "audit_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_chat_session_with_token: {
         Args: {
           p_ai_summary?: string
@@ -6398,6 +6988,46 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "repo_staging"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_audit_tesseract_cell_with_token: {
+        Args: {
+          p_contributing_agents?: string[]
+          p_evidence_refs?: Json
+          p_evidence_summary?: string
+          p_session_id: string
+          p_token?: string
+          p_x_element_id: string
+          p_x_element_label?: string
+          p_x_element_type: string
+          p_x_index: number
+          p_y_step: number
+          p_y_step_label?: string
+          p_z_criticality?: string
+          p_z_polarity: number
+        }
+        Returns: {
+          contributing_agents: string[] | null
+          created_at: string
+          evidence_refs: Json | null
+          evidence_summary: string | null
+          id: string
+          session_id: string
+          updated_at: string
+          x_element_id: string
+          x_element_label: string | null
+          x_element_type: string
+          x_index: number
+          y_step: number
+          y_step_label: string | null
+          z_criticality: string | null
+          z_polarity: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "audit_tesseract_cells"
           isOneToOne: true
           isSetofReturn: false
         }
