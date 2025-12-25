@@ -16,8 +16,7 @@ interface AgentPersona {
   role: string;
   name: string;
   systemPrompt: string;
-  sectorStart?: number;
-  sectorEnd?: number;
+  assignedNodeIds?: string[];
 }
 
 interface ProblemShape {
@@ -26,117 +25,269 @@ interface ProblemShape {
   steps: Array<{ step: number; label: string }>;
 }
 
-// Normalize varied LLM response formats into our expected structure
-function normalizeAgentResponse(raw: any): any {
-  // If already in expected format with observations array
-  if (raw.observations && Array.isArray(raw.observations) && raw.observations.length > 0 && raw.observations[0].elementId) {
-    return raw;
-  }
-
-  const normalized: any = {
-    reasoning: raw.reasoning || raw.summary || "",
-    observations: [],
-    blackboardEntry: raw.blackboardEntry || null,
-    sectorComplete: raw.sectorComplete ?? raw.sector_complete ?? true,
-    consensusVote: raw.consensusVote ?? raw.consensus_vote ?? false,
-  };
-
-  // Find the analysis array in various formats
-  const analysisSource = raw.observations || raw.audit_results || raw.auditReport || raw.analysis || [];
-  const items = Array.isArray(analysisSource) ? analysisSource : (analysisSource?.analysis || []);
-
-  for (const item of items) {
-    // Extract element ID from various field names
-    const elementId = item.elementId || item.elementID || item.element_id || 
-                      item.d1_element_id || item.requirement_id || item.id || "";
-    const elementLabel = item.elementLabel || item.elementName || item.element_name || 
-                         item.d1_element_name || item.requirement_name || "";
-
-    // Extract steps/analysis from various formats
-    const steps = item.analysis || item.analysis_steps || item.steps || [];
-    
-    for (const step of steps) {
-      const stepNum = step.step || 
-                      (step.step_name === "Identification" ? 1 :
-                       step.step_name === "Completeness" ? 2 :
-                       step.step_name === "Correctness" ? 3 :
-                       step.step_name === "Quality" ? 4 :
-                       step.step_name === "Integration" ? 5 : 1);
-
-      normalized.observations.push({
-        elementId,
-        elementLabel,
-        step: typeof stepNum === 'number' ? stepNum : parseInt(stepNum) || 1,
-        polarity: typeof step.polarity === 'number' ? step.polarity : 0,
-        criticality: step.criticality || (step.polarity < -0.5 ? "major" : step.polarity < 0 ? "minor" : "info"),
-        evidence: step.evidence || step.observation || "",
-      });
-    }
-  }
-
-  // Create blackboard entry from summary if not present
-  if (!normalized.blackboardEntry && (raw.summary || normalized.observations.length > 0)) {
-    normalized.blackboardEntry = {
-      entryType: "observation",
-      content: raw.summary || `Analyzed ${normalized.observations.length} observations`,
-      confidence: 0.7,
-    };
-  }
-
-  console.log(`Normalized response: ${normalized.observations.length} observations, hasBlackboard: ${!!normalized.blackboardEntry}`);
-  return normalized;
+interface GraphNode {
+  id?: string;
+  label: string;
+  description: string;
+  nodeType: string;
+  sourceDataset: string;
+  sourceElementIds: string[];
+  color?: string;
 }
 
-// Parse JSON from LLM response with multiple fallback methods
-function parseAgentResponse(rawText: string): any {
-  const text = rawText.trim();
-  console.log("Parsing agent response, length:", text.length);
-
-  const tryParse = (jsonStr: string, method: string): any | null => {
-    try {
-      const parsed = JSON.parse(jsonStr);
-      console.log(`JSON parsed via ${method}`);
-      return normalizeAgentResponse(parsed);
-    } catch (e) {
-      console.log(`Parse failed (${method}):`, (e as Error).message);
-      return null;
-    }
-  };
-
-  // Method 1: Direct parse
-  let result = tryParse(text, "direct");
-  if (result) return result;
-
-  // Method 2: Extract from code fence
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (fenceMatch?.[1]) {
-    result = tryParse(fenceMatch[1].trim(), "code fence");
-    if (result) return result;
-  }
-
-  // Method 3: Brace extraction
-  const firstBrace = text.indexOf("{");
-  const lastBrace = text.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    result = tryParse(text.slice(firstBrace, lastBrace + 1), "brace extraction");
-    if (result) return result;
-  }
-
-  console.error("All parsing methods failed");
-  return { error: "parse_failed", raw: text.slice(0, 500), observations: [], blackboardEntry: null };
+interface GraphEdge {
+  sourceNodeId: string;
+  targetNodeId: string;
+  edgeType: string;
+  label?: string;
+  weight?: number;
 }
 
-// Get Grok response schema for audit agent
-function getGrokAuditSchema() {
+// ==================== PHASE PROMPTS ====================
+
+function getConferencePrompt(problemShape: ProblemShape, persona: AgentPersona): string {
+  return `You are ${persona.name}, an expert ${persona.role}.
+
+## Phase: CONFERENCE
+This is an initial conference where all agents discuss the audit scope and identify key concepts.
+
+## Your Perspective
+${persona.systemPrompt}
+
+## Dataset 1: ${problemShape.dataset1.type} (${problemShape.dataset1.count} elements)
+${problemShape.dataset1.elements.map(e => `- ${e.label} (ID: ${e.id})`).join("\n")}
+
+## Dataset 2: ${problemShape.dataset2.type}
+${problemShape.dataset2.summary}
+
+## Your Task
+1. Analyze both datasets from your perspective
+2. Identify KEY CONCEPTS that should be nodes in our knowledge graph
+3. These concepts should represent themes, categories, or groupings that emerge from the data
+4. Focus on concepts relevant to your expertise as a ${persona.role}
+
+Respond with concepts you believe should be graph nodes.`;
+}
+
+function getGraphBuildingPrompt(problemShape: ProblemShape, persona: AgentPersona, existingNodes: any[], existingEdges: any[], iteration: number): string {
+  const nodesList = existingNodes.map(n => `- [${n.id}] ${n.label}: ${n.description || 'No description'} (type: ${n.node_type})`).join("\n") || "(no nodes yet)";
+  const edgesList = existingEdges.map(e => `- ${e.source_node_id} -> ${e.target_node_id}: ${e.label || e.edge_type}`).join("\n") || "(no edges yet)";
+
+  return `You are ${persona.name}, an expert ${persona.role}.
+
+## Phase: KNOWLEDGE GRAPH BUILDING (Iteration ${iteration})
+We are collaboratively building a knowledge graph to understand the audit scope.
+
+## Your Perspective
+${persona.systemPrompt}
+
+## Dataset 1: ${problemShape.dataset1.type} (${problemShape.dataset1.count} elements)
+${problemShape.dataset1.elements.map(e => `- ${e.label} (ID: ${e.id})`).join("\n")}
+
+## Dataset 2: ${problemShape.dataset2.type}
+${problemShape.dataset2.summary}
+
+## Current Knowledge Graph
+
+### Nodes:
+${nodesList}
+
+### Edges:
+${edgesList}
+
+## Your Task
+1. Review the current graph from your ${persona.role} perspective
+2. Propose NEW nodes (concepts) or edges (relationships) that should be added
+3. Consider: Are there missing concepts? Missing relationships? 
+4. Vote on whether the graph is COMPLETE (has all necessary structure for audit)
+
+IMPORTANT: Only propose nodes/edges that are truly missing. Do not duplicate existing ones.`;
+}
+
+function getAssignmentPrompt(persona: AgentPersona, graphNodes: any[]): string {
+  const nodesList = graphNodes.map(n => `- [${n.id}] ${n.label}: ${n.description || 'No description'}`).join("\n");
+
+  return `You are ${persona.name}, an expert ${persona.role}.
+
+## Phase: ELEMENT ASSIGNMENT
+The knowledge graph is complete. Now each agent will select nodes they are best suited to analyze.
+
+## Your Expertise
+${persona.systemPrompt}
+
+## Available Graph Nodes:
+${nodesList}
+
+## Your Task
+Select the nodes you believe you are best qualified to analyze based on your expertise as a ${persona.role}.
+Choose nodes where your specialized perspective will add the most value.
+You may select multiple nodes. Other agents will also make selections, so focus on your strengths.`;
+}
+
+function getAnalysisPrompt(persona: AgentPersona, problemShape: ProblemShape, assignedNodes: any[], recentBlackboard: string): string {
+  const assignedList = assignedNodes.map(n => 
+    `- [${n.id}] ${n.label}: ${n.description || 'No description'}
+     Source Elements: ${(n.source_element_ids || []).join(", ")}`
+  ).join("\n\n");
+
+  return `You are ${persona.name}, an expert ${persona.role}.
+
+## Phase: PARALLEL ANALYSIS
+You are now analyzing your assigned knowledge graph nodes in depth.
+
+## Your Expertise
+${persona.systemPrompt}
+
+## Your Assigned Nodes:
+${assignedList}
+
+## Dataset Context
+- Dataset 1 (${problemShape.dataset1.type}): ${problemShape.dataset1.count} elements
+- Dataset 2 (${problemShape.dataset2.type}): ${problemShape.dataset2.summary}
+
+## Analysis Steps
+${problemShape.steps.map(s => `${s.step}. ${s.label}`).join("\n")}
+
+## Recent Blackboard Entries
+${recentBlackboard || "(empty)"}
+
+## Your Task
+For each assigned node, analyze the source elements against Dataset 2:
+1. Apply each analysis step
+2. Record polarity (-1 = gap/violation, 0 = neutral, +1 = compliant)
+3. Provide evidence for findings
+4. Post observations to the blackboard`;
+}
+
+// ==================== LLM RESPONSE SCHEMAS ====================
+
+function getGrokConferenceSchema() {
   return {
     type: "json_schema",
     json_schema: {
-      name: "audit_agent_response",
+      name: "conference_response",
       strict: true,
       schema: {
         type: "object",
         properties: {
-          reasoning: { type: "string", description: "Analysis reasoning" },
+          reasoning: { type: "string" },
+          proposedNodes: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                label: { type: "string" },
+                description: { type: "string" },
+                nodeType: { type: "string", enum: ["concept", "theme", "category", "risk", "requirement_group"] },
+                sourceDataset: { type: "string", enum: ["dataset1", "dataset2", "both"] },
+                sourceElementIds: { type: "array", items: { type: "string" } },
+              },
+              required: ["label", "description", "nodeType", "sourceDataset", "sourceElementIds"],
+            },
+          },
+          blackboardEntry: {
+            type: "object",
+            properties: {
+              content: { type: "string" },
+              confidence: { type: "number" },
+            },
+            required: ["content"],
+          },
+        },
+        required: ["reasoning", "proposedNodes", "blackboardEntry"],
+      },
+    },
+  };
+}
+
+function getGrokGraphBuildingSchema() {
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: "graph_building_response",
+      strict: true,
+      schema: {
+        type: "object",
+        properties: {
+          reasoning: { type: "string" },
+          proposedNodes: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                label: { type: "string" },
+                description: { type: "string" },
+                nodeType: { type: "string" },
+                sourceDataset: { type: "string" },
+                sourceElementIds: { type: "array", items: { type: "string" } },
+              },
+              required: ["label", "description", "nodeType", "sourceDataset", "sourceElementIds"],
+            },
+          },
+          proposedEdges: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                sourceNodeLabel: { type: "string" },
+                targetNodeLabel: { type: "string" },
+                edgeType: { type: "string", enum: ["relates_to", "depends_on", "implements", "conflicts_with", "supports"] },
+                label: { type: "string" },
+              },
+              required: ["sourceNodeLabel", "targetNodeLabel", "edgeType"],
+            },
+          },
+          graphCompleteVote: { type: "boolean" },
+          blackboardEntry: {
+            type: "object",
+            properties: {
+              content: { type: "string" },
+              confidence: { type: "number" },
+            },
+            required: ["content"],
+          },
+        },
+        required: ["reasoning", "proposedNodes", "proposedEdges", "graphCompleteVote", "blackboardEntry"],
+      },
+    },
+  };
+}
+
+function getGrokAssignmentSchema() {
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: "assignment_response",
+      strict: true,
+      schema: {
+        type: "object",
+        properties: {
+          reasoning: { type: "string" },
+          selectedNodeIds: { type: "array", items: { type: "string" } },
+          blackboardEntry: {
+            type: "object",
+            properties: {
+              content: { type: "string" },
+            },
+            required: ["content"],
+          },
+        },
+        required: ["reasoning", "selectedNodeIds", "blackboardEntry"],
+      },
+    },
+  };
+}
+
+function getGrokAnalysisSchema() {
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: "analysis_response",
+      strict: true,
+      schema: {
+        type: "object",
+        properties: {
+          reasoning: { type: "string" },
           observations: {
             type: "array",
             items: {
@@ -145,7 +296,7 @@ function getGrokAuditSchema() {
                 elementId: { type: "string" },
                 elementLabel: { type: "string" },
                 step: { type: "integer" },
-                polarity: { type: "number", description: "-1 to +1" },
+                polarity: { type: "number" },
                 criticality: { type: "string", enum: ["critical", "major", "minor", "info"] },
                 evidence: { type: "string" },
               },
@@ -161,94 +312,173 @@ function getGrokAuditSchema() {
             },
             required: ["entryType", "content"],
           },
-          sectorComplete: { type: "boolean" },
+          analysisComplete: { type: "boolean" },
           consensusVote: { type: ["boolean", "null"] },
         },
-        required: ["reasoning", "observations", "blackboardEntry", "sectorComplete"],
+        required: ["reasoning", "observations", "blackboardEntry", "analysisComplete"],
       },
     },
   };
 }
 
-// Get Claude tool for audit agent
-function getClaudeAuditTool() {
+// Claude tool equivalents
+function getClaudeConferenceTool() {
   return {
-    name: "submit_audit_findings",
-    description: "Submit your audit analysis findings. You MUST use this tool to respond.",
+    name: "submit_conference_findings",
+    description: "Submit your conference findings with proposed knowledge graph nodes.",
     input_schema: {
       type: "object",
       properties: {
-        reasoning: { type: "string", description: "Analysis reasoning" },
-        observations: {
+        reasoning: { type: "string" },
+        proposedNodes: {
           type: "array",
           items: {
             type: "object",
             properties: {
-              elementId: { type: "string" },
-              elementLabel: { type: "string" },
-              step: { type: "integer" },
-              polarity: { type: "number" },
-              criticality: { type: "string", enum: ["critical", "major", "minor", "info"] },
-              evidence: { type: "string" },
+              label: { type: "string" },
+              description: { type: "string" },
+              nodeType: { type: "string" },
+              sourceDataset: { type: "string" },
+              sourceElementIds: { type: "array", items: { type: "string" } },
             },
-            required: ["elementId", "step", "polarity", "evidence"],
+            required: ["label", "description", "nodeType", "sourceDataset", "sourceElementIds"],
           },
         },
         blackboardEntry: {
           type: "object",
-          properties: {
-            entryType: { type: "string", enum: ["observation", "finding", "question", "thesis"] },
-            content: { type: "string" },
-            confidence: { type: "number" },
-          },
-          required: ["entryType", "content"],
+          properties: { content: { type: "string" }, confidence: { type: "number" } },
+          required: ["content"],
         },
-        sectorComplete: { type: "boolean" },
-        consensusVote: { type: ["boolean", "null"] },
       },
-      required: ["reasoning", "observations", "blackboardEntry", "sectorComplete"],
+      required: ["reasoning", "proposedNodes", "blackboardEntry"],
     },
   };
 }
 
-// Build system prompt for an agent persona
-function buildAgentSystemPrompt(persona: AgentPersona, problemShape: ProblemShape, iteration: number): string {
-  const basePrompt = `You are ${persona.name}, an expert ${persona.role} performing a compliance audit.
-
-## Your Mission
-Analyze Dataset 1 (${problemShape.dataset1.type}) against Dataset 2 (${problemShape.dataset2.type}) from your specialized perspective.
-
-## Your Assigned Sector
-You are responsible for elements ${persona.sectorStart} to ${persona.sectorEnd} (indices) from Dataset 1.
-
-## Dataset 1 Elements in Your Sector
-${problemShape.dataset1.elements
-  .filter((e) => e.index >= (persona.sectorStart || 0) && e.index <= (persona.sectorEnd || Infinity))
-  .map((e) => `- [${e.index}] ${e.label} (ID: ${e.id})`)
-  .join("\n")}
-
-## Analysis Steps
-${problemShape.steps.map((s) => `${s.step}. ${s.label}`).join("\n")}
-
-## Your Perspective (${persona.role})
-${persona.systemPrompt}
-
-## Current Iteration: ${iteration}
-
-## Instructions
-1. For each element in your sector, analyze it through each step
-2. Record polarity (-1 = gap/violation, 0 = neutral, +1 = compliant)
-3. Provide evidence for each observation
-4. Write a summary to the blackboard
-5. Mark sectorComplete=true when you've analyzed all assigned elements
-6. Vote consensusVote=true only if ALL agents have completed AND you agree the audit is done
-
-RESPOND USING THE STRUCTURED OUTPUT FORMAT.`;
-
-  return basePrompt;
+function getClaudeGraphBuildingTool() {
+  return {
+    name: "submit_graph_updates",
+    description: "Submit proposed graph nodes, edges, and vote on graph completeness.",
+    input_schema: {
+      type: "object",
+      properties: {
+        reasoning: { type: "string" },
+        proposedNodes: { type: "array", items: { type: "object" } },
+        proposedEdges: { type: "array", items: { type: "object" } },
+        graphCompleteVote: { type: "boolean" },
+        blackboardEntry: { type: "object", properties: { content: { type: "string" } }, required: ["content"] },
+      },
+      required: ["reasoning", "proposedNodes", "proposedEdges", "graphCompleteVote", "blackboardEntry"],
+    },
+  };
 }
 
-// Default agent personas
+function getClaudeAssignmentTool() {
+  return {
+    name: "submit_node_selection",
+    description: "Submit which knowledge graph nodes you want to analyze.",
+    input_schema: {
+      type: "object",
+      properties: {
+        reasoning: { type: "string" },
+        selectedNodeIds: { type: "array", items: { type: "string" } },
+        blackboardEntry: { type: "object", properties: { content: { type: "string" } }, required: ["content"] },
+      },
+      required: ["reasoning", "selectedNodeIds", "blackboardEntry"],
+    },
+  };
+}
+
+function getClaudeAnalysisTool() {
+  return {
+    name: "submit_audit_findings",
+    description: "Submit your audit analysis findings.",
+    input_schema: {
+      type: "object",
+      properties: {
+        reasoning: { type: "string" },
+        observations: { type: "array", items: { type: "object" } },
+        blackboardEntry: { type: "object" },
+        analysisComplete: { type: "boolean" },
+        consensusVote: { type: ["boolean", "null"] },
+      },
+      required: ["reasoning", "observations", "blackboardEntry", "analysisComplete"],
+    },
+  };
+}
+
+// ==================== LLM CALL HELPER ====================
+
+async function callLLM(
+  apiEndpoint: string,
+  apiKey: string,
+  selectedModel: string,
+  systemPrompt: string,
+  userPrompt: string,
+  schema: any,
+  tool: any
+): Promise<any> {
+  if (selectedModel.startsWith("grok")) {
+    const response = await fetch(apiEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: selectedModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: schema,
+        max_tokens: 4096,
+        temperature: 0.7,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(`Grok API error: ${JSON.stringify(data)}`);
+    const rawText = data.choices?.[0]?.message?.content || "{}";
+    return JSON.parse(rawText);
+  } else if (selectedModel.startsWith("claude")) {
+    const response = await fetch(apiEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "structured-outputs-2025-11-13",
+      },
+      body: JSON.stringify({
+        model: selectedModel,
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        tools: [tool],
+        tool_choice: { type: "tool", name: tool.name },
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(`Claude API error: ${JSON.stringify(data)}`);
+    const toolUse = data.content?.find((c: any) => c.type === "tool_use");
+    return toolUse?.input || {};
+  } else {
+    // Gemini
+    const response = await fetch(`${apiEndpoint}?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: { responseMimeType: "application/json", maxOutputTokens: 4096, temperature: 0.7 },
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(`Gemini API error: ${JSON.stringify(data)}`);
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    return JSON.parse(rawText);
+  }
+}
+
+// ==================== DEFAULT PERSONAS ====================
+
 const DEFAULT_PERSONAS: AgentPersona[] = [
   {
     role: "security_analyst",
@@ -277,6 +507,8 @@ const DEFAULT_PERSONAS: AgentPersona[] = [
   },
 ];
 
+// ==================== MAIN HANDLER ====================
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -294,27 +526,23 @@ serve(async (req) => {
     const { sessionId, projectId, shareToken }: AuditRequest = await req.json();
     console.log("Starting audit orchestrator:", { sessionId, projectId });
 
-    // Set share token for RLS
     await supabase.rpc("set_share_token", { token: shareToken });
 
     // Get session details
-    const { data: sessions, error: sessionsError } = await supabase.rpc("get_audit_sessions_with_token", {
+    const { data: sessions } = await supabase.rpc("get_audit_sessions_with_token", {
       p_project_id: projectId,
       p_token: shareToken,
     });
-    if (sessionsError) throw sessionsError;
-
     const session = sessions?.find((s: any) => s.id === sessionId);
     if (!session) throw new Error("Session not found");
 
-    // Get project settings for API key
-    const { data: project, error: projectError } = await supabase.rpc("get_project_with_token", {
+    // Get project for model selection
+    const { data: project } = await supabase.rpc("get_project_with_token", {
       p_project_id: projectId,
       p_token: shareToken,
     });
-    if (projectError) throw projectError;
 
-    const selectedModel = project.selected_model || "grok-3-mini";
+    const selectedModel = project?.selected_model || "grok-3-mini";
     let apiKey: string;
     let apiEndpoint: string;
 
@@ -331,36 +559,23 @@ serve(async (req) => {
 
     if (!apiKey) throw new Error(`API key not configured for: ${selectedModel}`);
 
-    // Update session status to running
-    await supabase.rpc("update_audit_session_with_token", {
-      p_session_id: sessionId,
-      p_token: shareToken,
-      p_status: "analyzing_shape",
-    });
+    const channel = supabase.channel(`audit-${sessionId}`);
 
-    // PHASE 1: Build Problem Shape
-    console.log("Building problem shape...");
+    // Build problem shape
     const problemShape = await buildProblemShape(supabase, session, projectId, shareToken);
-    console.log("Problem shape built:", {
-      d1Type: problemShape.dataset1.type,
-      d1Count: problemShape.dataset1.count,
-      d1Elements: problemShape.dataset1.elements.slice(0, 3).map((e: any) => ({ id: e.id, label: e.label })),
-      d2Type: problemShape.dataset2.type,
-      d2Count: problemShape.dataset2.count,
-      stepsCount: problemShape.steps.length,
-    });
+    console.log("Problem shape:", { d1Count: problemShape.dataset1.count, d2Type: problemShape.dataset2.type });
 
     await supabase.rpc("update_audit_session_with_token", {
       p_session_id: sessionId,
       p_token: shareToken,
-      p_status: "agents_active",
+      p_status: "running",
+      p_phase: "conference",
       p_problem_shape: problemShape,
     });
 
-    // PHASE 2: Spawn Agent Instances
-    console.log("Spawning agents...");
+    // Get enabled agents
     const agentDefs = session.agent_definitions || {};
-    const enabledPersonas = DEFAULT_PERSONAS.filter((p) => {
+    const agents: AgentPersona[] = DEFAULT_PERSONAS.filter((p) => {
       const def = agentDefs[p.role];
       return !def || def.enabled !== false;
     }).map((p) => ({
@@ -368,51 +583,7 @@ serve(async (req) => {
       systemPrompt: agentDefs[p.role]?.customPrompt || p.systemPrompt,
     }));
 
-    // Divide sectors among agents - ensure ALL agents get elements (overlap allowed)
-    const elementCount = problemShape.dataset1.count;
-    const agentCount = enabledPersonas.length;
-    
-    // If fewer elements than agents, each agent covers all elements from their perspective
-    // If more elements than agents, distribute evenly with proper bounds
-    const agents: AgentPersona[] = enabledPersonas.map((p, i) => {
-      let sectorStart: number;
-      let sectorEnd: number;
-      
-      if (elementCount <= agentCount) {
-        // Each agent analyzes ALL elements from their unique perspective
-        sectorStart = 0;
-        sectorEnd = elementCount - 1;
-      } else {
-        // Distribute elements evenly
-        const baseElements = Math.floor(elementCount / agentCount);
-        const remainder = elementCount % agentCount;
-        
-        // Agents with index < remainder get an extra element
-        if (i < remainder) {
-          sectorStart = i * (baseElements + 1);
-          sectorEnd = sectorStart + baseElements; // +1 element
-        } else {
-          sectorStart = remainder * (baseElements + 1) + (i - remainder) * baseElements;
-          sectorEnd = sectorStart + baseElements - 1;
-        }
-      }
-      
-      return {
-        ...p,
-        sectorStart,
-        sectorEnd: Math.min(sectorEnd, elementCount - 1), // Safety clamp
-      };
-    });
-    
-    console.log("Agent sector assignments:", agents.map(a => ({
-      role: a.role,
-      sector: `${a.sectorStart}-${a.sectorEnd}`,
-      elements: problemShape.dataset1.elements
-        .filter(e => e.index >= (a.sectorStart || 0) && e.index <= (a.sectorEnd || 0))
-        .map(e => e.label)
-    })));
-
-    // Create agent instances in DB
+    // Create agent instances
     for (const agent of agents) {
       await supabase.rpc("insert_audit_agent_instance_with_token", {
         p_session_id: sessionId,
@@ -420,28 +591,300 @@ serve(async (req) => {
         p_agent_role: agent.role,
         p_agent_name: agent.name,
         p_system_prompt: agent.systemPrompt,
-        p_sector_start: agent.sectorStart,
-        p_sector_end: agent.sectorEnd,
+        p_sector_start: null,
+        p_sector_end: null,
       });
     }
 
-    // Broadcast channel for real-time updates
-    const channel = supabase.channel(`audit-${sessionId}`);
+    channel.send({ type: "broadcast", event: "audit_refresh", payload: { phase: "conference" } });
 
-    // PHASE 3: Iteration Loop
-    const MAX_ITERATIONS = session.max_iterations || 10;
-    let iteration = 0;
-    let consensusReached = false;
+    // ==================== PHASE 1: CONFERENCE ====================
+    console.log("=== PHASE 1: CONFERENCE ===");
+    
+    const conferencePromises = agents.map(async (agent) => {
+      try {
+        const systemPrompt = getConferencePrompt(problemShape, agent);
+        const response = await callLLM(
+          apiEndpoint, apiKey, selectedModel,
+          systemPrompt, "Identify key concepts for the knowledge graph.",
+          getGrokConferenceSchema(), getClaudeConferenceTool()
+        );
 
-    while (iteration < MAX_ITERATIONS && !consensusReached) {
-      iteration++;
-      console.log(`=== Iteration ${iteration} ===`);
+        console.log(`Conference response from ${agent.role}:`, response.proposedNodes?.length || 0, "nodes");
 
-      // Update session iteration
+        // Insert proposed nodes
+        for (const node of response.proposedNodes || []) {
+          await supabase.rpc("insert_audit_graph_node_with_token", {
+            p_session_id: sessionId,
+            p_token: shareToken,
+            p_label: node.label,
+            p_description: node.description || "",
+            p_node_type: node.nodeType || "concept",
+            p_source_dataset: node.sourceDataset || "dataset1",
+            p_source_element_ids: node.sourceElementIds || [],
+            p_created_by_agent: agent.role,
+          });
+        }
+
+        // Blackboard entry
+        if (response.blackboardEntry?.content) {
+          await supabase.rpc("insert_audit_blackboard_with_token", {
+            p_session_id: sessionId,
+            p_token: shareToken,
+            p_agent_role: agent.role,
+            p_entry_type: "observation",
+            p_content: response.blackboardEntry.content,
+            p_iteration: 0,
+            p_confidence: response.blackboardEntry.confidence || 0.7,
+          });
+        }
+
+        return { agent: agent.role, success: true, nodes: response.proposedNodes?.length || 0 };
+      } catch (err) {
+        console.error(`Conference error for ${agent.role}:`, err);
+        return { agent: agent.role, success: false, error: String(err) };
+      }
+    });
+
+    await Promise.all(conferencePromises);
+    channel.send({ type: "broadcast", event: "audit_refresh", payload: { phase: "conference_complete" } });
+
+    // ==================== PHASE 2: GRAPH BUILDING ====================
+    console.log("=== PHASE 2: GRAPH BUILDING ===");
+    await supabase.rpc("update_audit_session_with_token", {
+      p_session_id: sessionId,
+      p_token: shareToken,
+      p_phase: "graph_building",
+    });
+
+    const MAX_GRAPH_ITERATIONS = 5;
+    let graphComplete = false;
+    let graphIteration = 0;
+
+    while (!graphComplete && graphIteration < MAX_GRAPH_ITERATIONS) {
+      graphIteration++;
+      console.log(`Graph building iteration ${graphIteration}`);
+
       await supabase.rpc("update_audit_session_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
-        p_current_iteration: iteration,
+        p_current_iteration: graphIteration,
+      });
+
+      // Get current graph state
+      const { data: existingNodes } = await supabase.rpc("get_audit_graph_nodes_with_token", {
+        p_session_id: sessionId,
+        p_token: shareToken,
+      });
+      const { data: existingEdges } = await supabase.rpc("get_audit_graph_edges_with_token", {
+        p_session_id: sessionId,
+        p_token: shareToken,
+      });
+
+      const graphPromises = agents.map(async (agent) => {
+        try {
+          const systemPrompt = getGraphBuildingPrompt(problemShape, agent, existingNodes || [], existingEdges || [], graphIteration);
+          const response = await callLLM(
+            apiEndpoint, apiKey, selectedModel,
+            systemPrompt, "Review and propose updates to the knowledge graph.",
+            getGrokGraphBuildingSchema(), getClaudeGraphBuildingTool()
+          );
+
+          // Insert new nodes (deduplicate by label)
+          const existingLabels = new Set((existingNodes || []).map((n: any) => n.label.toLowerCase()));
+          for (const node of response.proposedNodes || []) {
+            if (!existingLabels.has(node.label.toLowerCase())) {
+              await supabase.rpc("insert_audit_graph_node_with_token", {
+                p_session_id: sessionId,
+                p_token: shareToken,
+                p_label: node.label,
+                p_description: node.description || "",
+                p_node_type: node.nodeType || "concept",
+                p_source_dataset: node.sourceDataset || "dataset1",
+                p_source_element_ids: node.sourceElementIds || [],
+                p_created_by_agent: agent.role,
+              });
+              existingLabels.add(node.label.toLowerCase());
+            }
+          }
+
+          // Insert edges (need to resolve labels to IDs)
+          const { data: refreshedNodes } = await supabase.rpc("get_audit_graph_nodes_with_token", {
+            p_session_id: sessionId,
+            p_token: shareToken,
+          });
+          const labelToId = new Map((refreshedNodes || []).map((n: any) => [n.label.toLowerCase(), n.id]));
+
+          for (const edge of response.proposedEdges || []) {
+            const sourceId = labelToId.get(edge.sourceNodeLabel?.toLowerCase());
+            const targetId = labelToId.get(edge.targetNodeLabel?.toLowerCase());
+            if (sourceId && targetId) {
+              await supabase.rpc("insert_audit_graph_edge_with_token", {
+                p_session_id: sessionId,
+                p_token: shareToken,
+                p_source_node_id: sourceId,
+                p_target_node_id: targetId,
+                p_edge_type: edge.edgeType || "relates_to",
+                p_label: edge.label || null,
+                p_created_by_agent: agent.role,
+              });
+            }
+          }
+
+          // Blackboard
+          if (response.blackboardEntry?.content) {
+            await supabase.rpc("insert_audit_blackboard_with_token", {
+              p_session_id: sessionId,
+              p_token: shareToken,
+              p_agent_role: agent.role,
+              p_entry_type: "observation",
+              p_content: response.blackboardEntry.content,
+              p_iteration: graphIteration,
+              p_confidence: response.blackboardEntry.confidence || 0.7,
+            });
+          }
+
+          return { agent: agent.role, graphCompleteVote: response.graphCompleteVote };
+        } catch (err) {
+          console.error(`Graph building error for ${agent.role}:`, err);
+          return { agent: agent.role, graphCompleteVote: false };
+        }
+      });
+
+      const results = await Promise.all(graphPromises);
+      channel.send({ type: "broadcast", event: "audit_refresh", payload: { phase: "graph_building", iteration: graphIteration } });
+
+      // Check if majority votes graph complete
+      const completeVotes = results.filter(r => r.graphCompleteVote === true).length;
+      const threshold = Math.ceil(agents.length * 0.6); // 60% threshold
+      if (completeVotes >= threshold) {
+        graphComplete = true;
+        console.log(`Graph complete! ${completeVotes}/${agents.length} votes`);
+      }
+
+      // Store votes
+      const votes: Record<string, boolean> = {};
+      results.forEach(r => { votes[r.agent] = r.graphCompleteVote || false; });
+      await supabase.rpc("update_audit_session_with_token", {
+        p_session_id: sessionId,
+        p_token: shareToken,
+        p_graph_complete_votes: votes,
+      });
+    }
+
+    // ==================== PHASE 3: ASSIGNMENT ====================
+    console.log("=== PHASE 3: ASSIGNMENT ===");
+    await supabase.rpc("update_audit_session_with_token", {
+      p_session_id: sessionId,
+      p_token: shareToken,
+      p_phase: "assignment",
+    });
+    channel.send({ type: "broadcast", event: "audit_refresh", payload: { phase: "assignment" } });
+
+    const { data: graphNodes } = await supabase.rpc("get_audit_graph_nodes_with_token", {
+      p_session_id: sessionId,
+      p_token: shareToken,
+    });
+
+    const agentSelections: Map<string, string[]> = new Map();
+
+    const assignmentPromises = agents.map(async (agent) => {
+      try {
+        const systemPrompt = getAssignmentPrompt(agent, graphNodes || []);
+        const response = await callLLM(
+          apiEndpoint, apiKey, selectedModel,
+          systemPrompt, "Select the nodes you want to analyze.",
+          getGrokAssignmentSchema(), getClaudeAssignmentTool()
+        );
+
+        agentSelections.set(agent.role, response.selectedNodeIds || []);
+
+        if (response.blackboardEntry?.content) {
+          await supabase.rpc("insert_audit_blackboard_with_token", {
+            p_session_id: sessionId,
+            p_token: shareToken,
+            p_agent_role: agent.role,
+            p_entry_type: "observation",
+            p_content: response.blackboardEntry.content,
+            p_iteration: graphIteration + 1,
+            p_confidence: 0.8,
+          });
+        }
+
+        return { agent: agent.role, selectedNodes: response.selectedNodeIds || [] };
+      } catch (err) {
+        console.error(`Assignment error for ${agent.role}:`, err);
+        return { agent: agent.role, selectedNodes: [] };
+      }
+    });
+
+    await Promise.all(assignmentPromises);
+
+    // Confirm assignments (mixed approach - orchestrator ensures coverage)
+    const nodeAssignments: Map<string, string[]> = new Map();
+    for (const node of graphNodes || []) {
+      nodeAssignments.set(node.id, []);
+    }
+
+    // First pass: honor agent selections
+    for (const [agentRole, selectedIds] of agentSelections) {
+      for (const nodeId of selectedIds) {
+        const current = nodeAssignments.get(nodeId) || [];
+        current.push(agentRole);
+        nodeAssignments.set(nodeId, current);
+      }
+    }
+
+    // Second pass: assign unassigned nodes to least-loaded agents
+    for (const [nodeId, assignedAgents] of nodeAssignments) {
+      if (assignedAgents.length === 0) {
+        // Find agent with fewest assignments
+        const agentLoads = agents.map(a => ({
+          role: a.role,
+          load: Array.from(nodeAssignments.values()).filter(arr => arr.includes(a.role)).length,
+        }));
+        agentLoads.sort((a, b) => a.load - b.load);
+        const leastLoadedAgent = agentLoads[0].role;
+        nodeAssignments.set(nodeId, [leastLoadedAgent]);
+      }
+    }
+
+    // Build final agent assignments
+    const finalAssignments: Map<string, string[]> = new Map();
+    for (const agent of agents) {
+      finalAssignments.set(agent.role, []);
+    }
+    for (const [nodeId, assignedAgents] of nodeAssignments) {
+      for (const agentRole of assignedAgents) {
+        const current = finalAssignments.get(agentRole) || [];
+        current.push(nodeId);
+        finalAssignments.set(agentRole, current);
+      }
+    }
+
+    console.log("Final assignments:", Object.fromEntries(finalAssignments));
+
+    // ==================== PHASE 4: PARALLEL ANALYSIS ====================
+    console.log("=== PHASE 4: PARALLEL ANALYSIS ===");
+    await supabase.rpc("update_audit_session_with_token", {
+      p_session_id: sessionId,
+      p_token: shareToken,
+      p_phase: "analysis",
+    });
+    channel.send({ type: "broadcast", event: "audit_refresh", payload: { phase: "analysis" } });
+
+    const MAX_ANALYSIS_ITERATIONS = session.max_iterations || 10;
+    let analysisIteration = 0;
+    let consensusReached = false;
+
+    while (analysisIteration < MAX_ANALYSIS_ITERATIONS && !consensusReached) {
+      analysisIteration++;
+      console.log(`Analysis iteration ${analysisIteration}`);
+
+      await supabase.rpc("update_audit_session_with_token", {
+        p_session_id: sessionId,
+        p_token: shareToken,
+        p_current_iteration: graphIteration + analysisIteration,
       });
 
       // Check for abort
@@ -451,200 +894,77 @@ serve(async (req) => {
       });
       const sessionState = currentSession?.find((s: any) => s.id === sessionId);
       if (sessionState?.status === "stopped" || sessionState?.status === "paused") {
-        console.log("Session stopped/paused, exiting loop");
+        console.log("Session stopped/paused");
         break;
       }
 
-      // Get recent blackboard entries for context
+      // Get blackboard context
       const { data: recentBlackboard } = await supabase.rpc("get_audit_blackboard_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
       });
       const blackboardContext = (recentBlackboard || [])
-        .slice(-30)
+        .slice(-20)
         .map((e: any) => `[${e.agent_role}] ${e.entry_type}: ${e.content}`)
         .join("\n");
 
-      // Run each agent in parallel
-      const agentPromises = agents.map(async (agent) => {
+      const analysisPromises = agents.map(async (agent) => {
         try {
-          const systemPrompt = buildAgentSystemPrompt(agent, problemShape, iteration);
-          const userPrompt = `## Recent Blackboard Entries\n${blackboardContext || "(empty)"}\n\nAnalyze your assigned sector and report findings.`;
+          const assignedNodeIds = finalAssignments.get(agent.role) || [];
+          const assignedNodes = (graphNodes || []).filter((n: any) => assignedNodeIds.includes(n.id));
 
-          let agentResponse: any;
-
-          if (selectedModel.startsWith("grok")) {
-            // Grok with strict JSON schema enforcement
-            const response = await fetch(apiEndpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-              body: JSON.stringify({
-                model: selectedModel,
-                messages: [
-                  { role: "system", content: systemPrompt },
-                  { role: "user", content: userPrompt },
-                ],
-                response_format: getGrokAuditSchema(),
-                max_tokens: 4096,
-                temperature: 0.7,
-              }),
-            });
-            const data = await response.json();
-            if (!response.ok) {
-              console.error(`Grok API error for ${agent.role}:`, data);
-              throw new Error(`Grok API error: ${JSON.stringify(data)}`);
-            }
-            const rawText = data.choices?.[0]?.message?.content || "{}";
-            agentResponse = parseAgentResponse(rawText);
-          } else if (selectedModel.startsWith("claude")) {
-            // Claude with strict tool use - response comes directly from tool_use.input
-            const response = await fetch(apiEndpoint, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-api-key": apiKey,
-                "anthropic-version": "2023-06-01",
-                "anthropic-beta": "structured-outputs-2025-11-13",
-              },
-              body: JSON.stringify({
-                model: selectedModel,
-                max_tokens: 4096,
-                system: systemPrompt,
-                messages: [{ role: "user", content: userPrompt }],
-                tools: [getClaudeAuditTool()],
-                tool_choice: { type: "tool", name: "submit_audit_findings" },
-              }),
-            });
-            const data = await response.json();
-            if (!response.ok) {
-              console.error(`Claude API error for ${agent.role}:`, data);
-              throw new Error(`Claude API error: ${JSON.stringify(data)}`);
-            }
-            const toolUse = data.content?.find((c: any) => c.type === "tool_use");
-            if (toolUse?.input) {
-              // Tool input is already structured JSON, use directly (no parsing needed)
-              agentResponse = toolUse.input;
-              console.log(`Claude tool_use response for ${agent.role} - direct JSON`);
-            } else {
-              // Fallback to text parsing
-              const textBlock = data.content?.find((c: any) => c.type === "text");
-              agentResponse = parseAgentResponse(textBlock?.text || JSON.stringify(data));
-            }
-          } else {
-            // Gemini with systemInstruction and responseMimeType
-            const response = await fetch(`${apiEndpoint}?key=${apiKey}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                systemInstruction: {
-                  parts: [{ text: systemPrompt }],
-                },
-                contents: [{ 
-                  role: "user",
-                  parts: [{ text: userPrompt }] 
-                }],
-                generationConfig: { 
-                  responseMimeType: "application/json", 
-                  maxOutputTokens: 4096,
-                  temperature: 0.7,
-                },
-              }),
-            });
-            const data = await response.json();
-            if (!response.ok) {
-              console.error(`Gemini API error for ${agent.role}:`, data);
-              throw new Error(`Gemini API error: ${JSON.stringify(data)}`);
-            }
-            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-            agentResponse = parseAgentResponse(rawText);
+          if (assignedNodes.length === 0) {
+            return { agent: agent.role, consensusVote: true, analysisComplete: true };
           }
 
-          // Log the parsed response structure
-          console.log(`Agent ${agent.role} response structure:`, {
-            hasObservations: !!agentResponse.observations,
-            observationsCount: agentResponse.observations?.length || 0,
-            hasBlackboardEntry: !!agentResponse.blackboardEntry,
-            sectorComplete: agentResponse.sectorComplete,
-            consensusVote: agentResponse.consensusVote,
-          });
+          const systemPrompt = getAnalysisPrompt(agent, problemShape, assignedNodes, blackboardContext);
+          const response = await callLLM(
+            apiEndpoint, apiKey, selectedModel,
+            systemPrompt, "Analyze your assigned nodes and report findings.",
+            getGrokAnalysisSchema(), getClaudeAnalysisTool()
+          );
 
-          // Process agent response
-          if (agentResponse.observations && Array.isArray(agentResponse.observations)) {
-            console.log(`Processing ${agentResponse.observations.length} observations from ${agent.role}`);
-            for (const obs of agentResponse.observations) {
-              const elementIndex = problemShape.dataset1.elements.findIndex((e: any) => e.id === obs.elementId);
-              console.log(`Recording tesseract cell: elementId=${obs.elementId}, index=${elementIndex}, step=${obs.step}, polarity=${obs.polarity}`);
-              
-              const { error: cellError } = await supabase.rpc("upsert_audit_tesseract_cell_with_token", {
-                p_session_id: sessionId,
-                p_token: shareToken,
-                p_x_index: elementIndex >= 0 ? elementIndex : 0,
-                p_x_element_id: obs.elementId,
-                p_x_element_type: problemShape.dataset1.type,
-                p_x_element_label: obs.elementLabel || null,
-                p_y_step: obs.step || 1,
-                p_y_step_label: problemShape.steps.find((s) => s.step === obs.step)?.label || null,
-                p_z_polarity: typeof obs.polarity === 'number' ? obs.polarity : 0,
-                p_z_criticality: obs.criticality || null,
-                p_evidence_summary: obs.evidence || null,
-                p_contributing_agents: [agent.role],
-              });
-              
-              if (cellError) {
-                console.error(`Failed to insert tesseract cell:`, cellError);
-              } else {
-                console.log(`Tesseract cell inserted successfully`);
-                // Broadcast for real-time update
-                await channel.send({ type: "broadcast", event: "audit_refresh", payload: { type: "tesseract" } });
-              }
-            }
-          } else {
-            console.log(`No observations from ${agent.role}, response:`, JSON.stringify(agentResponse).slice(0, 500));
+          // Record observations to tesseract
+          for (const obs of response.observations || []) {
+            const elementIndex = problemShape.dataset1.elements.findIndex((e: any) => e.id === obs.elementId);
+            await supabase.rpc("upsert_audit_tesseract_cell_with_token", {
+              p_session_id: sessionId,
+              p_token: shareToken,
+              p_x_index: elementIndex >= 0 ? elementIndex : 0,
+              p_x_element_id: obs.elementId,
+              p_x_element_type: problemShape.dataset1.type,
+              p_x_element_label: obs.elementLabel || null,
+              p_y_step: obs.step || 1,
+              p_y_step_label: problemShape.steps.find((s) => s.step === obs.step)?.label || null,
+              p_z_polarity: typeof obs.polarity === "number" ? obs.polarity : 0,
+              p_z_criticality: obs.criticality || null,
+              p_evidence_summary: obs.evidence || null,
+              p_contributing_agents: [agent.role],
+            });
           }
 
-          if (agentResponse.blackboardEntry) {
-            console.log(`Recording blackboard entry from ${agent.role}:`, agentResponse.blackboardEntry.entryType);
-            const { error: bbError } = await supabase.rpc("insert_audit_blackboard_with_token", {
+          // Blackboard
+          if (response.blackboardEntry?.content) {
+            await supabase.rpc("insert_audit_blackboard_with_token", {
               p_session_id: sessionId,
               p_token: shareToken,
               p_agent_role: agent.role,
-              p_entry_type: agentResponse.blackboardEntry.entryType || "observation",
-              p_content: agentResponse.blackboardEntry.content || "No content",
-              p_iteration: iteration,
-              p_confidence: agentResponse.blackboardEntry.confidence || null,
-            });
-            
-            if (bbError) {
-              console.error(`Failed to insert blackboard entry:`, bbError);
-            } else {
-              console.log(`Blackboard entry inserted successfully`);
-              // Broadcast for real-time update
-              await channel.send({ type: "broadcast", event: "audit_refresh", payload: { type: "blackboard" } });
-            }
-          } else {
-            console.log(`No blackboard entry from ${agent.role}`);
-          }
-
-          // Update agent sector complete status
-          if (agentResponse.sectorComplete) {
-            await supabase.rpc("update_audit_agent_sector_with_token", {
-              p_agent_id: agents.find((a) => a.role === agent.role)?.role,
-              p_session_id: sessionId,
-              p_token: shareToken,
-              p_sector_complete: true,
-              p_consensus_vote: agentResponse.consensusVote || null,
+              p_entry_type: response.blackboardEntry.entryType || "observation",
+              p_content: response.blackboardEntry.content,
+              p_iteration: graphIteration + analysisIteration,
+              p_confidence: response.blackboardEntry.confidence || 0.7,
             });
           }
 
-          return { agent: agent.role, success: true, consensusVote: agentResponse.consensusVote };
+          return { agent: agent.role, consensusVote: response.consensusVote, analysisComplete: response.analysisComplete };
         } catch (err) {
-          console.error(`Agent ${agent.role} error:`, err);
-          return { agent: agent.role, success: false, error: String(err) };
+          console.error(`Analysis error for ${agent.role}:`, err);
+          return { agent: agent.role, consensusVote: false, analysisComplete: false };
         }
       });
 
-      const results = await Promise.all(agentPromises);
-      console.log("Iteration results:", results);
+      const results = await Promise.all(analysisPromises);
+      channel.send({ type: "broadcast", event: "audit_refresh", payload: { phase: "analysis", iteration: analysisIteration } });
 
       // Check consensus
       const votes = results.filter((r) => r.consensusVote === true);
@@ -652,26 +972,30 @@ serve(async (req) => {
         consensusReached = true;
         console.log("Consensus reached!");
       }
-
-      // Broadcast iteration complete
-      channel.send({ type: "broadcast", event: "audit_refresh", payload: { iteration } });
     }
 
-    // PHASE 4: Finalize Results
-    console.log("Finalizing audit...");
+    // ==================== FINALIZE ====================
+    console.log("=== FINALIZING ===");
     const vennResult = await generateVennResult(supabase, sessionId, shareToken, problemShape);
 
     await supabase.rpc("update_audit_session_with_token", {
       p_session_id: sessionId,
       p_token: shareToken,
       p_status: consensusReached ? "completed" : "completed_max_iterations",
+      p_phase: "completed",
       p_venn_result: vennResult,
       p_consensus_reached: consensusReached,
     });
 
     channel.send({ type: "broadcast", event: "audit_refresh", payload: { completed: true } });
 
-    return new Response(JSON.stringify({ success: true, sessionId, iterations: iteration, consensusReached }), {
+    return new Response(JSON.stringify({ 
+      success: true, 
+      sessionId, 
+      graphIterations: graphIteration, 
+      analysisIterations: analysisIteration, 
+      consensusReached 
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
@@ -683,14 +1007,14 @@ serve(async (req) => {
   }
 });
 
-// Build problem shape by analyzing both datasets
+// ==================== HELPER FUNCTIONS ====================
+
 async function buildProblemShape(supabase: any, session: any, projectId: string, shareToken: string): Promise<ProblemShape> {
   const d1Type = session.dataset_1_type;
   const d2Type = session.dataset_2_type;
 
-  // Get Dataset 1 elements
   let d1Elements: Array<{ id: string; label: string; index: number }> = [];
-  
+
   if (d1Type === "requirements") {
     const { data } = await supabase.rpc("get_requirements_with_token", { p_project_id: projectId, p_token: shareToken });
     d1Elements = (data || []).map((r: any, i: number) => ({ id: r.id, label: r.title || r.text?.slice(0, 50), index: i }));
@@ -699,24 +1023,20 @@ async function buildProblemShape(supabase: any, session: any, projectId: string,
     d1Elements = (data || []).map((n: any, i: number) => ({ id: n.id, label: n.data?.label || n.type, index: i }));
   } else if (d1Type === "standards") {
     const { data } = await supabase.rpc("get_project_standards_with_token", { p_project_id: projectId, p_token: shareToken });
-    const stdList = Array.isArray(data) ? data : [];
-    d1Elements = stdList.map((s: any, i: number) => ({ id: s.standard_id || s.id, label: s.name || s.title, index: i }));
+    d1Elements = (data || []).map((s: any, i: number) => ({ id: s.standard_id || s.id, label: s.name || s.title, index: i }));
   } else if (d1Type === "artifacts") {
     const { data } = await supabase.rpc("get_artifacts_with_token", { p_project_id: projectId, p_token: shareToken });
     d1Elements = (data || []).map((a: any, i: number) => ({ id: a.id, label: a.ai_title || a.content?.slice(0, 50), index: i }));
   }
 
-  // Get Dataset 2 summary
   let d2Summary = "";
   let d2Count = 0;
 
   if (d2Type === "repository_files") {
     const { data: repos } = await supabase.rpc("get_project_repos_with_token", { p_project_id: projectId, p_token: shareToken });
-    const repoList = Array.isArray(repos) ? repos : [];
-    if (repoList[0]) {
-      const { data: files } = await supabase.rpc("get_repo_files_with_token", { p_repo_id: repoList[0].id, p_token: shareToken });
-      const fileList = Array.isArray(files) ? files : [];
-      d2Count = fileList.length;
+    if (repos?.[0]) {
+      const { data: files } = await supabase.rpc("get_repo_files_with_token", { p_repo_id: repos[0].id, p_token: shareToken });
+      d2Count = files?.length || 0;
       d2Summary = `${d2Count} files in repository`;
     }
   } else if (d2Type === "requirements") {
@@ -729,23 +1049,19 @@ async function buildProblemShape(supabase: any, session: any, projectId: string,
     d2Summary = `${d2Count} canvas nodes`;
   }
 
-  // Define analysis steps
-  const steps = [
-    { step: 1, label: "Identification - Does D1 element appear in D2?" },
-    { step: 2, label: "Completeness - Is implementation complete?" },
-    { step: 3, label: "Correctness - Is implementation correct?" },
-    { step: 4, label: "Quality - Does implementation meet quality standards?" },
-    { step: 5, label: "Integration - Is element properly integrated?" },
-  ];
-
   return {
     dataset1: { type: d1Type, count: d1Elements.length, elements: d1Elements },
     dataset2: { type: d2Type, count: d2Count, summary: d2Summary },
-    steps,
+    steps: [
+      { step: 1, label: "Identification - Does D1 element appear in D2?" },
+      { step: 2, label: "Completeness - Is implementation complete?" },
+      { step: 3, label: "Correctness - Is implementation correct?" },
+      { step: 4, label: "Quality - Does implementation meet quality standards?" },
+      { step: 5, label: "Integration - Is element properly integrated?" },
+    ],
   };
 }
 
-// Generate Venn diagram result from tesseract cells
 async function generateVennResult(supabase: any, sessionId: string, shareToken: string, problemShape: ProblemShape): Promise<any> {
   const { data: cells } = await supabase.rpc("get_audit_tesseract_cells_with_token", {
     p_session_id: sessionId,
@@ -756,9 +1072,8 @@ async function generateVennResult(supabase: any, sessionId: string, shareToken: 
     return { unique_to_d1: [], aligned: [], unique_to_d2: [], summary: { total_d1_coverage: 0, total_d2_coverage: 0, alignment_score: 0 } };
   }
 
-  // Aggregate by element
   const elementScores = new Map<string, { totalPolarity: number; count: number; label: string; evidence: string[] }>();
-  
+
   for (const cell of cells) {
     const existing = elementScores.get(cell.x_element_id) || { totalPolarity: 0, count: 0, label: cell.x_element_label || "", evidence: [] as string[] };
     existing.totalPolarity += cell.z_polarity;
@@ -786,17 +1101,14 @@ async function generateVennResult(supabase: any, sessionId: string, shareToken: 
     else uniqueToD2.push(item);
   }
 
-  const totalElements = problemShape.dataset1.count;
-  const coveredElements = aligned.length;
-
   return {
     unique_to_d1: uniqueToD1,
     aligned,
     unique_to_d2: uniqueToD2,
     summary: {
-      total_d1_coverage: totalElements > 0 ? Math.round((coveredElements / totalElements) * 100) : 0,
-      total_d2_coverage: 75, // Placeholder - would need D2 element tracking
-      alignment_score: totalElements > 0 ? Math.round((coveredElements / totalElements) * 100) : 0,
+      total_d1_coverage: problemShape.dataset1.count > 0 ? Math.round((aligned.length / problemShape.dataset1.count) * 100) : 0,
+      total_d2_coverage: 75,
+      alignment_score: problemShape.dataset1.count > 0 ? Math.round((aligned.length / problemShape.dataset1.count) * 100) : 0,
     },
   };
 }
