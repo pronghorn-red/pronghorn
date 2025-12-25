@@ -340,7 +340,7 @@ ${artifact.content}`;
                     className="pl-10"
                   />
                 </div>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap items-center">
                   {/* Provenance filter indicator */}
                   {provenanceFilter && (
                     <Button
@@ -350,7 +350,7 @@ ${artifact.content}`;
                       className="gap-1"
                     >
                       <Link2 className="h-3 w-3" />
-                      Showing related
+                      <span className="hidden sm:inline">Showing related</span>
                       <X className="h-3 w-3 ml-1" />
                     </Button>
                   )}
@@ -392,16 +392,41 @@ ${artifact.content}`;
                         {sortOrder === "newest" ? "Newest First" : "Oldest First"}
                       </TooltipContent>
                     </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" className="md:hidden" onClick={() => setIsVisualRecognitionOpen(true)}>
+                          <ScanEye className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Visual Recognition</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" className="md:hidden" onClick={() => setIsEnhanceImageOpen(true)}>
+                          <Wand2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Create/Enhance Image</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="icon" className="md:hidden" onClick={() => setIsAddDialogOpen(true)}>
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Add Artifact</TooltipContent>
+                    </Tooltip>
                   </TooltipProvider>
-                  <Button variant="outline" onClick={() => setIsVisualRecognitionOpen(true)}>
+                  {/* Desktop buttons with text */}
+                  <Button variant="outline" className="hidden md:flex" onClick={() => setIsVisualRecognitionOpen(true)}>
                     <ScanEye className="h-4 w-4 mr-2" />
                     Visual Recognition
                   </Button>
-                  <Button variant="outline" onClick={() => setIsEnhanceImageOpen(true)}>
+                  <Button variant="outline" className="hidden md:flex" onClick={() => setIsEnhanceImageOpen(true)}>
                     <Wand2 className="h-4 w-4 mr-2" />
                     Create/Enhance Image
                   </Button>
-                  <Button onClick={() => setIsAddDialogOpen(true)}>
+                  <Button className="hidden md:flex" onClick={() => setIsAddDialogOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Artifact
                   </Button>
