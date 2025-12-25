@@ -6,6 +6,7 @@ import { TesseractVisualizer } from "@/components/audit/TesseractVisualizer";
 import { AuditBlackboard } from "@/components/audit/AuditBlackboard";
 import { VennDiagramResults } from "@/components/audit/VennDiagramResults";
 import { AuditConfigurationDialog, AuditConfiguration } from "@/components/audit/AuditConfigurationDialog";
+import { AgentInstancesCard } from "@/components/audit/AgentInstancesCard";
 import { useRealtimeAudit } from "@/hooks/useRealtimeAudit";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +23,6 @@ import {
   PlayCircle,
   Pause,
   StopCircle,
-  History,
   Settings2,
   Activity,
   Grid3X3,
@@ -111,9 +111,23 @@ export default function Audit() {
         setSelectedSessionId(newSession.id);
         setSessions((prev) => [newSession, ...prev]);
         setConfigDialogOpen(false);
-        toast.success("Audit session created");
+        toast.success("Audit session created, starting orchestrator...");
         
-        // TODO: Trigger audit-orchestrator edge function here
+        // Call the audit-orchestrator edge function
+        const { error: orchestratorError } = await supabase.functions.invoke("audit-orchestrator", {
+          body: {
+            sessionId: newSession.id,
+            projectId,
+            shareToken,
+          },
+        });
+        
+        if (orchestratorError) {
+          console.error("Orchestrator error:", orchestratorError);
+          toast.error("Failed to start audit orchestrator");
+        } else {
+          toast.success("Audit orchestrator started");
+        }
       }
     } catch (err) {
       toast.error("Failed to start audit");
@@ -140,10 +154,12 @@ export default function Audit() {
     switch (status) {
       case "running":
       case "agents_active":
+      case "analyzing_shape":
         return "bg-green-500";
       case "paused":
         return "bg-yellow-500";
       case "completed":
+      case "completed_max_iterations":
         return "bg-blue-500";
       case "stopped":
       case "failed":
@@ -154,6 +170,7 @@ export default function Audit() {
   };
 
   const activeAgents = agentInstances.filter((a) => a.status === "active");
+  const isRunning = session?.status === "running" || session?.status === "agents_active" || session?.status === "analyzing_shape";
 
   return (
     <div className="min-h-screen bg-background">
@@ -208,7 +225,7 @@ export default function Audit() {
                       <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
                     </Button>
                     
-                    {(session.status === "running" || session.status === "paused") && (
+                    {isRunning && (
                       <>
                         <Button variant="outline" onClick={handlePauseResume}>
                           {session.status === "paused" ? (
@@ -241,8 +258,8 @@ export default function Audit() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${getStatusColor(session.status)} animate-pulse`} />
-                        <span className="font-medium capitalize">{session.status.replace("_", " ")}</span>
+                        <div className={`w-3 h-3 rounded-full ${getStatusColor(session.status)} ${isRunning ? "animate-pulse" : ""}`} />
+                        <span className="font-medium capitalize">{session.status.replace(/_/g, " ")}</span>
                       </div>
                       <Badge variant="outline">
                         <Activity className="h-3 w-3 mr-1" />
@@ -252,6 +269,11 @@ export default function Audit() {
                         <Users className="h-3 w-3 mr-1" />
                         {activeAgents.length} active agents
                       </Badge>
+                      {session.consensus_reached && (
+                        <Badge variant="default" className="bg-green-500">
+                          Consensus Reached
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {session.dataset_1_type} ↔ {session.dataset_2_type}
@@ -288,52 +310,70 @@ export default function Audit() {
                 </CardContent>
               </Card>
             ) : (
-              <Tabs defaultValue="tesseract" className="space-y-6">
-                <TabsList>
-                  <TabsTrigger value="tesseract" className="gap-2">
-                    <Grid3X3 className="h-4 w-4" />
-                    Tesseract
-                  </TabsTrigger>
-                  <TabsTrigger value="blackboard" className="gap-2">
-                    <MessageSquare className="h-4 w-4" />
-                    Blackboard
-                    {blackboardEntries.length > 0 && (
-                      <Badge variant="secondary" className="ml-1">
-                        {blackboardEntries.length}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="results" className="gap-2">
-                    <CircleDot className="h-4 w-4" />
-                    Results
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="tesseract">
-                  <TesseractVisualizer
-                    cells={tesseractCells}
-                    currentIteration={session.current_iteration}
-                    onCellClick={(cell) => {
-                      toast.info(`Cell: ${cell.x_element_label || cell.x_element_id}`);
-                    }}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left Column - Agents */}
+                <div className="lg:col-span-1">
+                  <AgentInstancesCard 
+                    agents={agentInstances}
+                    totalElements={tesseractCells.length}
                   />
-                </TabsContent>
+                </div>
 
-                <TabsContent value="blackboard">
-                  <AuditBlackboard
-                    entries={blackboardEntries}
-                    currentIteration={session.current_iteration}
-                  />
-                </TabsContent>
+                {/* Right Column - Main Tabs */}
+                <div className="lg:col-span-2">
+                  <Tabs defaultValue="tesseract" className="space-y-4">
+                    <TabsList>
+                      <TabsTrigger value="tesseract" className="gap-2">
+                        <Grid3X3 className="h-4 w-4" />
+                        Tesseract
+                        {tesseractCells.length > 0 && (
+                          <Badge variant="secondary" className="ml-1">
+                            {tesseractCells.length}
+                          </Badge>
+                        )}
+                      </TabsTrigger>
+                      <TabsTrigger value="blackboard" className="gap-2">
+                        <MessageSquare className="h-4 w-4" />
+                        Blackboard
+                        {blackboardEntries.length > 0 && (
+                          <Badge variant="secondary" className="ml-1">
+                            {blackboardEntries.length}
+                          </Badge>
+                        )}
+                      </TabsTrigger>
+                      <TabsTrigger value="results" className="gap-2">
+                        <CircleDot className="h-4 w-4" />
+                        Results
+                      </TabsTrigger>
+                    </TabsList>
 
-                <TabsContent value="results">
-                  <VennDiagramResults
-                    vennResult={session.venn_result}
-                    dataset1Label={session.dataset_1_type}
-                    dataset2Label={session.dataset_2_type}
-                  />
-                </TabsContent>
-              </Tabs>
+                    <TabsContent value="tesseract">
+                      <TesseractVisualizer
+                        cells={tesseractCells}
+                        currentIteration={session.current_iteration}
+                        onCellClick={(cell) => {
+                          toast.info(`${cell.x_element_label || cell.x_element_id}: ${cell.evidence_summary || "No evidence"}`);
+                        }}
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="blackboard">
+                      <AuditBlackboard
+                        entries={blackboardEntries}
+                        currentIteration={session.current_iteration}
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="results">
+                      <VennDiagramResults
+                        vennResult={session.venn_result}
+                        dataset1Label={session.dataset_1_type}
+                        dataset2Label={session.dataset_2_type}
+                      />
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              </div>
             )}
           </div>
         </main>
@@ -344,6 +384,8 @@ export default function Audit() {
         onOpenChange={setConfigDialogOpen}
         onStartAudit={handleStartAudit}
         isLoading={isStarting}
+        projectId={projectId!}
+        shareToken={shareToken}
       />
     </div>
   );

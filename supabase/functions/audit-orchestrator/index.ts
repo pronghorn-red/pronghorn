@@ -524,8 +524,9 @@ async function buildProblemShape(supabase: any, session: any, projectId: string,
     const { data } = await supabase.rpc("get_canvas_nodes_with_token", { p_project_id: projectId, p_token: shareToken });
     d1Elements = (data || []).map((n: any, i: number) => ({ id: n.id, label: n.data?.label || n.type, index: i }));
   } else if (d1Type === "standards") {
-    const { data } = await supabase.rpc("get_project_standards_detail_with_token", { p_project_id: projectId, p_token: shareToken });
-    d1Elements = (data || []).map((s: any, i: number) => ({ id: s.id, label: s.name || s.title, index: i }));
+    const { data } = await supabase.rpc("get_project_standards_with_token", { p_project_id: projectId, p_token: shareToken });
+    const stdList = Array.isArray(data) ? data : [];
+    d1Elements = stdList.map((s: any, i: number) => ({ id: s.standard_id || s.id, label: s.name || s.title, index: i }));
   } else if (d1Type === "artifacts") {
     const { data } = await supabase.rpc("get_artifacts_with_token", { p_project_id: projectId, p_token: shareToken });
     d1Elements = (data || []).map((a: any, i: number) => ({ id: a.id, label: a.ai_title || a.content?.slice(0, 50), index: i }));
@@ -536,10 +537,12 @@ async function buildProblemShape(supabase: any, session: any, projectId: string,
   let d2Count = 0;
 
   if (d2Type === "repository_files") {
-    const { data: repos } = await supabase.rpc("get_repos_with_token", { p_project_id: projectId, p_token: shareToken });
-    if (repos?.[0]) {
-      const { data: files } = await supabase.rpc("get_repo_files_with_token", { p_repo_id: repos[0].id, p_token: shareToken });
-      d2Count = files?.length || 0;
+    const { data: repos } = await supabase.rpc("get_project_repos_with_token", { p_project_id: projectId, p_token: shareToken });
+    const repoList = Array.isArray(repos) ? repos : [];
+    if (repoList[0]) {
+      const { data: files } = await supabase.rpc("get_repo_files_with_token", { p_repo_id: repoList[0].id, p_token: shareToken });
+      const fileList = Array.isArray(files) ? files : [];
+      d2Count = fileList.length;
       d2Summary = `${d2Count} files in repository`;
     }
   } else if (d2Type === "requirements") {

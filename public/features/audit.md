@@ -638,20 +638,25 @@ All follow `_with_token` pattern with `require_role(p_project_id, p_token, 'edit
 - [x] Create VennDiagramResults
 - [x] Create AuditConfigurationDialog
 
-### Phase 4: Page Integration ✅
+### Phase 4: Page Integration ✅ COMPLETE
 
 - [x] Rewrite Audit.tsx page with new components
 - [x] Session selector and management
 - [x] Status bar with iteration tracking
 - [x] Tab-based layout (Tesseract, Blackboard, Results)
 - [x] Real-time updates via useRealtimeAudit hook
+- [x] Add AgentInstancesCard component for agent monitoring
+- [x] Connect to audit-orchestrator edge function on "Start Audit"
+- [x] Add Audit to ProjectSidebar navigation (after Deploy)
+- [x] Dataset selection with item picker in configuration dialog
 
-### Phase 5: Polish
+### Phase 5: Polish (Future)
 
 - [ ] Add TesseractVisualizer 3D mode
-- [ ] Add export options
+- [ ] Add export options (PDF audit report)
 - [ ] Add audit history view
-- [ ] Performance optimization
+- [ ] Performance optimization for large datasets
+- [ ] Agent conversation threading
 
 ---
 
