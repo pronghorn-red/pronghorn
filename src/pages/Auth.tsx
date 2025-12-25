@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff, ArrowLeft, Info, CheckCircle, AlertTriangle } from "lucide-react";
 import { PronghornLogo } from "@/components/layout/PronghornLogo";
+
 export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -147,6 +148,7 @@ export default function Auth() {
       navigate("/dashboard");
     }
   }, [session, navigate, resetMode, searchParams]);
+
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     const {
@@ -157,6 +159,7 @@ export default function Auth() {
       setGoogleLoading(false);
     }
   };
+
   const handleAzureSignIn = async () => {
     setAzureLoading(true);
     const {
@@ -167,6 +170,7 @@ export default function Auth() {
       setAzureLoading(false);
     }
   };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -181,6 +185,7 @@ export default function Auth() {
       navigate("/dashboard");
     }
   };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (signupPassword !== signupConfirm) {
@@ -202,6 +207,7 @@ export default function Auth() {
       toast.success("Account created! Please check your email to verify your account.");
     }
   };
+
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetEmail) {
@@ -221,6 +227,7 @@ export default function Auth() {
       setResetEmail("");
     }
   };
+
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmNewPassword) {
@@ -259,25 +266,30 @@ export default function Auth() {
   }: {
     show: boolean;
     onToggle: () => void;
-  }) => <button type="button" onClick={onToggle} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+  }) => (
+    <button type="button" onClick={onToggle} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
       {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-    </button>;
+    </button>
+  );
 
   // Login type information component
-  const LoginTypeInfo = () => <Alert className="mb-4 border-muted bg-muted/50">
+  const LoginTypeInfo = () => (
+    <Alert className="mb-4 border-muted bg-muted/50">
       <Info className="h-4 w-4" />
       <AlertDescription className="text-sm">
         <ul className="mt-1 space-y-1 text-muted-foreground">
-          <li><span className="font-medium text-foreground">Google SSO:</span>Google SSO: Government of Alberta</li>
+          <li><span className="font-medium text-foreground">Google SSO:</span> Government of Alberta</li>
           <li><span className="font-medium text-foreground">Microsoft SSO:</span> Organizations with Entra ID</li>
-          <li><span className="font-medium text-foreground">Email/Password:</span>Email/Password: </li>
+          <li><span className="font-medium text-foreground">Email/Password:</span> Public access</li>
         </ul>
       </AlertDescription>
-    </Alert>;
+    </Alert>
+  );
 
   // Reset password form (when user comes back from email link)
   if (resetMode) {
-    return <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <Link to="/" className="flex justify-center mb-4">
@@ -309,12 +321,14 @@ export default function Auth() {
             </form>
           </CardContent>
         </Card>
-      </div>;
+      </div>
+    );
   }
 
   // Forgot password form
   if (forgotPasswordMode) {
-    return <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <Link to="/" className="flex justify-center mb-4">
@@ -340,9 +354,12 @@ export default function Auth() {
             </Button>
           </CardContent>
         </Card>
-      </div>;
+      </div>
+    );
   }
-  return <div className="min-h-screen bg-background flex items-center justify-center p-4">
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <Link to="/" className="flex justify-center mb-4">
@@ -355,34 +372,40 @@ export default function Auth() {
         </CardHeader>
         <CardContent>
           {/* Expired link error banner */}
-          {expiredLinkError && <Alert className="mb-4 border-amber-500/50 bg-amber-500/10">
+          {expiredLinkError && (
+            <Alert className="mb-4 border-amber-500/50 bg-amber-500/10">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
               <AlertDescription className="text-amber-700 dark:text-amber-400">
                 {expiredLinkError}
                 <Button variant="link" className="p-0 h-auto ml-1 text-amber-700 dark:text-amber-400 underline" onClick={() => {
-              setExpiredLinkError(null);
-              setForgotPasswordMode(true);
-            }}>
+                  setExpiredLinkError(null);
+                  setForgotPasswordMode(true);
+                }}>
                   Request a new link
                 </Button>
               </AlertDescription>
-            </Alert>}
+            </Alert>
+          )}
 
           {/* Already verified/used link warning */}
-          {alreadyVerifiedError && <Alert className="mb-4 border-amber-500/50 bg-amber-500/10">
+          {alreadyVerifiedError && (
+            <Alert className="mb-4 border-amber-500/50 bg-amber-500/10">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
               <AlertDescription className="text-amber-700 dark:text-amber-400">
                 {alreadyVerifiedError}
               </AlertDescription>
-            </Alert>}
+            </Alert>
+          )}
 
           {/* Verification success message */}
-          {verificationSuccess && !alreadyVerifiedError && <Alert className="mb-4 border-green-500/50 bg-green-500/10">
+          {verificationSuccess && !alreadyVerifiedError && (
+            <Alert className="mb-4 border-green-500/50 bg-green-500/10">
               <CheckCircle className="h-4 w-4 text-green-500" />
               <AlertDescription className="text-green-700 dark:text-green-400">
                 Your email has been verified! You can now sign in to your account.
               </AlertDescription>
-            </Alert>}
+            </Alert>
+          )}
 
           {/* Login type information */}
           <LoginTypeInfo />
@@ -427,22 +450,26 @@ export default function Auth() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" onClick={handleGoogleSignIn} disabled={googleLoading || azureLoading}>
-                    {googleLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+                    {googleLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (
+                      <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                         <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                         <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                      </svg>}
+                      </svg>
+                    )}
                     Google
                   </Button>
                   <Button variant="outline" onClick={handleAzureSignIn} disabled={googleLoading || azureLoading}>
-                    {azureLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <svg className="mr-2 h-4 w-4" viewBox="0 0 23 23">
+                    {azureLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (
+                      <svg className="mr-2 h-4 w-4" viewBox="0 0 23 23">
                         <path fill="#f3f3f3" d="M0 0h23v23H0z" />
                         <path fill="#f35325" d="M1 1h10v10H1z" />
                         <path fill="#81bc06" d="M12 1h10v10H12z" />
                         <path fill="#05a6f0" d="M1 12h10v10H1z" />
                         <path fill="#ffba08" d="M12 12h10v10H12z" />
-                      </svg>}
+                      </svg>
+                    )}
                     Microsoft
                   </Button>
                 </div>
@@ -488,5 +515,6 @@ export default function Auth() {
           </div>
         </CardContent>
       </Card>
-    </div>;
+    </div>
+  );
 }
