@@ -77,13 +77,14 @@ serve(async (req) => {
         progress: 0 
       });
 
-      // Build the prompt - now includes within-dataset merging
+      // Build the prompt - ONLY pass labels and descriptions, NOT the D1/D2 IDs
+      // The IDs will be re-attached after the LLM identifies which concepts to merge
       const d1ConceptsText = d1Concepts.map((c, i) => 
-        `D1-${i + 1}: "${c.label}"\nDescription: ${c.description}\nLinked D1 element IDs: ${c.d1Ids.join(", ")}`
+        `D1-${i + 1}: "${c.label}"\nDescription: ${c.description}`
       ).join("\n\n");
 
       const d2ConceptsText = d2Concepts.map((c, i) => 
-        `D2-${i + 1}: "${c.label}"\nDescription: ${c.description}\nLinked D2 element IDs: ${c.d2Ids.join(", ")}`
+        `D2-${i + 1}: "${c.label}"\nDescription: ${c.description}`
       ).join("\n\n");
 
       const prompt = `You are merging concepts from two datasets. Your job is to identify concepts that are identical or nearly identical and should be merged.
@@ -116,40 +117,25 @@ DO NOT merge concepts that are genuinely different functional areas.
 
 ## Output Format
 
-Return a JSON object with this exact structure:
+Return a JSON object with this exact structure (use labels to identify concepts, NOT IDs):
 {
   "mergedConcepts": [
     {
       "mergedLabel": "Final Concept Name",
       "mergedDescription": "Combined description capturing all merged concepts",
       "d1ConceptLabels": ["D1 Concept Label 1", "D1 Concept Label 2"],
-      "d2ConceptLabels": ["D2 Concept Label 1"],
-      "d1Ids": ["all", "d1", "element", "ids", "from", "merged", "concepts"],
-      "d2Ids": ["all", "d2", "element", "ids", "from", "merged", "concepts"]
+      "d2ConceptLabels": ["D2 Concept Label 1"]
     }
   ],
-  "unmergedD1Concepts": [
-    {
-      "label": "D1 Concept with no matches",
-      "description": "...",
-      "d1Ids": ["..."]
-    }
-  ],
-  "unmergedD2Concepts": [
-    {
-      "label": "D2 Concept with no matches",
-      "description": "...",
-      "d2Ids": ["..."]
-    }
-  ]
+  "unmergedD1Labels": ["D1 Concept with no matches"],
+  "unmergedD2Labels": ["D2 Concept with no matches"]
 }
 
 Notes:
 - mergedConcepts: concepts that were merged (can be D1+D1, D2+D2, or D1+D2 combinations)
-- A merged concept can have multiple d1ConceptLabels OR multiple d2ConceptLabels (within-dataset merge)
-- A merged concept with both d1ConceptLabels AND d2ConceptLabels is a cross-dataset merge
-- unmergedD1Concepts: D1 concepts with NO matches anywhere
-- unmergedD2Concepts: D2 concepts with NO matches anywhere
+- Use the EXACT labels from the input concepts so we can match them back
+- unmergedD1Labels: labels of D1 concepts with NO matches anywhere
+- unmergedD2Labels: labels of D2 concepts with NO matches anywhere
 
 Return ONLY the JSON object, no other text.`;
 
@@ -185,11 +171,19 @@ Return ONLY the JSON object, no other text.`;
       
       await sendSSE("progress", { phase: "concept_merge", message: "Parsing merge instructions...", progress: 60 });
 
-      // Parse JSON
+      // Parse JSON - now expects labels only, we'll reconstruct IDs
       let parsed: { 
-        mergedConcepts: MergeInstruction[]; 
-        unmergeedD1Concepts?: D1Concept[];
+        mergedConcepts: Array<{
+          mergedLabel: string;
+          mergedDescription: string;
+          d1ConceptLabels: string[];
+          d2ConceptLabels: string[];
+        }>; 
+        unmergedD1Labels?: string[];
+        unmergedD2Labels?: string[];
+        // Legacy fallbacks
         unmergedD1Concepts?: D1Concept[];
+        unmergeedD1Concepts?: D1Concept[];
         unmergedD2Concepts?: D2Concept[];
       };
       try {
@@ -205,9 +199,59 @@ Return ONLY the JSON object, no other text.`;
         }
       }
 
-      const mergedConcepts = parsed.mergedConcepts || [];
-      const unmergedD1Concepts = parsed.unmergedD1Concepts || parsed.unmergeedD1Concepts || [];
-      const unmergedD2Concepts = parsed.unmergedD2Concepts || [];
+      // Build lookup maps for reconstructing IDs from labels
+      const d1ByLabel = new Map<string, D1Concept>();
+      d1Concepts.forEach(c => d1ByLabel.set(c.label.toLowerCase(), c));
+      
+      const d2ByLabel = new Map<string, D2Concept>();
+      d2Concepts.forEach(c => d2ByLabel.set(c.label.toLowerCase(), c));
+
+      // Reconstruct full merged concepts with IDs
+      const mergedConcepts: MergeInstruction[] = (parsed.mergedConcepts || []).map(m => {
+        const d1Ids: string[] = [];
+        const d2Ids: string[] = [];
+        
+        (m.d1ConceptLabels || []).forEach(label => {
+          const found = d1ByLabel.get(label.toLowerCase());
+          if (found) d1Ids.push(...found.d1Ids);
+        });
+        
+        (m.d2ConceptLabels || []).forEach(label => {
+          const found = d2ByLabel.get(label.toLowerCase());
+          if (found) d2Ids.push(...found.d2Ids);
+        });
+        
+        return {
+          mergedLabel: m.mergedLabel,
+          mergedDescription: m.mergedDescription,
+          d1ConceptLabels: m.d1ConceptLabels || [],
+          d2ConceptLabels: m.d2ConceptLabels || [],
+          d1Ids,
+          d2Ids
+        };
+      });
+
+      // Reconstruct unmerged D1 concepts from labels
+      let unmergedD1Concepts: D1Concept[] = [];
+      if (parsed.unmergedD1Labels) {
+        unmergedD1Concepts = parsed.unmergedD1Labels
+          .map(label => d1ByLabel.get(label.toLowerCase()))
+          .filter((c): c is D1Concept => c !== undefined);
+      } else if (parsed.unmergedD1Concepts || parsed.unmergeedD1Concepts) {
+        // Legacy fallback
+        unmergedD1Concepts = parsed.unmergedD1Concepts || parsed.unmergeedD1Concepts || [];
+      }
+
+      // Reconstruct unmerged D2 concepts from labels
+      let unmergedD2Concepts: D2Concept[] = [];
+      if (parsed.unmergedD2Labels) {
+        unmergedD2Concepts = parsed.unmergedD2Labels
+          .map(label => d2ByLabel.get(label.toLowerCase()))
+          .filter((c): c is D2Concept => c !== undefined);
+      } else if (parsed.unmergedD2Concepts) {
+        // Legacy fallback
+        unmergedD2Concepts = parsed.unmergedD2Concepts || [];
+      }
 
       // Count different merge types
       const d1OnlyMerges = mergedConcepts.filter(c => c.d1ConceptLabels.length > 1 && c.d2ConceptLabels.length === 0).length;

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import { 
   ChevronRight, 
   ChevronDown, 
@@ -9,7 +10,8 @@ import {
   FolderOpen,
   FileText,
   FileCode,
-  Loader2
+  Loader2,
+  AlertTriangle
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -29,6 +31,7 @@ interface FileTreeNode {
   children: FileTreeNode[];
   content?: string;
   isBinary?: boolean;
+  charCount?: number;
 }
 
 // Binary file extensions to filter out
@@ -45,6 +48,19 @@ const BINARY_EXTENSIONS = new Set([
 const isBinaryFile = (path: string): boolean => {
   const ext = path.toLowerCase().match(/\.[^.]+$/)?.[0] || '';
   return BINARY_EXTENSIONS.has(ext);
+};
+
+const formatSize = (chars: number): string => {
+  if (chars >= 1000000) return `${(chars / 1000000).toFixed(1)}M`;
+  if (chars >= 1000) return `${(chars / 1000).toFixed(1)}K`;
+  return `${chars}`;
+};
+
+const getSizeClass = (chars: number): { class: string; warning: boolean } => {
+  if (chars >= 200000) return { class: "bg-destructive text-destructive-foreground", warning: true };
+  if (chars >= 100000) return { class: "bg-orange-500 text-white", warning: true };
+  if (chars >= 50000) return { class: "bg-yellow-500 text-black", warning: false };
+  return { class: "", warning: false };
 };
 
 export function RepositoryFilesSelector({
@@ -169,13 +185,15 @@ export function RepositoryFilesSelector({
 
         if (isLast) {
           // It's a file
+          const charCount = file.content?.length || 0;
           currentLevel.push({
             name: part,
             path: file.path,
             type: 'file',
             children: [],
             content: file.content,
-            isBinary: file.isBinary
+            isBinary: file.isBinary,
+            charCount
           });
         } else {
           // It's a folder
@@ -325,12 +343,17 @@ export function RepositoryFilesSelector({
 
     // File node
     const isSelected = selectedFiles.has(node.path);
+    const charCount = node.charCount || 0;
+    const sizeInfo = getSizeClass(charCount);
+    const showSize = charCount >= 50000; // Only show badge for files >= 50K
+    
     return (
       <div
         key={node.path}
         className={cn(
           "flex items-center gap-2 py-1.5 px-2 hover:bg-accent/50 rounded-sm cursor-pointer",
-          isSelected && "bg-accent/30"
+          isSelected && "bg-accent/30",
+          sizeInfo.warning && "border-l-2 border-orange-500"
         )}
         style={{ paddingLeft: paddingLeft + 24 }}
         onClick={() => toggleFile(node.path)}
@@ -340,7 +363,15 @@ export function RepositoryFilesSelector({
           onCheckedChange={() => toggleFile(node.path)}
         />
         {getFileIcon(node.name)}
-        <span className="text-sm truncate">{node.name}</span>
+        <span className="text-sm truncate flex-1">{node.name}</span>
+        {showSize && (
+          <Badge variant="secondary" className={cn("text-xs ml-auto", sizeInfo.class)}>
+            {formatSize(charCount)}
+          </Badge>
+        )}
+        {sizeInfo.warning && (
+          <AlertTriangle className="h-3 w-3 text-orange-500 flex-shrink-0" />
+        )}
       </div>
     );
   };
