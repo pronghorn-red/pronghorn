@@ -766,10 +766,10 @@ export function useAuditPipeline() {
       if (abortRef.current) throw new Error("Aborted");
 
       // ========================================
-      // PHASE 3: Build Tesseract cells locally
+      // PHASE 3: Build Tesseract cells - ONE CALL PER CONCEPT
       // ========================================
       setProgress({ phase: "building_tesseract", message: "Analyzing alignment...", progress: 65 });
-      updateStep("tesseract", { status: "running", message: "Calling tesseract LLM...", startedAt: new Date() });
+      updateStep("tesseract", { status: "running", message: "Preparing concepts...", startedAt: new Date() });
 
       // Get concept nodes for tesseract analysis
       const conceptNodes = localNodes.filter(n => n.node_type === "concept");
@@ -782,83 +782,133 @@ export function useAuditPipeline() {
 
       // Prepare concepts for tesseract with full content
       const conceptsForTesseract = conceptNodes.map(node => {
-        const d1Content: string[] = [];
-        const d2Content: string[] = [];
+        const d1Els: Array<{ id: string; label: string; content: string }> = [];
+        const d2Els: Array<{ id: string; label: string; content: string }> = [];
         
         for (const elId of node.source_element_ids) {
           const d1El = d1ContentMap.get(elId);
           const d2El = d2ContentMap.get(elId);
-          if (d1El) d1Content.push(d1El.content);
-          if (d2El) d2Content.push(d2El.content);
+          if (d1El) d1Els.push({ id: d1El.id, label: d1El.label, content: d1El.content });
+          if (d2El) d2Els.push({ id: d2El.id, label: d2El.label, content: d2El.content });
         }
 
         return {
           conceptId: node.id,
-          label: node.label,
-          description: node.description,
-          d1ElementIds: node.source_element_ids.filter(id => d1ContentMap.has(id)),
-          d2ElementIds: node.source_element_ids.filter(id => d2ContentMap.has(id)),
-          d1Content,
-          d2Content,
+          conceptLabel: node.label,
+          conceptDescription: node.description || "",
+          d1Elements: d1Els,
+          d2Elements: d2Els,
         };
       });
 
-      const tesseractResponse = await fetch(`${BASE_URL}/audit-build-tesseract`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, projectId, shareToken, concepts: conceptsForTesseract }),
-      });
+      const totalConcepts = conceptsForTesseract.length;
+      updateStep("tesseract", { message: `Analyzing ${totalConcepts} concepts...`, progress: 5 });
 
-      if (!tesseractResponse.ok) {
-        const errorText = await tesseractResponse.text();
-        throw new Error(`Tesseract failed: ${tesseractResponse.status} - ${errorText.slice(0, 100)}`);
-      }
+      if (totalConcepts === 0) {
+        updateStep("tesseract", { status: "completed", message: "No concepts to analyze", progress: 100, completedAt: new Date() });
+      } else {
+        // Process concepts in parallel batches (3 at a time to avoid rate limits)
+        const TESSERACT_PARALLEL = 3;
+        let completedCount = 0;
+        let errorCount = 0;
 
-      await streamSSE(
-        tesseractResponse,
-        (data) => {
-          updateStep("tesseract", { message: data.message || "Analyzing...", progress: data.progress || 50 });
-        },
-        (data) => {
-          // Each cell streamed in
-          if (data.conceptLabel && data.polarity !== undefined) {
-            const cell: LocalTesseractCell = {
-              id: localId(),
-              conceptLabel: data.conceptLabel,
-              conceptDescription: data.conceptDescription || "",
-              polarity: data.polarity,
-              rationale: data.rationale || "",
-              d1ElementIds: data.d1ElementIds || [],
-              d2ElementIds: data.d2ElementIds || [],
-            };
-            localTesseractCells.push(cell);
-            updateResults();
-            addStepDetail("tesseract", `${data.conceptLabel}: ${data.polarity > 0 ? "+" : ""}${data.polarity.toFixed(2)}`);
-          }
-        },
-        (data) => {
-          // Full result at end
-          if (data.cells) {
-            for (const c of data.cells) {
-              if (!localTesseractCells.find(tc => tc.conceptLabel === c.conceptLabel)) {
-                localTesseractCells.push({
-                  id: localId(),
-                  conceptLabel: c.conceptLabel,
-                  conceptDescription: c.conceptDescription || "",
-                  polarity: c.polarity,
-                  rationale: c.rationale || "",
-                  d1ElementIds: c.d1ElementIds || [],
-                  d2ElementIds: c.d2ElementIds || [],
-                });
-              }
+        const processTesseractConcept = async (concept: typeof conceptsForTesseract[0], index: number): Promise<void> => {
+          try {
+            const response = await fetch(`${BASE_URL}/audit-build-tesseract`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                sessionId, 
+                projectId, 
+                shareToken, 
+                concepts: [concept] // Send ONE concept
+              }),
+            });
+
+            if (!response.ok) {
+              console.error(`[tesseract] Failed for concept ${concept.conceptLabel}:`, await response.text());
+              errorCount++;
+              return;
             }
-            updateResults();
-          }
-        },
-        (err) => { throw new Error(`Tesseract stream error: ${err}`); }
-      );
 
-      updateStep("tesseract", { status: "completed", message: `${localTesseractCells.length} cells analyzed`, progress: 100, completedAt: new Date() });
+            // Parse SSE response for this single concept
+            await streamSSE(
+              response,
+              () => {}, // progress - ignore per-concept
+              (data) => {
+                // Cell data
+                if (data.conceptLabel && data.polarity !== undefined) {
+                  const cell: LocalTesseractCell = {
+                    id: localId(),
+                    conceptLabel: data.conceptLabel,
+                    conceptDescription: concept.conceptDescription,
+                    polarity: data.polarity,
+                    rationale: data.rationale || "",
+                    d1ElementIds: concept.d1Elements.map(e => e.id),
+                    d2ElementIds: concept.d2Elements.map(e => e.id),
+                  };
+                  localTesseractCells.push(cell);
+                  addStepDetail("tesseract", `${data.conceptLabel}: ${data.polarity > 0 ? "+" : ""}${data.polarity.toFixed(2)}`);
+                }
+              },
+              (data) => {
+                // Result with cells array
+                if (data.cells) {
+                  for (const c of data.cells) {
+                    if (!localTesseractCells.find(tc => tc.conceptLabel === c.conceptLabel)) {
+                      localTesseractCells.push({
+                        id: localId(),
+                        conceptLabel: c.conceptLabel,
+                        conceptDescription: c.conceptDescription || concept.conceptDescription,
+                        polarity: c.polarity,
+                        rationale: c.rationale || "",
+                        d1ElementIds: concept.d1Elements.map(e => e.id),
+                        d2ElementIds: concept.d2Elements.map(e => e.id),
+                      });
+                    }
+                  }
+                }
+              },
+              (err) => {
+                console.error(`[tesseract] Stream error for ${concept.conceptLabel}:`, err);
+                errorCount++;
+              }
+            );
+
+            completedCount++;
+            const progressPercent = Math.round((completedCount / totalConcepts) * 95) + 5;
+            updateStep("tesseract", { 
+              message: `Analyzed ${completedCount}/${totalConcepts}: ${concept.conceptLabel}`, 
+              progress: progressPercent 
+            });
+            updateResults();
+
+          } catch (err) {
+            console.error(`[tesseract] Error for concept ${concept.conceptLabel}:`, err);
+            errorCount++;
+          }
+        };
+
+        // Process in parallel batches
+        for (let i = 0; i < conceptsForTesseract.length; i += TESSERACT_PARALLEL) {
+          if (abortRef.current) throw new Error("Aborted");
+          
+          const batch = conceptsForTesseract.slice(i, i + TESSERACT_PARALLEL);
+          await Promise.all(batch.map((concept, batchIdx) => processTesseractConcept(concept, i + batchIdx)));
+        }
+
+        const finalMessage = errorCount > 0 
+          ? `${localTesseractCells.length} cells analyzed (${errorCount} errors)`
+          : `${localTesseractCells.length} cells analyzed`;
+        
+        updateStep("tesseract", { 
+          status: errorCount === totalConcepts ? "error" : "completed", 
+          message: finalMessage, 
+          progress: 100, 
+          completedAt: new Date(),
+          errorMessage: errorCount > 0 ? `${errorCount} concept(s) failed to analyze` : undefined
+        });
+      }
 
       if (abortRef.current) throw new Error("Aborted");
 
