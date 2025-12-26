@@ -444,11 +444,42 @@ function normalizeFieldNames(obj: any): any {
     return obj.map(normalizeFieldNames);
   }
   
+  // Map alternative field names to expected ones
+  const fieldAliases: Record<string, string> = {
+    // Nodes
+    newNodes: 'proposedNodes',
+    new_nodes: 'proposedNodes',
+    nodes: 'proposedNodes',
+    proposed_nodes: 'proposedNodes',
+    // Edges
+    newEdges: 'proposedEdges',
+    new_edges: 'proposedEdges',
+    edges: 'proposedEdges',
+    proposed_edges: 'proposedEdges',
+    // Graph complete vote
+    isGraphComplete: 'graphCompleteVote',
+    is_graph_complete: 'graphCompleteVote',
+    graph_complete_vote: 'graphCompleteVote',
+    graphComplete: 'graphCompleteVote',
+    // Blackboard entry
+    blackboard_entry: 'blackboardEntry',
+    // Node fields
+    node_type: 'nodeType',
+    source_dataset: 'sourceDataset',
+    source_element_ids: 'sourceElementIds',
+    source_node_id: 'sourceNodeId',
+    target_node_id: 'targetNodeId',
+    edge_type: 'edgeType',
+  };
+  
   const normalized: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
-    // Convert snake_case to camelCase
-    const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-    normalized[camelKey] = normalizeFieldNames(value);
+    // Check for alias first, then convert snake_case to camelCase
+    let normalizedKey = fieldAliases[key];
+    if (!normalizedKey) {
+      normalizedKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    }
+    normalized[normalizedKey] = normalizeFieldNames(value);
   }
   return normalized;
 }
