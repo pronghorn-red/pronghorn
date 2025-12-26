@@ -117,7 +117,7 @@ export default function Audit() {
     console.log("Resuming stale audit session:", sessionToResume.id);
     
     try {
-      const { error: orchestratorError } = await supabase.functions.invoke("audit-orchestrator", {
+      const { data, error: orchestratorError } = await supabase.functions.invoke("audit-orchestrator", {
         body: {
           sessionId: sessionToResume.id,
           projectId,
@@ -126,11 +126,17 @@ export default function Audit() {
         },
       });
       
+      // Check for actual errors - edge functions return errors in data.error sometimes
       if (orchestratorError) {
         console.error("Resume orchestrator error:", orchestratorError);
-        toast.error("Failed to resume audit");
+        toast.error("Failed to resume audit: " + (orchestratorError.message || "Unknown error"));
+      } else if (data?.error) {
+        console.error("Resume returned error in data:", data.error);
+        toast.error("Resume error: " + data.error);
       } else {
-        toast.success("Audit resumed");
+        // Only show success toast if we actually resumed successfully
+        console.log("Audit resumed successfully", data);
+        // Don't show toast here - the activity stream will show progress
       }
     } catch (err) {
       console.error("Resume failed:", err);

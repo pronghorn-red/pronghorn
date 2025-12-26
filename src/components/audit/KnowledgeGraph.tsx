@@ -215,18 +215,16 @@ export function KnowledgeGraph({
       return node;
     })];
 
-    // Create edges from anchor to all concept nodes
-    const anchorEdges: GraphEdge[] = nodes
-      .filter(n => n.node_type === "concept")
-      .map(n => ({
-        id: `anchor-to-${n.id}`,
-        source: "__project_anchor__",
-        target: n.id,
-        label: null,
-        edge_type: "anchors",
-        weight: 0.3,
-        created_by_agent: "system",
-      }));
+    // Create edges from anchor to ALL nodes (not just concepts) to keep graph together
+    const anchorEdges: GraphEdge[] = nodes.map(n => ({
+      id: `anchor-to-${n.id}`,
+      source: "__project_anchor__",
+      target: n.id,
+      label: null,
+      edge_type: "anchors",
+      weight: 0.1, // Very weak to allow natural clustering
+      created_by_agent: "system",
+    }));
 
     const graphEdges: GraphEdge[] = [
       ...anchorEdges,

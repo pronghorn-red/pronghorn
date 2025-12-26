@@ -132,8 +132,9 @@ ${perspectiveDescriptions}
 
 ### Phase 1: GRAPH_BUILDING (iterations 1-30)
 - Call write_blackboard with entryType="plan" to document your strategy
-- Call read_dataset_item for EVERY element in Dataset 1 (batch 5-10 per iteration)
-- Call read_dataset_item for EVERY element in Dataset 2 (batch 5-10 per iteration)
+- Call read_dataset_item for EVERY element in Dataset 1 using the UUID IDs provided (batch 5-10 per iteration)
+- Call read_dataset_item for EVERY element in Dataset 2 using the UUID IDs provided (batch 5-10 per iteration)
+- IMPORTANT: Use the UUID IDs exactly as provided in the element lists (e.g., "f35fbf48-xxxx-xxxx-xxxx-xxxxxxxxxxxx"), NOT numeric indices!
 - Call create_concept for major themes/concepts (include sourceElementIds!)
 - Call link_concepts to connect related concepts
 - Call write_blackboard with entryType="observation" as you find patterns
@@ -165,15 +166,24 @@ ${problemShape.analysisSteps.map(s => `${s.step}. ${s.label}`).join("\n")}
 3. **write_blackboard EVERY iteration** - it's your working memory AND your resume checkpoint
 4. **ALWAYS include sourceElementIds** when creating concept nodes
 5. **Set continueAnalysis=false** ONLY after calling finalize_venn
+6. **USE UUID IDs** - When calling read_dataset_item, use the exact UUID IDs from the element lists, NOT numeric indices like "24" or "item 25"
 
 ## BLACKBOARD REQUIREMENTS (CRITICAL!)
-You MUST call write_blackboard:
-- At the START of each iteration with your current plan (entryType="thinking")
-- After processing each batch of elements with your findings (entryType="batch_findings")
-- When you discover gaps or orphans (entryType="finding")
-- Before finalize_venn with your synthesis (entryType="synthesis")
+You MUST call write_blackboard with MEANINGFUL INSIGHTS, not just tracking what you read:
+- At the START of each iteration: entryType="thinking" - what patterns are you seeing? What's your hypothesis?
+- When you find interesting patterns: entryType="finding" - describe the actual discovery, not just "read 10 items"
+- When you discover gaps/orphans: entryType="finding" - which specific items have no coverage and why this matters
+- Before finalize_venn: entryType="synthesis" - summarize your conclusions with evidence
 
-The blackboard is your ONLY persistent memory. If the analysis is interrupted and resumes, we will use the blackboard to restore context. Write frequently!
+BAD blackboard entries (don't do this):
+- "Read items 1-10 from dataset1" (just tracking, no insight)
+- "Processed batch 3" (meaningless)
+
+GOOD blackboard entries:
+- "Dataset1 items 5-8 focus on authentication requirements, but Dataset2 has no auth-related implementations - this is a critical GAP"
+- "Found overlap: D1 item 'User Login' matches D2 file 'auth/login.tsx' - marking as ALIGNED"
+
+The blackboard is your ONLY persistent memory. If the analysis is interrupted and resumes, we will use the blackboard to restore context. Write INSIGHTS, not just logs!
 
 ## RESPONSE FORMAT
 
@@ -296,13 +306,28 @@ async function executeTool(
           ? problemShape.dataset1.elements 
           : problemShape.dataset2.elements;
         
-        // Support partial ID matching
-        const item = elements.find(e => e.id === itemId || e.id.startsWith(itemId));
+        // Support multiple matching strategies:
+        // 1. Exact UUID match
+        // 2. Partial UUID prefix match
+        // 3. Numeric index (1-based) - LLM often uses "item 24" meaning index 24
+        let item = elements.find(e => e.id === itemId || e.id.startsWith(itemId));
+        
+        // If not found, try numeric index (1-based)
+        if (!item && /^\d+$/.test(String(itemId))) {
+          const numericIndex = parseInt(String(itemId), 10);
+          // Try 0-based index first, then 1-based
+          item = elements[numericIndex] || elements[numericIndex - 1];
+        }
+        
+        // If still not found, try matching by label
+        if (!item) {
+          item = elements.find(e => e.label === itemId);
+        }
         
         if (item) {
           return { success: true, result: item };
         }
-        return { success: false, result: null, error: `Item ${itemId} not found in ${normalizedDataset}` };
+        return { success: false, result: null, error: `Item ${itemId} not found in ${normalizedDataset}. Use UUIDs from dataset (${elements.length} items available, e.g. "${elements[0]?.id?.slice(0, 8)}...")` };
       }
       
       case "query_knowledge_graph": {
