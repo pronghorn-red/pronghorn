@@ -672,29 +672,45 @@ async function callLLMWithConversation(
           });
         }
       } else {
-        // Assistant message - format as tool_use
-        try {
-          const parsed = JSON.parse(turn.content);
-          claudeMessages.push({
-            role: "assistant",
-            content: [{
-              type: "tool_use",
-              id: turn.toolUseId || `tool_${Date.now()}_${i}`,
-              name: "respond_with_actions",
-              input: parsed
-            }]
-          });
-        } catch {
-          // If not valid JSON, add as text (shouldn't happen but be safe)
-          claudeMessages.push({
-            role: "assistant",
-            content: turn.content
-          });
+        // Assistant message - format as tool_use ONLY if we have a toolUseId
+        if (turn.toolUseId) {
+          try {
+            const parsed = JSON.parse(turn.content);
+            claudeMessages.push({
+              role: "assistant",
+              content: [{
+                type: "tool_use",
+                id: turn.toolUseId,
+                name: "respond_with_actions",
+                input: parsed
+              }]
+            });
+          } catch {
+            // If not valid JSON, skip this turn entirely
+            console.log("Skipping assistant turn with invalid JSON");
+          }
+        } else {
+          // No toolUseId - this was a text response, skip it in Claude conversation
+          // Claude requires tool_use/tool_result pairs, so we can't include plain text assistant messages
+          console.log("Skipping assistant turn without toolUseId");
         }
       }
     }
     
-    // For Claude, ensure we're using proper tool forcing
+    // Log the full request payload for debugging
+    const requestPayload = {
+      model,
+      max_tokens: 32768,
+      system: systemPrompt,
+      messages: claudeMessages,
+      tools: [getClaudeResponseTool()],
+      tool_choice: { type: "tool", name: "respond_with_actions" },
+    };
+    
+    console.log("Claude request payload:", JSON.stringify(requestPayload, null, 2).slice(0, 5000));
+    await logActivity("orchestrator", "llm_request", "Full LLM Request Payload", 
+      JSON.stringify({ messageCount: claudeMessages.length, messages: claudeMessages }, null, 2));
+    
     const response = await fetch(apiEndpoint, {
       method: "POST",
       headers: {
@@ -703,22 +719,21 @@ async function callLLMWithConversation(
         "anthropic-version": "2023-06-01",
         "anthropic-beta": "prompt-caching-2024-07-31",
       },
-      body: JSON.stringify({
-        model,
-        max_tokens: 32768,
-        system: systemPrompt,
-        messages: claudeMessages,
-        tools: [getClaudeResponseTool()],
-        tool_choice: { type: "tool", name: "respond_with_actions" },
-      }),
+      body: JSON.stringify(requestPayload),
     });
     
     if (!response.ok) {
       const errText = await response.text();
+      console.error("Claude API error response:", errText);
       throw new Error(`Claude API error: ${errText}`);
     }
     
     const data = await response.json();
+    
+    // Log the full response for debugging
+    console.log("Claude full response:", JSON.stringify(data, null, 2).slice(0, 3000));
+    await logActivity("orchestrator", "llm_response_full", "Full LLM Response", 
+      JSON.stringify(data, null, 2).slice(0, 5000));
     
     // Extract from tool_use content block
     const toolUseBlock = data.content?.find((c: any) => c.type === "tool_use");
@@ -728,7 +743,7 @@ async function callLLMWithConversation(
     } else {
       const textBlock = data.content?.find((c: any) => c.type === "text");
       rawText = textBlock?.text || "{}";
-      console.log("Warning: No tool_use block found in Claude response, falling back to text:", rawText.slice(0, 200));
+      console.log("Warning: No tool_use block found in Claude response, got text:", rawText.slice(0, 500));
     }
     
   } else {
@@ -1012,11 +1027,16 @@ START NOW - call your tools!`;
         logActivity, broadcast
       );
 
-      console.log(`Response: thinking=${response.thinking.length}chars, toolCalls=${response.toolCalls.length}, continue=${response.continueAnalysis}`);
+      console.log(`Response: thinking=${response.thinking.length}chars, toolCalls=${response.toolCalls.length}, continue=${response.continueAnalysis}, toolUseId=${toolUseId || 'none'}`);
 
-      // Add assistant response to conversation history with the tool_use ID
-      conversationTurns.push({ role: "assistant", content: rawContent, toolUseId });
-      lastToolUseId = toolUseId;
+      // Only add assistant response to conversation history if we got a valid tool_use response
+      // This is critical for Claude - we can't have assistant messages without tool_use IDs
+      if (toolUseId) {
+        conversationTurns.push({ role: "assistant", content: rawContent, toolUseId });
+        lastToolUseId = toolUseId;
+      } else {
+        console.log("Skipping conversation turn - no toolUseId returned (Claude returned text instead of tool_use)");
+      }
 
       // Log thinking
       if (response.thinking) {
