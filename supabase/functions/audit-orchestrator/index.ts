@@ -742,9 +742,28 @@ serve(async (req) => {
       return data;
     };
 
+    // Helper to log activity to the stream for real-time transparency
+    const logActivity = async (agentRole: string | null, activityType: string, title: string, content?: string, metadata?: Record<string, any>) => {
+      try {
+        await rpc("insert_audit_activity_with_token", {
+          p_session_id: sessionId,
+          p_token: shareToken,
+          p_agent_role: agentRole,
+          p_activity_type: activityType,
+          p_title: title,
+          p_content: content || null,
+          p_metadata: metadata || {},
+        });
+      } catch (err) {
+        console.error("Failed to log activity:", err);
+      }
+    };
+
     // Build problem shape
     const problemShape = await buildProblemShape(supabase, session, projectId, shareToken);
     console.log("Problem shape:", { d1Count: problemShape.dataset1.count, d2Type: problemShape.dataset2.type });
+
+    await logActivity(null, "phase_change", "Starting Audit Session", `Analyzing ${problemShape.dataset1.count} ${problemShape.dataset1.type} against ${problemShape.dataset2.type}`);
 
     await rpc("update_audit_session_with_token", {
       p_session_id: sessionId,
@@ -779,12 +798,15 @@ serve(async (req) => {
     }
 
     await broadcast("conference", { agentsCreated: agents.length });
+    await logActivity(null, "phase_change", "Conference Phase Started", `${agents.length} agents activated: ${agents.map(a => a.name).join(", ")}`);
 
     // ==================== PHASE 1: CONFERENCE ====================
     console.log("=== PHASE 1: CONFERENCE ===");
     
     const conferencePromises = agents.map(async (agent) => {
       try {
+        await logActivity(agent.role, "thinking", `${agent.name} analyzing datasets`, "Identifying key concepts for knowledge graph...");
+        
         const systemPrompt = getConferencePrompt(problemShape, agent);
         const response = await callLLM(
           apiEndpoint, apiKey, modelSettings,
@@ -795,6 +817,8 @@ serve(async (req) => {
         // Log what we got from the LLM
         const nodeCount = response.proposedNodes?.length || 0;
         console.log(`Conference response from ${agent.role}: ${nodeCount} nodes, keys: ${Object.keys(response).join(", ")}`);
+        
+        await logActivity(agent.role, "response", `${agent.name} proposed ${nodeCount} concepts`, response.reasoning?.slice(0, 300));
 
         // Insert proposed nodes - use UPSERT function (not insert)
         let insertedNodes = 0;
@@ -812,6 +836,7 @@ serve(async (req) => {
             p_created_by_agent: agent.role,
           });
           insertedNodes++;
+          await logActivity(agent.role, "node_insert", `Created node: ${label}`, node.description?.slice(0, 200));
         }
         console.log(`${agent.role} inserted ${insertedNodes} nodes`);
 
@@ -828,17 +853,20 @@ serve(async (req) => {
             p_iteration: 0,
             p_confidence: response.blackboardEntry?.confidence || 0.7,
           });
+          await logActivity(agent.role, "blackboard_write", `${agent.name} shared observation`, bbContent.slice(0, 200));
         }
 
         return { agent: agent.role, success: true, nodes: response.proposedNodes?.length || 0 };
       } catch (err) {
         console.error(`Conference error for ${agent.role}:`, err);
+        await logActivity(agent.role, "error", `Error during conference`, String(err));
         return { agent: agent.role, success: false, error: String(err) };
       }
     });
 
     await Promise.all(conferencePromises);
     await broadcast("conference_complete", { agents: agents.length });
+    await logActivity(null, "phase_change", "Conference Complete", "All agents have shared initial observations");
 
     // ==================== PHASE 2: GRAPH BUILDING ====================
     console.log("=== PHASE 2: GRAPH BUILDING ===");
@@ -848,6 +876,7 @@ serve(async (req) => {
       p_phase: "graph_building",
     });
     await broadcast("graph_building", { iteration: 0 });
+    await logActivity(null, "phase_change", "Graph Building Phase Started", "Agents collaboratively building knowledge graph");
 
     // Reduced iterations for faster convergence
     const MAX_GRAPH_ITERATIONS = 3;
@@ -857,6 +886,7 @@ serve(async (req) => {
     while (!graphComplete && graphIteration < MAX_GRAPH_ITERATIONS) {
       graphIteration++;
       console.log(`Graph building iteration ${graphIteration}`);
+      await logActivity(null, "thinking", `Graph Building Iteration ${graphIteration}/${MAX_GRAPH_ITERATIONS}`, `Current graph has ${(await rpc("get_audit_graph_nodes_with_token", { p_session_id: sessionId, p_token: shareToken }))?.length || 0} nodes`);
 
       await rpc("update_audit_session_with_token", {
         p_session_id: sessionId,
@@ -877,12 +907,17 @@ serve(async (req) => {
 
       const graphPromises = agents.map(async (agent) => {
         try {
+          await logActivity(agent.role, "thinking", `${agent.name} reviewing graph`, "Looking for missing concepts and relationships...");
+          
           const systemPrompt = getGraphBuildingPrompt(problemShape, agent, existingNodes || [], existingEdges || [], graphIteration);
           const response = await callLLM(
             apiEndpoint, apiKey, modelSettings,
             systemPrompt, "Review and propose updates to the knowledge graph.",
             getGrokGraphBuildingSchema(), getClaudeGraphBuildingTool()
           );
+          
+          await logActivity(agent.role, "response", `${agent.name} voted: ${response.graphCompleteVote ? "Complete" : "Needs more"}`, 
+            `Proposed ${response.proposedNodes?.length || 0} nodes, ${response.proposedEdges?.length || 0} edges`);
 
           // Insert new nodes (deduplicate by label) - use UPSERT
           const existingLabels = new Set((existingNodes || []).map((n: any) => n.label.toLowerCase()));
@@ -954,6 +989,9 @@ serve(async (req) => {
       if (completeVotes >= threshold) {
         graphComplete = true;
         console.log(`Graph complete! ${completeVotes}/${agents.length} votes`);
+        await logActivity(null, "success", "Graph Building Complete", `${completeVotes}/${agents.length} agents voted graph is complete`);
+      } else {
+        await logActivity(null, "thinking", "Continuing graph building", `Only ${completeVotes}/${agents.length} votes for completion (need ${threshold})`);
       }
 
       // Store votes
@@ -968,6 +1006,7 @@ serve(async (req) => {
 
     // ==================== PHASE 3: ASSIGNMENT ====================
     console.log("=== PHASE 3: ASSIGNMENT ===");
+    await logActivity(null, "phase_change", "Assignment Phase Started", "Agents selecting nodes to analyze");
     await rpc("update_audit_session_with_token", {
       p_session_id: sessionId,
       p_token: shareToken,
@@ -985,12 +1024,17 @@ serve(async (req) => {
 
     const assignmentPromises = agents.map(async (agent) => {
       try {
+        await logActivity(agent.role, "thinking", `${agent.name} selecting nodes`, "Choosing nodes matching expertise...");
+        
         const systemPrompt = getAssignmentPrompt(agent, graphNodes || []);
         const response = await callLLM(
           apiEndpoint, apiKey, modelSettings,
           systemPrompt, "Select the nodes you want to analyze.",
           getGrokAssignmentSchema(), getClaudeAssignmentTool()
         );
+        
+        await logActivity(agent.role, "response", `${agent.name} selected ${response.selectedNodeIds?.length || 0} nodes`, 
+          response.reasoning?.slice(0, 200));
 
         agentSelections.set(agent.role, response.selectedNodeIds || []);
 
@@ -1059,9 +1103,12 @@ serve(async (req) => {
     }
 
     console.log("Final assignments:", Object.fromEntries(finalAssignments));
+    await logActivity(null, "success", "Node Assignments Complete", 
+      agents.map(a => `${a.name}: ${finalAssignments.get(a.role)?.length || 0} nodes`).join(", "));
 
     // ==================== PHASE 4: PARALLEL ANALYSIS ====================
     console.log("=== PHASE 4: PARALLEL ANALYSIS ===");
+    await logActivity(null, "phase_change", "Analysis Phase Started", `Agents analyzing assigned nodes (max ${session.max_iterations || 10} iterations)`);
     await rpc("update_audit_session_with_token", {
       p_session_id: sessionId,
       p_token: shareToken,
@@ -1076,6 +1123,7 @@ serve(async (req) => {
     while (analysisIteration < MAX_ANALYSIS_ITERATIONS && !consensusReached) {
       analysisIteration++;
       console.log(`Analysis iteration ${analysisIteration}`);
+      await logActivity(null, "thinking", `Analysis Iteration ${analysisIteration}/${MAX_ANALYSIS_ITERATIONS}`, "Agents analyzing assigned elements...");
 
       await rpc("update_audit_session_with_token", {
         p_session_id: sessionId,
@@ -1120,6 +1168,9 @@ serve(async (req) => {
             systemPrompt, "Analyze your assigned nodes and report findings.",
             getGrokAnalysisSchema(), getClaudeAnalysisTool()
           );
+          
+          await logActivity(agent.role, "response", `${agent.name} found ${response.observations?.length || 0} observations`,
+            response.reasoning?.slice(0, 200));
 
           // Record observations to tesseract
           for (const obs of response.observations || []) {
@@ -1168,11 +1219,15 @@ serve(async (req) => {
       if (votes.length === agents.length) {
         consensusReached = true;
         console.log("Consensus reached!");
+        await logActivity(null, "success", "Consensus Reached!", "All agents agree on audit findings");
+      } else {
+        await logActivity(null, "thinking", "Continuing analysis", `${votes.length}/${agents.length} agents ready for consensus`);
       }
     }
 
     // ==================== FINALIZE ====================
     console.log("=== FINALIZING ===");
+    await logActivity(null, "phase_change", "Finalizing Audit", "Generating Venn diagram and final results...");
     const vennResult = await generateVennResult(supabase, sessionId, shareToken, problemShape);
 
     await rpc("update_audit_session_with_token", {
@@ -1185,6 +1240,8 @@ serve(async (req) => {
     });
 
     await broadcast("completed", { consensusReached, vennResult: !!vennResult });
+    await logActivity(null, "success", "Audit Complete", 
+      `${consensusReached ? "Consensus reached" : "Max iterations reached"}. Found ${vennResult.aligned?.length || 0} aligned, ${vennResult.unique_to_d1?.length || 0} gaps`);
 
     return new Response(JSON.stringify({ 
       success: true, 

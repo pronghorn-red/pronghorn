@@ -8,6 +8,7 @@ import { VennDiagramResults } from "@/components/audit/VennDiagramResults";
 import { AuditConfigurationDialog, AuditConfiguration } from "@/components/audit/AuditConfigurationDialog";
 import { AgentInstancesCard } from "@/components/audit/AgentInstancesCard";
 import { KnowledgeGraph } from "@/components/audit/KnowledgeGraph";
+import { AuditActivityStream } from "@/components/audit/AuditActivityStream";
 import { useRealtimeAudit } from "@/hooks/useRealtimeAudit";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,7 @@ import {
   RefreshCw,
   Users,
   Network,
+  Brain,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useShareToken } from "@/hooks/useShareToken";
@@ -56,6 +58,7 @@ export default function Audit() {
     agentInstances,
     graphNodes,
     graphEdges,
+    activityStream,
     isLoading,
     error,
     createSession,
@@ -320,8 +323,17 @@ export default function Audit() {
                 </CardContent>
               </Card>
             ) : (
-              <Tabs defaultValue="graph" className="space-y-4">
+              <Tabs defaultValue="activity" className="space-y-4">
                 <TabsList>
+                  <TabsTrigger value="activity" className="gap-2">
+                    <Brain className="h-4 w-4" />
+                    Activity
+                    {activityStream.length > 0 && (
+                      <Badge variant="secondary" className="ml-1">
+                        {activityStream.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
                   <TabsTrigger value="graph" className="gap-2">
                     <Network className="h-4 w-4" />
                     Graph
@@ -363,6 +375,13 @@ export default function Audit() {
                     Results
                   </TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="activity">
+                  <AuditActivityStream
+                    activities={activityStream}
+                    isLoading={isLoading}
+                  />
+                </TabsContent>
 
                 <TabsContent value="graph">
                   <KnowledgeGraph

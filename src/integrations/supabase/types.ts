@@ -562,6 +562,47 @@ export type Database = {
           },
         ]
       }
+      audit_activity_stream: {
+        Row: {
+          activity_type: string
+          agent_role: string | null
+          content: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          session_id: string
+          title: string
+        }
+        Insert: {
+          activity_type: string
+          agent_role?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          session_id: string
+          title: string
+        }
+        Update: {
+          activity_type?: string
+          agent_role?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          session_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_activity_stream_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "audit_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_agent_instances: {
         Row: {
           agent_name: string
@@ -3734,6 +3775,25 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_audit_activity_stream_with_token: {
+        Args: { p_limit?: number; p_session_id: string; p_token: string }
+        Returns: {
+          activity_type: string
+          agent_role: string | null
+          content: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          session_id: string
+          title: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "audit_activity_stream"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_audit_agent_instances_with_token: {
         Args: { p_session_id: string; p_token?: string }
         Returns: {
@@ -5235,6 +5295,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      insert_audit_activity_with_token: {
+        Args: {
+          p_activity_type?: string
+          p_agent_role?: string
+          p_content?: string
+          p_metadata?: Json
+          p_session_id: string
+          p_title?: string
+          p_token: string
+        }
+        Returns: string
       }
       insert_audit_agent_instance_with_token: {
         Args: {
