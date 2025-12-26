@@ -138,10 +138,7 @@ verify_jwt = false
 [functions.audit-orchestrator]
 verify_jwt = false
 
-[functions.audit-extract-d1-concepts]
-verify_jwt = false
-
-[functions.audit-extract-d2-concepts]
+[functions.audit-extract-concepts]
 verify_jwt = false
 
 [functions.audit-merge-concepts]
