@@ -215,14 +215,20 @@ export function KnowledgeGraph({
       return node;
     })];
 
-    // Create edges from anchor to ALL nodes (not just concepts) to keep graph together
-    const anchorEdges: GraphEdge[] = nodes.map(n => ({
+    // Create edges from anchor to concept nodes to keep them anchored
+    // Debug: log what node types we have
+    console.log("Graph nodes by type:", nodes.map(n => ({ id: n.id.slice(0, 8), type: n.node_type, label: n.label?.slice(0, 20) })));
+    
+    const conceptNodes = nodes.filter(n => n.node_type === "concept" || n.node_type?.toLowerCase() === "concept");
+    console.log("Concept nodes found for anchoring:", conceptNodes.length);
+    
+    const anchorEdges: GraphEdge[] = conceptNodes.map(n => ({
       id: `anchor-to-${n.id}`,
       source: "__project_anchor__",
       target: n.id,
       label: null,
       edge_type: "anchors",
-      weight: 0.1, // Very weak to allow natural clustering
+      weight: 0.3,
       created_by_agent: "system",
     }));
 
