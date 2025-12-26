@@ -124,29 +124,32 @@ export function TesseractVisualizer({
               </Badge>
             )}
           </CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <Button
               variant="outline"
               size="icon"
+              className="h-8 w-8 sm:h-9 sm:w-9"
               onClick={() => setShowLabels(!showLabels)}
             >
-              <Layers className="h-4 w-4" />
+              <Layers className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
             <Button
               variant="outline"
               size="icon"
+              className="h-8 w-8 sm:h-9 sm:w-9"
               onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
               disabled={zoom <= 0.5}
             >
-              <ZoomOut className="h-4 w-4" />
+              <ZoomOut className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
             <Button
               variant="outline"
               size="icon"
+              className="h-8 w-8 sm:h-9 sm:w-9"
               onClick={() => setZoom(Math.min(2, zoom + 0.25))}
               disabled={zoom >= 2}
             >
-              <ZoomIn className="h-4 w-4" />
+              <ZoomIn className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           </div>
         </div>
@@ -296,31 +299,34 @@ export function TesseractVisualizer({
         </ScrollArea>
         )}
 
-        {/* Legend */}
-        <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-red-500 rounded" />
-            <span>Negative (-1)</span>
+        {/* Legend - Responsive */}
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 mt-4 pt-4 border-t text-xs">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-red-500 rounded" />
+            <span className="hidden sm:inline">Negative (-1)</span>
+            <span className="sm:hidden">-1</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-muted rounded" />
-            <span>Neutral (0)</span>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-muted rounded" />
+            <span className="hidden sm:inline">Neutral (0)</span>
+            <span className="sm:hidden">0</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-green-500 rounded" />
-            <span>Positive (+1)</span>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded" />
+            <span className="hidden sm:inline">Positive (+1)</span>
+            <span className="sm:hidden">+1</span>
           </div>
-          <div className="border-l pl-4 flex items-center gap-2">
-            <Badge variant="destructive" className="text-[10px]">
+          <div className="border-l pl-2 flex items-center gap-1">
+            <Badge variant="destructive" className="text-[10px] h-4 px-1">
               C
             </Badge>
-            <span>Critical</span>
+            <span className="hidden sm:inline">Critical</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="default" className="text-[10px]">
+          <div className="flex items-center gap-1">
+            <Badge variant="default" className="text-[10px] h-4 px-1">
               M
             </Badge>
-            <span>Major</span>
+            <span className="hidden sm:inline">Major</span>
           </div>
         </div>
       </CardContent>

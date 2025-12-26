@@ -61,6 +61,8 @@ interface KnowledgeGraphProps {
   currentPhase?: string;
   onNodeClick?: (nodeId: string) => void;
   onPruneOrphans?: () => void;
+  dataset1Label?: string;
+  dataset2Label?: string;
 }
 
 // Color scheme for node types
@@ -112,6 +114,8 @@ export function KnowledgeGraph({
   currentPhase = "conference",
   onNodeClick,
   onPruneOrphans,
+  dataset1Label = "Dataset 1",
+  dataset2Label = "Dataset 2",
 }: KnowledgeGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   
@@ -557,25 +561,25 @@ export function KnowledgeGraph({
         />
       </CardContent>
 
-      {/* Legend */}
+      {/* Legend - Responsive */}
       <div className="px-4 pb-4 border-t pt-3">
-        <div className="flex flex-wrap gap-4 text-xs mb-2">
-          <div className="font-medium text-muted-foreground">Nodes:</div>
+        <div className="flex flex-wrap gap-2 sm:gap-4 text-xs mb-2">
+          <div className="font-medium text-muted-foreground w-full sm:w-auto">Nodes:</div>
           <div className="flex items-center gap-1">
             <div className="w-4 h-4 rounded-full border-2 border-white" style={{ backgroundColor: nodeTypeColors.concept }} />
             <span>Concept</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded-full border border-white/50" style={{ backgroundColor: nodeTypeColors.requirement }} />
-            <span>Requirement (D1)</span>
+            <span>{dataset1Label}</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded-full border border-white/50" style={{ backgroundColor: nodeTypeColors.canvas_node }} />
-            <span>Canvas Node (D2)</span>
+            <span>{dataset2Label}</span>
           </div>
         </div>
-        <div className="flex flex-wrap gap-4 text-xs">
-          <div className="font-medium text-muted-foreground">Edges:</div>
+        <div className="flex flex-wrap gap-2 sm:gap-4 text-xs">
+          <div className="font-medium text-muted-foreground w-full sm:w-auto">Edges:</div>
           <div className="flex items-center gap-1">
             <div className="w-6 h-0 border-t-2 border-dashed" style={{ borderColor: edgeTypeStyles.derived_from.color }} />
             <span>Derived From</span>

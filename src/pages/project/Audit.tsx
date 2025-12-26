@@ -325,57 +325,55 @@ export default function Audit() {
               </Card>
             ) : (
               <Tabs defaultValue="activity" className="space-y-4">
-                <TabsList>
-                  <TabsTrigger value="activity" className="gap-2">
-                    <Brain className="h-4 w-4" />
-                    Activity
-                    {activityStream.length > 0 && (
-                      <Badge variant="secondary" className="ml-1">
-                        {activityStream.length}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="graph" className="gap-2">
-                    <Network className="h-4 w-4" />
-                    Graph
-                    {graphNodes.length > 0 && (
-                      <Badge variant="secondary" className="ml-1">
-                        {graphNodes.length}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="agents" className="gap-2">
-                    <Users className="h-4 w-4" />
-                    Agents
-                    {agentInstances.length > 0 && (
-                      <Badge variant="secondary" className="ml-1">
-                        {agentInstances.filter(a => a.status === "active").length}/{agentInstances.length}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="tesseract" className="gap-2">
-                    <Grid3X3 className="h-4 w-4" />
-                    Tesseract
-                    {tesseractCells.length > 0 && (
-                      <Badge variant="secondary" className="ml-1">
-                        {tesseractCells.length}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="blackboard" className="gap-2">
-                    <MessageSquare className="h-4 w-4" />
-                    Blackboard
-                    {blackboardEntries.length > 0 && (
-                      <Badge variant="secondary" className="ml-1">
-                        {blackboardEntries.length}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="results" className="gap-2">
-                    <CircleDot className="h-4 w-4" />
-                    Results
-                  </TabsTrigger>
-                </TabsList>
+                <div className="overflow-x-auto -mx-6 px-6">
+                  <TabsList className="inline-flex w-auto min-w-full sm:min-w-0">
+                    <TabsTrigger value="activity" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+                      <Brain className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Activity</span>
+                      <span className="sm:hidden">Act</span>
+                      {activityStream.length > 0 && (
+                        <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">
+                          {activityStream.length}
+                        </Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="graph" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+                      <Network className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Graph</span>
+                      <span className="sm:hidden">Grph</span>
+                      {graphNodes.length > 0 && (
+                        <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">
+                          {graphNodes.length}
+                        </Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="tesseract" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+                      <Grid3X3 className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Tesseract</span>
+                      <span className="sm:hidden">Tess</span>
+                      {tesseractCells.length > 0 && (
+                        <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">
+                          {tesseractCells.length}
+                        </Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="blackboard" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+                      <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Blackboard</span>
+                      <span className="sm:hidden">BB</span>
+                      {blackboardEntries.length > 0 && (
+                        <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">
+                          {blackboardEntries.length}
+                        </Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="results" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+                      <CircleDot className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Results</span>
+                      <span className="sm:hidden">Res</span>
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
 
                 <TabsContent value="activity">
                   <AuditActivityStream
@@ -389,6 +387,8 @@ export default function Audit() {
                     nodes={graphNodes}
                     edges={graphEdges}
                     currentPhase={(session as any)?.phase || "conference"}
+                    dataset1Label={session.dataset_1_type}
+                    dataset2Label={session.dataset_2_type}
                     onNodeClick={(nodeId) => {
                       toast.info(`Node: ${graphNodes.find(n => n.id === nodeId)?.label || nodeId}`);
                     }}
@@ -403,14 +403,6 @@ export default function Audit() {
                     }}
                   />
                 </TabsContent>
-
-                <TabsContent value="agents">
-                  <AgentInstancesCard 
-                    agents={agentInstances}
-                    totalElements={tesseractCells.length}
-                  />
-                </TabsContent>
-
                 <TabsContent value="tesseract">
                   <TesseractVisualizer
                     cells={tesseractCells}
