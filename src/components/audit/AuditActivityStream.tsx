@@ -237,60 +237,49 @@ function CondensedIterationRow({
         } transition-colors hover:bg-muted/50`}
       >
         <CollapsibleTrigger asChild>
-          <button className="w-full p-3 text-left">
-            <div className="flex items-center justify-between gap-4">
+          <button className="w-full p-2 text-left">
+            <div className="flex items-center justify-between gap-2">
               {/* Left: Iteration number and phase */}
-              <div className="flex items-center gap-3">
-                <div className="text-2xl font-bold text-primary min-w-[3ch] text-center">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="text-xl font-bold text-primary min-w-[2ch] text-center">
                   {summary.iteration}
                 </div>
-                <Badge variant="outline" className="text-xs whitespace-nowrap">
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 whitespace-nowrap truncate max-w-[100px]">
                   {summary.phase || 'PROCESSING'}
                 </Badge>
                 {isExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                 ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                 )}
               </div>
               
               {/* Middle: Activity count and Tool call breakdown */}
-              <div className="flex items-center gap-4 text-sm">
-                <Badge variant="secondary" className="text-xs" title="Total activities in this iteration">
+              <div className="flex items-center gap-2 text-xs flex-shrink-0">
+                <Badge variant="secondary" className="text-[10px] px-1 py-0" title="Total activities">
                   {totalActivities}
                 </Badge>
                 {totalTools > 0 && (
-                  <>
-                    <div className="flex items-center gap-1.5" title="Reads">
-                      <FileSearch className="h-4 w-4 text-blue-500" />
-                      <span className="font-medium">{summary.toolCalls.reads}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5" title="Creates">
-                      <Plus className="h-4 w-4 text-green-500" />
-                      <span className="font-medium">{summary.toolCalls.creates}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5" title="Writes">
-                      <Pencil className="h-4 w-4 text-orange-500" />
-                      <span className="font-medium">{summary.toolCalls.writes}</span>
-                    </div>
-                    {summary.toolCalls.other > 0 && (
-                      <div className="flex items-center gap-1.5" title="Other tools">
-                        <Wrench className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{summary.toolCalls.other}</span>
-                      </div>
-                    )}
-                  </>
+                  <div className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-0.5 text-blue-500" title="Reads">
+                      <FileSearch className="h-3 w-3" />
+                      <span>{summary.toolCalls.reads}</span>
+                    </span>
+                    <span className="flex items-center gap-0.5 text-green-500" title="Creates">
+                      <Plus className="h-3 w-3" />
+                      <span>{summary.toolCalls.creates}</span>
+                    </span>
+                    <span className="flex items-center gap-0.5 text-orange-500" title="Writes">
+                      <Pencil className="h-3 w-3" />
+                      <span>{summary.toolCalls.writes}</span>
+                    </span>
+                  </div>
                 )}
                 {summary.errors > 0 && (
-                  <Badge variant="destructive" className="text-xs">
-                    {summary.errors} error{summary.errors > 1 ? 's' : ''}
+                  <Badge variant="destructive" className="text-[10px] px-1 py-0">
+                    {summary.errors}
                   </Badge>
                 )}
-              </div>
-              
-              {/* Right: Timing */}
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span>{formatDistanceToNow(summary.endTime, { addSuffix: true })}</span>
               </div>
             </div>
           </button>
