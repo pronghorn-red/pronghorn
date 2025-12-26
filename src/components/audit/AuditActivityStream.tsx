@@ -117,13 +117,19 @@ function extractIteration(activity: ActivityEntry): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
-// Extract phase from activity
+// Extract phase from activity - prefer display name for better UI
 function extractPhase(activity: ActivityEntry): string | null {
+  // First check for phaseDisplayName (human-readable)
+  if (activity.metadata?.phaseDisplayName) {
+    return String(activity.metadata.phaseDisplayName);
+  }
+  // Then check for phase_change activity titles (they now have nice names)
+  if (activity.activity_type === 'phase_change') {
+    return activity.title;
+  }
+  // Fallback to raw phase from metadata
   if (activity.metadata?.phase) {
     return String(activity.metadata.phase);
-  }
-  if (activity.activity_type === 'phase_change') {
-    return activity.title.replace(/Phase:\s*/i, '');
   }
   return null;
 }

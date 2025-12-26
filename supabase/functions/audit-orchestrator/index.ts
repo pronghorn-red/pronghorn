@@ -12,6 +12,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Phase display names for activity stream
+const PHASE_DISPLAY_NAMES: Record<string, string> = {
+  initialization: "Initialization",
+  graph_building: "Building Knowledge Graph",
+  gap_analysis: "Analyzing Gaps & Orphans",
+  deep_analysis: "Deep Analysis (Tesseract)",
+  synthesis: "Synthesizing Venn Diagram",
+  completed: "Audit Complete",
+};
+
 interface AuditRequest {
   sessionId: string;
   projectId: string;
@@ -1097,8 +1107,9 @@ serve(async (req) => {
     const problemShape = await buildProblemShape(supabase, session, projectId, shareToken);
     console.log("Problem shape:", { d1: problemShape.dataset1.count, d2: problemShape.dataset2.count });
 
-    await logActivity(null, "phase_change", "Audit Started", 
-      `Analyzing ${problemShape.dataset1.count} ${problemShape.dataset1.type} against ${problemShape.dataset2.count} ${problemShape.dataset2.type}`);
+    await logActivity(null, "phase_change", PHASE_DISPLAY_NAMES["graph_building"], 
+      `Starting analysis: ${problemShape.dataset1.count} ${problemShape.dataset1.type} against ${problemShape.dataset2.count} ${problemShape.dataset2.type}`,
+      { phase: "graph_building", fromPhase: "initialization" });
 
     await rpc("update_audit_session_with_token", {
       p_session_id: sessionId,
@@ -1118,6 +1129,7 @@ serve(async (req) => {
     let iteration = 0;
     let analysisComplete = false;
     let currentPhase = "graph_building";
+    let previousPhase = "initialization";
     let consecutiveEmptyToolCalls = 0;
 
     // Build initial user prompt with dataset summaries
@@ -1156,7 +1168,9 @@ START NOW - call your tools!`;
       iteration++;
       console.log(`\n=== Iteration ${iteration}/${MAX_ITERATIONS}, Phase: ${currentPhase} ===`);
       
-      await logActivity(null, "thinking", `Iteration ${iteration}`, `Phase: ${currentPhase}`);
+      await logActivity(null, "thinking", `Iteration ${iteration}`, 
+        `Phase: ${PHASE_DISPLAY_NAMES[currentPhase] || currentPhase}`,
+        { iteration, phase: currentPhase, phaseDisplayName: PHASE_DISPLAY_NAMES[currentPhase] });
       await rpc("update_audit_session_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
@@ -1440,13 +1454,27 @@ CALL YOUR TOOLS NOW!`;
           }
           
           // Update phase based on tool calls
+          let newPhase = currentPhase;
           if (toolCall.tool === "finalize_venn" && result.success) {
-            currentPhase = "completed";
+            newPhase = "completed";
             analysisComplete = true;
-          } else if (toolCall.tool === "record_tesseract_cell") {
-            currentPhase = "deep_analysis";
-          } else if (toolCall.tool === "query_knowledge_graph" && toolCall.params?.filter === "shared") {
-            currentPhase = "gap_analysis";
+          } else if (toolCall.tool === "record_tesseract_cell" && currentPhase !== "deep_analysis") {
+            newPhase = "deep_analysis";
+          } else if (toolCall.tool === "query_knowledge_graph" && 
+                     (toolCall.params?.filter === "shared" || toolCall.params?.filter === "dataset1_only" || toolCall.params?.filter === "dataset2_only") &&
+                     currentPhase === "graph_building") {
+            newPhase = "gap_analysis";
+          }
+          
+          // Log phase change if phase actually changed
+          if (newPhase !== currentPhase) {
+            await logActivity(null, "phase_change", 
+              PHASE_DISPLAY_NAMES[newPhase] || newPhase,
+              `Transitioning from ${PHASE_DISPLAY_NAMES[currentPhase]} to ${PHASE_DISPLAY_NAMES[newPhase]}`,
+              { fromPhase: currentPhase, toPhase: newPhase, iteration }
+            );
+            previousPhase = currentPhase;
+            currentPhase = newPhase;
           }
         }
       }
@@ -1510,8 +1538,9 @@ ${contextSummary}`;
       p_consensus_reached: analysisComplete,
     });
 
-    await logActivity(null, "phase_change", "Audit Complete", 
-      `Finished after ${iteration} iterations. Status: ${finalStatus}`);
+    await logActivity(null, "phase_change", PHASE_DISPLAY_NAMES["completed"], 
+      `Finished after ${iteration} iterations. Status: ${finalStatus}`,
+      { phase: "completed", fromPhase: currentPhase, totalIterations: iteration });
     await broadcast("complete", { status: finalStatus, iterations: iteration });
 
     return new Response(JSON.stringify({ success: true, iterations: iteration, status: finalStatus }), {
