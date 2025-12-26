@@ -251,35 +251,42 @@ export function useAuditPipeline() {
 
       const [d1Response, d2Response] = await Promise.all([d1Promise, d2Promise]);
 
-      // Stream D1 results
-      if (!d1Response.ok) {
-        throw new Error(`D1 extraction failed: ${d1Response.status}`);
-      }
-      const d1Result = await streamSSE(
-        d1Response,
-        (data) => updateStep("d1", { message: data.message, progress: data.progress }),
-        (data) => addStepDetail("d1", `Concept ${data.index + 1}/${data.total}: ${data.label}`),
-        (data) => {
-          d1Concepts = data.concepts || [];
-          updateStep("d1", { status: "completed", message: `${d1Concepts.length} concepts`, progress: 100, completedAt: new Date() });
-        },
-        (err) => updateStep("d1", { status: "error", message: err })
-      );
+      // Process both streams in parallel using Promise.all
+      const processStream = async (
+        response: Response, 
+        stepId: string, 
+        conceptsRef: { value: Concept[] }
+      ) => {
+        if (!response.ok) {
+          throw new Error(`${stepId.toUpperCase()} extraction failed: ${response.status}`);
+        }
+        return streamSSE(
+          response,
+          (data) => updateStep(stepId, { message: data.message, progress: data.progress }),
+          (data) => addStepDetail(stepId, `${data.label} (${data.elementCount} elements)`),
+          (data) => {
+            conceptsRef.value = data.concepts || [];
+            updateStep(stepId, { 
+              status: "completed", 
+              message: `${conceptsRef.value.length} concepts extracted`, 
+              progress: 100, 
+              completedAt: new Date() 
+            });
+          },
+          (err) => updateStep(stepId, { status: "error", message: err })
+        );
+      };
 
-      // Stream D2 results
-      if (!d2Response.ok) {
-        throw new Error(`D2 extraction failed: ${d2Response.status}`);
-      }
-      const d2Result = await streamSSE(
-        d2Response,
-        (data) => updateStep("d2", { message: data.message, progress: data.progress }),
-        (data) => addStepDetail("d2", `Concept ${data.index + 1}/${data.total}: ${data.label}`),
-        (data) => {
-          d2Concepts = data.concepts || [];
-          updateStep("d2", { status: "completed", message: `${d2Concepts.length} concepts`, progress: 100, completedAt: new Date() });
-        },
-        (err) => updateStep("d2", { status: "error", message: err })
-      );
+      const d1ConceptsRef = { value: [] as Concept[] };
+      const d2ConceptsRef = { value: [] as Concept[] };
+
+      await Promise.all([
+        processStream(d1Response, "d1", d1ConceptsRef),
+        processStream(d2Response, "d2", d2ConceptsRef),
+      ]);
+
+      d1Concepts = d1ConceptsRef.value;
+      d2Concepts = d2ConceptsRef.value;
 
       setProgress({ 
         phase: "merging_concepts", 
