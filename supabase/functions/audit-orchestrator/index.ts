@@ -696,109 +696,245 @@ function getClaudeResponseTool() {
 
 // ==================== BUILD PROBLEM SHAPE ====================
 
+// Helper to extract elements from ProjectSelectionResult content
+function extractElementsFromContent(
+  content: any
+): Array<{ id: string; label: string; content?: string; category: string }> {
+  const elements: Array<{ id: string; label: string; content?: string; category: string }> = [];
+  
+  if (!content) return elements;
+  
+  // Requirements
+  if (content.requirements && Array.isArray(content.requirements)) {
+    content.requirements.forEach((r: any) => {
+      elements.push({
+        id: r.id,
+        label: r.title || r.code || r.text?.slice(0, 50) || "Requirement",
+        content: r.description || r.text || "",
+        category: "requirements",
+      });
+    });
+  }
+  
+  // Artifacts
+  if (content.artifacts && Array.isArray(content.artifacts)) {
+    content.artifacts.forEach((a: any) => {
+      elements.push({
+        id: a.id,
+        label: a.ai_title || a.content?.slice(0, 50) || "Artifact",
+        content: a.content?.slice(0, 500) || "",
+        category: "artifacts",
+      });
+    });
+  }
+  
+  // Standards
+  if (content.standards && Array.isArray(content.standards)) {
+    content.standards.forEach((s: any) => {
+      elements.push({
+        id: s.id,
+        label: s.code ? `${s.code}: ${s.title}` : (s.title || "Standard"),
+        content: s.description || "",
+        category: "standards",
+      });
+    });
+  }
+  
+  // Tech Stacks
+  if (content.techStacks && Array.isArray(content.techStacks)) {
+    content.techStacks.forEach((t: any) => {
+      elements.push({
+        id: t.id,
+        label: t.name || "Tech Stack",
+        content: t.description || `Type: ${t.type}`,
+        category: "techStacks",
+      });
+    });
+  }
+  
+  // Canvas Nodes
+  if (content.canvasNodes && Array.isArray(content.canvasNodes)) {
+    content.canvasNodes.forEach((n: any) => {
+      elements.push({
+        id: n.id,
+        label: n.data?.label || n.type || "Node",
+        content: JSON.stringify(n.data || {}),
+        category: "canvas",
+      });
+    });
+  }
+  
+  // Files
+  if (content.files && Array.isArray(content.files)) {
+    content.files.forEach((f: any) => {
+      elements.push({
+        id: f.path || f.id,
+        label: f.path || "File",
+        content: f.content?.slice(0, 500) || "",
+        category: "files",
+      });
+    });
+  }
+  
+  // Databases
+  if (content.databases && Array.isArray(content.databases)) {
+    content.databases.forEach((d: any) => {
+      elements.push({
+        id: d.name || d.databaseId,
+        label: `${d.schemaName}.${d.name}` || "Database Object",
+        content: d.definition || JSON.stringify(d.columns || {}),
+        category: "databases",
+      });
+    });
+  }
+  
+  // Chat Sessions
+  if (content.chatSessions && Array.isArray(content.chatSessions)) {
+    content.chatSessions.forEach((c: any) => {
+      elements.push({
+        id: c.id,
+        label: c.title || c.ai_title || "Chat Session",
+        content: c.ai_summary || "",
+        category: "chats",
+      });
+    });
+  }
+  
+  // Project Metadata
+  if (content.projectMetadata) {
+    elements.push({
+      id: content.projectMetadata.id || "metadata",
+      label: content.projectMetadata.name || "Project",
+      content: content.projectMetadata.description || "",
+      category: "metadata",
+    });
+  }
+  
+  return elements;
+}
+
 async function buildProblemShape(
   supabase: any,
   session: any,
   projectId: string,
   shareToken: string
 ): Promise<ProblemShape> {
-  const d1Type = session.dataset_1_type;
-  const d2Type = session.dataset_2_type;
-  const d1Ids = session.dataset_1_ids || [];
-  const d2Ids = session.dataset_2_ids || [];
+  let d1Elements: Array<{ id: string; label: string; content?: string; category?: string }> = [];
+  let d2Elements: Array<{ id: string; label: string; content?: string; category?: string }> = [];
+  let d1Type = session.dataset_1_type || "mixed";
+  let d2Type = session.dataset_2_type || "mixed";
 
-  let d1Elements: Array<{ id: string; label: string; content?: string }> = [];
-  let d2Elements: Array<{ id: string; label: string; content?: string }> = [];
-
-  // Fetch Dataset 1
-  if (d1Type === "requirements") {
-    const { data } = await supabase.rpc("get_requirements_with_token", { p_project_id: projectId, p_token: shareToken });
-    const requirements = data || [];
-    d1Elements = (d1Ids.length > 0 ? requirements.filter((r: any) => d1Ids.includes(r.id)) : requirements)
-      .map((r: any) => ({ id: r.id, label: r.title, content: r.description }));
-  } else if (d1Type === "canvas_nodes") {
-    const { data } = await supabase.rpc("get_canvas_nodes_with_token", { p_project_id: projectId, p_token: shareToken });
-    const nodes = data || [];
-    d1Elements = (d1Ids.length > 0 ? nodes.filter((n: any) => d1Ids.includes(n.id)) : nodes)
-      .map((n: any) => ({ id: n.id, label: (n.data as any)?.label || n.type, content: JSON.stringify(n.data) }));
-  } else if (d1Type === "artifacts") {
-    const { data } = await supabase.rpc("get_artifacts_with_token", { p_project_id: projectId, p_token: shareToken });
-    const artifacts = data || [];
-    d1Elements = (d1Ids.length > 0 ? artifacts.filter((a: any) => d1Ids.includes(a.id)) : artifacts)
-      .map((a: any) => ({ id: a.id, label: a.ai_title || "Artifact", content: a.content?.slice(0, 500) }));
-  } else if (d1Type === "standards") {
-    // Query standards table directly using the stored IDs
-    const { data: allStandards } = await supabase
-      .from("standards")
-      .select("id, code, title, description")
-      .in("id", d1Ids.length > 0 ? d1Ids : []);
-    d1Elements = (allStandards || []).map((s: any) => ({
-      id: s.id,
-      label: s.code ? `${s.code}: ${s.title}` : s.title,
-      content: s.description || "",
-    }));
-  } else if (d1Type === "tech_stacks") {
-    // Query tech_stacks table directly using the stored IDs
-    const { data: allTechStacks } = await supabase
-      .from("tech_stacks")
-      .select("id, name, description, type")
-      .in("id", d1Ids.length > 0 ? d1Ids : []);
-    d1Elements = (allTechStacks || []).map((t: any) => ({
-      id: t.id,
-      label: t.name,
-      content: t.description || `Tech stack of type: ${t.type}`,
-    }));
+  // NEW: Check for JSONB content first (new format with ProjectSelectionResult)
+  if (session.dataset_1_content) {
+    d1Elements = extractElementsFromContent(session.dataset_1_content);
+    d1Type = d1Elements.length > 0 ? "mixed" : session.dataset_1_type;
+  }
+  
+  if (session.dataset_2_content) {
+    d2Elements = extractElementsFromContent(session.dataset_2_content);
+    d2Type = d2Elements.length > 0 ? "mixed" : session.dataset_2_type;
   }
 
-  // Fetch Dataset 2
-  if (d2Type === "requirements") {
-    const { data } = await supabase.rpc("get_requirements_with_token", { p_project_id: projectId, p_token: shareToken });
-    const requirements = data || [];
-    d2Elements = (d2Ids.length > 0 ? requirements.filter((r: any) => d2Ids.includes(r.id)) : requirements)
-      .map((r: any) => ({ id: r.id, label: r.title, content: r.description }));
-  } else if (d2Type === "canvas_nodes") {
-    const { data } = await supabase.rpc("get_canvas_nodes_with_token", { p_project_id: projectId, p_token: shareToken });
-    const nodes = data || [];
-    d2Elements = (d2Ids.length > 0 ? nodes.filter((n: any) => d2Ids.includes(n.id)) : nodes)
-      .map((n: any) => ({ id: n.id, label: (n.data as any)?.label || n.type, content: JSON.stringify(n.data) }));
-  } else if (d2Type === "repository") {
-    const { data: repos } = await supabase.rpc("get_repos_with_token", { p_project_id: projectId, p_token: shareToken });
-    const primeRepo = repos?.find((r: any) => r.is_prime) || repos?.[0];
-    if (primeRepo) {
-      const { data: files } = await supabase.rpc("get_repo_files_with_token", { p_repo_id: primeRepo.id, p_token: shareToken });
-      d2Elements = (files || []).slice(0, 100).map((f: any) => ({ 
-        id: f.id, 
-        label: f.path, 
-        content: f.content?.slice(0, 500) 
+  // LEGACY FALLBACK: If no content, use the old type+ids approach
+  if (d1Elements.length === 0 && session.dataset_1_type) {
+    const d1Ids = session.dataset_1_ids || [];
+    d1Type = session.dataset_1_type;
+    
+    if (d1Type === "requirements") {
+      const { data } = await supabase.rpc("get_requirements_with_token", { p_project_id: projectId, p_token: shareToken });
+      const requirements = data || [];
+      d1Elements = (d1Ids.length > 0 ? requirements.filter((r: any) => d1Ids.includes(r.id)) : requirements)
+        .map((r: any) => ({ id: r.id, label: r.title, content: r.description, category: "requirements" }));
+    } else if (d1Type === "canvas_nodes") {
+      const { data } = await supabase.rpc("get_canvas_nodes_with_token", { p_project_id: projectId, p_token: shareToken });
+      const nodes = data || [];
+      d1Elements = (d1Ids.length > 0 ? nodes.filter((n: any) => d1Ids.includes(n.id)) : nodes)
+        .map((n: any) => ({ id: n.id, label: (n.data as any)?.label || n.type, content: JSON.stringify(n.data), category: "canvas" }));
+    } else if (d1Type === "artifacts") {
+      const { data } = await supabase.rpc("get_artifacts_with_token", { p_project_id: projectId, p_token: shareToken });
+      const artifacts = data || [];
+      d1Elements = (d1Ids.length > 0 ? artifacts.filter((a: any) => d1Ids.includes(a.id)) : artifacts)
+        .map((a: any) => ({ id: a.id, label: a.ai_title || "Artifact", content: a.content?.slice(0, 500), category: "artifacts" }));
+    } else if (d1Type === "standards") {
+      const { data: allStandards } = await supabase
+        .from("standards")
+        .select("id, code, title, description")
+        .in("id", d1Ids.length > 0 ? d1Ids : []);
+      d1Elements = (allStandards || []).map((s: any) => ({
+        id: s.id,
+        label: s.code ? `${s.code}: ${s.title}` : s.title,
+        content: s.description || "",
+        category: "standards",
+      }));
+    } else if (d1Type === "tech_stacks") {
+      const { data: allTechStacks } = await supabase
+        .from("tech_stacks")
+        .select("id, name, description, type")
+        .in("id", d1Ids.length > 0 ? d1Ids : []);
+      d1Elements = (allTechStacks || []).map((t: any) => ({
+        id: t.id,
+        label: t.name,
+        content: t.description || `Tech stack of type: ${t.type}`,
+        category: "techStacks",
       }));
     }
-  } else if (d2Type === "artifacts") {
-    const { data } = await supabase.rpc("get_artifacts_with_token", { p_project_id: projectId, p_token: shareToken });
-    const artifacts = data || [];
-    d2Elements = (d2Ids.length > 0 ? artifacts.filter((a: any) => d2Ids.includes(a.id)) : artifacts)
-      .map((a: any) => ({ id: a.id, label: a.ai_title || "Artifact", content: a.content?.slice(0, 500) }));
-  } else if (d2Type === "standards") {
-    // Query standards table directly using the stored IDs
-    const { data: allStandards } = await supabase
-      .from("standards")
-      .select("id, code, title, description")
-      .in("id", d2Ids.length > 0 ? d2Ids : []);
-    d2Elements = (allStandards || []).map((s: any) => ({
-      id: s.id,
-      label: s.code ? `${s.code}: ${s.title}` : s.title,
-      content: s.description || "",
-    }));
-  } else if (d2Type === "tech_stacks") {
-    // Query tech_stacks table directly using the stored IDs
-    const { data: allTechStacks } = await supabase
-      .from("tech_stacks")
-      .select("id, name, description, type")
-      .in("id", d2Ids.length > 0 ? d2Ids : []);
-    d2Elements = (allTechStacks || []).map((t: any) => ({
-      id: t.id,
-      label: t.name,
-      content: t.description || `Tech stack of type: ${t.type}`,
-    }));
+  }
+
+  // LEGACY FALLBACK for Dataset 2
+  if (d2Elements.length === 0 && session.dataset_2_type) {
+    const d2Ids = session.dataset_2_ids || [];
+    d2Type = session.dataset_2_type;
+    
+    if (d2Type === "requirements") {
+      const { data } = await supabase.rpc("get_requirements_with_token", { p_project_id: projectId, p_token: shareToken });
+      const requirements = data || [];
+      d2Elements = (d2Ids.length > 0 ? requirements.filter((r: any) => d2Ids.includes(r.id)) : requirements)
+        .map((r: any) => ({ id: r.id, label: r.title, content: r.description, category: "requirements" }));
+    } else if (d2Type === "canvas_nodes") {
+      const { data } = await supabase.rpc("get_canvas_nodes_with_token", { p_project_id: projectId, p_token: shareToken });
+      const nodes = data || [];
+      d2Elements = (d2Ids.length > 0 ? nodes.filter((n: any) => d2Ids.includes(n.id)) : nodes)
+        .map((n: any) => ({ id: n.id, label: (n.data as any)?.label || n.type, content: JSON.stringify(n.data), category: "canvas" }));
+    } else if (d2Type === "repository") {
+      const { data: repos } = await supabase.rpc("get_repos_with_token", { p_project_id: projectId, p_token: shareToken });
+      const primeRepo = repos?.find((r: any) => r.is_prime) || repos?.[0];
+      if (primeRepo) {
+        const { data: files } = await supabase.rpc("get_repo_files_with_token", { p_repo_id: primeRepo.id, p_token: shareToken });
+        d2Elements = (files || []).slice(0, 100).map((f: any) => ({ 
+          id: f.id, 
+          label: f.path, 
+          content: f.content?.slice(0, 500),
+          category: "files",
+        }));
+      }
+    } else if (d2Type === "artifacts") {
+      const { data } = await supabase.rpc("get_artifacts_with_token", { p_project_id: projectId, p_token: shareToken });
+      const artifacts = data || [];
+      d2Elements = (d2Ids.length > 0 ? artifacts.filter((a: any) => d2Ids.includes(a.id)) : artifacts)
+        .map((a: any) => ({ id: a.id, label: a.ai_title || "Artifact", content: a.content?.slice(0, 500), category: "artifacts" }));
+    } else if (d2Type === "standards") {
+      const { data: allStandards } = await supabase
+        .from("standards")
+        .select("id, code, title, description")
+        .in("id", d2Ids.length > 0 ? d2Ids : []);
+      d2Elements = (allStandards || []).map((s: any) => ({
+        id: s.id,
+        label: s.code ? `${s.code}: ${s.title}` : s.title,
+        content: s.description || "",
+        category: "standards",
+      }));
+    } else if (d2Type === "tech_stacks") {
+      const { data: allTechStacks } = await supabase
+        .from("tech_stacks")
+        .select("id, name, description, type")
+        .in("id", d2Ids.length > 0 ? d2Ids : []);
+      d2Elements = (allTechStacks || []).map((t: any) => ({
+        id: t.id,
+        label: t.name,
+        content: t.description || `Tech stack of type: ${t.type}`,
+        category: "techStacks",
+      }));
+    }
   }
 
   return {

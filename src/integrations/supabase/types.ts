@@ -918,8 +918,10 @@ export type Database = {
           created_at: string
           created_by: string | null
           current_iteration: number
+          dataset_1_content: Json | null
           dataset_1_ids: string[] | null
           dataset_1_type: string
+          dataset_2_content: Json | null
           dataset_2_ids: string[] | null
           dataset_2_type: string
           description: string | null
@@ -943,8 +945,10 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_iteration?: number
+          dataset_1_content?: Json | null
           dataset_1_ids?: string[] | null
           dataset_1_type: string
+          dataset_2_content?: Json | null
           dataset_2_ids?: string[] | null
           dataset_2_type: string
           description?: string | null
@@ -968,8 +972,10 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_iteration?: number
+          dataset_1_content?: Json | null
           dataset_1_ids?: string[] | null
           dataset_1_type?: string
+          dataset_2_content?: Json | null
           dataset_2_ids?: string[] | null
           dataset_2_type?: string
           description?: string | null
@@ -3910,8 +3916,10 @@ export type Database = {
           created_at: string
           created_by: string | null
           current_iteration: number
+          dataset_1_content: Json | null
           dataset_1_ids: string[] | null
           dataset_1_type: string
+          dataset_2_content: Json | null
           dataset_2_ids: string[] | null
           dataset_2_type: string
           description: string | null
@@ -3949,8 +3957,10 @@ export type Database = {
           created_at: string
           created_by: string | null
           current_iteration: number
+          dataset_1_content: Json | null
           dataset_1_ids: string[] | null
           dataset_1_type: string
+          dataset_2_content: Json | null
           dataset_2_ids: string[] | null
           dataset_2_type: string
           description: string | null
@@ -5420,51 +5430,103 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      insert_audit_session_with_token: {
-        Args: {
-          p_agent_definitions?: Json
-          p_dataset_1_ids?: string[]
-          p_dataset_1_type?: string
-          p_dataset_2_ids?: string[]
-          p_dataset_2_type?: string
-          p_description?: string
-          p_max_iterations?: number
-          p_name: string
-          p_project_id: string
-          p_token?: string
-        }
-        Returns: {
-          agent_definitions: Json | null
-          completed_at: string | null
-          consensus_reached: boolean | null
-          consensus_votes: Json | null
-          created_at: string
-          created_by: string | null
-          current_iteration: number
-          dataset_1_ids: string[] | null
-          dataset_1_type: string
-          dataset_2_ids: string[] | null
-          dataset_2_type: string
-          description: string | null
-          graph_complete_votes: Json | null
-          id: string
-          max_iterations: number
-          name: string
-          phase: string | null
-          problem_shape: Json | null
-          project_id: string
-          status: string
-          tesseract_dimensions: Json | null
-          updated_at: string
-          venn_result: Json | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "audit_sessions"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      insert_audit_session_with_token:
+        | {
+            Args: {
+              p_agent_definitions?: Json
+              p_dataset_1_ids?: string[]
+              p_dataset_1_type?: string
+              p_dataset_2_ids?: string[]
+              p_dataset_2_type?: string
+              p_description?: string
+              p_max_iterations?: number
+              p_name: string
+              p_project_id: string
+              p_token?: string
+            }
+            Returns: {
+              agent_definitions: Json | null
+              completed_at: string | null
+              consensus_reached: boolean | null
+              consensus_votes: Json | null
+              created_at: string
+              created_by: string | null
+              current_iteration: number
+              dataset_1_content: Json | null
+              dataset_1_ids: string[] | null
+              dataset_1_type: string
+              dataset_2_content: Json | null
+              dataset_2_ids: string[] | null
+              dataset_2_type: string
+              description: string | null
+              graph_complete_votes: Json | null
+              id: string
+              max_iterations: number
+              name: string
+              phase: string | null
+              problem_shape: Json | null
+              project_id: string
+              status: string
+              tesseract_dimensions: Json | null
+              updated_at: string
+              venn_result: Json | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "audit_sessions"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_agent_definitions?: Json
+              p_dataset_1_content?: Json
+              p_dataset_1_ids?: string[]
+              p_dataset_1_type?: string
+              p_dataset_2_content?: Json
+              p_dataset_2_ids?: string[]
+              p_dataset_2_type?: string
+              p_description?: string
+              p_max_iterations?: number
+              p_name: string
+              p_project_id: string
+              p_token?: string
+            }
+            Returns: {
+              agent_definitions: Json | null
+              completed_at: string | null
+              consensus_reached: boolean | null
+              consensus_votes: Json | null
+              created_at: string
+              created_by: string | null
+              current_iteration: number
+              dataset_1_content: Json | null
+              dataset_1_ids: string[] | null
+              dataset_1_type: string
+              dataset_2_content: Json | null
+              dataset_2_ids: string[] | null
+              dataset_2_type: string
+              description: string | null
+              graph_complete_votes: Json | null
+              id: string
+              max_iterations: number
+              name: string
+              phase: string | null
+              problem_shape: Json | null
+              project_id: string
+              status: string
+              tesseract_dimensions: Json | null
+              updated_at: string
+              venn_result: Json | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "audit_sessions"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       insert_chat_message_with_token: {
         Args: {
           p_chat_session_id: string
@@ -6821,8 +6883,10 @@ export type Database = {
           created_at: string
           created_by: string | null
           current_iteration: number
+          dataset_1_content: Json | null
           dataset_1_ids: string[] | null
           dataset_1_type: string
+          dataset_2_content: Json | null
           dataset_2_ids: string[] | null
           dataset_2_type: string
           description: string | null

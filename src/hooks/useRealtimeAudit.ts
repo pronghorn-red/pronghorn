@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useShareToken } from "@/hooks/useShareToken";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import type { Database, Json } from "@/integrations/supabase/types";
+import type { ProjectSelectionResult } from "@/components/project/ProjectSelector";
 
 type AuditSession = Database["public"]["Tables"]["audit_sessions"]["Row"];
 type AuditBlackboard = Database["public"]["Tables"]["audit_blackboard"]["Row"];
@@ -81,6 +82,9 @@ interface CreateSessionParams {
   dataset2Ids?: string[];
   maxIterations?: number;
   agentDefinitions?: Json;
+  // New: full ProjectSelectionResult for mixed-category support
+  dataset1Content?: ProjectSelectionResult;
+  dataset2Content?: ProjectSelectionResult;
 }
 
 interface WriteBlackboardParams {
@@ -198,10 +202,19 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
   const createSession = useCallback(async (params: CreateSessionParams): Promise<AuditSession | null> => {
     if (!shareToken) return null;
     const { data, error } = await supabase.rpc("insert_audit_session_with_token", {
-      p_project_id: projectId, p_token: shareToken, p_name: params.name, p_description: params.description || null,
-      p_dataset_1_type: params.dataset1Type, p_dataset_1_ids: params.dataset1Ids || null,
-      p_dataset_2_type: params.dataset2Type, p_dataset_2_ids: params.dataset2Ids || null,
-      p_max_iterations: params.maxIterations || 10, p_agent_definitions: params.agentDefinitions || null,
+      p_project_id: projectId, 
+      p_token: shareToken, 
+      p_name: params.name, 
+      p_description: params.description || null,
+      p_dataset_1_type: params.dataset1Type, 
+      p_dataset_1_ids: params.dataset1Ids || null,
+      p_dataset_2_type: params.dataset2Type, 
+      p_dataset_2_ids: params.dataset2Ids || null,
+      p_max_iterations: params.maxIterations || 10, 
+      p_agent_definitions: params.agentDefinitions || null,
+      // New: pass ProjectSelectionResult as JSONB
+      p_dataset_1_content: params.dataset1Content ? JSON.parse(JSON.stringify(params.dataset1Content)) : null,
+      p_dataset_2_content: params.dataset2Content ? JSON.parse(JSON.stringify(params.dataset2Content)) : null,
     });
     if (error) { setError(error.message); return null; }
     channelRef.current?.send({ type: "broadcast", event: "audit_refresh", payload: {} });
