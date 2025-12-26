@@ -1050,11 +1050,17 @@ START NOW - call your tools!`;
         consecutiveEmptyToolCalls++;
         console.log(`Warning: No tool calls in iteration ${iteration} (consecutive: ${consecutiveEmptyToolCalls})`);
         
-        if (consecutiveEmptyToolCalls >= 3) {
-          // Force a reminder to use tools
-          conversationTurns.push({ role: "user", content: `## WARNING: You did NOT call any tools in iteration ${iteration}!
-You MUST call at least one tool every iteration. Current phase: ${currentPhase}.
-Available tools:
+        // CRITICAL: If we added an assistant turn with toolUseId, we MUST add a tool_result
+        // Claude requires tool_result immediately after every tool_use
+        if (toolUseId) {
+          let nudgeMessage = `## Tool Result: You returned an empty toolCalls array in iteration ${iteration}.
+You MUST include actual tool calls in the toolCalls array. Current phase: ${currentPhase}.`;
+          
+          if (consecutiveEmptyToolCalls >= 3) {
+            nudgeMessage += `
+
+## WARNING: ${consecutiveEmptyToolCalls} consecutive empty responses!
+Available tools you MUST use:
 - write_blackboard: Record your findings (USE THIS!)
 - read_dataset_item: Read more dataset elements  
 - create_concept: Create knowledge graph nodes
@@ -1063,17 +1069,17 @@ Available tools:
 - record_tesseract_cell: Record coverage analysis
 - finalize_venn: Complete the analysis
 
-CALL YOUR TOOLS NOW!` });
-        }
-        
-        if (consecutiveEmptyToolCalls >= 5) {
-          // Add a stronger nudge before giving up
-          conversationTurns.push({ role: "user", content: `## FINAL WARNING: ${consecutiveEmptyToolCalls} consecutive iterations without tool calls!
-The analysis is incomplete. You MUST call tools to make progress.
-If you believe the analysis is complete, call finalize_venn with your findings.
-Otherwise, continue calling read_dataset_item, create_concept, or write_blackboard.
+CALL YOUR TOOLS NOW!`;
+          }
+          
+          if (consecutiveEmptyToolCalls >= 5) {
+            nudgeMessage += `
 
-THIS IS YOUR LAST CHANCE - CALL TOOLS OR THE ANALYSIS WILL TERMINATE!` });
+## FINAL WARNING: Analysis will terminate if you don't call tools!
+If you're done, call finalize_venn. Otherwise, use the tools above.`;
+          }
+          
+          conversationTurns.push({ role: "user", content: nudgeMessage });
         }
         
         if (consecutiveEmptyToolCalls >= 8) {
