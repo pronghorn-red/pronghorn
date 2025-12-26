@@ -137,3 +137,18 @@ verify_jwt = false
 
 [functions.audit-orchestrator]
 verify_jwt = false
+
+[functions.audit-extract-d1-concepts]
+verify_jwt = false
+
+[functions.audit-extract-d2-concepts]
+verify_jwt = false
+
+[functions.audit-merge-concepts]
+verify_jwt = false
+
+[functions.audit-build-tesseract]
+verify_jwt = false
+
+[functions.audit-generate-venn]
+verify_jwt = false
