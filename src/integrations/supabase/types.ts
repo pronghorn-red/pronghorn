@@ -6708,50 +6708,97 @@ export type Database = {
         }
         Returns: undefined
       }
-      update_audit_session_with_token: {
-        Args: {
-          p_consensus_reached?: boolean
-          p_consensus_votes?: Json
-          p_current_iteration?: number
-          p_problem_shape?: Json
-          p_session_id: string
-          p_status?: string
-          p_tesseract_dimensions?: Json
-          p_token?: string
-          p_venn_result?: Json
-        }
-        Returns: {
-          agent_definitions: Json | null
-          completed_at: string | null
-          consensus_reached: boolean | null
-          consensus_votes: Json | null
-          created_at: string
-          created_by: string | null
-          current_iteration: number
-          dataset_1_ids: string[] | null
-          dataset_1_type: string
-          dataset_2_ids: string[] | null
-          dataset_2_type: string
-          description: string | null
-          graph_complete_votes: Json | null
-          id: string
-          max_iterations: number
-          name: string
-          phase: string | null
-          problem_shape: Json | null
-          project_id: string
-          status: string
-          tesseract_dimensions: Json | null
-          updated_at: string
-          venn_result: Json | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "audit_sessions"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      update_audit_session_with_token:
+        | {
+            Args: {
+              p_consensus_reached?: boolean
+              p_consensus_votes?: Json
+              p_current_iteration?: number
+              p_problem_shape?: Json
+              p_session_id: string
+              p_status?: string
+              p_tesseract_dimensions?: Json
+              p_token?: string
+              p_venn_result?: Json
+            }
+            Returns: {
+              agent_definitions: Json | null
+              completed_at: string | null
+              consensus_reached: boolean | null
+              consensus_votes: Json | null
+              created_at: string
+              created_by: string | null
+              current_iteration: number
+              dataset_1_ids: string[] | null
+              dataset_1_type: string
+              dataset_2_ids: string[] | null
+              dataset_2_type: string
+              description: string | null
+              graph_complete_votes: Json | null
+              id: string
+              max_iterations: number
+              name: string
+              phase: string | null
+              problem_shape: Json | null
+              project_id: string
+              status: string
+              tesseract_dimensions: Json | null
+              updated_at: string
+              venn_result: Json | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "audit_sessions"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_consensus_reached?: boolean
+              p_consensus_votes?: Json
+              p_current_iteration?: number
+              p_graph_complete_votes?: Json
+              p_phase?: string
+              p_problem_shape?: Json
+              p_session_id: string
+              p_status?: string
+              p_tesseract_dimensions?: Json
+              p_token?: string
+              p_venn_result?: Json
+            }
+            Returns: {
+              agent_definitions: Json | null
+              completed_at: string | null
+              consensus_reached: boolean | null
+              consensus_votes: Json | null
+              created_at: string
+              created_by: string | null
+              current_iteration: number
+              dataset_1_ids: string[] | null
+              dataset_1_type: string
+              dataset_2_ids: string[] | null
+              dataset_2_type: string
+              description: string | null
+              graph_complete_votes: Json | null
+              id: string
+              max_iterations: number
+              name: string
+              phase: string | null
+              problem_shape: Json | null
+              project_id: string
+              status: string
+              tesseract_dimensions: Json | null
+              updated_at: string
+              venn_result: Json | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "audit_sessions"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       update_chat_session_with_token: {
         Args: {
           p_ai_summary?: string
