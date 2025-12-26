@@ -1210,12 +1210,39 @@ CALL YOUR TOOLS NOW!`;
       } else {
         consecutiveEmptyToolCalls = 0;
         
-        for (const toolCall of response.toolCalls) {
+        // Separate tools into parallel-safe (reads) and sequential (writes/creates)
+        const parallelSafeTools = ['read_dataset_item', 'query_knowledge_graph', 'read_blackboard', 'get_concept_links'];
+        
+        const parallelCalls = response.toolCalls.filter(tc => parallelSafeTools.includes(tc.tool));
+        const sequentialCalls = response.toolCalls.filter(tc => !parallelSafeTools.includes(tc.tool));
+        
+        console.log(`Executing ${parallelCalls.length} tools in parallel, ${sequentialCalls.length} sequentially`);
+        
+        // Execute parallel-safe tools simultaneously
+        const parallelResults = await Promise.all(
+          parallelCalls.map(async (toolCall) => {
+            await logActivity("orchestrator", "tool_call", `Tool: ${toolCall.tool}`, 
+              JSON.stringify(toolCall.params, null, 2), { tool: toolCall.tool });
+            
+            const result = await executeTool(toolCall.tool, toolCall.params, toolContext);
+            return { toolCall, result };
+          })
+        );
+        
+        // Execute sequential tools (writes, creates, links) in order to maintain consistency
+        const sequentialResults: Array<{ toolCall: ToolCall; result: { success: boolean; result?: unknown; error?: string } }> = [];
+        for (const toolCall of sequentialCalls) {
           await logActivity("orchestrator", "tool_call", `Tool: ${toolCall.tool}`, 
             JSON.stringify(toolCall.params, null, 2), { tool: toolCall.tool });
           
           const result = await executeTool(toolCall.tool, toolCall.params, toolContext);
-          
+          sequentialResults.push({ toolCall, result });
+        }
+        
+        // Combine all results and process them
+        const allResults = [...parallelResults, ...sequentialResults];
+        
+        for (const { toolCall, result } of allResults) {
           const resultSummary = result.success 
             ? (typeof result.result === "object" ? JSON.stringify(result.result) : String(result.result))
             : `Error: ${result.error}`;
