@@ -74,6 +74,7 @@ const nodeTypeColors: Record<string, string> = {
   opportunity: "#22c55e", // green
   requirement: "#3b82f6", // blue - D1 source elements
   canvas_node: "#22c55e", // green - D2 source elements
+  anchor: "#8b5cf6", // violet - project anchor
 };
 
 // Node shapes/sizes by type
@@ -85,6 +86,7 @@ const nodeTypeSizes: Record<string, number> = {
   gap: 18,
   risk: 18,
   opportunity: 18,
+  anchor: 35, // Large for anchor node
 };
 
 // Edge type styling
@@ -96,6 +98,7 @@ const edgeTypeStyles: Record<string, { color: string; dashArray?: string }> = {
   conflicts_with: { color: "#ef4444" },
   supports: { color: "#3b82f6" },
   covers: { color: "#8b5cf6" },
+  anchors: { color: "#8b5cf620", dashArray: "2,4" }, // Very faint for anchor lines
 };
 
 // Color scheme for agent roles
@@ -174,11 +177,26 @@ export function KnowledgeGraph({
   const initializedRef = useRef(false);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
 
-  // Transform data for D3, preserving existing positions
+  // Transform data for D3, preserving existing positions and adding anchor node
   const graphData = useMemo(() => {
     const nodeMap = new Map<string, GraphNode>();
     
-    const graphNodes: GraphNode[] = nodes.map((n) => {
+    // Add a central "Project" anchor node
+    const anchorNode: GraphNode = {
+      id: "__project_anchor__",
+      label: "Project",
+      description: "Central anchor",
+      node_type: "anchor",
+      source_dataset: "both",
+      created_by_agent: "system",
+      x: nodePositionsRef.current.get("__project_anchor__")?.x ?? undefined,
+      y: nodePositionsRef.current.get("__project_anchor__")?.y ?? undefined,
+      color: "#8b5cf6", // violet
+      size: 40,
+    };
+    nodeMap.set(anchorNode.id, anchorNode);
+    
+    const graphNodes: GraphNode[] = [anchorNode, ...nodes.map((n) => {
       // Preserve existing position if we have it
       const existingPos = nodePositionsRef.current.get(n.id);
       const node: GraphNode = {
@@ -195,19 +213,35 @@ export function KnowledgeGraph({
       };
       nodeMap.set(n.id, node);
       return node;
-    });
+    })];
 
-    const graphEdges: GraphEdge[] = edges
-      .filter((e) => nodeMap.has(e.source_node_id) && nodeMap.has(e.target_node_id))
-      .map((e) => ({
-        id: e.id,
-        source: e.source_node_id,
-        target: e.target_node_id,
-        label: e.label,
-        edge_type: e.edge_type,
-        weight: e.weight,
-        created_by_agent: e.created_by_agent,
+    // Create edges from anchor to all concept nodes
+    const anchorEdges: GraphEdge[] = nodes
+      .filter(n => n.node_type === "concept")
+      .map(n => ({
+        id: `anchor-to-${n.id}`,
+        source: "__project_anchor__",
+        target: n.id,
+        label: null,
+        edge_type: "anchors",
+        weight: 0.3,
+        created_by_agent: "system",
       }));
+
+    const graphEdges: GraphEdge[] = [
+      ...anchorEdges,
+      ...edges
+        .filter((e) => nodeMap.has(e.source_node_id) && nodeMap.has(e.target_node_id))
+        .map((e) => ({
+          id: e.id,
+          source: e.source_node_id,
+          target: e.target_node_id,
+          label: e.label,
+          edge_type: e.edge_type,
+          weight: e.weight,
+          created_by_agent: e.created_by_agent,
+        })),
+    ];
 
     return { nodes: graphNodes, edges: graphEdges };
   }, [nodes, edges]);
@@ -349,9 +383,9 @@ export function KnowledgeGraph({
           nodeEnter.append("circle")
             .attr("r", (d) => nodeTypeSizes[d.node_type] || 15)
             .attr("fill", (d) => d.color || nodeTypeColors[d.node_type] || "#6b7280")
-            .attr("stroke", (d) => d.node_type === "concept" ? "#ffffff" : "#ffffff80")
-            .attr("stroke-width", (d) => d.node_type === "concept" ? 3 : 2)
-            .attr("opacity", (d) => d.node_type === "concept" ? 1 : 0.85);
+            .attr("stroke", (d) => d.node_type === "anchor" ? "#ffffff" : d.node_type === "concept" ? "#ffffff" : "#ffffff80")
+            .attr("stroke-width", (d) => d.node_type === "anchor" ? 4 : d.node_type === "concept" ? 3 : 2)
+            .attr("opacity", (d) => d.node_type === "anchor" || d.node_type === "concept" ? 1 : 0.85);
           
           // Add label
           nodeEnter.append("text")
@@ -367,11 +401,12 @@ export function KnowledgeGraph({
             .attr("class", "node-icon")
             .attr("text-anchor", "middle")
             .attr("dy", "0.35em")
-            .attr("font-size", (d) => d.node_type === "concept" ? "12px" : "10px")
+            .attr("font-size", (d) => d.node_type === "anchor" ? "16px" : d.node_type === "concept" ? "12px" : "10px")
             .attr("font-weight", "bold")
             .attr("fill", "#ffffff")
             .text((d) => {
               switch (d.node_type) {
+                case "anchor": return "⚓";
                 case "concept": return "C";
                 case "requirement": return "R";
                 case "canvas_node": return "N";
