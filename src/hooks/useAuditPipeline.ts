@@ -807,8 +807,8 @@ export function useAuditPipeline() {
       if (totalConcepts === 0) {
         updateStep("tesseract", { status: "completed", message: "No concepts to analyze", progress: 100, completedAt: new Date() });
       } else {
-        // Process concepts in parallel batches (3 at a time to avoid rate limits)
-        const TESSERACT_PARALLEL = 3;
+        // Process concepts one at a time for better progress tracking
+        const TESSERACT_PARALLEL = 1;
         let completedCount = 0;
         let errorCount = 0;
 
@@ -904,25 +904,24 @@ export function useAuditPipeline() {
           }
         };
 
-        // Process in parallel batches (sequential batches, parallel within batch)
-        for (let i = 0; i < conceptsForTesseract.length; i += TESSERACT_PARALLEL) {
+        // Process concepts one at a time
+        const errorMessages: string[] = [];
+        
+        for (let i = 0; i < conceptsForTesseract.length; i++) {
           if (abortRef.current) throw new Error("Aborted");
           
-          const batchStart = i;
-          const batch = conceptsForTesseract.slice(i, i + TESSERACT_PARALLEL);
+          const concept = conceptsForTesseract[i];
           
-          // Update progress at batch start
-          const batchNum = Math.floor(i / TESSERACT_PARALLEL) + 1;
-          const totalBatches = Math.ceil(conceptsForTesseract.length / TESSERACT_PARALLEL);
+          // Update progress at concept start
           updateStep("tesseract", { 
-            message: `Batch ${batchNum}/${totalBatches}: Processing ${batch.length} concepts...`, 
+            message: `Concept ${i + 1}/${totalConcepts}: ${concept.conceptLabel.slice(0, 30)}...`, 
             progress: Math.round((i / totalConcepts) * 90) + 5 
           });
           
-          await Promise.all(batch.map((concept, batchIdx) => processTesseractConcept(concept, batchStart + batchIdx)));
+          await processTesseractConcept(concept, i);
           
-          // Update progress after batch completes
-          const progressPercent = Math.round(((i + batch.length) / totalConcepts) * 90) + 5;
+          // Update progress after concept completes
+          const progressPercent = Math.round(((i + 1) / totalConcepts) * 90) + 5;
           updateStep("tesseract", { 
             message: `Completed ${completedCount}/${totalConcepts} concepts (${errorCount} errors)`, 
             progress: progressPercent 
@@ -933,12 +932,16 @@ export function useAuditPipeline() {
           ? `${localTesseractCells.length} cells analyzed (${errorCount} errors)`
           : `${localTesseractCells.length} cells analyzed`;
         
+        // Collect error details from step details
+        const stepDetails = steps.find(s => s.id === "tesseract")?.details || [];
+        const failedDetails = stepDetails.filter(d => d.startsWith("❌")).join("\n");
+        
         updateStep("tesseract", { 
           status: errorCount === totalConcepts ? "error" : "completed", 
           message: finalMessage, 
           progress: 100, 
           completedAt: new Date(),
-          errorMessage: errorCount > 0 ? `${errorCount} concept(s) failed to analyze` : undefined
+          errorMessage: errorCount > 0 ? `${errorCount} concept(s) failed:\n${failedDetails}` : undefined
         });
       }
 

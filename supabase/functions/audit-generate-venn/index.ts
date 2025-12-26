@@ -13,13 +13,15 @@ const corsHeaders = {
 interface D1Concept {
   label: string;
   description: string;
-  d1Ids: string[];
+  d1Ids?: string[];
+  elementIds?: string[]; // Client may send this instead
 }
 
 interface D2Concept {
   label: string;
   description: string;
-  d2Ids: string[];
+  d2Ids?: string[];
+  elementIds?: string[]; // Client may send this instead
 }
 
 interface MergedConcept {
@@ -32,8 +34,10 @@ interface MergedConcept {
 interface TesseractCell {
   conceptLabel: string;
   polarity: number;
-  rationale: string;
-  gaps: string[];
+  rationale?: string;
+  gaps?: string[];
+  d1ElementIds?: string[];
+  d2ElementIds?: string[];
 }
 
 interface VennRequest {
@@ -44,8 +48,6 @@ interface VennRequest {
   unmergedD1Concepts: D1Concept[];
   unmergedD2Concepts: D2Concept[];
   tesseractCells: TesseractCell[];
-  d1Count: number;
-  d2Count: number;
 }
 
 interface VennItem {
@@ -86,13 +88,20 @@ serve(async (req) => {
       const { 
         sessionId, projectId, shareToken, 
         mergedConcepts, unmergedD1Concepts, unmergedD2Concepts,
-        tesseractCells, d1Count, d2Count 
+        tesseractCells 
       }: VennRequest = await req.json();
+      
+      console.log("[venn] Received request:", {
+        mergedConcepts: mergedConcepts?.length || 0,
+        unmergedD1: unmergedD1Concepts?.length || 0,
+        unmergedD2: unmergedD2Concepts?.length || 0,
+        tesseractCells: tesseractCells?.length || 0,
+      });
       
       await sendSSE("progress", { phase: "venn", message: "Generating Venn diagram...", progress: 0 });
 
       // Create tesseract lookup by concept label
-      const tesseractMap = new Map(tesseractCells.map(c => [c.conceptLabel, c]));
+      const tesseractMap = new Map((tesseractCells || []).map(c => [c.conceptLabel, c]));
 
       // Build Venn categories
       const uniqueToD1: VennItem[] = [];
@@ -102,14 +111,15 @@ serve(async (req) => {
       await sendSSE("progress", { phase: "venn", message: "Processing unmerged D1 concepts (gaps)...", progress: 20 });
 
       // Unmerged D1 concepts = unique to D1 (gaps - requirements not met)
-      for (const concept of unmergedD1Concepts) {
+      for (const concept of (unmergedD1Concepts || [])) {
+        const ids = concept.d1Ids || concept.elementIds || [];
         uniqueToD1.push({
           id: crypto.randomUUID(),
           label: concept.label,
           category: "unique_d1",
           criticality: "major", // Gaps are major issues
           evidence: concept.description,
-          sourceElement: concept.d1Ids[0] || "",
+          sourceElement: ids[0] || "",
           polarity: -1, // No D2 match
           description: `D1 requirement not implemented: ${concept.description}`,
         });
@@ -143,14 +153,15 @@ serve(async (req) => {
       await sendSSE("progress", { phase: "venn", message: "Processing unmerged D2 concepts (orphans)...", progress: 70 });
 
       // Unmerged D2 concepts = unique to D2 (orphans - implementation without requirements)
-      for (const concept of unmergedD2Concepts) {
+      for (const concept of (unmergedD2Concepts || [])) {
+        const ids = concept.d2Ids || concept.elementIds || [];
         uniqueToD2.push({
           id: crypto.randomUUID(),
           label: concept.label,
           category: "unique_d2",
           criticality: "info", // Orphans are informational (extra work, but not necessarily bad)
           evidence: concept.description,
-          sourceElement: concept.d2Ids[0] || "",
+          sourceElement: ids[0] || "",
           polarity: 0, // No D1 match
           description: `D2 implementation without corresponding D1 requirement: ${concept.description}`,
         });
