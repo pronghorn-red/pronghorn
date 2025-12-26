@@ -491,16 +491,24 @@ function parseAgentResponseText(rawText: string, defaultResponse: any = {}): any
 
 // ==================== LLM CALL HELPER ====================
 
+interface ModelSettings {
+  selectedModel: string;
+  maxTokens: number;
+  thinkingEnabled: boolean;
+  thinkingBudget: number;
+}
+
 async function callLLM(
   apiEndpoint: string,
   apiKey: string,
-  selectedModel: string,
+  settings: ModelSettings,
   systemPrompt: string,
   userPrompt: string,
   schema: any,
-  tool: any,
-  maxTokens: number
+  tool: any
 ): Promise<any> {
+  const { selectedModel, maxTokens, thinkingEnabled, thinkingBudget } = settings;
+  
   const defaultResponse = {
     reasoning: "",
     proposedNodes: [],
@@ -532,37 +540,61 @@ async function callLLM(
     const rawText = data.choices?.[0]?.message?.content || "{}";
     return parseAgentResponseText(rawText, defaultResponse);
   } else if (selectedModel.startsWith("claude")) {
+    // Build request body with optional thinking support
+    const requestBody: any = {
+      model: selectedModel,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+      tools: [tool],
+      tool_choice: { type: "tool", name: tool.name },
+    };
+
+    // Add thinking/extended thinking if enabled (Claude 3.5+ supports this)
+    if (thinkingEnabled && thinkingBudget > 0) {
+      requestBody.thinking = {
+        type: "enabled",
+        budget_tokens: thinkingBudget,
+      };
+    }
+
     const response = await fetch(apiEndpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
-        "anthropic-beta": "structured-outputs-2025-11-13",
+        "anthropic-beta": thinkingEnabled ? "thinking-2025-04-15,structured-outputs-2025-11-13" : "structured-outputs-2025-11-13",
       },
-      body: JSON.stringify({
-        model: selectedModel,
-        max_tokens: maxTokens,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-        tools: [tool],
-        tool_choice: { type: "tool", name: tool.name },
-      }),
+      body: JSON.stringify(requestBody),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(`Claude API error: ${JSON.stringify(data)}`);
     const toolUse = data.content?.find((c: any) => c.type === "tool_use");
     return toolUse?.input || defaultResponse;
   } else {
-    // Gemini
+    // Gemini - thinkingEnabled maps to thinkingConfig for Gemini 2.5+ models
+    const requestBody: any = {
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+      generationConfig: { 
+        responseMimeType: "application/json", 
+        maxOutputTokens: maxTokens, 
+        temperature: 0.7,
+      },
+    };
+
+    // Gemini 2.5 Flash/Pro support thinking mode
+    if (thinkingEnabled && selectedModel.includes("2.5")) {
+      requestBody.generationConfig.thinkingConfig = {
+        thinkingBudget: thinkingBudget > 0 ? thinkingBudget : 8192,
+      };
+    }
+
     const response = await fetch(`${apiEndpoint}?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: { responseMimeType: "application/json", maxOutputTokens: maxTokens, temperature: 0.7 },
-      }),
+      body: JSON.stringify(requestBody),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(`Gemini API error: ${JSON.stringify(data)}`);
@@ -636,15 +668,23 @@ serve(async (req) => {
       p_token: shareToken,
     });
 
-    const selectedModel = project?.selected_model || "gemini-2.5-flash";
-    const maxTokens = project?.max_tokens || 32768;
+    // Extract all model settings from project
+    const modelSettings: ModelSettings = {
+      selectedModel: project?.selected_model || "gemini-2.5-flash",
+      maxTokens: project?.max_tokens || 32768,
+      thinkingEnabled: project?.thinking_enabled || false,
+      thinkingBudget: project?.thinking_budget || -1,
+    };
+
+    console.log("Model settings:", modelSettings);
+
     let apiKey: string;
     let apiEndpoint: string;
 
-    if (selectedModel.startsWith("gemini")) {
+    if (modelSettings.selectedModel.startsWith("gemini")) {
       apiKey = Deno.env.get("GEMINI_API_KEY")!;
-      apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`;
-    } else if (selectedModel.startsWith("claude")) {
+      apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelSettings.selectedModel}:generateContent`;
+    } else if (modelSettings.selectedModel.startsWith("claude")) {
       apiKey = Deno.env.get("ANTHROPIC_API_KEY")!;
       apiEndpoint = "https://api.anthropic.com/v1/messages";
     } else {
@@ -652,7 +692,7 @@ serve(async (req) => {
       apiEndpoint = "https://api.x.ai/v1/chat/completions";
     }
 
-    if (!apiKey) throw new Error(`API key not configured for: ${selectedModel}`);
+    if (!apiKey) throw new Error(`API key not configured for: ${modelSettings.selectedModel}`);
 
     const channel = supabase.channel(`audit-${sessionId}`);
 
@@ -700,9 +740,9 @@ serve(async (req) => {
       try {
         const systemPrompt = getConferencePrompt(problemShape, agent);
         const response = await callLLM(
-          apiEndpoint, apiKey, selectedModel,
+          apiEndpoint, apiKey, modelSettings,
           systemPrompt, "Identify key concepts for the knowledge graph.",
-          getGrokConferenceSchema(), getClaudeConferenceTool(), maxTokens
+          getGrokConferenceSchema(), getClaudeConferenceTool()
         );
 
         console.log(`Conference response from ${agent.role}:`, response.proposedNodes?.length || 0, "nodes");
@@ -780,9 +820,9 @@ serve(async (req) => {
         try {
           const systemPrompt = getGraphBuildingPrompt(problemShape, agent, existingNodes || [], existingEdges || [], graphIteration);
           const response = await callLLM(
-            apiEndpoint, apiKey, selectedModel,
+            apiEndpoint, apiKey, modelSettings,
             systemPrompt, "Review and propose updates to the knowledge graph.",
-            getGrokGraphBuildingSchema(), getClaudeGraphBuildingTool(), maxTokens
+            getGrokGraphBuildingSchema(), getClaudeGraphBuildingTool()
           );
 
           // Insert new nodes (deduplicate by label)
@@ -887,9 +927,9 @@ serve(async (req) => {
       try {
         const systemPrompt = getAssignmentPrompt(agent, graphNodes || []);
         const response = await callLLM(
-          apiEndpoint, apiKey, selectedModel,
+          apiEndpoint, apiKey, modelSettings,
           systemPrompt, "Select the nodes you want to analyze.",
-          getGrokAssignmentSchema(), getClaudeAssignmentTool(), maxTokens
+          getGrokAssignmentSchema(), getClaudeAssignmentTool()
         );
 
         agentSelections.set(agent.role, response.selectedNodeIds || []);
@@ -1014,9 +1054,9 @@ serve(async (req) => {
 
           const systemPrompt = getAnalysisPrompt(agent, problemShape, assignedNodes, blackboardContext);
           const response = await callLLM(
-            apiEndpoint, apiKey, selectedModel,
+            apiEndpoint, apiKey, modelSettings,
             systemPrompt, "Analyze your assigned nodes and report findings.",
-            getGrokAnalysisSchema(), getClaudeAnalysisTool(), maxTokens
+            getGrokAnalysisSchema(), getClaudeAnalysisTool()
           );
 
           // Record observations to tesseract
