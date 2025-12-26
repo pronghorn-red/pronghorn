@@ -590,28 +590,38 @@ function getClaudeResponseTool() {
 
 // ==================== LLM CALL WITH STRUCTURED OUTPUT ====================
 
-async function callLLMWithStreaming(
+interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+async function callLLMWithConversation(
   apiEndpoint: string,
   apiKey: string,
   model: string,
   systemPrompt: string,
-  userPrompt: string,
+  messages: ConversationMessage[],
   logActivity: (agentRole: string | null, activityType: string, title: string, content?: string, metadata?: Record<string, any>) => Promise<void>,
   broadcast: (event: string, payload: any) => Promise<void>
-): Promise<OrchestratorResponse> {
+): Promise<{ response: OrchestratorResponse; rawContent: string }> {
   
-  // Log that we're making an LLM call
-  await logActivity("orchestrator", "llm_call", "Calling LLM...", `Model: ${model}`);
+  await logActivity("orchestrator", "llm_call", "Calling LLM...", `Model: ${model}, Messages: ${messages.length}`);
   
   let rawText = "";
   
   if (model.startsWith("gemini")) {
+    // Convert messages to Gemini format
+    const geminiContents = messages.map(m => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }]
+    }));
+    
     const requestBody = {
       systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+      contents: geminiContents,
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: getGeminiFunctionDeclarations(), // Use explicit Gemini schema
+        responseSchema: getGeminiFunctionDeclarations(),
         maxOutputTokens: 32768,
         temperature: 0.7,
       },
@@ -632,7 +642,15 @@ async function callLLMWithStreaming(
     rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     
   } else if (model.startsWith("claude")) {
-    // Use strict tool use for Claude to force structured JSON output
+    // Convert messages to Claude format
+    const claudeMessages = messages.map(m => ({
+      role: m.role,
+      content: m.role === "assistant" 
+        ? [{ type: "tool_use" as const, id: `tool_${Date.now()}`, name: "respond_with_actions", input: JSON.parse(m.content) }]
+        : m.content
+    }));
+    
+    // For Claude, ensure we're using proper tool forcing
     const response = await fetch(apiEndpoint, {
       method: "POST",
       headers: {
@@ -645,7 +663,7 @@ async function callLLMWithStreaming(
         model,
         max_tokens: 32768,
         system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
+        messages: claudeMessages,
         tools: [getClaudeResponseTool()],
         tool_choice: { type: "tool", name: "respond_with_actions" },
       }),
@@ -663,22 +681,24 @@ async function callLLMWithStreaming(
     if (toolUseBlock?.input) {
       rawText = JSON.stringify(toolUseBlock.input);
     } else {
-      // Fallback to text block if no tool_use
       const textBlock = data.content?.find((c: any) => c.type === "text");
       rawText = textBlock?.text || "{}";
+      console.log("Warning: No tool_use block found in Claude response, falling back to text:", rawText.slice(0, 200));
     }
     
   } else {
-    // Grok
+    // Grok - convert to OpenAI-style messages
+    const grokMessages = [
+      { role: "system", content: systemPrompt },
+      ...messages.map(m => ({ role: m.role, content: m.content }))
+    ];
+    
     const response = await fetch(apiEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
+        messages: grokMessages,
         response_format: getGrokToolSchema(),
         max_tokens: 32768,
         temperature: 0.7,
@@ -694,11 +714,10 @@ async function callLLMWithStreaming(
     rawText = data.choices?.[0]?.message?.content || "{}";
   }
   
-  // Log the full response for transparency
-  await logActivity("orchestrator", "response", "LLM Response", rawText, { rawResponse: true });
+  await logActivity("orchestrator", "response", "LLM Response", rawText.slice(0, 500), { rawLength: rawText.length });
   await broadcast("llm_response", { length: rawText.length });
   
-  return parseOrchestratorResponse(rawText);
+  return { response: parseOrchestratorResponse(rawText), rawContent: rawText };
 }
 
 // ==================== BUILD PROBLEM SHAPE ====================
@@ -895,7 +914,7 @@ serve(async (req) => {
     const d1Summary = problemShape.dataset1.elements.slice(0, 50).map(e => `- [${e.id.slice(0,8)}] ${e.label}`).join("\n");
     const d2Summary = problemShape.dataset2.elements.slice(0, 50).map(e => `- [${e.id.slice(0,8)}] ${e.label}`).join("\n");
 
-    let conversationHistory = `## Dataset 1 Elements (${problemShape.dataset1.type}) - THE SOURCE OF TRUTH:
+    const initialPrompt = `## Dataset 1 Elements (${problemShape.dataset1.type}) - THE SOURCE OF TRUTH:
 ${d1Summary}
 ${problemShape.dataset1.count > 50 ? `... and ${problemShape.dataset1.count - 50} more` : ""}
 
@@ -909,6 +928,11 @@ ${problemShape.dataset2.count > 50 ? `... and ${problemShape.dataset2.count - 50
 3. Call create_concept for major themes you identify
 
 START NOW - call your tools!`;
+
+    // Proper multi-turn conversation array
+    const conversationMessages: ConversationMessage[] = [
+      { role: "user", content: initialPrompt }
+    ];
 
     while (iteration < MAX_ITERATIONS && !analysisComplete) {
       iteration++;
@@ -934,15 +958,18 @@ START NOW - call your tools!`;
         break;
       }
 
-      // Call LLM
+      // Call LLM with multi-turn conversation
       const systemPrompt = getOrchestratorSystemPrompt(problemShape, currentPhase);
-      const response = await callLLMWithStreaming(
+      const { response, rawContent } = await callLLMWithConversation(
         apiEndpoint, apiKey, selectedModel,
-        systemPrompt, conversationHistory,
+        systemPrompt, conversationMessages,
         logActivity, broadcast
       );
 
       console.log(`Response: thinking=${response.thinking.length}chars, toolCalls=${response.toolCalls.length}, continue=${response.continueAnalysis}`);
+
+      // Add assistant response to conversation history (for multi-turn context)
+      conversationMessages.push({ role: "assistant", content: rawContent });
 
       // Log thinking
       if (response.thinking) {
@@ -958,7 +985,7 @@ START NOW - call your tools!`;
         
         if (consecutiveEmptyToolCalls >= 3) {
           // Force a reminder to use tools
-          conversationHistory += `\n\n## WARNING: You did NOT call any tools in iteration ${iteration}!
+          conversationMessages.push({ role: "user", content: `## WARNING: You did NOT call any tools in iteration ${iteration}!
 You MUST call at least one tool every iteration. Current phase: ${currentPhase}.
 Available tools:
 - write_blackboard: Record your findings (USE THIS!)
@@ -969,17 +996,17 @@ Available tools:
 - record_tesseract_cell: Record coverage analysis
 - finalize_venn: Complete the analysis
 
-CALL YOUR TOOLS NOW!`;
+CALL YOUR TOOLS NOW!` });
         }
         
         if (consecutiveEmptyToolCalls >= 5) {
           // Add a stronger nudge before giving up
-          conversationHistory += `\n\n## FINAL WARNING: ${consecutiveEmptyToolCalls} consecutive iterations without tool calls!
+          conversationMessages.push({ role: "user", content: `## FINAL WARNING: ${consecutiveEmptyToolCalls} consecutive iterations without tool calls!
 The analysis is incomplete. You MUST call tools to make progress.
 If you believe the analysis is complete, call finalize_venn with your findings.
 Otherwise, continue calling read_dataset_item, create_concept, or write_blackboard.
 
-THIS IS YOUR LAST CHANCE - CALL TOOLS OR THE ANALYSIS WILL TERMINATE!`;
+THIS IS YOUR LAST CHANCE - CALL TOOLS OR THE ANALYSIS WILL TERMINATE!` });
         }
         
         if (consecutiveEmptyToolCalls >= 8) {
@@ -1032,9 +1059,9 @@ THIS IS YOUR LAST CHANCE - CALL TOOLS OR THE ANALYSIS WILL TERMINATE!`;
         }
       }
 
-      // Update conversation history with tool results and feedback
+      // Update conversation with tool results and feedback as a new user message
       if (toolResults) {
-        let feedback = `\n\n## Tool Results from Iteration ${iteration} (${successCount} succeeded, ${failureCount} failed):${toolResults}`;
+        let feedback = `## Tool Results from Iteration ${iteration} (${successCount} succeeded, ${failureCount} failed):${toolResults}`;
         
         // Add guidance for failed tools
         if (failureCount > 0) {
@@ -1048,7 +1075,7 @@ THIS IS YOUR LAST CHANCE - CALL TOOLS OR THE ANALYSIS WILL TERMINATE!`;
         }
         
         feedback += `\n\nContinue your analysis. Current phase: ${currentPhase}. What's your next step?`;
-        conversationHistory += feedback;
+        conversationMessages.push({ role: "user", content: feedback });
       }
 
       // Check if LLM says we're done
