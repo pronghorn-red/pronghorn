@@ -468,14 +468,17 @@ export function KnowledgeGraph({
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2">
+          {/* Title row */}
           <CardTitle className="flex items-center gap-2">
             <Network className="h-5 w-5" />
             Knowledge Graph
           </CardTitle>
+          
+          {/* Badges row - wraps on mobile */}
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="outline">{getPhaseLabel(currentPhase)}</Badge>
-            <Badge variant="secondary">
+            <Badge variant="outline" className="text-xs">{getPhaseLabel(currentPhase)}</Badge>
+            <Badge variant="secondary" className="text-xs">
               {nodes.length} nodes · {edges.length} edges
             </Badge>
             {orphanCount > 0 && (
@@ -483,71 +486,73 @@ export function KnowledgeGraph({
                 {orphanCount} orphans
               </Badge>
             )}
-            <div className="flex items-center gap-1 ml-2">
+          </div>
+          
+          {/* Actions row - wraps on mobile */}
+          <div className="flex items-center gap-1 flex-wrap">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleZoom("out")}>
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Zoom Out</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleZoom("in")}>
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Zoom In</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleZoom("reset")}>
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Reset View</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleReheat}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Re-layout</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <div className="w-px h-6 bg-border mx-1" />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleDownload}>
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Download Graph (JSON)</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {orphanCount > 0 && onPruneOrphans && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={() => handleZoom("out")}>
-                      <ZoomOut className="h-4 w-4" />
+                    <Button variant="outline" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={onPruneOrphans}>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Zoom Out</TooltipContent>
+                  <TooltipContent>Prune {orphanCount} orphan nodes</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={() => handleZoom("in")}>
-                      <ZoomIn className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Zoom In</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={() => handleZoom("reset")}>
-                      <Maximize2 className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Reset View</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={handleReheat}>
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Re-layout</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <div className="w-px h-6 bg-border mx-1" />
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" onClick={handleDownload}>
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Download Graph (JSON)</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              {orphanCount > 0 && onPruneOrphans && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="outline" size="icon" onClick={onPruneOrphans} className="text-destructive hover:text-destructive">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Prune {orphanCount} orphan nodes</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </CardHeader>
