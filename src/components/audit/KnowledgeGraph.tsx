@@ -170,13 +170,17 @@ export function KnowledgeGraph({
   }, [nodes, edges, currentPhase, orphanCount]);
   const containerRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphEdge> | null>(null);
+  const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const initializedRef = useRef(false);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
 
-  // Transform data for D3
+  // Transform data for D3, preserving existing positions
   const graphData = useMemo(() => {
     const nodeMap = new Map<string, GraphNode>();
     
     const graphNodes: GraphNode[] = nodes.map((n) => {
+      // Preserve existing position if we have it
+      const existingPos = nodePositionsRef.current.get(n.id);
       const node: GraphNode = {
         id: n.id,
         label: n.label,
@@ -184,8 +188,8 @@ export function KnowledgeGraph({
         node_type: n.node_type,
         source_dataset: n.source_dataset,
         created_by_agent: n.created_by_agent,
-        x: n.x_position || undefined,
-        y: n.y_position || undefined,
+        x: existingPos?.x ?? n.x_position ?? undefined,
+        y: existingPos?.y ?? n.y_position ?? undefined,
         color: n.color || nodeTypeColors[n.node_type] || "#6b7280",
         size: n.size || 10,
       };
@@ -223,27 +227,63 @@ export function KnowledgeGraph({
     return () => resizeObserver.disconnect();
   }, []);
 
-  // D3 force simulation
+  // D3 force simulation - incremental updates to prevent jitter
   useEffect(() => {
     if (!svgRef.current || graphData.nodes.length === 0) return;
 
     const svg = d3.select(svgRef.current);
-    svg.selectAll("*").remove();
-
     const { width, height } = dimensions;
     
-    // Create zoom behavior
+    // Check if this is the first render or if we need full setup
+    const needsFullSetup = !initializedRef.current;
+    
+    if (needsFullSetup) {
+      svg.selectAll("*").remove();
+      initializedRef.current = true;
+    }
+    
+    // Create or get zoom behavior
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.2, 4])
       .on("zoom", (event) => {
-        g.attr("transform", event.transform);
+        svg.select<SVGGElement>("g.main-group").attr("transform", event.transform);
       });
 
     svg.call(zoom);
 
-    const g = svg.append("g");
+    let g = svg.select<SVGGElement>("g.main-group");
+    if (g.empty()) {
+      g = svg.append("g").attr("class", "main-group");
+      
+      // Create arrow marker for directed edges
+      svg
+        .append("defs")
+        .selectAll("marker")
+        .data(["arrow"])
+        .join("marker")
+        .attr("id", "arrow")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 25)
+        .attr("refY", 0)
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path")
+        .attr("fill", "#6b7280")
+        .attr("d", "M0,-5L10,0L0,5");
+      
+      // Create layer groups
+      g.append("g").attr("class", "links");
+      g.append("g").attr("class", "link-labels");
+      g.append("g").attr("class", "nodes");
+    }
 
-    // Create simulation
+    // Stop existing simulation before updating
+    if (simulationRef.current) {
+      simulationRef.current.stop();
+    }
+
+    // Create simulation with preserved positions
     const simulation = d3
       .forceSimulation<GraphNode>(graphData.nodes)
       .force(
@@ -260,118 +300,114 @@ export function KnowledgeGraph({
 
     simulationRef.current = simulation;
 
-    // Create arrow marker for directed edges
-    svg
-      .append("defs")
-      .selectAll("marker")
-      .data(["arrow"])
-      .join("marker")
-      .attr("id", "arrow")
-      .attr("viewBox", "0 -5 10 10")
-      .attr("refX", 25)
-      .attr("refY", 0)
-      .attr("markerWidth", 6)
-      .attr("markerHeight", 6)
-      .attr("orient", "auto")
-      .append("path")
-      .attr("fill", "#6b7280")
-      .attr("d", "M0,-5L10,0L0,5");
+    // Update edges using D3 data join
+    const linkGroup = g.select<SVGGElement>("g.links");
+    const link = linkGroup
+      .selectAll<SVGLineElement, GraphEdge>("line")
+      .data(graphData.edges, (d) => d.id)
+      .join(
+        enter => enter.append("line")
+          .attr("stroke", (d) => edgeTypeStyles[d.edge_type]?.color || "#6b728080")
+          .attr("stroke-width", (d) => d.edge_type === "derived_from" ? 1.5 : Math.max(1, d.weight * 2))
+          .attr("stroke-dasharray", (d) => edgeTypeStyles[d.edge_type]?.dashArray || "")
+          .attr("marker-end", "url(#arrow)"),
+        update => update,
+        exit => exit.remove()
+      );
 
-    // Create edges with type-based styling
-    const link = g
-      .append("g")
-      .attr("class", "links")
-      .selectAll("line")
-      .data(graphData.edges)
-      .join("line")
-      .attr("stroke", (d) => edgeTypeStyles[d.edge_type]?.color || "#6b728080")
-      .attr("stroke-width", (d) => d.edge_type === "derived_from" ? 1.5 : Math.max(1, d.weight * 2))
-      .attr("stroke-dasharray", (d) => edgeTypeStyles[d.edge_type]?.dashArray || "")
-      .attr("marker-end", "url(#arrow)");
+    // Update edge labels
+    const linkLabelGroup = g.select<SVGGElement>("g.link-labels");
+    const linkLabel = linkLabelGroup
+      .selectAll<SVGTextElement, GraphEdge>("text")
+      .data(graphData.edges.filter((e) => e.label), (d) => d.id)
+      .join(
+        enter => enter.append("text")
+          .attr("font-size", "10px")
+          .attr("fill", "#9ca3af")
+          .attr("text-anchor", "middle")
+          .text((d) => d.label || ""),
+        update => update.text((d) => d.label || ""),
+        exit => exit.remove()
+      );
 
-    // Create edge labels
-    const linkLabel = g
-      .append("g")
-      .attr("class", "link-labels")
-      .selectAll("text")
-      .data(graphData.edges.filter((e) => e.label))
-      .join("text")
-      .attr("font-size", "10px")
-      .attr("fill", "#9ca3af")
-      .attr("text-anchor", "middle")
-      .text((d) => d.label || "");
+    // Update nodes using D3 data join
+    const nodeGroup = g.select<SVGGElement>("g.nodes");
+    const node = nodeGroup
+      .selectAll<SVGGElement, GraphNode>("g.node")
+      .data(graphData.nodes, (d) => d.id)
+      .join(
+        enter => {
+          const nodeEnter = enter.append("g")
+            .attr("class", "node")
+            .attr("cursor", "pointer")
+            .on("click", (event, d) => {
+              event.stopPropagation();
+              onNodeClick?.(d.id);
+            });
+          
+          // Add circle
+          nodeEnter.append("circle")
+            .attr("r", (d) => nodeTypeSizes[d.node_type] || 15)
+            .attr("fill", (d) => d.color || nodeTypeColors[d.node_type] || "#6b7280")
+            .attr("stroke", (d) => d.node_type === "concept" ? "#ffffff" : "#ffffff80")
+            .attr("stroke-width", (d) => d.node_type === "concept" ? 3 : 2)
+            .attr("opacity", (d) => d.node_type === "concept" ? 1 : 0.85);
+          
+          // Add label
+          nodeEnter.append("text")
+            .attr("class", "node-label")
+            .attr("dy", (d) => (d.size || 10) + 20)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "11px")
+            .attr("fill", "currentColor")
+            .text((d) => d.label.slice(0, 20) + (d.label.length > 20 ? "..." : ""));
+          
+          // Add type icon
+          nodeEnter.append("text")
+            .attr("class", "node-icon")
+            .attr("text-anchor", "middle")
+            .attr("dy", "0.35em")
+            .attr("font-size", (d) => d.node_type === "concept" ? "12px" : "10px")
+            .attr("font-weight", "bold")
+            .attr("fill", "#ffffff")
+            .text((d) => {
+              switch (d.node_type) {
+                case "concept": return "C";
+                case "requirement": return "R";
+                case "canvas_node": return "N";
+                case "gap": return "!";
+                case "risk": return "⚠";
+                default: return d.node_type[0].toUpperCase();
+              }
+            });
+          
+          return nodeEnter;
+        },
+        update => update,
+        exit => exit.remove()
+      );
 
-    // Create nodes
-    const node = g
-      .append("g")
-      .attr("class", "nodes")
-      .selectAll("g")
-      .data(graphData.nodes)
-      .join("g")
-      .attr("cursor", "pointer")
-      .call(
-        d3
-          .drag<SVGGElement, GraphNode>()
-          .on("start", (event, d) => {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-          })
-          .on("drag", (event, d) => {
-            d.fx = event.x;
-            d.fy = event.y;
-          })
-          .on("end", (event, d) => {
-            if (!event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-          })
-      )
-      .on("click", (event, d) => {
-        event.stopPropagation();
-        onNodeClick?.(d.id);
-      });
+    // Apply drag behavior
+    node.call(
+      d3
+        .drag<SVGGElement, GraphNode>()
+        .on("start", (event, d) => {
+          if (!event.active) simulation.alphaTarget(0.3).restart();
+          d.fx = d.x;
+          d.fy = d.y;
+        })
+        .on("drag", (event, d) => {
+          d.fx = event.x;
+          d.fy = event.y;
+        })
+        .on("end", (event, d) => {
+          if (!event.active) simulation.alphaTarget(0);
+          d.fx = null;
+          d.fy = null;
+        })
+    );
 
-    // Node circles with type-based sizing
-    node
-      .append("circle")
-      .attr("r", (d) => nodeTypeSizes[d.node_type] || 15)
-      .attr("fill", (d) => d.color || nodeTypeColors[d.node_type] || "#6b7280")
-      .attr("stroke", (d) => d.node_type === "concept" ? "#ffffff" : "#ffffff80")
-      .attr("stroke-width", (d) => d.node_type === "concept" ? 3 : 2)
-      .attr("opacity", (d) => d.node_type === "concept" ? 1 : 0.85);
-
-    // Node labels
-    node
-      .append("text")
-      .attr("dy", (d) => (d.size || 10) + 20)
-      .attr("text-anchor", "middle")
-      .attr("font-size", "11px")
-      .attr("fill", "currentColor")
-      .attr("class", "text-foreground")
-      .text((d) => d.label.slice(0, 20) + (d.label.length > 20 ? "..." : ""));
-
-    // Node type icons - show different icons for different types
-    node
-      .append("text")
-      .attr("text-anchor", "middle")
-      .attr("dy", "0.35em")
-      .attr("font-size", (d) => d.node_type === "concept" ? "12px" : "10px")
-      .attr("font-weight", "bold")
-      .attr("fill", "#ffffff")
-      .text((d) => {
-        // Different icons for different node types
-        switch (d.node_type) {
-          case "concept": return "C";
-          case "requirement": return "R";
-          case "canvas_node": return "N";
-          case "gap": return "!";
-          case "risk": return "⚠";
-          default: return d.node_type[0].toUpperCase();
-        }
-      });
-
-    // Simulation tick
+    // Simulation tick - save positions to ref
     simulation.on("tick", () => {
       link
         .attr("x1", (d) => (d.source as GraphNode).x || 0)
@@ -392,16 +428,28 @@ export function KnowledgeGraph({
         });
 
       node.attr("transform", (d) => `translate(${d.x || 0},${d.y || 0})`);
+      
+      // Save positions for future updates
+      graphData.nodes.forEach(n => {
+        if (n.x !== undefined && n.y !== undefined) {
+          nodePositionsRef.current.set(n.id, { x: n.x, y: n.y });
+        }
+      });
     });
 
-    // Initial zoom to fit
-    const initialScale = 0.8;
-    svg.call(
-      zoom.transform,
-      d3.zoomIdentity
-        .translate(width * (1 - initialScale) / 2, height * (1 - initialScale) / 2)
-        .scale(initialScale)
-    );
+    // Only apply initial zoom on first render
+    if (needsFullSetup) {
+      const initialScale = 0.8;
+      svg.call(
+        zoom.transform,
+        d3.zoomIdentity
+          .translate(width * (1 - initialScale) / 2, height * (1 - initialScale) / 2)
+          .scale(initialScale)
+      );
+    } else {
+      // For updates, just gently reheat the simulation
+      simulation.alpha(0.3).restart();
+    }
 
     return () => {
       simulation.stop();

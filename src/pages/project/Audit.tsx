@@ -54,6 +54,7 @@ export default function Audit() {
   const [isResuming, setIsResuming] = useState(false);
   const staleCheckRef = useRef<NodeJS.Timeout | null>(null);
   const lastResumeAttemptRef = useRef<number>(0);
+  const manualStopRef = useRef(false);
   
   const {
     session,
@@ -153,16 +154,30 @@ export default function Audit() {
       return;
     }
 
-    const checkForStaleSession = () => {
-      if (isResuming) return;
+    const checkForStaleSession = async () => {
+      // Don't auto-resume if manually stopped or already resuming
+      if (isResuming || manualStopRef.current) return;
       
-      const updatedAt = new Date(session.updated_at);
+      // Re-fetch session status from DB to avoid stale state
+      const { data: freshSessions } = await supabase.rpc("get_audit_sessions_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken,
+      });
+      const freshSession = freshSessions?.find((s: AuditSession) => s.id === session.id);
+      
+      // Only resume if session is still actually running
+      if (!freshSession || freshSession.status !== "running") {
+        console.log("Session no longer running, skipping auto-resume");
+        return;
+      }
+      
+      const updatedAt = new Date(freshSession.updated_at);
       const staleness = Date.now() - updatedAt.getTime();
       
       // If session hasn't been updated in 70 seconds but still "running", it's likely timed out
       if (staleness > 70000) {
         console.log(`Session appears stale (${Math.round(staleness/1000)}s since last update), auto-resuming...`);
-        resumeOrchestrator(session);
+        resumeOrchestrator(freshSession);
       }
     };
 
@@ -186,6 +201,7 @@ export default function Audit() {
 
   const handleStartAudit = async (config: AuditConfiguration) => {
     setIsStarting(true);
+    manualStopRef.current = false; // Reset manual stop flag for new audit
     try {
       const agentDefs = config.agentPersonas.reduce((acc, p) => ({
         ...acc,
@@ -244,6 +260,13 @@ export default function Audit() {
 
   const handleStop = async () => {
     if (!session) return;
+    // Set manual stop flag to prevent auto-resume
+    manualStopRef.current = true;
+    // Clear stale check immediately
+    if (staleCheckRef.current) {
+      clearInterval(staleCheckRef.current);
+      staleCheckRef.current = null;
+    }
     await updateSessionStatus(session.id, "stopped");
     toast.success("Audit stopped");
   };

@@ -1253,18 +1253,34 @@ serve(async (req) => {
     const problemShape = await buildProblemShape(supabase, session, projectId, shareToken);
     console.log("Problem shape:", { d1: problemShape.dataset1.count, d2: problemShape.dataset2.count });
 
-    await logActivity(null, "phase_change", PHASE_DISPLAY_NAMES["graph_building"], 
-      `Starting analysis: ${problemShape.dataset1.count} ${problemShape.dataset1.type} against ${problemShape.dataset2.count} ${problemShape.dataset2.type}`,
-      { phase: "graph_building", fromPhase: "initialization" });
+    // If resuming, only update status to running - DO NOT reset phase or problem_shape
+    if (resume) {
+      await logActivity(null, "resume", "Resuming Analysis", 
+        `Continuing from iteration ${session.current_iteration || 0}, phase: ${session.phase || "graph_building"}`,
+        { phase: session.phase, iteration: session.current_iteration, resumed: true });
 
-    await rpc("update_audit_session_with_token", {
-      p_session_id: sessionId,
-      p_token: shareToken,
-      p_status: "running",
-      p_phase: "graph_building",
-      p_problem_shape: problemShape,
-    });
-    await broadcast("phase", { phase: "graph_building" });
+      await rpc("update_audit_session_with_token", {
+        p_session_id: sessionId,
+        p_token: shareToken,
+        p_status: "running",
+        // Explicitly DO NOT set p_phase - keep existing phase
+      });
+      await broadcast("resumed", { phase: session.phase, iteration: session.current_iteration });
+    } else {
+      // New session - initialize from scratch
+      await logActivity(null, "phase_change", PHASE_DISPLAY_NAMES["graph_building"], 
+        `Starting analysis: ${problemShape.dataset1.count} ${problemShape.dataset1.type} against ${problemShape.dataset2.count} ${problemShape.dataset2.type}`,
+        { phase: "graph_building", fromPhase: "initialization" });
+
+      await rpc("update_audit_session_with_token", {
+        p_session_id: sessionId,
+        p_token: shareToken,
+        p_status: "running",
+        p_phase: "graph_building",
+        p_problem_shape: problemShape,
+      });
+      await broadcast("phase", { phase: "graph_building" });
+    }
 
     // Tool execution context
     const toolContext = { supabase, sessionId, projectId, shareToken, problemShape, logActivity, rpc };
@@ -1313,10 +1329,7 @@ START NOW - call your tools!`;
     // If resuming, build resume context instead of initial message
     if (resume) {
       console.log(`Resuming from iteration ${iteration}, phase ${currentPhase}`);
-      await logActivity(null, "resume", `Resuming Analysis`, 
-        `Continuing from iteration ${iteration}, phase: ${currentPhase}`,
-        { iteration, phase: currentPhase, resumed: true });
-      
+      // Note: we already logged the resume activity above in the setup
       const resumeContext = await buildResumeContext(supabase, sessionId, shareToken, session, problemShape);
       claudeMessages.push({ role: "user", content: resumeContext });
     }
@@ -1561,6 +1574,9 @@ CALL YOUR TOOLS NOW!`;
       } else {
         consecutiveEmptyToolCalls = 0;
         
+        // Track if write_blackboard was called this iteration
+        const blackboardCalls = response.toolCalls.filter(tc => tc.tool === "write_blackboard").length;
+        
         // Separate tools into parallel-safe (reads) and sequential (writes/creates)
         const parallelSafeTools = ['read_dataset_item', 'query_knowledge_graph', 'read_blackboard', 'get_concept_links'];
         
@@ -1633,6 +1649,13 @@ CALL YOUR TOOLS NOW!`;
             previousPhase = currentPhase;
             currentPhase = newPhase;
           }
+        }
+        
+        // ENFORCE BLACKBOARD USAGE: Add warning if no blackboard calls
+        if (blackboardCalls === 0 && iteration > 1) {
+          toolResults += `\n\n⚠️ BLACKBOARD WARNING: You did not call write_blackboard this iteration!
+The blackboard is your ONLY persistent memory. If the analysis is interrupted, we will lose your progress without blackboard entries.
+You MUST call write_blackboard with your findings, observations, or current thinking in the NEXT iteration!`;
         }
       }
 
