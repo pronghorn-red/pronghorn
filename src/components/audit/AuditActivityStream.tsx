@@ -227,6 +227,7 @@ function CondensedIterationRow({
   onToggle: () => void;
 }) {
   const totalTools = summary.toolCalls.reads + summary.toolCalls.creates + summary.toolCalls.writes + summary.toolCalls.other;
+  const totalActivities = summary.activities.length;
   
   return (
     <Collapsible open={isExpanded} onOpenChange={onToggle}>
@@ -253,25 +254,32 @@ function CondensedIterationRow({
                 )}
               </div>
               
-              {/* Middle: Tool call breakdown */}
+              {/* Middle: Activity count and Tool call breakdown */}
               <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-1.5" title="Reads">
-                  <FileSearch className="h-4 w-4 text-blue-500" />
-                  <span className="font-medium">{summary.toolCalls.reads}</span>
-                </div>
-                <div className="flex items-center gap-1.5" title="Creates">
-                  <Plus className="h-4 w-4 text-green-500" />
-                  <span className="font-medium">{summary.toolCalls.creates}</span>
-                </div>
-                <div className="flex items-center gap-1.5" title="Writes">
-                  <Pencil className="h-4 w-4 text-orange-500" />
-                  <span className="font-medium">{summary.toolCalls.writes}</span>
-                </div>
-                {summary.toolCalls.other > 0 && (
-                  <div className="flex items-center gap-1.5" title="Other">
-                    <Wrench className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{summary.toolCalls.other}</span>
-                  </div>
+                <Badge variant="secondary" className="text-xs" title="Total activities in this iteration">
+                  {totalActivities}
+                </Badge>
+                {totalTools > 0 && (
+                  <>
+                    <div className="flex items-center gap-1.5" title="Reads">
+                      <FileSearch className="h-4 w-4 text-blue-500" />
+                      <span className="font-medium">{summary.toolCalls.reads}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5" title="Creates">
+                      <Plus className="h-4 w-4 text-green-500" />
+                      <span className="font-medium">{summary.toolCalls.creates}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5" title="Writes">
+                      <Pencil className="h-4 w-4 text-orange-500" />
+                      <span className="font-medium">{summary.toolCalls.writes}</span>
+                    </div>
+                    {summary.toolCalls.other > 0 && (
+                      <div className="flex items-center gap-1.5" title="Other tools">
+                        <Wrench className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{summary.toolCalls.other}</span>
+                      </div>
+                    )}
+                  </>
                 )}
                 {summary.errors > 0 && (
                   <Badge variant="destructive" className="text-xs">
@@ -280,9 +288,8 @@ function CondensedIterationRow({
                 )}
               </div>
               
-              {/* Right: Timing and totals */}
+              {/* Right: Timing */}
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="hidden sm:inline">{totalTools} tools</span>
                 <span>{formatDistanceToNow(summary.endTime, { addSuffix: true })}</span>
               </div>
             </div>
