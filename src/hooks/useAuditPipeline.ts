@@ -965,14 +965,78 @@ export function useAuditPipeline() {
       if (abortRef.current) throw new Error("Aborted");
 
       // ========================================
-      // PHASE 3: Build tesseract
+      // PHASE 3: Build tesseract from graph concepts
       // ========================================
-      updateStep("tesseract", { status: "running", message: "Analyzing concepts...", startedAt: new Date() });
+      updateStep("tesseract", { status: "running", message: "Gathering concepts from graph...", startedAt: new Date() });
+
+      // Fetch all concept nodes from the graph
+      const { data: allGraphNodes } = await supabase.rpc("get_audit_graph_nodes_with_token", {
+        p_session_id: sessionId,
+        p_token: shareToken,
+      });
+      const { data: allGraphEdges } = await supabase.rpc("get_audit_graph_edges_with_token", {
+        p_session_id: sessionId,
+        p_token: shareToken,
+      });
+
+      const conceptNodes = (allGraphNodes || []).filter((n: any) => n.node_type === "concept");
+      const elementNodesMap = new Map((allGraphNodes || []).filter((n: any) => n.node_type !== "concept").map((n: any) => [n.id, n]));
+      
+      console.log(`[tesseract] Found ${conceptNodes.length} concept nodes in graph`);
+      addStepDetail("tesseract", `Found ${conceptNodes.length} concepts in graph`);
+
+      // Build concept data with linked D1/D2 content
+      const conceptsForTesseract: Array<{
+        conceptId: string;
+        conceptLabel: string;
+        conceptDescription: string;
+        d1Elements: Array<{ id: string; label: string; content: string }>;
+        d2Elements: Array<{ id: string; label: string; content: string }>;
+      }> = [];
+
+      for (const concept of conceptNodes) {
+        // Find edges pointing TO this concept
+        const incomingEdges = (allGraphEdges || []).filter((e: any) => e.target_node_id === concept.id);
+        
+        const linkedD1: Array<{ id: string; label: string; content: string }> = [];
+        const linkedD2: Array<{ id: string; label: string; content: string }> = [];
+
+        for (const edge of incomingEdges) {
+          const sourceNode = elementNodesMap.get(edge.source_node_id);
+          if (sourceNode) {
+            const elementData = {
+              id: sourceNode.id,
+              label: sourceNode.label || "Untitled",
+              content: sourceNode.description || sourceNode.metadata?.content || "",
+            };
+            if (sourceNode.source_dataset === "dataset1") {
+              linkedD1.push(elementData);
+            } else if (sourceNode.source_dataset === "dataset2") {
+              linkedD2.push(elementData);
+            }
+          }
+        }
+
+        conceptsForTesseract.push({
+          conceptId: concept.id,
+          conceptLabel: concept.label,
+          conceptDescription: concept.description || "",
+          d1Elements: linkedD1,
+          d2Elements: linkedD2,
+        });
+      }
+
+      console.log(`[tesseract] Prepared ${conceptsForTesseract.length} concepts for analysis`);
 
       const tesseractResponse = await fetch(`${BASE_URL}/audit-build-tesseract`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, projectId, shareToken, mergedConcepts, d1Elements, d2Elements }),
+        body: JSON.stringify({ 
+          sessionId, 
+          projectId, 
+          shareToken, 
+          concepts: conceptsForTesseract,
+        }),
       });
 
       let tesseractCells: any[] = [];
