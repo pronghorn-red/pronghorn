@@ -114,42 +114,45 @@ export function TesseractVisualizer({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+        <div className="flex flex-col gap-2">
+          {/* Title row */}
+          <CardTitle className="flex items-center gap-2 flex-wrap">
             <Grid3X3 className="h-5 w-5" />
-            Tesseract Visualization
+            <span>Tesseract Visualization</span>
             {currentIteration > 0 && (
-              <Badge variant="outline" className="ml-2">
+              <Badge variant="outline" className="text-xs">
                 Iteration {currentIteration}
               </Badge>
             )}
           </CardTitle>
-          <div className="flex items-center gap-1 sm:gap-2">
+          
+          {/* Controls row */}
+          <div className="flex items-center gap-1">
             <Button
               variant="outline"
               size="icon"
-              className="h-8 w-8 sm:h-9 sm:w-9"
+              className="h-8 w-8"
               onClick={() => setShowLabels(!showLabels)}
             >
-              <Layers className="h-3 w-3 sm:h-4 sm:w-4" />
+              <Layers className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
               size="icon"
-              className="h-8 w-8 sm:h-9 sm:w-9"
+              className="h-8 w-8"
               onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
               disabled={zoom <= 0.5}
             >
-              <ZoomOut className="h-3 w-3 sm:h-4 sm:w-4" />
+              <ZoomOut className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
               size="icon"
-              className="h-8 w-8 sm:h-9 sm:w-9"
+              className="h-8 w-8"
               onClick={() => setZoom(Math.min(2, zoom + 0.25))}
               disabled={zoom >= 2}
             >
-              <ZoomIn className="h-3 w-3 sm:h-4 sm:w-4" />
+              <ZoomIn className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -190,113 +193,116 @@ export function TesseractVisualizer({
             </div>
           </div>
         ) : (
-        <ScrollArea className="w-full">
-          <div className="min-w-max">
-            {/* Header row with X labels */}
-            <div className="flex">
-              <div
-                style={{ width: cellSize * 2, height: cellSize }}
-                className="shrink-0"
-              />
-              {xElements.map(([xIndex, xData]) => (
-                <TooltipProvider key={xIndex}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div
-                        style={{ width: cellSize, height: cellSize }}
-                        className="flex items-center justify-center text-xs font-medium text-muted-foreground truncate px-1 cursor-help"
-                      >
-                        {showLabels ? xData.label.slice(0, 6) : xIndex}
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="font-medium">{xData.label}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Type: {xData.type}
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ))}
-            </div>
-
-            {/* Data rows */}
-            {ySteps.map(([yStep, yLabel]) => (
-              <div key={yStep} className="flex">
-                {/* Y axis label */}
+        <div className="overflow-auto max-h-[400px]">
+          <ScrollArea className="w-full">
+            <div className="min-w-max">
+              {/* Header row with X labels */}
+              <div className="flex">
                 <div
                   style={{ width: cellSize * 2, height: cellSize }}
-                  className="flex items-center text-xs font-medium text-muted-foreground truncate pr-2 shrink-0"
-                >
-                  {showLabels ? yLabel : `Step ${yStep}`}
-                </div>
+                  className="shrink-0"
+                />
+                {xElements.map(([xIndex, xData]) => (
+                  <TooltipProvider key={xIndex}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          style={{ width: cellSize, height: cellSize }}
+                          className="flex items-center justify-center text-xs font-medium text-muted-foreground truncate px-1 cursor-help"
+                        >
+                          {showLabels ? xData.label.slice(0, 6) : xIndex}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="font-medium">{xData.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Type: {xData.type}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
+              </div>
 
-                {/* Cells */}
-                {xElements.map(([xIndex]) => {
-                  const cell = cellMap.get(`${xIndex}-${yStep}`);
-                  return (
-                    <TooltipProvider key={`${xIndex}-${yStep}`}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div
-                            style={{ width: cellSize, height: cellSize }}
-                            className={`
-                              border border-border/50 flex items-center justify-center cursor-pointer
-                              transition-all duration-200 hover:ring-2 hover:ring-primary/50
-                              ${cell ? getPolarityColor(cell.z_polarity) : "bg-muted/30"}
-                            `}
-                            onClick={() => cell && onCellClick?.(cell)}
-                          >
-                            {cell?.z_criticality && (
-                              <span className="text-[8px] font-bold text-white drop-shadow">
-                                {cell.z_criticality[0].toUpperCase()}
-                              </span>
-                            )}
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs">
-                          {cell ? (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <Badge
-                                  variant={getCriticalityVariant(
-                                    cell.z_criticality
-                                  )}
-                                >
-                                  {cell.z_criticality || "info"}
-                                </Badge>
-                                <span className="text-sm">
-                                  Polarity: {cell.z_polarity.toFixed(2)}
+              {/* Data rows */}
+              {ySteps.map(([yStep, yLabel]) => (
+                <div key={yStep} className="flex">
+                  {/* Y axis label */}
+                  <div
+                    style={{ width: cellSize * 2, height: cellSize }}
+                    className="flex items-center text-xs font-medium text-muted-foreground truncate pr-2 shrink-0"
+                  >
+                    {showLabels ? yLabel : `Step ${yStep}`}
+                  </div>
+
+                  {/* Cells */}
+                  {xElements.map(([xIndex]) => {
+                    const cell = cellMap.get(`${xIndex}-${yStep}`);
+                    return (
+                      <TooltipProvider key={`${xIndex}-${yStep}`}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              style={{ width: cellSize, height: cellSize }}
+                              className={`
+                                border border-border/50 flex items-center justify-center cursor-pointer
+                                transition-all duration-200 hover:ring-2 hover:ring-primary/50
+                                ${cell ? getPolarityColor(cell.z_polarity) : "bg-muted/30"}
+                              `}
+                              onClick={() => cell && onCellClick?.(cell)}
+                            >
+                              {cell?.z_criticality && (
+                                <span className="text-[8px] font-bold text-white drop-shadow">
+                                  {cell.z_criticality[0].toUpperCase()}
                                 </span>
-                              </div>
-                              {cell.evidence_summary && (
-                                <p className="text-xs">
-                                  {cell.evidence_summary}
-                                </p>
                               )}
-                              {cell.contributing_agents &&
-                                cell.contributing_agents.length > 0 && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Contributors:{" "}
-                                    {cell.contributing_agents.join(", ")}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            {cell ? (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    variant={getCriticalityVariant(
+                                      cell.z_criticality
+                                    )}
+                                  >
+                                    {cell.z_criticality || "info"}
+                                  </Badge>
+                                  <span className="text-sm">
+                                    Polarity: {cell.z_polarity.toFixed(2)}
+                                  </span>
+                                </div>
+                                {cell.evidence_summary && (
+                                  <p className="text-xs">
+                                    {cell.evidence_summary}
                                   </p>
                                 )}
-                            </div>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              No data for this cell
-                            </p>
-                          )}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
+                                {cell.contributing_agents &&
+                                  cell.contributing_agents.length > 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Contributors:{" "}
+                                      {cell.contributing_agents.join(", ")}
+                                    </p>
+                                  )}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">
+                                No data for this cell
+                              </p>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+            <ScrollBar orientation="horizontal" />
+            <ScrollBar orientation="vertical" />
+          </ScrollArea>
+        </div>
         )}
 
         {/* Legend - Responsive */}

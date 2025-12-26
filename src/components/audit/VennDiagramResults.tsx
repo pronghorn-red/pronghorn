@@ -268,45 +268,48 @@ export function VennDiagramResults({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3">
+          {/* Title row */}
           <CardTitle className="flex items-center gap-2">
             <CircleDot className="h-5 w-5" />
             Venn Diagram Results
           </CardTitle>
+          
+          {/* Export buttons row */}
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={exportAsJson}>
-              <FileJson className="h-4 w-4 mr-1" />
-              JSON
+              <FileJson className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">JSON</span>
             </Button>
             <Button variant="outline" size="sm" onClick={exportAsCsv}>
-              <FileSpreadsheet className="h-4 w-4 mr-1" />
-              CSV
+              <FileSpreadsheet className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">CSV</span>
             </Button>
           </div>
         </div>
 
         {/* Summary stats */}
-        <div className="grid grid-cols-3 gap-4 mt-4">
-          <div className="text-center p-3 rounded-lg bg-red-500/10">
-            <div className="text-2xl font-bold text-red-500">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-4">
+          <div className="text-center p-2 sm:p-3 rounded-lg bg-red-500/10">
+            <div className="text-lg sm:text-2xl font-bold text-red-500">
               {Number(result.summary.total_d1_coverage).toFixed(1)}%
             </div>
-            <div className="text-xs text-muted-foreground">
-              {dataset1Label} Coverage
+            <div className="text-[10px] sm:text-xs text-muted-foreground">
+              {dataset1Label}
             </div>
           </div>
-          <div className="text-center p-3 rounded-lg bg-green-500/10">
-            <div className="text-2xl font-bold text-green-500">
+          <div className="text-center p-2 sm:p-3 rounded-lg bg-green-500/10">
+            <div className="text-lg sm:text-2xl font-bold text-green-500">
               {Number(result.summary.alignment_score).toFixed(1)}%
             </div>
-            <div className="text-xs text-muted-foreground">Alignment Score</div>
+            <div className="text-[10px] sm:text-xs text-muted-foreground">Alignment</div>
           </div>
-          <div className="text-center p-3 rounded-lg bg-blue-500/10">
-            <div className="text-2xl font-bold text-blue-500">
+          <div className="text-center p-2 sm:p-3 rounded-lg bg-blue-500/10">
+            <div className="text-lg sm:text-2xl font-bold text-blue-500">
               {Number(result.summary.total_d2_coverage).toFixed(1)}%
             </div>
-            <div className="text-xs text-muted-foreground">
-              {dataset2Label} Coverage
+            <div className="text-[10px] sm:text-xs text-muted-foreground">
+              {dataset2Label}
             </div>
           </div>
         </div>
