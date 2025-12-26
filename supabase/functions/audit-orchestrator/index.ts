@@ -367,14 +367,14 @@ async function executeTool(
         sourceElementIds = sourceElementIds.map((id: string) => resolveElementId(id) || id);
         
         // Use upsert_audit_graph_node_with_token (not insert)
-        const data = await rpc("upsert_audit_graph_node_with_token", {
+        const conceptData = await rpc("upsert_audit_graph_node_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
           p_label: label,
           p_description: description,
           p_node_type: "concept",
           p_source_dataset: sourceDataset,
-          p_source_element_ids: sourceElementIds, // Must be uuid[] - resolved above
+          p_source_element_ids: sourceElementIds,
           p_created_by_agent: "orchestrator",
           p_x_position: 0,
           p_y_position: 0,
@@ -383,7 +383,63 @@ async function executeTool(
           p_metadata: {},
         });
         
-        return { success: true, result: { nodeId: data?.id, label, sourceDataset, sourceElementIds } };
+        // Auto-create source element nodes and link them to the concept
+        // This makes the graph show provenance (concept -> source elements)
+        const createdSourceNodeIds: string[] = [];
+        for (const elementId of sourceElementIds) {
+          // Find the element in the problem shape
+          const d1Element = problemShape.dataset1.elements.find(e => e.id === elementId);
+          const d2Element = problemShape.dataset2.elements.find(e => e.id === elementId);
+          const element = d1Element || d2Element;
+          const elementDataset = d1Element ? "dataset1" : d2Element ? "dataset2" : null;
+          
+          if (element && elementDataset) {
+            // Create/upsert a node for the source element itself
+            const nodeType = elementDataset === "dataset1" ? "requirement" : "canvas_node";
+            const sourceNodeData = await rpc("upsert_audit_graph_node_with_token", {
+              p_session_id: sessionId,
+              p_token: shareToken,
+              p_label: element.label,
+              p_description: element.content || "",
+              p_node_type: nodeType,
+              p_source_dataset: elementDataset,
+              p_source_element_ids: [elementId],
+              p_created_by_agent: "orchestrator",
+              p_x_position: 0,
+              p_y_position: 0,
+              p_color: elementDataset === "dataset1" ? "#3b82f6" : "#22c55e",
+              p_size: 20,
+              p_metadata: { originalElementId: elementId },
+            });
+            
+            if (sourceNodeData?.id && conceptData?.id) {
+              createdSourceNodeIds.push(sourceNodeData.id);
+              // Create edge: concept -> source element (derived_from relationship)
+              await rpc("insert_audit_graph_edge_with_token", {
+                p_session_id: sessionId,
+                p_token: shareToken,
+                p_source_node_id: conceptData.id,
+                p_target_node_id: sourceNodeData.id,
+                p_edge_type: "derived_from",
+                p_label: "derived from",
+                p_weight: 1.0,
+                p_created_by_agent: "orchestrator",
+                p_metadata: {},
+              });
+            }
+          }
+        }
+        
+        return { 
+          success: true, 
+          result: { 
+            nodeId: conceptData?.id, 
+            label, 
+            sourceDataset, 
+            sourceElementIds,
+            linkedSourceNodes: createdSourceNodeIds.length 
+          } 
+        };
       }
       
       case "link_concepts": {
@@ -514,6 +570,13 @@ async function executeTool(
           description: item.description || item.evidence || "",
         });
         
+        // Auto-calculate alignment score from actual aligned items
+        // alignment_score = (aligned items / max(D1 count, D2 count)) * 100
+        const d1Count = problemShape.dataset1.count;
+        const d2Count = problemShape.dataset2.count;
+        const alignedCount = aligned.length;
+        const calculatedAlignmentScore = (alignedCount / Math.max(d1Count, d2Count, 1)) * 100;
+        
         // Use snake_case keys for frontend compatibility
         const vennResult = {
           unique_to_d1: uniqueToD1.map((item: any) => normalizeItem(item, "unique_d1")),
@@ -521,13 +584,14 @@ async function executeTool(
           unique_to_d2: uniqueToD2.map((item: any) => normalizeItem(item, "unique_d2")),
           summary: {
             total_d1_coverage: summary.totalD1Coverage || summary.total_d1_coverage || 
-              (aligned.length / Math.max(problemShape.dataset1.count, 1) * 100),
+              (alignedCount / Math.max(d1Count, 1) * 100),
             total_d2_coverage: summary.totalD2Coverage || summary.total_d2_coverage ||
-              (aligned.length / Math.max(problemShape.dataset2.count, 1) * 100),
-            alignment_score: summary.alignmentScore || summary.alignment_score || 0,
+              (alignedCount / Math.max(d2Count, 1) * 100),
+            // Auto-calculate alignment_score instead of defaulting to 0
+            alignment_score: summary.alignmentScore || summary.alignment_score || calculatedAlignmentScore,
             gaps: uniqueToD1.length,
             orphans: uniqueToD2.length,
-            aligned: aligned.length,
+            aligned: alignedCount,
           },
           generatedAt: new Date().toISOString(),
         };

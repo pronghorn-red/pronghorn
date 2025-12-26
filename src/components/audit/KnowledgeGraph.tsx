@@ -65,13 +65,35 @@ interface KnowledgeGraphProps {
 
 // Color scheme for node types
 const nodeTypeColors: Record<string, string> = {
-  concept: "#6366f1", // indigo
+  concept: "#6366f1", // indigo - synthesized concepts
   theme: "#8b5cf6", // violet
   gap: "#ef4444", // red
   risk: "#f97316", // orange
   opportunity: "#22c55e", // green
-  requirement: "#3b82f6", // blue
-  canvas_node: "#06b6d4", // cyan
+  requirement: "#3b82f6", // blue - D1 source elements
+  canvas_node: "#22c55e", // green - D2 source elements
+};
+
+// Node shapes/sizes by type
+const nodeTypeSizes: Record<string, number> = {
+  concept: 25, // Larger for synthesized concepts
+  requirement: 15, // Smaller for source elements
+  canvas_node: 15,
+  theme: 20,
+  gap: 18,
+  risk: 18,
+  opportunity: 18,
+};
+
+// Edge type styling
+const edgeTypeStyles: Record<string, { color: string; dashArray?: string }> = {
+  derived_from: { color: "#94a3b8", dashArray: "4,2" }, // Dashed gray for provenance
+  relates_to: { color: "#6b7280" },
+  implements: { color: "#22c55e" },
+  depends_on: { color: "#f97316" },
+  conflicts_with: { color: "#ef4444" },
+  supports: { color: "#3b82f6" },
+  covers: { color: "#8b5cf6" },
 };
 
 // Color scheme for agent roles
@@ -251,15 +273,16 @@ export function KnowledgeGraph({
       .attr("fill", "#6b7280")
       .attr("d", "M0,-5L10,0L0,5");
 
-    // Create edges
+    // Create edges with type-based styling
     const link = g
       .append("g")
       .attr("class", "links")
       .selectAll("line")
       .data(graphData.edges)
       .join("line")
-      .attr("stroke", "#6b728080")
-      .attr("stroke-width", (d) => Math.max(1, d.weight * 2))
+      .attr("stroke", (d) => edgeTypeStyles[d.edge_type]?.color || "#6b728080")
+      .attr("stroke-width", (d) => d.edge_type === "derived_from" ? 1.5 : Math.max(1, d.weight * 2))
+      .attr("stroke-dasharray", (d) => edgeTypeStyles[d.edge_type]?.dashArray || "")
       .attr("marker-end", "url(#arrow)");
 
     // Create edge labels
@@ -305,14 +328,14 @@ export function KnowledgeGraph({
         onNodeClick?.(d.id);
       });
 
-    // Node circles
+    // Node circles with type-based sizing
     node
       .append("circle")
-      .attr("r", (d) => Math.max(15, (d.size || 10) + 5))
+      .attr("r", (d) => nodeTypeSizes[d.node_type] || 15)
       .attr("fill", (d) => d.color || nodeTypeColors[d.node_type] || "#6b7280")
-      .attr("stroke", "#ffffff")
-      .attr("stroke-width", 2)
-      .attr("opacity", 0.9);
+      .attr("stroke", (d) => d.node_type === "concept" ? "#ffffff" : "#ffffff80")
+      .attr("stroke-width", (d) => d.node_type === "concept" ? 3 : 2)
+      .attr("opacity", (d) => d.node_type === "concept" ? 1 : 0.85);
 
     // Node labels
     node
@@ -324,15 +347,25 @@ export function KnowledgeGraph({
       .attr("class", "text-foreground")
       .text((d) => d.label.slice(0, 20) + (d.label.length > 20 ? "..." : ""));
 
-    // Node type icons (first letter)
+    // Node type icons - show different icons for different types
     node
       .append("text")
       .attr("text-anchor", "middle")
       .attr("dy", "0.35em")
-      .attr("font-size", "12px")
+      .attr("font-size", (d) => d.node_type === "concept" ? "12px" : "10px")
       .attr("font-weight", "bold")
       .attr("fill", "#ffffff")
-      .text((d) => d.node_type[0].toUpperCase());
+      .text((d) => {
+        // Different icons for different node types
+        switch (d.node_type) {
+          case "concept": return "C";
+          case "requirement": return "R";
+          case "canvas_node": return "N";
+          case "gap": return "!";
+          case "risk": return "⚠";
+          default: return d.node_type[0].toUpperCase();
+        }
+      });
 
     // Simulation tick
     simulation.on("tick", () => {
@@ -526,14 +559,35 @@ export function KnowledgeGraph({
 
       {/* Legend */}
       <div className="px-4 pb-4 border-t pt-3">
+        <div className="flex flex-wrap gap-4 text-xs mb-2">
+          <div className="font-medium text-muted-foreground">Nodes:</div>
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded-full border-2 border-white" style={{ backgroundColor: nodeTypeColors.concept }} />
+            <span>Concept</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full border border-white/50" style={{ backgroundColor: nodeTypeColors.requirement }} />
+            <span>Requirement (D1)</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-full border border-white/50" style={{ backgroundColor: nodeTypeColors.canvas_node }} />
+            <span>Canvas Node (D2)</span>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-4 text-xs">
-          <div className="font-medium text-muted-foreground">Node Types:</div>
-          {Object.entries(nodeTypeColors).map(([type, color]) => (
-            <div key={type} className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-              <span className="capitalize">{type}</span>
-            </div>
-          ))}
+          <div className="font-medium text-muted-foreground">Edges:</div>
+          <div className="flex items-center gap-1">
+            <div className="w-6 h-0 border-t-2 border-dashed" style={{ borderColor: edgeTypeStyles.derived_from.color }} />
+            <span>Derived From</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-6 h-0 border-t-2" style={{ borderColor: edgeTypeStyles.relates_to.color }} />
+            <span>Relates To</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-6 h-0 border-t-2" style={{ borderColor: edgeTypeStyles.implements.color }} />
+            <span>Implements</span>
+          </div>
         </div>
       </div>
     </Card>
