@@ -135,7 +135,7 @@ export function AuditBlackboard({
     entryTypeConfig[type] || { variant: "outline" as const, label: type };
 
   return (
-    <Card className="h-[600px] flex flex-col overflow-hidden">
+    <Card className="h-[600px] flex flex-col overflow-hidden max-w-full">
       <CardHeader className="pb-3 shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -215,7 +215,7 @@ export function AuditBlackboard({
                     open={isExpanded}
                     onOpenChange={() => toggleExpanded(entry.id)}
                   >
-                    <div className="border rounded-lg bg-card overflow-hidden">
+                    <div className="border rounded-lg bg-card overflow-hidden max-w-full">
                       <CollapsibleTrigger asChild>
                         <Button
                           variant="ghost"
@@ -253,7 +253,7 @@ export function AuditBlackboard({
                                   )}
                                 </span>
                               </div>
-                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2 break-words">
+                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2 break-all overflow-hidden max-w-full">
                                 {entry.content}
                               </p>
                             </div>

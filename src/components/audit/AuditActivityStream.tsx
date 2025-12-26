@@ -81,20 +81,20 @@ function ActivityItem({ activity }: { activity: ActivityEntry }) {
 
   return (
     <div
-      className={`border-l-4 ${ACTIVITY_COLORS[activity.activity_type] || "border-l-muted"} bg-muted/30 rounded-r-lg p-3`}
+      className={`border-l-4 ${ACTIVITY_COLORS[activity.activity_type] || "border-l-muted"} bg-muted/30 rounded-r-lg p-3 overflow-hidden`}
     >
-      <div className="flex items-start gap-2">
-        <div className="mt-0.5 text-muted-foreground">
+      <div className="flex items-start gap-2 min-w-0">
+        <div className="mt-0.5 text-muted-foreground shrink-0">
           {ACTIVITY_ICONS[activity.activity_type] || <MessageSquare className="h-4 w-4" />}
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 flex-wrap">
             {activity.agent_role && (
               <Badge variant="outline" className={`text-xs ${AGENT_COLORS[activity.agent_role] || ""}`}>
                 {activity.agent_role.replace(/_/g, " ")}
               </Badge>
             )}
-            <span className="font-medium text-sm">{activity.title}</span>
+            <span className="font-medium text-sm truncate">{activity.title}</span>
             <span className="text-xs text-muted-foreground ml-auto">
               {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
             </span>
@@ -118,15 +118,15 @@ function ActivityItem({ activity }: { activity: ActivityEntry }) {
                       </pre>
                     </CollapsibleContent>
                     {!isOpen && (
-                      <div className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        {activity.content.slice(0, 150)}...
-                      </div>
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2 break-words overflow-hidden">
+                        {activity.content.slice(0, 200)}...
+                      </p>
                     )}
                   </>
                 ) : (
-                  <div className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words overflow-hidden">
                     {activity.content}
-                  </div>
+                  </p>
                 )}
               </div>
             </Collapsible>
