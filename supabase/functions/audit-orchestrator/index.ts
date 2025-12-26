@@ -409,6 +409,23 @@ function getClaudeAnalysisTool() {
 
 // ==================== BATTLE-TESTED JSON PARSER (from coding-agent-orchestrator) ====================
 
+// Normalize field names from snake_case to camelCase
+function normalizeFieldNames(obj: any): any {
+  if (obj === null || typeof obj !== 'object') return obj;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(normalizeFieldNames);
+  }
+  
+  const normalized: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    // Convert snake_case to camelCase
+    const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    normalized[camelKey] = normalizeFieldNames(value);
+  }
+  return normalized;
+}
+
 function parseAgentResponseText(rawText: string, defaultResponse: any = {}): any {
   const originalText = rawText.trim();
   let text = originalText;
@@ -421,7 +438,8 @@ function parseAgentResponseText(rawText: string, defaultResponse: any = {}): any
     try {
       const parsed = JSON.parse(jsonStr);
       console.log(`JSON parsed successfully via ${method}`);
-      return parsed;
+      // Normalize field names (snake_case -> camelCase)
+      return normalizeFieldNames(parsed);
     } catch (e) {
       console.log(`JSON.parse failed in ${method}:`, (e as Error).message);
       return null;
@@ -485,7 +503,7 @@ function parseAgentResponseText(rawText: string, defaultResponse: any = {}): any
   return {
     ...defaultResponse,
     reasoning: "Failed to parse agent response as JSON. Raw output preserved.",
-    raw_output: originalText.slice(0, 2000),
+    rawOutput: originalText.slice(0, 2000),
   };
 }
 
@@ -774,32 +792,41 @@ serve(async (req) => {
           getGrokConferenceSchema(), getClaudeConferenceTool()
         );
 
-        console.log(`Conference response from ${agent.role}:`, response.proposedNodes?.length || 0, "nodes");
+        // Log what we got from the LLM
+        const nodeCount = response.proposedNodes?.length || 0;
+        console.log(`Conference response from ${agent.role}: ${nodeCount} nodes, keys: ${Object.keys(response).join(", ")}`);
 
         // Insert proposed nodes - use UPSERT function (not insert)
+        let insertedNodes = 0;
         for (const node of response.proposedNodes || []) {
+          const label = node.label || node.name || "Unnamed";
+          console.log(`Inserting node: "${label}" from ${agent.role}`);
           await rpc("upsert_audit_graph_node_with_token", {
             p_session_id: sessionId,
             p_token: shareToken,
-            p_label: node.label,
+            p_label: label,
             p_description: node.description || "",
-            p_node_type: node.nodeType || "concept",
+            p_node_type: node.nodeType || node.type || "concept",
             p_source_dataset: node.sourceDataset || "dataset1",
-            p_source_element_ids: node.sourceElementIds || [],
+            p_source_element_ids: node.sourceElementIds || node.relatedRequirements || [],
             p_created_by_agent: agent.role,
           });
+          insertedNodes++;
         }
+        console.log(`${agent.role} inserted ${insertedNodes} nodes`);
 
         // Blackboard entry
-        if (response.blackboardEntry?.content) {
+        const bbContent = response.blackboardEntry?.content || response.reasoning;
+        if (bbContent) {
+          console.log(`${agent.role} writing to blackboard: ${bbContent.slice(0, 100)}...`);
           await rpc("insert_audit_blackboard_with_token", {
             p_session_id: sessionId,
             p_token: shareToken,
             p_agent_role: agent.role,
             p_entry_type: "observation",
-            p_content: response.blackboardEntry.content,
+            p_content: bbContent,
             p_iteration: 0,
-            p_confidence: response.blackboardEntry.confidence || 0.7,
+            p_confidence: response.blackboardEntry?.confidence || 0.7,
           });
         }
 
@@ -822,7 +849,8 @@ serve(async (req) => {
     });
     await broadcast("graph_building", { iteration: 0 });
 
-    const MAX_GRAPH_ITERATIONS = 5;
+    // Reduced iterations for faster convergence
+    const MAX_GRAPH_ITERATIONS = 3;
     let graphComplete = false;
     let graphIteration = 0;
 
