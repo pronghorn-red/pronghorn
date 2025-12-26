@@ -1,8 +1,7 @@
-// Hook for orchestrating the new audit pipeline
-// Streams SSE events and tracks progress for each phase
+// Hook for orchestrating the audit pipeline - RUNS ENTIRELY LOCALLY
+// No database writes until explicit save. All operations update local state only.
 
 import { useState, useCallback, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
 
 export type PipelinePhase = 
   | "idle" 
@@ -59,7 +58,7 @@ interface Element {
   category?: string;
 }
 
-interface GraphNode {
+export interface LocalGraphNode {
   id: string;
   label: string;
   description: string;
@@ -71,7 +70,7 @@ interface GraphNode {
   metadata: Record<string, any>;
 }
 
-interface GraphEdge {
+export interface LocalGraphEdge {
   id: string;
   source_node_id: string;
   target_node_id: string;
@@ -81,18 +80,44 @@ interface GraphEdge {
   metadata: Record<string, any>;
 }
 
+export interface LocalTesseractCell {
+  id: string;
+  conceptLabel: string;
+  conceptDescription: string;
+  polarity: number; // -1 to 1
+  rationale: string;
+  d1ElementIds: string[];
+  d2ElementIds: string[];
+}
+
+export interface LocalVennResult {
+  uniqueToD1: { label: string; description: string }[];
+  aligned: { label: string; description: string; polarity: number }[];
+  uniqueToD2: { label: string; description: string }[];
+  summary: string;
+}
+
 interface PipelineInput {
   sessionId: string;
   projectId: string;
   shareToken: string;
   d1Elements: Element[];
   d2Elements: Element[];
-  onNodesAdded?: (nodes: GraphNode[]) => void; // Optimistic: add nodes
-  onEdgesAdded?: (edges: GraphEdge[]) => void; // Optimistic: add edges
-  onNodesRemoved?: (nodeIds: string[]) => void; // Optimistic: remove nodes
+}
+
+export interface PipelineResults {
+  nodes: LocalGraphNode[];
+  edges: LocalGraphEdge[];
+  tesseractCells: LocalTesseractCell[];
+  vennResult: LocalVennResult | null;
 }
 
 const BASE_URL = "https://obkzdksfayygnrzdqoam.supabase.co/functions/v1";
+
+// Generate local UUIDs
+function localId(): string {
+  return crypto.randomUUID();
+}
 
 // Parse SSE stream and call callbacks for each event
 async function streamSSE(
@@ -119,9 +144,7 @@ async function streamSSE(
 
       buffer += decoder.decode(value, { stream: true });
       
-      // Process complete events (separated by double newline)
       const events = buffer.split("\n\n");
-      // Keep incomplete last part in buffer
       buffer = events.pop() || "";
       
       for (const eventBlock of events) {
@@ -152,26 +175,25 @@ async function streamSSE(
               onConcept(data);
               break;
             case "cell":
-              onConcept(data); // Reuse concept callback for cell events
+              onConcept(data);
               break;
             case "result":
               result = data;
               onResult(data);
               break;
             case "done":
-              // Stream complete - we're done
               break;
             case "error":
               onError(data.message || String(data));
               break;
           }
         } catch {
-          // Skip unparseable data - not valid JSON yet
+          // Skip unparseable data
         }
       }
     }
     
-    // Process any remaining buffer content after stream ends
+    // Process remaining buffer
     if (buffer.trim()) {
       const lines = buffer.split("\n");
       let eventType = "";
@@ -214,6 +236,7 @@ export function useAuditPipeline() {
   const [progress, setProgress] = useState<PipelineProgress>({ phase: "idle", message: "", progress: 0 });
   const [steps, setSteps] = useState<PipelineStep[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<PipelineResults | null>(null);
   const abortRef = useRef(false);
 
   const updateStep = useCallback((id: string, updates: Partial<PipelineStep>) => {
@@ -230,9 +253,16 @@ export function useAuditPipeline() {
   const runPipeline = useCallback(async (input: PipelineInput) => {
     setIsRunning(true);
     setError(null);
+    setResults(null);
     abortRef.current = false;
 
-    const { sessionId, projectId, shareToken, d1Elements, d2Elements, onNodesAdded, onEdgesAdded, onNodesRemoved } = input;
+    const { sessionId, projectId, shareToken, d1Elements, d2Elements } = input;
+
+    // LOCAL STATE - all nodes/edges/cells stored here, NO DB writes
+    const localNodes: LocalGraphNode[] = [];
+    const localEdges: LocalGraphEdge[] = [];
+    const localTesseractCells: LocalTesseractCell[] = [];
+    let localVennResult: LocalVennResult | null = null;
 
     // Initialize steps
     const initialSteps: PipelineStep[] = [
@@ -252,124 +282,75 @@ export function useAuditPipeline() {
     let unmergedD1Concepts: Concept[] = [];
     let unmergedD2Concepts: Concept[] = [];
 
+    // Helper to update results state for live graph updates
+    const updateResults = () => {
+      setResults({
+        nodes: [...localNodes],
+        edges: [...localEdges],
+        tesseractCells: [...localTesseractCells],
+        vennResult: localVennResult,
+      });
+    };
+
     try {
-      // Track created nodes for optimistic updates
-      const createdNodes: GraphNode[] = [];
-      const createdEdges: GraphEdge[] = [];
-      
       // ========================================
-      // PHASE 0: Create D1 and D2 nodes immediately
+      // PHASE 0: Create D1 and D2 element nodes LOCALLY (instant)
       // ========================================
       setProgress({ phase: "creating_nodes", message: `Creating ${d1Elements.length + d2Elements.length} nodes...`, progress: 5 });
-      updateStep("nodes", { status: "running", message: "Creating nodes...", startedAt: new Date() });
+      updateStep("nodes", { status: "running", message: "Creating nodes locally...", startedAt: new Date() });
 
-      // Create all D1 nodes with optimistic updates
-      for (let i = 0; i < d1Elements.length; i++) {
-        const element = d1Elements[i];
-        const { data: nodeData, error } = await supabase.rpc("upsert_audit_graph_node_with_token", {
-          p_session_id: sessionId,
-          p_token: shareToken,
-          p_label: element.label,
-          p_description: (element.content || "").slice(0, 2000),
-          p_node_type: "d1_element",
-          p_source_dataset: "dataset1",
-          p_source_element_ids: [element.id],
-          p_created_by_agent: "pipeline",
-          p_color: "#3b82f6",
-          p_size: 15,
-          p_metadata: { category: element.category || "unknown" },
-        });
-        
-        if (nodeData?.id && !error) {
-          const newNode: GraphNode = {
-            id: nodeData.id,
-            label: element.label,
-            description: (element.content || "").slice(0, 2000),
-            node_type: "d1_element",
-            source_dataset: "dataset1",
-            source_element_ids: [element.id],
-            color: "#3b82f6",
-            size: 15,
-            metadata: { category: element.category || "unknown" },
-          };
-          createdNodes.push(newNode);
-          onNodesAdded?.([newNode]); // Optimistic update
-        }
-        addStepDetail("nodes", `Created D1 node: ${element.label.slice(0, 60)}${error ? ` (ERROR: ${error.message})` : ""}`);
+      // Create D1 nodes locally
+      for (const element of d1Elements) {
+        const node: LocalGraphNode = {
+          id: localId(),
+          label: element.label,
+          description: (element.content || "").slice(0, 2000),
+          node_type: "d1_element",
+          source_dataset: "dataset1",
+          source_element_ids: [element.id],
+          color: "#3b82f6",
+          size: 15,
+          metadata: { category: element.category || "unknown", originalElementId: element.id },
+        };
+        localNodes.push(node);
       }
 
-      // Create all D2 nodes with optimistic updates
-      for (let i = 0; i < d2Elements.length; i++) {
-        const element = d2Elements[i];
-        const { data: nodeData, error } = await supabase.rpc("upsert_audit_graph_node_with_token", {
-          p_session_id: sessionId,
-          p_token: shareToken,
-          p_label: element.label,
-          p_description: (element.content || "").slice(0, 2000),
-          p_node_type: "d2_element",
-          p_source_dataset: "dataset2",
-          p_source_element_ids: [element.id],
-          p_created_by_agent: "pipeline",
-          p_color: "#22c55e",
-          p_size: 15,
-          p_metadata: { category: element.category || "unknown" },
-        });
-        
-        if (nodeData?.id && !error) {
-          const newNode: GraphNode = {
-            id: nodeData.id,
-            label: element.label,
-            description: (element.content || "").slice(0, 2000),
-            node_type: "d2_element",
-            source_dataset: "dataset2",
-            source_element_ids: [element.id],
-            color: "#22c55e",
-            size: 15,
-            metadata: { category: element.category || "unknown" },
-          };
-          createdNodes.push(newNode);
-          onNodesAdded?.([newNode]); // Optimistic update
-        }
-        addStepDetail("nodes", `Created D2 node: ${element.label.slice(0, 60)}${error ? ` (ERROR: ${error.message})` : ""}`);
+      // Create D2 nodes locally
+      for (const element of d2Elements) {
+        const node: LocalGraphNode = {
+          id: localId(),
+          label: element.label,
+          description: (element.content || "").slice(0, 2000),
+          node_type: "d2_element",
+          source_dataset: "dataset2",
+          source_element_ids: [element.id],
+          color: "#22c55e",
+          size: 15,
+          metadata: { category: element.category || "unknown", originalElementId: element.id },
+        };
+        localNodes.push(node);
       }
 
+      updateResults(); // Immediate graph update
       updateStep("nodes", { status: "completed", message: `Created ${d1Elements.length + d2Elements.length} nodes`, progress: 100, completedAt: new Date() });
-
-      // Update session status
-      await supabase.rpc("update_audit_session_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_status: "running",
-        p_phase: "extracting_concepts",
-      });
 
       if (abortRef.current) throw new Error("Aborted");
 
       // ========================================
-      // PHASE 1: Extract D1 and D2 concepts in parallel
-      // If content is > 50k chars, batch the extraction calls
+      // PHASE 1: Extract D1 and D2 concepts IN PARALLEL
       // ========================================
-      
-      // Calculate character counts upfront
       const d1TotalChars = d1Elements.reduce((sum, e) => sum + (e.content?.length || 0), 0);
       const d2TotalChars = d2Elements.reduce((sum, e) => sum + (e.content?.length || 0), 0);
       const d1EstTokens = Math.ceil(d1TotalChars / 4);
       const d2EstTokens = Math.ceil(d2TotalChars / 4);
       
-      const BATCH_CHAR_LIMIT = 50000; // 50k chars per batch
+      const BATCH_CHAR_LIMIT = 50000;
       
-      // Helper to batch elements by character count - only if total exceeds limit
       const batchByCharLimit = (elements: Element[], limit: number, totalChars: number): Element[][] => {
-        // If total chars fits in one batch, send all at once
-        if (totalChars <= limit) {
-          return [elements];
-        }
-        
-        // Otherwise split by character count
+        if (totalChars <= limit) return [elements];
         const batches: Element[][] = [];
         let currentBatch: Element[] = [];
         let currentChars = 0;
-        
         for (const el of elements) {
           const elChars = el.content?.length || 0;
           if (currentChars + elChars > limit && currentBatch.length > 0) {
@@ -380,30 +361,16 @@ export function useAuditPipeline() {
           currentBatch.push(el);
           currentChars += elChars;
         }
-        if (currentBatch.length > 0) {
-          batches.push(currentBatch);
-        }
+        if (currentBatch.length > 0) batches.push(currentBatch);
         return batches;
       };
       
-      // Create batches - D1 likely stays as 1 batch, D2 gets split
       const d1Batches = batchByCharLimit(d1Elements, BATCH_CHAR_LIMIT, d1TotalChars);
       const d2Batches = batchByCharLimit(d2Elements, BATCH_CHAR_LIMIT, d2TotalChars);
       
       setProgress({ phase: "extracting_d1", message: "Extracting concepts...", progress: 15 });
-      updateStep("d1", { 
-        status: "running", 
-        message: `${d1TotalChars.toLocaleString()} chars (~${d1EstTokens.toLocaleString()} tokens) in ${d1Batches.length} batch(es)`, 
-        startedAt: new Date() 
-      });
-      addStepDetail("d1", `Total content: ${d1TotalChars.toLocaleString()} chars (~${d1EstTokens.toLocaleString()} tokens) → ${d1Batches.length} batch(es)`);
-      
-      updateStep("d2", { 
-        status: "running", 
-        message: `${d2TotalChars.toLocaleString()} chars (~${d2EstTokens.toLocaleString()} tokens) in ${d2Batches.length} batch(es)`, 
-        startedAt: new Date() 
-      });
-      addStepDetail("d2", `Total content: ${d2TotalChars.toLocaleString()} chars (~${d2EstTokens.toLocaleString()} tokens) → ${d2Batches.length} batch(es)`);
+      updateStep("d1", { status: "running", message: `${d1TotalChars.toLocaleString()} chars in ${d1Batches.length} batch(es)`, startedAt: new Date() });
+      updateStep("d2", { status: "running", message: `${d2TotalChars.toLocaleString()} chars in ${d2Batches.length} batch(es)`, startedAt: new Date() });
 
       // Helper to extract concepts from a batch
       const extractBatch = async (
@@ -413,8 +380,7 @@ export function useAuditPipeline() {
         totalBatches: number,
         stepId: string
       ): Promise<Concept[]> => {
-        const batchChars = batchElements.reduce((sum, e) => sum + (e.content?.length || 0), 0);
-        addStepDetail(stepId, `Batch ${batchIndex + 1}/${totalBatches}: ${batchElements.length} elements, ${batchChars.toLocaleString()} chars`);
+        addStepDetail(stepId, `Batch ${batchIndex + 1}/${totalBatches}: ${batchElements.length} elements`);
         
         const response = await fetch(`${BASE_URL}/audit-extract-concepts`, {
           method: "POST",
@@ -438,7 +404,43 @@ export function useAuditPipeline() {
               progress: Math.round((batchIndex / totalBatches) * 100 + (data.progress / totalBatches))
             });
           },
-          (data) => addStepDetail(stepId, `Batch ${batchIndex + 1}: ${data.label} (${data.elementCount} elements)`),
+          (data) => {
+            // IMMEDIATELY add concept node to local graph as it streams in
+            if (data.label && data.elementIds) {
+              const conceptNode: LocalGraphNode = {
+                id: localId(),
+                label: data.label,
+                description: data.description || "",
+                node_type: "concept",
+                source_dataset: dataset === "d1" ? "dataset1" : "dataset2",
+                source_element_ids: data.elementIds,
+                color: dataset === "d1" ? "#60a5fa" : "#4ade80",
+                size: 20,
+                metadata: { source: dataset, premerge: true },
+              };
+              localNodes.push(conceptNode);
+
+              // Create edges from element nodes to concept node
+              for (const elId of data.elementIds) {
+                const elementNode = localNodes.find(n => n.metadata?.originalElementId === elId);
+                if (elementNode) {
+                  const edge: LocalGraphEdge = {
+                    id: localId(),
+                    source_node_id: elementNode.id,
+                    target_node_id: conceptNode.id,
+                    edge_type: dataset === "d1" ? "defines" : "implements",
+                    label: dataset === "d1" ? "defines" : "implements",
+                    weight: 1.0,
+                    metadata: { premerge: true },
+                  };
+                  localEdges.push(edge);
+                }
+              }
+
+              updateResults(); // Update graph immediately
+              addStepDetail(stepId, `Concept: ${data.label} (${data.elementIds?.length || 0} elements)`);
+            }
+          },
           (data) => {
             concepts.push(...(data.concepts || []));
             addStepDetail(stepId, `Batch ${batchIndex + 1} complete: ${data.concepts?.length || 0} concepts`);
@@ -451,7 +453,7 @@ export function useAuditPipeline() {
         return concepts;
       };
 
-      // Process all batches for D1 and D2 in parallel
+      // Process all batches for D1 and D2
       const processAllBatches = async (
         dataset: "d1" | "d2",
         batches: Element[][],
@@ -472,15 +474,9 @@ export function useAuditPipeline() {
         processAllBatches("d2", d2Batches, "d2"),
       ]);
 
-      // Get results from parallel execution
       if (d1Result.status === "fulfilled") {
         d1Concepts = d1Result.value;
-        updateStep("d1", { 
-          status: "completed", 
-          message: `${d1Concepts.length} concepts extracted`, 
-          progress: 100, 
-          completedAt: new Date() 
-        });
+        updateStep("d1", { status: "completed", message: `${d1Concepts.length} concepts`, progress: 100, completedAt: new Date() });
       } else {
         console.error("[d1] Extraction failed:", d1Result.reason);
         updateStep("d1", { status: "error", message: String(d1Result.reason) });
@@ -488,163 +484,10 @@ export function useAuditPipeline() {
 
       if (d2Result.status === "fulfilled") {
         d2Concepts = d2Result.value;
-        updateStep("d2", { 
-          status: "completed", 
-          message: `${d2Concepts.length} concepts extracted`, 
-          progress: 100, 
-          completedAt: new Date() 
-        });
+        updateStep("d2", { status: "completed", message: `${d2Concepts.length} concepts`, progress: 100, completedAt: new Date() });
       } else {
         console.error("[d2] Extraction failed:", d2Result.reason);
         updateStep("d2", { status: "error", message: String(d2Result.reason) });
-      }
-
-      // ========================================
-      // PHASE 1.5: Add D1 and D2 concept nodes to the graph immediately
-      // ========================================
-      setProgress({ phase: "extracting_d1", message: "Adding D1 concepts to graph...", progress: 30 });
-      
-      // Fetch current nodes to find D1/D2 element nodes
-      const { data: nodesBeforeConcepts } = await supabase.rpc("get_audit_graph_nodes_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-      });
-      
-      // Create D1 concept nodes and link to D1 elements - use createdNodes for lookups
-      for (const concept of d1Concepts) {
-        const { data: d1ConceptNode } = await supabase.rpc("upsert_audit_graph_node_with_token", {
-          p_session_id: sessionId,
-          p_token: shareToken,
-          p_label: concept.label,
-          p_description: concept.description,
-          p_node_type: "concept",
-          p_source_dataset: "dataset1",
-          p_source_element_ids: concept.elementIds,
-          p_created_by_agent: "pipeline",
-          p_color: "#60a5fa", // Blue tint for D1 concepts
-          p_size: 20,
-          p_metadata: { source: "d1", premerge: true },
-        });
-        
-        if (d1ConceptNode?.id) {
-          // Optimistic update for concept node
-          const newConceptNode: GraphNode = {
-            id: d1ConceptNode.id,
-            label: concept.label,
-            description: concept.description,
-            node_type: "concept",
-            source_dataset: "dataset1",
-            source_element_ids: concept.elementIds,
-            color: "#60a5fa",
-            size: 20,
-            metadata: { source: "d1", premerge: true },
-          };
-          createdNodes.push(newConceptNode);
-          onNodesAdded?.([newConceptNode]);
-          
-          // Create edges from D1 elements to this concept
-          for (const elId of concept.elementIds) {
-            // Use createdNodes first, fall back to DB nodes
-            const elementNode = createdNodes.find(n => n.source_element_ids?.includes(elId)) 
-              || nodesBeforeConcepts?.find((n: any) => n.source_element_ids?.includes(elId));
-            if (elementNode) {
-              const { data: edgeData } = await supabase.rpc("insert_audit_graph_edge_with_token", {
-                p_session_id: sessionId,
-                p_token: shareToken,
-                p_source_node_id: elementNode.id,
-                p_target_node_id: d1ConceptNode.id,
-                p_edge_type: "defines",
-                p_label: "defines",
-                p_weight: 1.0,
-                p_created_by_agent: "pipeline",
-                p_metadata: { premerge: true },
-              });
-              if (edgeData?.id) {
-                const newEdge: GraphEdge = {
-                  id: edgeData.id,
-                  source_node_id: elementNode.id,
-                  target_node_id: d1ConceptNode.id,
-                  edge_type: "defines",
-                  label: "defines",
-                  weight: 1.0,
-                  metadata: { premerge: true },
-                };
-                createdEdges.push(newEdge);
-                onEdgesAdded?.([newEdge]);
-              }
-            }
-          }
-          addStepDetail("d1", `Added concept to graph: ${concept.label} (${concept.elementIds.length} links)`);
-        }
-      }
-      
-      setProgress({ phase: "extracting_d2", message: "Adding D2 concepts to graph...", progress: 32 });
-      
-      // Create D2 concept nodes and link to D2 elements
-      for (const concept of d2Concepts) {
-        const { data: d2ConceptNode } = await supabase.rpc("upsert_audit_graph_node_with_token", {
-          p_session_id: sessionId,
-          p_token: shareToken,
-          p_label: concept.label,
-          p_description: concept.description,
-          p_node_type: "concept",
-          p_source_dataset: "dataset2",
-          p_source_element_ids: concept.elementIds,
-          p_created_by_agent: "pipeline",
-          p_color: "#4ade80", // Green tint for D2 concepts
-          p_size: 20,
-          p_metadata: { source: "d2", premerge: true },
-        });
-        
-        if (d2ConceptNode?.id) {
-          // Optimistic update for concept node
-          const newConceptNode: GraphNode = {
-            id: d2ConceptNode.id,
-            label: concept.label,
-            description: concept.description,
-            node_type: "concept",
-            source_dataset: "dataset2",
-            source_element_ids: concept.elementIds,
-            color: "#4ade80",
-            size: 20,
-            metadata: { source: "d2", premerge: true },
-          };
-          createdNodes.push(newConceptNode);
-          onNodesAdded?.([newConceptNode]);
-          
-          // Create edges from D2 elements to this concept
-          for (const elId of concept.elementIds) {
-            const elementNode = createdNodes.find(n => n.source_element_ids?.includes(elId)) 
-              || nodesBeforeConcepts?.find((n: any) => n.source_element_ids?.includes(elId));
-            if (elementNode) {
-              const { data: edgeData } = await supabase.rpc("insert_audit_graph_edge_with_token", {
-                p_session_id: sessionId,
-                p_token: shareToken,
-                p_source_node_id: elementNode.id,
-                p_target_node_id: d2ConceptNode.id,
-                p_edge_type: "implements",
-                p_label: "implements",
-                p_weight: 1.0,
-                p_created_by_agent: "pipeline",
-                p_metadata: { premerge: true },
-              });
-              if (edgeData?.id) {
-                const newEdge: GraphEdge = {
-                  id: edgeData.id,
-                  source_node_id: elementNode.id,
-                  target_node_id: d2ConceptNode.id,
-                  edge_type: "implements",
-                  label: "implements",
-                  weight: 1.0,
-                  metadata: { premerge: true },
-                };
-                createdEdges.push(newEdge);
-                onEdgesAdded?.([newEdge]);
-              }
-            }
-          }
-          addStepDetail("d2", `Added concept to graph: ${concept.label} (${concept.elementIds.length} links)`);
-        }
       }
 
       setProgress({ 
@@ -676,15 +519,13 @@ export function useAuditPipeline() {
         throw new Error(`Merge failed: ${mergeResponse.status} - ${errorText.slice(0, 100)}`);
       }
 
-      // Parse SSE stream from merge endpoint
       await streamSSE(
         mergeResponse,
         (data) => {
           updateStep("merge", { message: data.message || "Merging...", progress: data.progress || 50 });
         },
-        () => {}, // no individual concepts streamed
+        () => {},
         (data) => {
-          // Result event contains the merged data
           mergedConcepts = data.mergedConcepts || [];
           unmergedD1Concepts = (data.unmergedD1Concepts || []).map((c: any) => ({
             label: c.label,
@@ -697,9 +538,7 @@ export function useAuditPipeline() {
             elementIds: c.d2Ids || [],
           }));
         },
-        (err) => {
-          throw new Error(`Merge stream error: ${err}`);
-        }
+        (err) => { throw new Error(`Merge stream error: ${err}`); }
       );
 
       updateStep("merge", { 
@@ -709,58 +548,39 @@ export function useAuditPipeline() {
         completedAt: new Date() 
       });
 
-      setProgress({ 
-        phase: "building_graph", 
-        message: `Creating concept nodes and edges...`, 
-        progress: 50,
-        mergedCount: mergedConcepts.length
-      });
+      setProgress({ phase: "building_graph", message: "Rebuilding graph with merged concepts...", progress: 50, mergedCount: mergedConcepts.length });
 
       if (abortRef.current) throw new Error("Aborted");
 
       // ========================================
-      // PHASE 2.5: Build graph edges - merge/replace pre-merge concepts
+      // PHASE 2.5: Rebuild graph locally with merged concepts
       // ========================================
-      updateStep("graph", { status: "running", message: "Refactoring graph with merged concepts...", startedAt: new Date() });
+      updateStep("graph", { status: "running", message: "Rebuilding graph...", startedAt: new Date() });
 
-      // Fetch all current nodes including pre-merge concept nodes
-      const { data: allNodes } = await supabase.rpc("get_audit_graph_nodes_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-      });
-
-      // Identify pre-merge concept nodes (they have metadata.premerge = true)
-      const premergeConcepts = allNodes?.filter((n: any) => n.metadata?.premerge === true) || [];
-      addStepDetail("graph", `Found ${premergeConcepts.length} pre-merge concepts to refactor`);
+      // Remove premerge concept nodes and their edges
+      const premergeConcepts = localNodes.filter(n => n.metadata?.premerge === true);
+      const premergeNodeIds = new Set(premergeConcepts.map(n => n.id));
       
-      // Delete pre-merge concept nodes (edges will be orphaned but new merged edges replace them)
-      const removedNodeIds: string[] = [];
-      for (const node of premergeConcepts) {
-        await supabase.rpc("delete_audit_graph_node_with_token", {
-          p_node_id: node.id,
-          p_token: shareToken,
-        });
-        removedNodeIds.push(node.id);
-      }
-      // Optimistic removal
-      if (removedNodeIds.length > 0) {
-        onNodesRemoved?.(removedNodeIds);
-        // Also update local tracking
-        for (let i = createdNodes.length - 1; i >= 0; i--) {
-          if (removedNodeIds.includes(createdNodes[i].id)) {
-            createdNodes.splice(i, 1);
-          }
+      // Remove premerge nodes
+      for (let i = localNodes.length - 1; i >= 0; i--) {
+        if (premergeNodeIds.has(localNodes[i].id)) {
+          localNodes.splice(i, 1);
         }
       }
-      addStepDetail("graph", `Deleted ${premergeConcepts.length} pre-merge concept nodes`);
-
-      // If merge returned nothing useful, fall back to raw extracted concepts
-      const hasMergeResults = mergedConcepts.length > 0 || unmergedD1Concepts.length > 0 || unmergedD2Concepts.length > 0;
       
+      // Remove edges pointing to/from premerge nodes
+      for (let i = localEdges.length - 1; i >= 0; i--) {
+        if (premergeNodeIds.has(localEdges[i].source_node_id) || premergeNodeIds.has(localEdges[i].target_node_id)) {
+          localEdges.splice(i, 1);
+        }
+      }
+
+      addStepDetail("graph", `Removed ${premergeConcepts.length} pre-merge concepts`);
+
+      // Handle fallback if merge returned empty
+      const hasMergeResults = mergedConcepts.length > 0 || unmergedD1Concepts.length > 0 || unmergedD2Concepts.length > 0;
       if (!hasMergeResults && (d1Concepts.length > 0 || d2Concepts.length > 0)) {
         addStepDetail("graph", "Merge returned empty, using raw extracted concepts");
-        
-        // Convert raw D1 concepts to merged format for tesseract analysis
         for (const c of d1Concepts) {
           mergedConcepts.push({
             mergedLabel: c.label,
@@ -771,8 +591,6 @@ export function useAuditPipeline() {
             d2Ids: [],
           });
         }
-        
-        // Convert raw D2 concepts to merged format for tesseract analysis
         for (const c of d2Concepts) {
           mergedConcepts.push({
             mergedLabel: c.label,
@@ -784,334 +602,292 @@ export function useAuditPipeline() {
           });
         }
       }
-      
-      // Refresh node list after deletions (to get D1/D2 element nodes)
-      const { data: elementNodes } = await supabase.rpc("get_audit_graph_nodes_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-      });
 
-      // Create merged concept nodes and edges
+      // Create merged concept nodes
       for (const concept of mergedConcepts) {
-        const { data: conceptNode } = await supabase.rpc("upsert_audit_graph_node_with_token", {
-          p_session_id: sessionId,
-          p_token: shareToken,
-          p_label: concept.mergedLabel,
-          p_description: concept.mergedDescription,
-          p_node_type: "concept",
-          p_source_dataset: "both",
-          p_source_element_ids: [...concept.d1Ids, ...concept.d2Ids],
-          p_created_by_agent: "pipeline",
-          p_color: "#a855f7",
-          p_size: 25,
-          p_metadata: { merged: true },
-        });
+        const conceptNode: LocalGraphNode = {
+          id: localId(),
+          label: concept.mergedLabel,
+          description: concept.mergedDescription,
+          node_type: "concept",
+          source_dataset: "both",
+          source_element_ids: [...concept.d1Ids, ...concept.d2Ids],
+          color: "#a855f7",
+          size: 25,
+          metadata: { merged: true, d1Labels: concept.d1ConceptLabels, d2Labels: concept.d2ConceptLabels },
+        };
+        localNodes.push(conceptNode);
 
-        if (conceptNode?.id) {
-          // Optimistic update for merged concept node
-          const newMergedNode: GraphNode = {
-            id: conceptNode.id,
-            label: concept.mergedLabel,
-            description: concept.mergedDescription,
-            node_type: "concept",
-            source_dataset: "both",
-            source_element_ids: [...concept.d1Ids, ...concept.d2Ids],
-            color: "#a855f7",
-            size: 25,
-            metadata: { merged: true },
-          };
-          createdNodes.push(newMergedNode);
-          onNodesAdded?.([newMergedNode]);
-          
-          for (const d1Id of concept.d1Ids) {
-            const d1Node = createdNodes.find(n => n.source_element_ids?.includes(d1Id)) 
-              || elementNodes?.find((n: any) => n.source_element_ids?.includes(d1Id));
-            if (d1Node) {
-              const { data: edgeData } = await supabase.rpc("insert_audit_graph_edge_with_token", {
-                p_session_id: sessionId,
-                p_token: shareToken,
-                p_source_node_id: d1Node.id,
-                p_target_node_id: conceptNode.id,
-                p_edge_type: "defines",
-                p_label: "defines",
-                p_weight: 1.0,
-                p_created_by_agent: "pipeline",
-                p_metadata: { merged: true },
-              });
-              if (edgeData?.id) {
-                const newEdge: GraphEdge = {
-                  id: edgeData.id,
-                  source_node_id: d1Node.id,
-                  target_node_id: conceptNode.id,
-                  edge_type: "defines",
-                  label: "defines",
-                  weight: 1.0,
-                  metadata: { merged: true },
-                };
-                onEdgesAdded?.([newEdge]);
-              }
-            }
-          }
-          for (const d2Id of concept.d2Ids) {
-            const d2Node = createdNodes.find(n => n.source_element_ids?.includes(d2Id)) 
-              || elementNodes?.find((n: any) => n.source_element_ids?.includes(d2Id));
-            if (d2Node) {
-              const { data: edgeData } = await supabase.rpc("insert_audit_graph_edge_with_token", {
-                p_session_id: sessionId,
-                p_token: shareToken,
-                p_source_node_id: d2Node.id,
-                p_target_node_id: conceptNode.id,
-                p_edge_type: "implements",
-                p_label: "implements",
-                p_weight: 1.0,
-                p_created_by_agent: "pipeline",
-                p_metadata: { merged: true },
-              });
-              if (edgeData?.id) {
-                const newEdge: GraphEdge = {
-                  id: edgeData.id,
-                  source_node_id: d2Node.id,
-                  target_node_id: conceptNode.id,
-                  edge_type: "implements",
-                  label: "implements",
-                  weight: 1.0,
-                  metadata: { merged: true },
-                };
-                onEdgesAdded?.([newEdge]);
-              }
-            }
+        // Create edges from D1 elements
+        for (const d1Id of concept.d1Ids) {
+          const d1Node = localNodes.find(n => n.metadata?.originalElementId === d1Id);
+          if (d1Node) {
+            localEdges.push({
+              id: localId(),
+              source_node_id: d1Node.id,
+              target_node_id: conceptNode.id,
+              edge_type: "defines",
+              label: "defines",
+              weight: 1.0,
+              metadata: { merged: true },
+            });
           }
         }
-        addStepDetail("graph", `Created merged concept: ${concept.mergedLabel}`);
+
+        // Create edges from D2 elements
+        for (const d2Id of concept.d2Ids) {
+          const d2Node = localNodes.find(n => n.metadata?.originalElementId === d2Id);
+          if (d2Node) {
+            localEdges.push({
+              id: localId(),
+              source_node_id: d2Node.id,
+              target_node_id: conceptNode.id,
+              edge_type: "implements",
+              label: "implements",
+              weight: 1.0,
+              metadata: { merged: true },
+            });
+          }
+        }
+        
+        addStepDetail("graph", `Created merged: ${concept.mergedLabel}`);
       }
 
-      // Create gap concept nodes
+      // Create gap concept nodes (D1 only)
       for (const concept of unmergedD1Concepts) {
-        const { data: gapNode } = await supabase.rpc("upsert_audit_graph_node_with_token", {
-          p_session_id: sessionId,
-          p_token: shareToken,
-          p_label: concept.label,
-          p_description: concept.description,
-          p_node_type: "concept",
-          p_source_dataset: "dataset1",
-          p_source_element_ids: concept.elementIds,
-          p_created_by_agent: "pipeline",
-          p_color: "#ef4444",
-          p_size: 22,
-          p_metadata: { gap: true },
-        });
-        if (gapNode?.id) {
-          for (const d1Id of concept.elementIds) {
-            const d1Node = elementNodes?.find((n: any) => n.source_element_ids?.includes(d1Id));
-            if (d1Node) {
-              await supabase.rpc("insert_audit_graph_edge_with_token", {
-                p_session_id: sessionId,
-                p_token: shareToken,
-                p_source_node_id: d1Node.id,
-                p_target_node_id: gapNode.id,
-                p_edge_type: "defines",
-                p_label: "defines",
-                p_weight: 1.0,
-                p_created_by_agent: "pipeline",
-                p_metadata: {},
-              });
-            }
+        const gapNode: LocalGraphNode = {
+          id: localId(),
+          label: concept.label,
+          description: concept.description,
+          node_type: "concept",
+          source_dataset: "dataset1",
+          source_element_ids: concept.elementIds,
+          color: "#ef4444",
+          size: 22,
+          metadata: { gap: true },
+        };
+        localNodes.push(gapNode);
+
+        for (const d1Id of concept.elementIds) {
+          const d1Node = localNodes.find(n => n.metadata?.originalElementId === d1Id);
+          if (d1Node) {
+            localEdges.push({
+              id: localId(),
+              source_node_id: d1Node.id,
+              target_node_id: gapNode.id,
+              edge_type: "defines",
+              label: "defines",
+              weight: 1.0,
+              metadata: { gap: true },
+            });
           }
         }
-        addStepDetail("graph", `Created gap concept: ${concept.label}`);
+        addStepDetail("graph", `Created gap: ${concept.label}`);
       }
 
-      // Create orphan concept nodes
+      // Create orphan concept nodes (D2 only)
       for (const concept of unmergedD2Concepts) {
-        const { data: orphanNode } = await supabase.rpc("upsert_audit_graph_node_with_token", {
-          p_session_id: sessionId,
-          p_token: shareToken,
-          p_label: concept.label,
-          p_description: concept.description,
-          p_node_type: "concept",
-          p_source_dataset: "dataset2",
-          p_source_element_ids: concept.elementIds,
-          p_created_by_agent: "pipeline",
-          p_color: "#f59e0b",
-          p_size: 22,
-          p_metadata: { orphan: true },
-        });
-        if (orphanNode?.id) {
-          for (const d2Id of concept.elementIds) {
-            const d2Node = elementNodes?.find((n: any) => n.source_element_ids?.includes(d2Id));
-            if (d2Node) {
-              await supabase.rpc("insert_audit_graph_edge_with_token", {
-                p_session_id: sessionId,
-                p_token: shareToken,
-                p_source_node_id: d2Node.id,
-                p_target_node_id: orphanNode.id,
-                p_edge_type: "implements",
-                p_label: "implements",
-                p_weight: 1.0,
-                p_created_by_agent: "pipeline",
-                p_metadata: {},
-              });
-            }
+        const orphanNode: LocalGraphNode = {
+          id: localId(),
+          label: concept.label,
+          description: concept.description,
+          node_type: "concept",
+          source_dataset: "dataset2",
+          source_element_ids: concept.elementIds,
+          color: "#f97316",
+          size: 22,
+          metadata: { orphan: true },
+        };
+        localNodes.push(orphanNode);
+
+        for (const d2Id of concept.elementIds) {
+          const d2Node = localNodes.find(n => n.metadata?.originalElementId === d2Id);
+          if (d2Node) {
+            localEdges.push({
+              id: localId(),
+              source_node_id: d2Node.id,
+              target_node_id: orphanNode.id,
+              edge_type: "implements",
+              label: "implements",
+              weight: 1.0,
+              metadata: { orphan: true },
+            });
           }
         }
-        addStepDetail("graph", `Created orphan concept: ${concept.label}`);
+        addStepDetail("graph", `Created orphan: ${concept.label}`);
       }
 
-      updateStep("graph", { status: "completed", message: "Graph built", progress: 100, completedAt: new Date() });
-      // Note: graph was already updated optimistically during creation
-
-      setProgress({ phase: "building_tesseract", message: "Analyzing alignment...", progress: 65 });
+      updateResults();
+      updateStep("graph", { status: "completed", message: `${localNodes.length} nodes, ${localEdges.length} edges`, progress: 100, completedAt: new Date() });
 
       if (abortRef.current) throw new Error("Aborted");
 
       // ========================================
-      // PHASE 3: Build tesseract from graph concepts
+      // PHASE 3: Build Tesseract cells locally
       // ========================================
-      updateStep("tesseract", { status: "running", message: "Gathering concepts from graph...", startedAt: new Date() });
+      setProgress({ phase: "building_tesseract", message: "Analyzing alignment...", progress: 65 });
+      updateStep("tesseract", { status: "running", message: "Calling tesseract LLM...", startedAt: new Date() });
 
-      // Fetch all concept nodes from the graph
-      const { data: allGraphNodes } = await supabase.rpc("get_audit_graph_nodes_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-      });
-      const { data: allGraphEdges } = await supabase.rpc("get_audit_graph_edges_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-      });
+      // Get concept nodes for tesseract analysis
+      const conceptNodes = localNodes.filter(n => n.node_type === "concept");
 
-      const conceptNodes = (allGraphNodes || []).filter((n: any) => n.node_type === "concept");
-      const elementNodesMap = new Map((allGraphNodes || []).filter((n: any) => n.node_type !== "concept").map((n: any) => [n.id, n]));
-      
-      console.log(`[tesseract] Found ${conceptNodes.length} concept nodes in graph`);
-      addStepDetail("tesseract", `Found ${conceptNodes.length} concepts in graph`);
+      // Build D1/D2 element content maps for tesseract
+      const d1ContentMap = new Map<string, Element>();
+      const d2ContentMap = new Map<string, Element>();
+      d1Elements.forEach(e => d1ContentMap.set(e.id, e));
+      d2Elements.forEach(e => d2ContentMap.set(e.id, e));
 
-      // Build concept data with linked D1/D2 content
-      const conceptsForTesseract: Array<{
-        conceptId: string;
-        conceptLabel: string;
-        conceptDescription: string;
-        d1Elements: Array<{ id: string; label: string; content: string }>;
-        d2Elements: Array<{ id: string; label: string; content: string }>;
-      }> = [];
-
-      for (const concept of conceptNodes) {
-        // Find edges pointing TO this concept
-        const incomingEdges = (allGraphEdges || []).filter((e: any) => e.target_node_id === concept.id);
+      // Prepare concepts for tesseract with full content
+      const conceptsForTesseract = conceptNodes.map(node => {
+        const d1Content: string[] = [];
+        const d2Content: string[] = [];
         
-        const linkedD1: Array<{ id: string; label: string; content: string }> = [];
-        const linkedD2: Array<{ id: string; label: string; content: string }> = [];
-
-        for (const edge of incomingEdges) {
-          const sourceNode = elementNodesMap.get(edge.source_node_id);
-          if (sourceNode) {
-            const elementData = {
-              id: sourceNode.id,
-              label: sourceNode.label || "Untitled",
-              content: sourceNode.description || sourceNode.metadata?.content || "",
-            };
-            if (sourceNode.source_dataset === "dataset1") {
-              linkedD1.push(elementData);
-            } else if (sourceNode.source_dataset === "dataset2") {
-              linkedD2.push(elementData);
-            }
-          }
+        for (const elId of node.source_element_ids) {
+          const d1El = d1ContentMap.get(elId);
+          const d2El = d2ContentMap.get(elId);
+          if (d1El) d1Content.push(d1El.content);
+          if (d2El) d2Content.push(d2El.content);
         }
 
-        conceptsForTesseract.push({
-          conceptId: concept.id,
-          conceptLabel: concept.label,
-          conceptDescription: concept.description || "",
-          d1Elements: linkedD1,
-          d2Elements: linkedD2,
-        });
-      }
-
-      console.log(`[tesseract] Prepared ${conceptsForTesseract.length} concepts for analysis`);
+        return {
+          conceptId: node.id,
+          label: node.label,
+          description: node.description,
+          d1ElementIds: node.source_element_ids.filter(id => d1ContentMap.has(id)),
+          d2ElementIds: node.source_element_ids.filter(id => d2ContentMap.has(id)),
+          d1Content,
+          d2Content,
+        };
+      });
 
       const tesseractResponse = await fetch(`${BASE_URL}/audit-build-tesseract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, projectId, shareToken, concepts: conceptsForTesseract }),
+      });
+
+      if (!tesseractResponse.ok) {
+        const errorText = await tesseractResponse.text();
+        throw new Error(`Tesseract failed: ${tesseractResponse.status} - ${errorText.slice(0, 100)}`);
+      }
+
+      await streamSSE(
+        tesseractResponse,
+        (data) => {
+          updateStep("tesseract", { message: data.message || "Analyzing...", progress: data.progress || 50 });
+        },
+        (data) => {
+          // Each cell streamed in
+          if (data.conceptLabel && data.polarity !== undefined) {
+            const cell: LocalTesseractCell = {
+              id: localId(),
+              conceptLabel: data.conceptLabel,
+              conceptDescription: data.conceptDescription || "",
+              polarity: data.polarity,
+              rationale: data.rationale || "",
+              d1ElementIds: data.d1ElementIds || [],
+              d2ElementIds: data.d2ElementIds || [],
+            };
+            localTesseractCells.push(cell);
+            updateResults();
+            addStepDetail("tesseract", `${data.conceptLabel}: ${data.polarity > 0 ? "+" : ""}${data.polarity.toFixed(2)}`);
+          }
+        },
+        (data) => {
+          // Full result at end
+          if (data.cells) {
+            for (const c of data.cells) {
+              if (!localTesseractCells.find(tc => tc.conceptLabel === c.conceptLabel)) {
+                localTesseractCells.push({
+                  id: localId(),
+                  conceptLabel: c.conceptLabel,
+                  conceptDescription: c.conceptDescription || "",
+                  polarity: c.polarity,
+                  rationale: c.rationale || "",
+                  d1ElementIds: c.d1ElementIds || [],
+                  d2ElementIds: c.d2ElementIds || [],
+                });
+              }
+            }
+            updateResults();
+          }
+        },
+        (err) => { throw new Error(`Tesseract stream error: ${err}`); }
+      );
+
+      updateStep("tesseract", { status: "completed", message: `${localTesseractCells.length} cells analyzed`, progress: 100, completedAt: new Date() });
+
+      if (abortRef.current) throw new Error("Aborted");
+
+      // ========================================
+      // PHASE 4: Generate Venn analysis locally
+      // ========================================
+      setProgress({ phase: "generating_venn", message: "Generating Venn diagram...", progress: 85 });
+      updateStep("venn", { status: "running", message: "Calling venn LLM...", startedAt: new Date() });
+
+      const vennResponse = await fetch(`${BASE_URL}/audit-generate-venn`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           sessionId, 
           projectId, 
           shareToken, 
-          concepts: conceptsForTesseract,
+          mergedConcepts, 
+          unmergedD1Concepts, 
+          unmergedD2Concepts,
+          tesseractCells: localTesseractCells,
         }),
       });
 
-      let tesseractCells: any[] = [];
-      if (tesseractResponse.ok) {
-        await streamSSE(
-          tesseractResponse,
-          (data) => {
-            updateStep("tesseract", { 
-              message: data.message || `Analyzing ${data.current || 0}/${data.total || 0}`, 
-              progress: data.progress || 50 
-            });
-          },
-          (data) => {
-            // Cell event
-            addStepDetail("tesseract", `${data.conceptLabel}: polarity ${data.polarity?.toFixed(2)}`);
-          },
-          (data) => {
-            tesseractCells = data.cells || [];
-          },
-          (err) => {
-            console.error("[tesseract] Stream error:", err);
-          }
-        );
-        updateStep("tesseract", { status: "completed", message: `${tesseractCells.length} cells`, progress: 100, completedAt: new Date() });
-      } else {
-        const errText = await tesseractResponse.text();
-        console.error("[tesseract] HTTP error:", tesseractResponse.status, errText);
-        updateStep("tesseract", { status: "error", message: `Failed: ${errText.slice(0, 50)}`, progress: 0 });
+      if (!vennResponse.ok) {
+        const errorText = await vennResponse.text();
+        throw new Error(`Venn failed: ${vennResponse.status} - ${errorText.slice(0, 100)}`);
       }
 
-      setProgress({ phase: "generating_venn", message: "Generating Venn...", progress: 85 });
+      await streamSSE(
+        vennResponse,
+        (data) => {
+          updateStep("venn", { message: data.message || "Generating...", progress: data.progress || 50 });
+        },
+        () => {},
+        (data) => {
+          localVennResult = {
+            uniqueToD1: data.uniqueToD1 || [],
+            aligned: data.aligned || [],
+            uniqueToD2: data.uniqueToD2 || [],
+            summary: data.summary || "",
+          };
+          updateResults();
+        },
+        (err) => { throw new Error(`Venn stream error: ${err}`); }
+      );
 
-      if (abortRef.current) throw new Error("Aborted");
+      updateStep("venn", { status: "completed", message: "Venn analysis complete", progress: 100, completedAt: new Date() });
 
       // ========================================
-      // PHASE 4: Generate Venn
+      // COMPLETE - all data is LOCAL, not saved to DB
       // ========================================
-      updateStep("venn", { status: "running", message: "Generating analysis...", startedAt: new Date() });
+      setProgress({ phase: "completed", message: "Pipeline complete! Review results before saving.", progress: 100 });
 
-      await fetch(`${BASE_URL}/audit-generate-venn`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId, projectId, shareToken,
-          mergedConcepts,
-          unmergedD1Concepts: unmergedD1Concepts.map(c => ({ ...c, d1Ids: c.elementIds })),
-          unmergedD2Concepts: unmergedD2Concepts.map(c => ({ ...c, d2Ids: c.elementIds })),
-          tesseractCells,
-          d1Count: d1Elements.length,
-          d2Count: d2Elements.length
-        }),
+      // Final update
+      setResults({
+        nodes: localNodes,
+        edges: localEdges,
+        tesseractCells: localTesseractCells,
+        vennResult: localVennResult,
       });
 
-      updateStep("venn", { status: "completed", message: "Complete", progress: 100, completedAt: new Date() });
-
-      // Update session to completed
-      await supabase.rpc("update_audit_session_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_status: "completed",
-        p_phase: "completed",
-      });
-
-      setProgress({ phase: "completed", message: "Pipeline complete!", progress: 100 });
-
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.error("[Pipeline] Error:", errMsg);
-      setError(errMsg);
-      setProgress({ phase: "error", message: errMsg, progress: 0 });
-
-      await supabase.rpc("update_audit_session_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_status: "failed",
+    } catch (err: any) {
+      console.error("Pipeline error:", err);
+      setError(err.message || "Pipeline failed");
+      setProgress({ phase: "error", message: err.message || "Pipeline failed", progress: 0 });
+      
+      // Still save whatever we have so far
+      setResults({
+        nodes: localNodes,
+        edges: localEdges,
+        tesseractCells: localTesseractCells,
+        vennResult: localVennResult,
       });
     } finally {
       setIsRunning(false);
@@ -1120,7 +896,25 @@ export function useAuditPipeline() {
 
   const abort = useCallback(() => {
     abortRef.current = true;
+    setProgress({ phase: "idle", message: "Aborted", progress: 0 });
+    setIsRunning(false);
   }, []);
 
-  return { runPipeline, isRunning, progress, steps, error, abort };
+  const clearResults = useCallback(() => {
+    setResults(null);
+    setSteps([]);
+    setProgress({ phase: "idle", message: "", progress: 0 });
+    setError(null);
+  }, []);
+
+  return {
+    isRunning,
+    progress,
+    steps,
+    error,
+    results,
+    runPipeline,
+    abort,
+    clearResults,
+  };
 }
