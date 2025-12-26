@@ -106,12 +106,12 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
   },
   {
     name: "link_concepts",
-    description: "Create an edge between two existing concept nodes in the knowledge graph.",
+    description: "Create an edge between two existing concept nodes in the knowledge graph. IMPORTANT: Use the graph node IDs returned by create_concept or query_knowledge_graph, NOT the source element IDs from the datasets.",
     parameters: {
       type: "object",
       properties: {
-        sourceNodeId: { type: "string", description: "The source node ID (8-char prefix or full UUID)" },
-        targetNodeId: { type: "string", description: "The target node ID (8-char prefix or full UUID)" },
+        sourceNodeId: { type: "string", description: "The source GRAPH NODE ID (from create_concept result or query_knowledge_graph). Accepts 8-char prefix, full UUID, source element ID, or node label." },
+        targetNodeId: { type: "string", description: "The target GRAPH NODE ID (from create_concept result or query_knowledge_graph). Accepts 8-char prefix, full UUID, source element ID, or node label." },
         edgeType: { 
           type: "string", 
           enum: ["relates_to", "implements", "depends_on", "conflicts_with", "supports", "covers"],
@@ -231,9 +231,9 @@ const TOOL_PARAMS_SCHEMA = {
     sourceDataset: { type: "string", enum: ["dataset1", "dataset2", "both"], description: "Which dataset this concept originates from" },
     sourceElementIds: { type: "array", items: { type: "string" }, description: "REQUIRED: UUIDs or 8-char prefixes of source artifacts" },
     
-    // link_concepts params
-    sourceNodeId: { type: "string", description: "Source node ID" },
-    targetNodeId: { type: "string", description: "Target node ID" },
+    // link_concepts params - accepts graph node IDs, source element IDs, or node labels
+    sourceNodeId: { type: "string", description: "Source GRAPH NODE ID (from create_concept or query_knowledge_graph), source element ID, or node label" },
+    targetNodeId: { type: "string", description: "Target GRAPH NODE ID (from create_concept or query_knowledge_graph), source element ID, or node label" },
     edgeType: { type: "string", enum: ["relates_to", "implements", "depends_on", "conflicts_with", "supports", "covers"], description: "Relationship type" },
     
     // record_tesseract_cell params

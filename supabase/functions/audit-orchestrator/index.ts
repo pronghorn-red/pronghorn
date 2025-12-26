@@ -311,12 +311,42 @@ async function executeTool(
         
         const nodes = await rpc("get_audit_graph_nodes_with_token", { p_session_id: sessionId, p_token: shareToken });
         
-        const resolveNodeId = (prefix: string) => nodes?.find((n: any) => n.id === prefix || n.id.startsWith(prefix))?.id;
+        // Enhanced resolver: check graph node ID first, then source_element_ids
+        const resolveNodeId = (idOrPrefix: string): string | null => {
+          if (!idOrPrefix) return null;
+          
+          // 1. Direct match on graph node ID (exact or prefix)
+          const directMatch = nodes?.find((n: any) => n.id === idOrPrefix || n.id.startsWith(idOrPrefix));
+          if (directMatch) return directMatch.id;
+          
+          // 2. Check if it's a source_element_id in any node
+          const bySourceElement = nodes?.find((n: any) => 
+            n.source_element_ids?.some((sid: string) => sid === idOrPrefix || sid.startsWith(idOrPrefix))
+          );
+          if (bySourceElement) return bySourceElement.id;
+          
+          // 3. Try matching by label (case-insensitive partial match)
+          const byLabel = nodes?.find((n: any) => 
+            n.label?.toLowerCase().includes(idOrPrefix.toLowerCase())
+          );
+          if (byLabel) return byLabel.id;
+          
+          return null;
+        };
+        
         const srcId = resolveNodeId(sourceNodeId);
         const tgtId = resolveNodeId(targetNodeId);
         
         if (!srcId || !tgtId) {
-          return { success: false, error: `Could not resolve node IDs: src=${sourceNodeId}, tgt=${targetNodeId}`, result: null };
+          // Provide helpful error with available nodes
+          const availableNodes = (nodes || []).slice(0, 20).map((n: any) => 
+            `${n.id.slice(0,8)}: "${n.label}" (sources: ${(n.source_element_ids || []).slice(0,2).map((s: string) => s.slice(0,8)).join(',')})`
+          ).join('; ');
+          return { 
+            success: false, 
+            error: `Could not resolve node IDs. src=${sourceNodeId}${srcId ? '✓' : '✗'}, tgt=${targetNodeId}${tgtId ? '✓' : '✗'}. Available nodes: ${availableNodes}`, 
+            result: null 
+          };
         }
         
         await rpc("insert_audit_graph_edge_with_token", {
@@ -329,7 +359,7 @@ async function executeTool(
           p_created_by_agent: "orchestrator",
         });
         await logActivity("orchestrator", "edge_insert", `Linked: ${sourceNodeId} -> ${targetNodeId}`, `Type: ${edgeType}`);
-        return { success: true, result: { linked: true } };
+        return { success: true, result: { linked: true, sourceResolved: srcId, targetResolved: tgtId } };
       }
 
       case "record_tesseract_cell": {
@@ -928,19 +958,34 @@ START NOW - call your tools!`;
         
         if (consecutiveEmptyToolCalls >= 3) {
           // Force a reminder to use tools
-          conversationHistory += `\n\n## CRITICAL: You did NOT call any tools!
-You MUST call at least one tool every iteration. Options:
-- write_blackboard: Record your findings
-- read_dataset_item: Read more dataset elements
+          conversationHistory += `\n\n## WARNING: You did NOT call any tools in iteration ${iteration}!
+You MUST call at least one tool every iteration. Current phase: ${currentPhase}.
+Available tools:
+- write_blackboard: Record your findings (USE THIS!)
+- read_dataset_item: Read more dataset elements  
 - create_concept: Create knowledge graph nodes
+- link_concepts: Connect existing nodes
 - query_knowledge_graph: Check current graph state
+- record_tesseract_cell: Record coverage analysis
 - finalize_venn: Complete the analysis
 
 CALL YOUR TOOLS NOW!`;
         }
         
         if (consecutiveEmptyToolCalls >= 5) {
-          console.log("Too many iterations without tool calls, forcing completion");
+          // Add a stronger nudge before giving up
+          conversationHistory += `\n\n## FINAL WARNING: ${consecutiveEmptyToolCalls} consecutive iterations without tool calls!
+The analysis is incomplete. You MUST call tools to make progress.
+If you believe the analysis is complete, call finalize_venn with your findings.
+Otherwise, continue calling read_dataset_item, create_concept, or write_blackboard.
+
+THIS IS YOUR LAST CHANCE - CALL TOOLS OR THE ANALYSIS WILL TERMINATE!`;
+        }
+        
+        if (consecutiveEmptyToolCalls >= 8) {
+          console.log("Too many iterations without tool calls (8), forcing completion");
+          await logActivity("orchestrator", "warning", "Analysis terminated", 
+            `Stopped after ${consecutiveEmptyToolCalls} consecutive empty tool calls`);
           break;
         }
         continue;
@@ -950,6 +995,10 @@ CALL YOUR TOOLS NOW!`;
 
       // Execute tool calls
       let toolResults = "";
+      let successCount = 0;
+      let failureCount = 0;
+      const failedTools: string[] = [];
+      
       for (const toolCall of response.toolCalls) {
         await logActivity("orchestrator", "tool_call", `Tool: ${toolCall.tool}`, 
           JSON.stringify(toolCall.params, null, 2), { tool: toolCall.tool });
@@ -963,7 +1012,14 @@ CALL YOUR TOOLS NOW!`;
         await logActivity("orchestrator", result.success ? "success" : "error", 
           `${toolCall.tool}: ${result.success ? "Success" : "Failed"}`, resultSummary);
         
-        toolResults += `\n\nTool: ${toolCall.tool}\nResult: ${resultSummary}`;
+        if (result.success) {
+          successCount++;
+          toolResults += `\n\n✓ Tool: ${toolCall.tool}\nResult: ${resultSummary}`;
+        } else {
+          failureCount++;
+          failedTools.push(toolCall.tool);
+          toolResults += `\n\n✗ Tool: ${toolCall.tool} FAILED\nError: ${result.error}`;
+        }
         
         // Update phase based on tool calls
         if (toolCall.tool === "finalize_venn" && result.success) {
@@ -976,9 +1032,23 @@ CALL YOUR TOOLS NOW!`;
         }
       }
 
-      // Update conversation history with tool results
+      // Update conversation history with tool results and feedback
       if (toolResults) {
-        conversationHistory += `\n\n## Tool Results from Iteration ${iteration}:${toolResults}\n\nContinue your analysis. What's your next step?`;
+        let feedback = `\n\n## Tool Results from Iteration ${iteration} (${successCount} succeeded, ${failureCount} failed):${toolResults}`;
+        
+        // Add guidance for failed tools
+        if (failureCount > 0) {
+          feedback += `\n\n## Tool Failures - Please Correct:`;
+          if (failedTools.includes("link_concepts")) {
+            feedback += `\n- link_concepts failed: Make sure you use graph node IDs (from create_concept results), not source element IDs directly. Check query_knowledge_graph to see available nodes.`;
+          }
+          if (failedTools.includes("create_concept")) {
+            feedback += `\n- create_concept failed: Ensure sourceElementIds contains valid element IDs from the datasets.`;
+          }
+        }
+        
+        feedback += `\n\nContinue your analysis. Current phase: ${currentPhase}. What's your next step?`;
+        conversationHistory += feedback;
       }
 
       // Check if LLM says we're done
