@@ -11,7 +11,7 @@ import { KnowledgeGraph } from "@/components/audit/KnowledgeGraph";
 import { AuditActivityStream } from "@/components/audit/AuditActivityStream";
 import { PipelineActivityStream } from "@/components/audit/PipelineActivityStream";
 import { useRealtimeAudit } from "@/hooks/useRealtimeAudit";
-import { useAuditPipeline, PipelineProgress } from "@/hooks/useAuditPipeline";
+import { useAuditPipeline, PipelineProgress, PipelineResults, LocalGraphNode, LocalGraphEdge } from "@/hooks/useAuditPipeline";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,7 +61,7 @@ export default function Audit() {
   const manualStopRef = useRef(false);
   
   // New pipeline hook
-  const { runPipeline, isRunning: isPipelineRunning, progress: pipelineProgress, steps: pipelineSteps, error: pipelineError, abort: abortPipeline } = useAuditPipeline();
+  const { runPipeline, isRunning: isPipelineRunning, progress: pipelineProgress, steps: pipelineSteps, error: pipelineError, abort: abortPipeline, results: pipelineResults, clearResults: clearPipelineResults } = useAuditPipeline();
   
   const {
     session,
@@ -344,17 +344,13 @@ export default function Audit() {
           const d1Elements = extractElements(config.dataset1Content);
           const d2Elements = extractElements(config.dataset2Content);
           
-          // Run the pipeline
+          // Run the pipeline (now fully local - no DB writes)
           await runPipeline({
             sessionId: newSession.id,
             projectId: projectId!,
             shareToken: shareToken!,
             d1Elements,
             d2Elements,
-            // Optimistic graph updates
-            onNodesAdded: (nodes) => addGraphNodes(nodes),
-            onEdgesAdded: (edges) => addGraphEdges(edges),
-            onNodesRemoved: (nodeIds) => removeGraphNodes(nodeIds),
           });
           
           // Refresh session data after pipeline completes
@@ -643,9 +639,9 @@ export default function Audit() {
                       <Network className="h-3 w-3 sm:h-4 sm:w-4" />
                       <span className="hidden sm:inline">Graph</span>
                       <span className="sm:hidden">Grph</span>
-                      {graphNodes.length > 0 && (
+                      {(pipelineResults?.nodes?.length || graphNodes.length) > 0 && (
                         <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">
-                          {graphNodes.length}
+                          {pipelineResults?.nodes?.length || graphNodes.length}
                         </Badge>
                       )}
                     </TabsTrigger>
@@ -653,9 +649,9 @@ export default function Audit() {
                       <Grid3X3 className="h-3 w-3 sm:h-4 sm:w-4" />
                       <span className="hidden sm:inline">Tesseract</span>
                       <span className="sm:hidden">Tess</span>
-                      {tesseractCells.length > 0 && (
+                      {(pipelineResults?.tesseractCells?.length || tesseractCells.length) > 0 && (
                         <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">
-                          {tesseractCells.length}
+                          {pipelineResults?.tesseractCells?.length || tesseractCells.length}
                         </Badge>
                       )}
                     </TabsTrigger>
@@ -693,13 +689,41 @@ export default function Audit() {
 
                 <TabsContent value="graph">
                   <KnowledgeGraph
-                    nodes={graphNodes}
-                    edges={graphEdges}
+                    nodes={pipelineResults?.nodes?.length ? pipelineResults.nodes.map(n => ({
+                      id: n.id,
+                      label: n.label,
+                      description: n.description,
+                      node_type: n.node_type,
+                      source_dataset: n.source_dataset,
+                      source_element_ids: n.source_element_ids,
+                      color: n.color,
+                      size: n.size,
+                      metadata: n.metadata,
+                      created_by_agent: "pipeline",
+                      session_id: session.id,
+                      created_at: new Date().toISOString(),
+                      updated_at: new Date().toISOString(),
+                      x_position: null,
+                      y_position: null,
+                    })) : graphNodes}
+                    edges={pipelineResults?.edges?.length ? pipelineResults.edges.map(e => ({
+                      id: e.id,
+                      source_node_id: e.source_node_id,
+                      target_node_id: e.target_node_id,
+                      edge_type: e.edge_type,
+                      label: e.label,
+                      weight: e.weight,
+                      metadata: e.metadata,
+                      created_by_agent: "pipeline",
+                      session_id: session.id,
+                      created_at: new Date().toISOString(),
+                    })) : graphEdges}
                     currentPhase={(session as any)?.phase || "conference"}
                     dataset1Label={session.dataset_1_type}
                     dataset2Label={session.dataset_2_type}
                     onNodeClick={(nodeId) => {
-                      toast.info(`Node: ${graphNodes.find(n => n.id === nodeId)?.label || nodeId}`);
+                      const nodes = pipelineResults?.nodes || graphNodes;
+                      toast.info(`Node: ${nodes.find(n => n.id === nodeId)?.label || nodeId}`);
                     }}
                     onPruneOrphans={async () => {
                       if (!session) return;
@@ -714,7 +738,23 @@ export default function Audit() {
                 </TabsContent>
                 <TabsContent value="tesseract">
                   <TesseractVisualizer
-                    cells={tesseractCells}
+                    cells={pipelineResults?.tesseractCells?.length ? pipelineResults.tesseractCells.map((c, idx) => ({
+                      id: c.id,
+                      session_id: session.id,
+                      x_element_id: c.d1ElementIds[0] || `concept-${idx}`,
+                      x_element_label: c.conceptLabel,
+                      x_element_type: "concept",
+                      x_index: idx,
+                      y_step: 0,
+                      y_step_label: "Alignment",
+                      z_polarity: c.polarity,
+                      z_criticality: c.polarity > 0.5 ? "high" : c.polarity > 0 ? "medium" : "low",
+                      evidence_summary: c.rationale,
+                      evidence_refs: null,
+                      contributing_agents: ["pipeline"],
+                      created_at: new Date().toISOString(),
+                      updated_at: new Date().toISOString(),
+                    })) : tesseractCells}
                     currentIteration={session.current_iteration}
                     onCellClick={(cell) => {
                       toast.info(`${cell.x_element_label || cell.x_element_id}: ${cell.evidence_summary || "No evidence"}`);
@@ -731,7 +771,12 @@ export default function Audit() {
 
                 <TabsContent value="results">
                   <VennDiagramResults
-                    vennResult={session.venn_result}
+                    vennResult={pipelineResults?.vennResult ? {
+                      uniqueToD1: pipelineResults.vennResult.uniqueToD1,
+                      aligned: pipelineResults.vennResult.aligned,
+                      uniqueToD2: pipelineResults.vennResult.uniqueToD2,
+                      summary: pipelineResults.vennResult.summary,
+                    } : session.venn_result}
                     dataset1Label={session.dataset_1_type}
                     dataset2Label={session.dataset_2_type}
                   />
