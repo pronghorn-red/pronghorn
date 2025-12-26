@@ -104,7 +104,7 @@ export function AuditConfigurationDialog({
   const [description, setDescription] = useState("");
   const [dataset1Type, setDataset1Type] = useState("requirements");
   const [dataset2Type, setDataset2Type] = useState("repository_files");
-  const [maxIterations, setMaxIterations] = useState(10);
+  const [maxIterations, setMaxIterations] = useState(100);
   const [personas, setPersonas] = useState<AgentPersona[]>(defaultPersonas);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.7);
   const [consensusRequired, setConsensusRequired] = useState(true);
@@ -454,9 +454,9 @@ export function AuditConfigurationDialog({
                   <Slider
                     value={[maxIterations]}
                     onValueChange={(v) => setMaxIterations(v[0])}
-                    min={1}
-                    max={50}
-                    step={1}
+                    min={10}
+                    max={500}
+                    step={10}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     Maximum agent iterations before forcing completion

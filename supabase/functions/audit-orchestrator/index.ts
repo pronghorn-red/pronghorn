@@ -48,17 +48,19 @@ function getOrchestratorSystemPrompt(problemShape: ProblemShape, phase: string):
     `- **${p.id}** (${p.name}): ${p.focus}`
   ).join("\n");
 
-  return `You are the Audit Orchestrator, a comprehensive analysis system that determines how well Dataset 2 covers and implements Dataset 1.
+  return `You are the Audit Orchestrator. Your job is to compare Dataset 1 (source of truth) against Dataset 2 (implementation) and produce a Venn diagram showing coverage, gaps, and orphans.
 
-## Your Mission
-Analyze the relationship between two datasets:
-- **Dataset 1** (${problemShape.dataset1.type}): ${problemShape.dataset1.count} source elements (the "requirements" or "source of truth")
-- **Dataset 2** (${problemShape.dataset2.type}): ${problemShape.dataset2.count} implementation elements (what should implement D1)
+## Datasets
+- **Dataset 1** (${problemShape.dataset1.type}): ${problemShape.dataset1.count} elements
+- **Dataset 2** (${problemShape.dataset2.type}): ${problemShape.dataset2.count} elements
 
-Your goal is to produce a Venn diagram analysis showing:
-1. **Unique to D1**: Requirements/elements NOT covered by D2 (GAPS)
-2. **Aligned**: Elements present in BOTH datasets (COVERAGE)
-3. **Unique to D2**: Implementation elements NOT traced to D1 (ORPHANS)
+## MANDATORY: You MUST call tools EVERY iteration!
+
+**CRITICAL RULES:**
+1. **ALWAYS use write_blackboard** to track your progress. Write your plan at the start, findings as you discover them, and conclusions at the end.
+2. **ALWAYS call at least one tool** in every response. If you have no tools to call, you're done.
+3. **Batch tool calls** - you can call MULTIPLE tools in one response. Call up to 10 tools at once for efficiency.
+4. **EVERY concept node MUST have sourceElementIds** - these link to the original artifacts.
 
 ## Current Phase: ${phase.toUpperCase()}
 
@@ -66,26 +68,43 @@ Your goal is to produce a Venn diagram analysis showing:
 ${toolDescriptions}
 
 ## Perspective Lenses
-Apply these perspectives when analyzing - you should cycle through them:
 ${perspectiveDescriptions}
 
-## Critical Rules
-1. **Every concept node MUST link to source artifacts** - use sourceElementIds when creating concepts
-2. **Stream your thinking** - explain what you're doing in the "thinking" field
-3. **Use tools explicitly** - every action must be a tool call
-4. **Build incrementally** - don't try to do everything at once
-5. **Set continueAnalysis=false** when you've completed your analysis and called finalize_venn
+## REQUIRED WORKFLOW - Follow these phases in order:
+
+### Phase 1: GRAPH_BUILDING (iterations 1-30)
+1. First, call write_blackboard with entryType="plan" describing your analysis strategy
+2. Call read_dataset_item for EVERY item in Dataset 1 (batch 5-10 per iteration)
+3. Call read_dataset_item for EVERY item in Dataset 2 (batch 5-10 per iteration)  
+4. For each meaningful theme, call create_concept with proper sourceElementIds
+5. Call link_concepts to connect related concepts
+6. Call write_blackboard with entryType="observation" as you find patterns
+
+### Phase 2: GAP_ANALYSIS (iterations 30-50)
+1. Call query_knowledge_graph with filter="dataset1_only" to find GAPS
+2. Call query_knowledge_graph with filter="dataset2_only" to find ORPHANS
+3. Call query_knowledge_graph with filter="shared" to find ALIGNED items
+4. Write findings to blackboard with entryType="finding"
+
+### Phase 3: DEEP_ANALYSIS (iterations 50-80)
+1. For each D1 element, call record_tesseract_cell with polarity scores
+2. Assess coverage quality for aligned items
+3. Write conclusions to blackboard
+
+### Phase 4: SYNTHESIS (final iterations)
+1. Call read_blackboard to review all findings
+2. Call finalize_venn with complete uniqueToD1, aligned, and uniqueToD2 arrays
+3. Set continueAnalysis=false
 
 ## Analysis Steps for Each Element
 ${problemShape.analysisSteps.map(s => `${s.step}. ${s.label}`).join("\n")}
 
-## Workflow
-1. **GRAPH_BUILDING**: Read both datasets, create concept nodes with proper source links
-2. **GAP_ANALYSIS**: Identify D1 elements without D2 coverage
-3. **DEEP_ANALYSIS**: Analyze shared concepts for alignment quality
-4. **SYNTHESIS**: Populate tesseract, finalize Venn diagram
-
-Respond with your thinking and tool calls. Set continueAnalysis=true if more work is needed.`;
+## REMEMBER:
+- Call write_blackboard frequently - it's your working memory
+- Batch multiple read_dataset_item calls together
+- Create concept nodes for themes, NOT for every single element
+- ALWAYS include sourceElementIds when creating concepts
+- Set continueAnalysis=false ONLY after calling finalize_venn`;
 }
 
 // ==================== BATTLE-TESTED JSON PARSER ====================
@@ -836,24 +855,30 @@ serve(async (req) => {
 
     // ==================== MAIN ORCHESTRATION LOOP ====================
     
-    const MAX_ITERATIONS = session.max_iterations || 20;
+    const MAX_ITERATIONS = session.max_iterations || 100;
     let iteration = 0;
     let analysisComplete = false;
     let currentPhase = "graph_building";
+    let consecutiveEmptyToolCalls = 0;
 
     // Build initial user prompt with dataset summaries
-    const d1Summary = problemShape.dataset1.elements.slice(0, 30).map(e => `- [${e.id.slice(0,8)}] ${e.label}`).join("\n");
-    const d2Summary = problemShape.dataset2.elements.slice(0, 30).map(e => `- [${e.id.slice(0,8)}] ${e.label}`).join("\n");
+    const d1Summary = problemShape.dataset1.elements.slice(0, 50).map(e => `- [${e.id.slice(0,8)}] ${e.label}`).join("\n");
+    const d2Summary = problemShape.dataset2.elements.slice(0, 50).map(e => `- [${e.id.slice(0,8)}] ${e.label}`).join("\n");
 
-    let conversationHistory = `## Dataset 1 Elements (${problemShape.dataset1.type}):
+    let conversationHistory = `## Dataset 1 Elements (${problemShape.dataset1.type}) - THE SOURCE OF TRUTH:
 ${d1Summary}
-${problemShape.dataset1.count > 30 ? `... and ${problemShape.dataset1.count - 30} more` : ""}
+${problemShape.dataset1.count > 50 ? `... and ${problemShape.dataset1.count - 50} more` : ""}
 
-## Dataset 2 Elements (${problemShape.dataset2.type}):
+## Dataset 2 Elements (${problemShape.dataset2.type}) - THE IMPLEMENTATION:
 ${d2Summary}
-${problemShape.dataset2.count > 30 ? `... and ${problemShape.dataset2.count - 30} more` : ""}
+${problemShape.dataset2.count > 50 ? `... and ${problemShape.dataset2.count - 50} more` : ""}
 
-Begin your analysis. First, create concept nodes for the key themes in Dataset 1, then identify how Dataset 2 covers them.`;
+## YOUR FIRST ACTION:
+1. Call write_blackboard with entryType="plan" to record your analysis strategy
+2. Then call read_dataset_item for MULTIPLE Dataset 1 elements (batch 5-10 calls)
+3. Call create_concept for major themes you identify
+
+START NOW - call your tools!`;
 
     while (iteration < MAX_ITERATIONS && !analysisComplete) {
       iteration++;
@@ -896,6 +921,33 @@ Begin your analysis. First, create concept nodes for the key themes in Dataset 1
           response.thinking);
       }
 
+      // Handle empty tool calls - prompt LLM to actually use tools
+      if (response.toolCalls.length === 0) {
+        consecutiveEmptyToolCalls++;
+        console.log(`Warning: No tool calls in iteration ${iteration} (consecutive: ${consecutiveEmptyToolCalls})`);
+        
+        if (consecutiveEmptyToolCalls >= 3) {
+          // Force a reminder to use tools
+          conversationHistory += `\n\n## CRITICAL: You did NOT call any tools!
+You MUST call at least one tool every iteration. Options:
+- write_blackboard: Record your findings
+- read_dataset_item: Read more dataset elements
+- create_concept: Create knowledge graph nodes
+- query_knowledge_graph: Check current graph state
+- finalize_venn: Complete the analysis
+
+CALL YOUR TOOLS NOW!`;
+        }
+        
+        if (consecutiveEmptyToolCalls >= 5) {
+          console.log("Too many iterations without tool calls, forcing completion");
+          break;
+        }
+        continue;
+      }
+      
+      consecutiveEmptyToolCalls = 0; // Reset on successful tool calls
+
       // Execute tool calls
       let toolResults = "";
       for (const toolCall of response.toolCalls) {
@@ -926,7 +978,7 @@ Begin your analysis. First, create concept nodes for the key themes in Dataset 1
 
       // Update conversation history with tool results
       if (toolResults) {
-        conversationHistory += `\n\n## Previous Tool Results:${toolResults}\n\nContinue your analysis.`;
+        conversationHistory += `\n\n## Tool Results from Iteration ${iteration}:${toolResults}\n\nContinue your analysis. What's your next step?`;
       }
 
       // Check if LLM says we're done
@@ -935,7 +987,7 @@ Begin your analysis. First, create concept nodes for the key themes in Dataset 1
         analysisComplete = true;
       }
 
-      await broadcast("iteration_complete", { iteration });
+      await broadcast("iteration_complete", { iteration, toolCallCount: response.toolCalls.length });
     }
 
     // Finalize session
