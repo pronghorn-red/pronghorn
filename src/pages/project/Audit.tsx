@@ -129,7 +129,12 @@ export default function Audit() {
       // Detect timeout vs real error - Edge Functions timeout after ~60s but continue running
       const isTimeout = orchestratorError?.message?.includes('timeout') || 
                         orchestratorError?.message?.includes('connection') ||
-                        orchestratorError?.name === 'FunctionsRelayError';
+                        orchestratorError?.message?.includes('body stream') ||
+                        orchestratorError?.message?.includes('EOF') ||
+                        orchestratorError?.message?.includes('network') ||
+                        orchestratorError?.message?.includes('Failed to send') ||
+                        orchestratorError?.name === 'FunctionsRelayError' ||
+                        orchestratorError?.name === 'FunctionsFetchError';
       
       // Check for actual errors - edge functions return errors in data.error sometimes
       if (orchestratorError && !isTimeout) {
@@ -146,9 +151,23 @@ export default function Audit() {
         console.log("Audit resumed successfully", data);
         // Don't show toast here - the activity stream will show progress
       }
-    } catch (err) {
-      console.error("Resume failed:", err);
-      toast.error("Failed to resume audit");
+    } catch (err: any) {
+      // Check if this is a timeout-related error (Edge Functions timeout but continue running)
+      const isTimeout = err?.message?.includes('timeout') || 
+                        err?.message?.includes('connection') ||
+                        err?.message?.includes('body stream') ||
+                        err?.message?.includes('EOF') ||
+                        err?.message?.includes('network') ||
+                        err?.message?.includes('Failed to send') ||
+                        err?.name === 'FunctionsRelayError' ||
+                        err?.name === 'FunctionsFetchError';
+      
+      if (!isTimeout) {
+        console.error("Resume failed:", err);
+        toast.error("Failed to resume audit");
+      } else {
+        console.log("Edge function timed out but continues running in background");
+      }
     } finally {
       setIsResuming(false);
     }
