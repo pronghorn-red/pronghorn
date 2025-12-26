@@ -271,74 +271,66 @@ export default function Audit() {
           toast.success("Audit session created, starting pipeline...");
           
           // Extract elements from ProjectSelectionResult
+          // Stringify entire object as content to ensure nothing is missed
           const extractElements = (content: typeof config.dataset1Content) => {
             const elements: Array<{ id: string; label: string; content: string; category: string }> = [];
             
-            // Requirements - include title, code, description and text
+            // Requirements - stringify entire object
             content.requirements?.forEach(r => {
-              const titlePart = r.title ? `Title: ${r.title}\n` : "";
-              const codePart = r.code ? `Code: ${r.code}\n` : "";
-              const descPart = r.description ? `Description: ${r.description}\n` : "";
-              const textPart = r.text ? `Text: ${r.text}` : "";
-              const fullContent = (titlePart + codePart + descPart + textPart).trim();
               elements.push({
                 id: r.id,
                 label: r.title || r.code || r.text?.slice(0, 50) || "Requirement",
-                content: fullContent || "(no content)",
+                content: JSON.stringify(r),
                 category: "requirements",
               });
             });
             
-            // Artifacts
+            // Artifacts - stringify entire object
             content.artifacts?.forEach(a => {
               elements.push({
                 id: a.id,
                 label: a.ai_title || a.content?.slice(0, 50) || "Artifact",
-                content: a.content || "",
+                content: JSON.stringify(a),
                 category: "artifacts",
               });
             });
             
-            // Standards - include title, code and description
+            // Standards - stringify entire object
             content.standards?.forEach(s => {
-              const titlePart = s.title ? `Title: ${s.title}\n` : "";
-              const codePart = s.code ? `Code: ${s.code}\n` : "";
-              const descPart = s.description ? `Description: ${s.description}` : "";
-              const fullContent = (titlePart + codePart + descPart).trim();
               elements.push({
                 id: s.id,
                 label: s.code ? `${s.code}: ${s.title}` : (s.title || "Standard"),
-                content: fullContent || "(no content)",
+                content: JSON.stringify(s),
                 category: "standards",
               });
             });
             
-            // Files - use ID from ProjectSelector
+            // Files - stringify entire object
             content.files?.forEach((f) => {
               elements.push({
                 id: f.id,
                 label: f.path,
-                content: f.content || "",
+                content: JSON.stringify(f),
                 category: "files",
               });
             });
             
-            // Canvas Nodes
+            // Canvas Nodes - stringify entire object
             content.canvasNodes?.forEach(n => {
               elements.push({
                 id: n.id,
                 label: n.data?.label || n.type || "Node",
-                content: JSON.stringify(n.data || {}),
+                content: JSON.stringify(n),
                 category: "canvas",
               });
             });
             
-            // Databases - use ID from ProjectSelector
+            // Databases - stringify entire object
             content.databases?.forEach(d => {
               elements.push({
                 id: d.id,
                 label: `${d.schemaName}.${d.name}`,
-                content: d.definition || JSON.stringify(d.columns || []),
+                content: JSON.stringify(d),
                 category: "database",
               });
             });

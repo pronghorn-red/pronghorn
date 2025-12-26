@@ -175,14 +175,14 @@ export function useAuditPipeline() {
       setProgress({ phase: "creating_nodes", message: `Creating ${d1Elements.length + d2Elements.length} nodes...`, progress: 5 });
       updateStep("nodes", { status: "running", message: "Creating nodes...", startedAt: new Date() });
 
-      // Create all D1 nodes
+      // Create all D1 nodes - log EVERY node, no truncation
       for (let i = 0; i < d1Elements.length; i++) {
         const element = d1Elements[i];
-        await supabase.rpc("upsert_audit_graph_node_with_token", {
+        const { error } = await supabase.rpc("upsert_audit_graph_node_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
           p_label: element.label,
-          p_description: (element.content || "").slice(0, 500),
+          p_description: (element.content || "").slice(0, 2000),
           p_node_type: "d1_element",
           p_source_dataset: "dataset1",
           p_source_element_ids: [element.id],
@@ -191,19 +191,18 @@ export function useAuditPipeline() {
           p_size: 15,
           p_metadata: { category: element.category || "unknown" },
         });
-        if (i % 5 === 0) {
-          addStepDetail("nodes", `Created D1 node: ${element.label.slice(0, 40)}...`);
-        }
+        // Log EVERY node created, no skipping
+        addStepDetail("nodes", `Created D1 node: ${element.label.slice(0, 60)}${error ? ` (ERROR: ${error.message})` : ""}`);
       }
 
-      // Create all D2 nodes
+      // Create all D2 nodes - log EVERY node, no truncation
       for (let i = 0; i < d2Elements.length; i++) {
         const element = d2Elements[i];
-        await supabase.rpc("upsert_audit_graph_node_with_token", {
+        const { error } = await supabase.rpc("upsert_audit_graph_node_with_token", {
           p_session_id: sessionId,
           p_token: shareToken,
           p_label: element.label,
-          p_description: (element.content || "").slice(0, 500),
+          p_description: (element.content || "").slice(0, 2000),
           p_node_type: "d2_element",
           p_source_dataset: "dataset2",
           p_source_element_ids: [element.id],
@@ -212,9 +211,8 @@ export function useAuditPipeline() {
           p_size: 15,
           p_metadata: { category: element.category || "unknown" },
         });
-        if (i % 5 === 0) {
-          addStepDetail("nodes", `Created D2 node: ${element.label.slice(0, 40)}...`);
-        }
+        // Log EVERY node created, no skipping
+        addStepDetail("nodes", `Created D2 node: ${element.label.slice(0, 60)}${error ? ` (ERROR: ${error.message})` : ""}`);
       }
 
       updateStep("nodes", { status: "completed", message: `Created ${d1Elements.length + d2Elements.length} nodes`, progress: 100, completedAt: new Date() });
@@ -269,36 +267,49 @@ export function useAuditPipeline() {
 
       const [d1Response, d2Response] = await Promise.all([d1Promise, d2Promise]);
 
-      // Process both streams in parallel using Promise.all
+      // Process both streams - handle errors independently so one failure doesn't block the other
       const processStream = async (
         response: Response, 
         stepId: string, 
         conceptsRef: { value: Concept[] }
-      ) => {
-        if (!response.ok) {
-          throw new Error(`${stepId.toUpperCase()} extraction failed: ${response.status}`);
+      ): Promise<void> => {
+        try {
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[${stepId}] HTTP error:`, response.status, errorText);
+            updateStep(stepId, { status: "error", message: `HTTP ${response.status}: ${errorText.slice(0, 100)}` });
+            return;
+          }
+          await streamSSE(
+            response,
+            (data) => updateStep(stepId, { message: data.message, progress: data.progress }),
+            (data) => addStepDetail(stepId, `${data.label} (${data.elementCount} elements)`),
+            (data) => {
+              conceptsRef.value = data.concepts || [];
+              updateStep(stepId, { 
+                status: "completed", 
+                message: `${conceptsRef.value.length} concepts extracted`, 
+                progress: 100, 
+                completedAt: new Date() 
+              });
+            },
+            (err) => {
+              console.error(`[${stepId}] Stream error:`, err);
+              updateStep(stepId, { status: "error", message: err });
+            }
+          );
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          console.error(`[${stepId}] Processing error:`, errMsg);
+          updateStep(stepId, { status: "error", message: errMsg });
         }
-        return streamSSE(
-          response,
-          (data) => updateStep(stepId, { message: data.message, progress: data.progress }),
-          (data) => addStepDetail(stepId, `${data.label} (${data.elementCount} elements)`),
-          (data) => {
-            conceptsRef.value = data.concepts || [];
-            updateStep(stepId, { 
-              status: "completed", 
-              message: `${conceptsRef.value.length} concepts extracted`, 
-              progress: 100, 
-              completedAt: new Date() 
-            });
-          },
-          (err) => updateStep(stepId, { status: "error", message: err })
-        );
       };
 
       const d1ConceptsRef = { value: [] as Concept[] };
       const d2ConceptsRef = { value: [] as Concept[] };
 
-      await Promise.all([
+      // Run in parallel - each handles its own errors
+      await Promise.allSettled([
         processStream(d1Response, "d1", d1ConceptsRef),
         processStream(d2Response, "d2", d2ConceptsRef),
       ]);
