@@ -839,62 +839,55 @@ export function useAuditPipeline() {
 
             if (!response.ok) {
               const errorText = await response.text().catch(() => "Unknown error");
-              const errorMsg = `${conceptName}: HTTP ${response.status} - ${errorText.slice(0, 200)}`;
+              const errorMsg = `${conceptName}: HTTP ${response.status} - ${errorText.slice(0, 300)}`;
               console.error(`[tesseract] Failed:`, errorMsg);
               addStepDetail("tesseract", `❌ ${errorMsg}`);
               errorCount++;
               return;
             }
 
-            // Parse SSE response for this single concept
-            await streamSSE(
-              response,
-              () => {}, // progress - ignore per-concept
-              (data) => {
-                // Cell data
-                if (data.conceptLabel && data.polarity !== undefined) {
-                  const cell: LocalTesseractCell = {
-                    id: localId(),
-                    conceptLabel: data.conceptLabel,
-                    conceptDescription: concept.conceptDescription,
-                    polarity: data.polarity,
-                    rationale: data.rationale || "",
-                    d1ElementIds: concept.d1Elements.map(e => e.id),
-                    d2ElementIds: concept.d2Elements.map(e => e.id),
-                  };
-                  localTesseractCells.push(cell);
-                  const polarityStr = data.polarity >= 0 ? `+${data.polarity.toFixed(2)}` : data.polarity.toFixed(2);
-                  addStepDetail("tesseract", `✓ ${data.conceptLabel}: ${polarityStr}`);
-                  updateResults(); // Update immediately so UI reflects new cell
-                }
-              },
-              (data) => {
-                // Result with cells array
-                if (data.cells) {
-                  for (const c of data.cells) {
-                    if (!localTesseractCells.find(tc => tc.conceptLabel === c.conceptLabel)) {
-                      localTesseractCells.push({
-                        id: localId(),
-                        conceptLabel: c.conceptLabel,
-                        conceptDescription: c.conceptDescription || concept.conceptDescription,
-                        polarity: c.polarity,
-                        rationale: c.rationale || "",
-                        d1ElementIds: concept.d1Elements.map(e => e.id),
-                        d2ElementIds: concept.d2Elements.map(e => e.id),
-                      });
-                      updateResults();
-                    }
-                  }
-                }
-              },
-              (err) => {
-                console.error(`[tesseract] Stream error for ${conceptName}:`, err);
-                addStepDetail("tesseract", `❌ ${conceptName}: Stream error - ${err}`);
+            // Parse JSON response (not SSE)
+            const result = await response.json();
+            
+            if (!result.success) {
+              const errorMsg = `${conceptName}: ${result.error || 'Unknown error from edge function'}`;
+              console.error(`[tesseract] Failed:`, errorMsg);
+              addStepDetail("tesseract", `❌ ${errorMsg}`);
+              errorCount++;
+              return;
+            }
+
+            // Process cells from response
+            if (result.cells && result.cells.length > 0) {
+              for (const c of result.cells) {
+                const cell: LocalTesseractCell = {
+                  id: localId(),
+                  conceptLabel: c.conceptLabel,
+                  conceptDescription: concept.conceptDescription,
+                  polarity: c.polarity,
+                  rationale: c.rationale || "", // Full rationale, no truncation
+                  d1ElementIds: concept.d1Elements.map(e => e.id),
+                  d2ElementIds: concept.d2Elements.map(e => e.id),
+                };
+                localTesseractCells.push(cell);
+                
+                const polarityStr = c.polarity >= 0 ? `+${c.polarity.toFixed(2)}` : c.polarity.toFixed(2);
+                addStepDetail("tesseract", `✓ ${c.conceptLabel}: ${polarityStr}`);
+                updateResults(); // Update immediately so UI reflects new cell
+              }
+              completedCount++;
+            } else {
+              // No cells returned - edge function errors are in result.errors
+              if (result.errors && result.errors.length > 0) {
+                const errorMsg = `${conceptName}: ${result.errors.join(', ')}`;
+                console.error(`[tesseract] Edge function errors:`, errorMsg);
+                addStepDetail("tesseract", `❌ ${errorMsg}`);
+                errorCount++;
+              } else {
+                addStepDetail("tesseract", `⚠ ${conceptName}: No cells returned`);
                 errorCount++;
               }
-            );
-
-            completedCount++;
+            }
 
           } catch (err: any) {
             const errorMsg = `${conceptName}: ${err?.message || 'Unknown error'}`;
