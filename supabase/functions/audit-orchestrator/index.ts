@@ -590,9 +590,11 @@ function getClaudeResponseTool() {
 
 // ==================== LLM CALL WITH STRUCTURED OUTPUT ====================
 
-interface ConversationMessage {
+// For Claude, we need to track tool_use IDs to send proper tool_result responses
+interface ConversationTurn {
   role: "user" | "assistant";
   content: string;
+  toolUseId?: string; // For Claude: the tool_use ID from assistant responses
 }
 
 async function callLLMWithConversation(
@@ -600,20 +602,21 @@ async function callLLMWithConversation(
   apiKey: string,
   model: string,
   systemPrompt: string,
-  messages: ConversationMessage[],
+  turns: ConversationTurn[],
   logActivity: (agentRole: string | null, activityType: string, title: string, content?: string, metadata?: Record<string, any>) => Promise<void>,
   broadcast: (event: string, payload: any) => Promise<void>
-): Promise<{ response: OrchestratorResponse; rawContent: string }> {
+): Promise<{ response: OrchestratorResponse; rawContent: string; toolUseId?: string }> {
   
-  await logActivity("orchestrator", "llm_call", "Calling LLM...", `Model: ${model}, Messages: ${messages.length}`);
+  await logActivity("orchestrator", "llm_call", "Calling LLM...", `Model: ${model}, Turns: ${turns.length}`);
   
   let rawText = "";
+  let returnedToolUseId: string | undefined;
   
   if (model.startsWith("gemini")) {
-    // Convert messages to Gemini format
-    const geminiContents = messages.map(m => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }]
+    // Convert turns to Gemini format (simple text messages)
+    const geminiContents = turns.map(t => ({
+      role: t.role === "assistant" ? "model" : "user",
+      parts: [{ text: t.content }]
     }));
     
     const requestBody = {
@@ -642,13 +645,54 @@ async function callLLMWithConversation(
     rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     
   } else if (model.startsWith("claude")) {
-    // Convert messages to Claude format
-    const claudeMessages = messages.map(m => ({
-      role: m.role,
-      content: m.role === "assistant" 
-        ? [{ type: "tool_use" as const, id: `tool_${Date.now()}`, name: "respond_with_actions", input: JSON.parse(m.content) }]
-        : m.content
-    }));
+    // Convert turns to Claude format with proper tool_use/tool_result structure
+    const claudeMessages: any[] = [];
+    
+    for (let i = 0; i < turns.length; i++) {
+      const turn = turns[i];
+      
+      if (turn.role === "user") {
+        // Check if previous turn was an assistant with a tool_use
+        const prevTurn = i > 0 ? turns[i - 1] : null;
+        if (prevTurn?.role === "assistant" && prevTurn.toolUseId) {
+          // This user message is a tool_result for the previous tool_use
+          claudeMessages.push({
+            role: "user",
+            content: [{
+              type: "tool_result",
+              tool_use_id: prevTurn.toolUseId,
+              content: turn.content
+            }]
+          });
+        } else {
+          // Regular user message
+          claudeMessages.push({
+            role: "user",
+            content: turn.content
+          });
+        }
+      } else {
+        // Assistant message - format as tool_use
+        try {
+          const parsed = JSON.parse(turn.content);
+          claudeMessages.push({
+            role: "assistant",
+            content: [{
+              type: "tool_use",
+              id: turn.toolUseId || `tool_${Date.now()}_${i}`,
+              name: "respond_with_actions",
+              input: parsed
+            }]
+          });
+        } catch {
+          // If not valid JSON, add as text (shouldn't happen but be safe)
+          claudeMessages.push({
+            role: "assistant",
+            content: turn.content
+          });
+        }
+      }
+    }
     
     // For Claude, ensure we're using proper tool forcing
     const response = await fetch(apiEndpoint, {
@@ -680,6 +724,7 @@ async function callLLMWithConversation(
     const toolUseBlock = data.content?.find((c: any) => c.type === "tool_use");
     if (toolUseBlock?.input) {
       rawText = JSON.stringify(toolUseBlock.input);
+      returnedToolUseId = toolUseBlock.id; // Save the tool_use ID for the next turn
     } else {
       const textBlock = data.content?.find((c: any) => c.type === "text");
       rawText = textBlock?.text || "{}";
@@ -690,7 +735,7 @@ async function callLLMWithConversation(
     // Grok - convert to OpenAI-style messages
     const grokMessages = [
       { role: "system", content: systemPrompt },
-      ...messages.map(m => ({ role: m.role, content: m.content }))
+      ...turns.map(t => ({ role: t.role, content: t.content }))
     ];
     
     const response = await fetch(apiEndpoint, {
@@ -717,7 +762,7 @@ async function callLLMWithConversation(
   await logActivity("orchestrator", "response", "LLM Response", rawText.slice(0, 500), { rawLength: rawText.length });
   await broadcast("llm_response", { length: rawText.length });
   
-  return { response: parseOrchestratorResponse(rawText), rawContent: rawText };
+  return { response: parseOrchestratorResponse(rawText), rawContent: rawText, toolUseId: returnedToolUseId };
 }
 
 // ==================== BUILD PROBLEM SHAPE ====================
@@ -929,10 +974,11 @@ ${problemShape.dataset2.count > 50 ? `... and ${problemShape.dataset2.count - 50
 
 START NOW - call your tools!`;
 
-    // Proper multi-turn conversation array
-    const conversationMessages: ConversationMessage[] = [
+    // Proper multi-turn conversation array with tool_use ID tracking
+    const conversationTurns: ConversationTurn[] = [
       { role: "user", content: initialPrompt }
     ];
+    let lastToolUseId: string | undefined;
 
     while (iteration < MAX_ITERATIONS && !analysisComplete) {
       iteration++;
@@ -960,16 +1006,17 @@ START NOW - call your tools!`;
 
       // Call LLM with multi-turn conversation
       const systemPrompt = getOrchestratorSystemPrompt(problemShape, currentPhase);
-      const { response, rawContent } = await callLLMWithConversation(
+      const { response, rawContent, toolUseId } = await callLLMWithConversation(
         apiEndpoint, apiKey, selectedModel,
-        systemPrompt, conversationMessages,
+        systemPrompt, conversationTurns,
         logActivity, broadcast
       );
 
       console.log(`Response: thinking=${response.thinking.length}chars, toolCalls=${response.toolCalls.length}, continue=${response.continueAnalysis}`);
 
-      // Add assistant response to conversation history (for multi-turn context)
-      conversationMessages.push({ role: "assistant", content: rawContent });
+      // Add assistant response to conversation history with the tool_use ID
+      conversationTurns.push({ role: "assistant", content: rawContent, toolUseId });
+      lastToolUseId = toolUseId;
 
       // Log thinking
       if (response.thinking) {
@@ -985,7 +1032,7 @@ START NOW - call your tools!`;
         
         if (consecutiveEmptyToolCalls >= 3) {
           // Force a reminder to use tools
-          conversationMessages.push({ role: "user", content: `## WARNING: You did NOT call any tools in iteration ${iteration}!
+          conversationTurns.push({ role: "user", content: `## WARNING: You did NOT call any tools in iteration ${iteration}!
 You MUST call at least one tool every iteration. Current phase: ${currentPhase}.
 Available tools:
 - write_blackboard: Record your findings (USE THIS!)
@@ -1001,7 +1048,7 @@ CALL YOUR TOOLS NOW!` });
         
         if (consecutiveEmptyToolCalls >= 5) {
           // Add a stronger nudge before giving up
-          conversationMessages.push({ role: "user", content: `## FINAL WARNING: ${consecutiveEmptyToolCalls} consecutive iterations without tool calls!
+          conversationTurns.push({ role: "user", content: `## FINAL WARNING: ${consecutiveEmptyToolCalls} consecutive iterations without tool calls!
 The analysis is incomplete. You MUST call tools to make progress.
 If you believe the analysis is complete, call finalize_venn with your findings.
 Otherwise, continue calling read_dataset_item, create_concept, or write_blackboard.
@@ -1075,7 +1122,7 @@ THIS IS YOUR LAST CHANCE - CALL TOOLS OR THE ANALYSIS WILL TERMINATE!` });
         }
         
         feedback += `\n\nContinue your analysis. Current phase: ${currentPhase}. What's your next step?`;
-        conversationMessages.push({ role: "user", content: feedback });
+        conversationTurns.push({ role: "user", content: feedback });
       }
 
       // Check if LLM says we're done
