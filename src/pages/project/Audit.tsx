@@ -10,6 +10,7 @@ import { AuditConfigurationDialog, AuditConfiguration } from "@/components/audit
 import { KnowledgeGraph } from "@/components/audit/KnowledgeGraph";
 import { AuditActivityStream } from "@/components/audit/AuditActivityStream";
 import { useRealtimeAudit } from "@/hooks/useRealtimeAudit";
+import { useAuditPipeline, PipelineProgress } from "@/hooks/useAuditPipeline";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +35,7 @@ import {
   Network,
   Brain,
   RotateCcw,
+  Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useShareToken } from "@/hooks/useShareToken";
@@ -52,9 +54,13 @@ export default function Audit() {
   const [isStarting, setIsStarting] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
+  const [usePipeline, setUsePipeline] = useState(true); // Use new pipeline by default
   const staleCheckRef = useRef<NodeJS.Timeout | null>(null);
   const lastResumeAttemptRef = useRef<number>(0);
   const manualStopRef = useRef(false);
+  
+  // New pipeline hook
+  const { runPipeline, isRunning: isPipelineRunning, progress: pipelineProgress, error: pipelineError, abort: abortPipeline } = useAuditPipeline();
   
   const {
     session,
@@ -234,7 +240,7 @@ export default function Audit() {
 
   const handleStartAudit = async (config: AuditConfiguration) => {
     setIsStarting(true);
-    manualStopRef.current = false; // Reset manual stop flag for new audit
+    manualStopRef.current = false;
     try {
       const agentDefs = config.agentPersonas.reduce((acc, p) => ({
         ...acc,
@@ -258,38 +264,123 @@ export default function Audit() {
         setSelectedSessionId(newSession.id);
         setSessions((prev) => [newSession, ...prev]);
         setConfigDialogOpen(false);
-        toast.success("Audit session created, starting orchestrator...");
         
-        // Call the audit-orchestrator edge function
-        const { data, error: orchestratorError } = await supabase.functions.invoke("audit-orchestrator", {
-          body: {
+        if (usePipeline && config.dataset1Content && config.dataset2Content) {
+          // Use new pipeline
+          toast.success("Audit session created, starting pipeline...");
+          
+          // Extract elements from ProjectSelectionResult
+          const extractElements = (content: typeof config.dataset1Content) => {
+            const elements: Array<{ id: string; label: string; content: string; category: string }> = [];
+            
+            // Requirements
+            content.requirements?.forEach(r => {
+              elements.push({
+                id: r.id,
+                label: r.title || r.code || r.text?.slice(0, 50) || "Requirement",
+                content: r.description || r.text || "",
+                category: "requirements",
+              });
+            });
+            
+            // Artifacts
+            content.artifacts?.forEach(a => {
+              elements.push({
+                id: a.id,
+                label: a.ai_title || a.content?.slice(0, 50) || "Artifact",
+                content: a.content || "",
+                category: "artifacts",
+              });
+            });
+            
+            // Standards
+            content.standards?.forEach(s => {
+              elements.push({
+                id: s.id,
+                label: s.code ? `${s.code}: ${s.title}` : (s.title || "Standard"),
+                content: s.description || "",
+                category: "standards",
+              });
+            });
+            
+            // Files
+            content.files?.forEach((f, i) => {
+              elements.push({
+                id: `file-${i}-${f.path.replace(/[^a-zA-Z0-9]/g, '-')}`,
+                label: f.path,
+                content: f.content || "",
+                category: "files",
+              });
+            });
+            
+            // Canvas Nodes
+            content.canvasNodes?.forEach(n => {
+              elements.push({
+                id: n.id,
+                label: n.data?.label || n.type || "Node",
+                content: JSON.stringify(n.data || {}),
+                category: "canvas",
+              });
+            });
+            
+            // Databases
+            content.databases?.forEach(d => {
+              elements.push({
+                id: `${d.databaseId}-${d.schemaName}-${d.name}`,
+                label: `${d.schemaName}.${d.name}`,
+                content: d.definition || JSON.stringify(d.columns || []),
+                category: "database",
+              });
+            });
+            
+            return elements;
+          };
+          
+          const d1Elements = extractElements(config.dataset1Content);
+          const d2Elements = extractElements(config.dataset2Content);
+          
+          // Run the pipeline
+          await runPipeline({
             sessionId: newSession.id,
-            projectId,
-            shareToken,
-          },
-        });
-        
-        // Detect timeout vs real error - Edge Functions timeout after ~60s but continue running
-        const isTimeout = orchestratorError?.message?.includes('timeout') || 
-                          orchestratorError?.message?.includes('connection') ||
-                          orchestratorError?.message?.includes('body stream') ||
-                          orchestratorError?.message?.includes('EOF') ||
-                          orchestratorError?.message?.includes('network') ||
-                          orchestratorError?.message?.includes('Failed to send') ||
-                          orchestratorError?.message?.includes('aborted') ||
-                          orchestratorError?.name === 'FunctionsRelayError' ||
-                          orchestratorError?.name === 'FunctionsFetchError';
-        
-        if (orchestratorError && !isTimeout) {
-          console.error("Orchestrator error:", orchestratorError);
-          toast.error("Failed to start audit orchestrator");
-        } else if (data?.error) {
-          toast.error("Orchestrator error: " + data.error);
-        } else if (!isTimeout) {
-          toast.success("Audit orchestrator started");
+            projectId: projectId!,
+            shareToken: shareToken!,
+            d1Elements,
+            d2Elements,
+          });
+          
+          // Refresh session data after pipeline completes
+          await refreshSession(newSession.id);
+          toast.success("Audit pipeline complete!");
         } else {
-          // Timeout is expected - function continues in background
-          console.log("Edge function timed out but continues running in background");
+          // Fall back to old orchestrator
+          toast.success("Audit session created, starting orchestrator...");
+          
+          const { data, error: orchestratorError } = await supabase.functions.invoke("audit-orchestrator", {
+            body: {
+              sessionId: newSession.id,
+              projectId,
+              shareToken,
+            },
+          });
+          
+          const isTimeout = orchestratorError?.message?.includes('timeout') || 
+                            orchestratorError?.message?.includes('connection') ||
+                            orchestratorError?.message?.includes('body stream') ||
+                            orchestratorError?.message?.includes('EOF') ||
+                            orchestratorError?.message?.includes('network') ||
+                            orchestratorError?.message?.includes('Failed to send') ||
+                            orchestratorError?.message?.includes('aborted') ||
+                            orchestratorError?.name === 'FunctionsRelayError' ||
+                            orchestratorError?.name === 'FunctionsFetchError';
+          
+          if (orchestratorError && !isTimeout) {
+            console.error("Orchestrator error:", orchestratorError);
+            toast.error("Failed to start audit orchestrator");
+          } else if (data?.error) {
+            toast.error("Orchestrator error: " + data.error);
+          } else if (!isTimeout) {
+            toast.success("Audit orchestrator started");
+          }
         }
       }
     } catch (err) {
@@ -472,11 +563,38 @@ export default function Audit() {
               </Card>
             )}
 
+            {/* Pipeline Progress */}
+            {isPipelineRunning && (
+              <Card className="mb-6 border-primary">
+                <CardContent className="py-4">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <div className="flex-1">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="font-medium capitalize">{pipelineProgress.phase.replace(/_/g, " ")}</span>
+                        <span className="text-muted-foreground">{pipelineProgress.progress}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-primary transition-all duration-300" 
+                          style={{ width: `${pipelineProgress.progress}%` }} 
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{pipelineProgress.message}</p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={abortPipeline}>
+                      <StopCircle className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Error Display */}
-            {error && (
+            {(error || pipelineError) && (
               <Card className="mb-6 border-destructive">
                 <CardContent className="py-4">
-                  <p className="text-destructive">{error}</p>
+                  <p className="text-destructive">{error || pipelineError}</p>
                 </CardContent>
               </Card>
             )}
