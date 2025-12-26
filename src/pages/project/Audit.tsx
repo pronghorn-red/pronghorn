@@ -2,17 +2,17 @@ import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
+import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { TesseractVisualizer } from "@/components/audit/TesseractVisualizer";
 import { AuditBlackboard } from "@/components/audit/AuditBlackboard";
 import { VennDiagramResults } from "@/components/audit/VennDiagramResults";
 import { AuditConfigurationDialog, AuditConfiguration } from "@/components/audit/AuditConfigurationDialog";
-import { AgentInstancesCard } from "@/components/audit/AgentInstancesCard";
 import { KnowledgeGraph } from "@/components/audit/KnowledgeGraph";
 import { AuditActivityStream } from "@/components/audit/AuditActivityStream";
 import { useRealtimeAudit } from "@/hooks/useRealtimeAudit";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -31,7 +31,6 @@ import {
   MessageSquare,
   CircleDot,
   RefreshCw,
-  Users,
   Network,
   Brain,
 } from "lucide-react";
@@ -50,6 +49,7 @@ export default function Audit() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   const {
     session,
@@ -180,116 +180,115 @@ export default function Audit() {
   const activeAgents = agentInstances.filter((a) => a.status === "active");
   const isRunning = session?.status === "running" || session?.status === "agents_active" || session?.status === "analyzing_shape" || session?.status === "pending";
   const currentPhase = (session as any)?.phase;
-
   return (
     <div className="min-h-screen bg-background">
       <PrimaryNav />
       
       <div className="flex relative">
-        <ProjectSidebar projectId={projectId!} />
+        <ProjectSidebar projectId={projectId!} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
         
-        <main className="flex-1 w-full">
-          <div className="container px-6 py-8 max-w-7xl">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h1 className="text-3xl font-bold mb-2">Audit</h1>
-                <p className="text-muted-foreground">
-                  Multi-agent compliance audits with tesseract visualization
-                </p>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                {/* Session Selector */}
-                <Select value={selectedSessionId} onValueChange={setSelectedSessionId}>
-                  <SelectTrigger className="w-[220px]">
-                    <SelectValue placeholder="Select session..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sessions.length === 0 ? (
-                      <SelectItem value="none" disabled>
-                        No sessions yet
-                      </SelectItem>
-                    ) : (
-                      sessions.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${getStatusColor(s.status)}`} />
-                            <span className="truncate">{s.name}</span>
-                          </div>
+        <main className="flex-1 overflow-auto w-full">
+          <div className="px-4 md:px-6 py-6 md:py-8 max-w-7xl mx-auto">
+            {/* Header with hamburger */}
+            <ProjectPageHeader
+              title="Audit"
+              subtitle="Multi-agent compliance audits with tesseract visualization"
+              onMenuClick={() => setIsSidebarOpen(true)}
+              actions={
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Session Selector */}
+                  <Select value={selectedSessionId} onValueChange={setSelectedSessionId}>
+                    <SelectTrigger className="w-[160px] md:w-[220px]">
+                      <SelectValue placeholder="Select session..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sessions.length === 0 ? (
+                        <SelectItem value="none" disabled>
+                          No sessions yet
                         </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-                
-                {session && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => refreshSession(session.id)}
-                      disabled={isLoading}
-                    >
-                      <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-                    </Button>
-                    
-                    {isRunning && (
-                      <>
-                        <Button variant="outline" onClick={handlePauseResume}>
-                          {session.status === "paused" ? (
-                            <PlayCircle className="h-4 w-4 mr-2" />
-                          ) : (
-                            <Pause className="h-4 w-4 mr-2" />
-                          )}
-                          {session.status === "paused" ? "Resume" : "Pause"}
-                        </Button>
-                        <Button variant="destructive" onClick={handleStop}>
-                          <StopCircle className="h-4 w-4 mr-2" />
-                          Stop
-                        </Button>
-                      </>
-                    )}
-                  </>
-                )}
-                
-                <Button onClick={() => setConfigDialogOpen(true)}>
-                  <PlayCircle className="h-4 w-4 mr-2" />
-                  New Audit
-                </Button>
-              </div>
-            </div>
+                      ) : (
+                        sessions.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full ${getStatusColor(s.status)}`} />
+                              <span className="truncate">{s.name}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  
+                  {session && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => refreshSession(session.id)}
+                        disabled={isLoading}
+                      >
+                        <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                      </Button>
+                      
+                      {isRunning && (
+                        <>
+                          <Button variant="outline" size="sm" onClick={handlePauseResume} className="hidden sm:flex">
+                            {session.status === "paused" ? (
+                              <PlayCircle className="h-4 w-4 mr-2" />
+                            ) : (
+                              <Pause className="h-4 w-4 mr-2" />
+                            )}
+                            {session.status === "paused" ? "Resume" : "Pause"}
+                          </Button>
+                          <Button variant="destructive" size="sm" onClick={handleStop} className="hidden sm:flex">
+                            <StopCircle className="h-4 w-4 mr-2" />
+                            Stop
+                          </Button>
+                        </>
+                      )}
+                    </>
+                  )}
+                  
+                  <Button onClick={() => setConfigDialogOpen(true)} size="sm">
+                    <PlayCircle className="h-4 w-4 mr-1 md:mr-2" />
+                    <span className="hidden sm:inline">New Audit</span>
+                    <span className="sm:hidden">New</span>
+                  </Button>
+                </div>
+              }
+            />
 
             {/* Session Status Bar */}
             {session && (
               <Card className="mb-6">
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                <CardContent className="py-3 md:py-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <div className="flex items-center gap-2">
                         <div className={`w-3 h-3 rounded-full ${getStatusColor(session.status)} ${isRunning ? "animate-pulse" : ""}`} />
-                        <span className="font-medium capitalize">{session.status.replace(/_/g, " ")}</span>
+                        <span className="font-medium capitalize text-sm">{session.status.replace(/_/g, " ")}</span>
                       </div>
                       {currentPhase && (
-                        <Badge variant="outline" className="capitalize">
-                          Phase: {currentPhase.replace(/_/g, " ")}
+                        <Badge variant="outline" className="capitalize text-xs">
+                          {currentPhase.replace(/_/g, " ")}
                         </Badge>
                       )}
-                      <Badge variant="outline">
+                      <Badge variant="outline" className="text-xs">
                         <Activity className="h-3 w-3 mr-1" />
-                        Iteration {session.current_iteration} / {session.max_iterations}
+                        {session.current_iteration}/{session.max_iterations}
                       </Badge>
-                      <Badge variant="secondary">
-                        <Users className="h-3 w-3 mr-1" />
-                        {activeAgents.length} active agents
-                      </Badge>
+                      {activeAgents.length > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {activeAgents.length} active
+                        </Badge>
+                      )}
                       {session.consensus_reached && (
-                        <Badge variant="default" className="bg-green-500">
-                          Consensus Reached
+                        <Badge variant="default" className="bg-green-500 text-xs">
+                          Consensus
                         </Badge>
                       )}
                     </div>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-xs text-muted-foreground">
                       {session.dataset_1_type} ↔ {session.dataset_2_type}
                     </div>
                   </div>
