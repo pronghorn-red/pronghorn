@@ -837,11 +837,13 @@ serve(async (req) => {
           getGrokConferenceSchema(), getClaudeConferenceTool()
         );
 
-        // Log what we got from the LLM
+        // Log the FULL raw JSON response for transparency
         const nodeCount = response.proposedNodes?.length || 0;
         console.log(`Conference response from ${agent.role}: ${nodeCount} nodes, keys: ${Object.keys(response).join(", ")}`);
         
-        await logActivity(agent.role, "response", `${agent.name} proposed ${nodeCount} concepts`, response.reasoning?.slice(0, 300));
+        // Log full raw response to activity stream
+        await logActivity(agent.role, "response", `${agent.name} proposed ${nodeCount} concepts`, 
+          JSON.stringify(response, null, 2), { rawResponse: true });
 
         // Insert proposed nodes - use UPSERT function (not insert)
         let insertedNodes = 0;
@@ -939,8 +941,9 @@ serve(async (req) => {
             getGrokGraphBuildingSchema(), getClaudeGraphBuildingTool()
           );
           
+          // Log full raw response for transparency
           await logActivity(agent.role, "response", `${agent.name} voted: ${response.graphCompleteVote ? "Complete" : "Needs more"}`, 
-            `Proposed ${response.proposedNodes?.length || 0} nodes, ${response.proposedEdges?.length || 0} edges`);
+            JSON.stringify(response, null, 2), { rawResponse: true, proposedNodes: response.proposedNodes?.length || 0, proposedEdges: response.proposedEdges?.length || 0 });
 
           // Insert new nodes (deduplicate by label) - use UPSERT
           const existingLabels = new Set((existingNodes || []).map((n: any) => n.label.toLowerCase()));
