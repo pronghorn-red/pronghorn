@@ -200,7 +200,107 @@ export const ORCHESTRATOR_TOOLS: ToolDefinition[] = [
   },
 ];
 
-// Convert tools to Grok response_format schema
+// Explicit params schema - enforces exact parameter names for all LLMs
+const TOOL_PARAMS_SCHEMA = {
+  type: "object",
+  properties: {
+    // read_dataset_item params
+    dataset: { type: "string", enum: ["dataset1", "dataset2"], description: "Which dataset to read from" },
+    itemId: { type: "string", description: "The item ID or 8-char prefix to read" },
+    
+    // query_knowledge_graph params
+    filter: { type: "string", enum: ["all", "dataset1_only", "dataset2_only", "shared", "orphans"], description: "Filter nodes by source dataset" },
+    nodeType: { type: "string", description: "Filter by node type" },
+    limit: { type: "integer", description: "Max results to return" },
+    
+    // get_concept_links params
+    nodeId: { type: "string", description: "The knowledge graph node ID" },
+    
+    // write_blackboard params
+    entryType: { type: "string", enum: ["plan", "finding", "observation", "question", "conclusion", "tool_result"], description: "Type of blackboard entry" },
+    content: { type: "string", description: "The content to write" },
+    confidence: { type: "number", description: "Confidence level 0.0-1.0" },
+    targetAgent: { type: "string", description: "Optional target perspective" },
+    
+    // read_blackboard params
+    entryTypes: { type: "array", items: { type: "string" }, description: "Filter to specific entry types" },
+    
+    // create_concept params
+    label: { type: "string", description: "Short label for the concept" },
+    description: { type: "string", description: "Detailed description of the concept" },
+    sourceDataset: { type: "string", enum: ["dataset1", "dataset2", "both"], description: "Which dataset this concept originates from" },
+    sourceElementIds: { type: "array", items: { type: "string" }, description: "REQUIRED: UUIDs or 8-char prefixes of source artifacts" },
+    
+    // link_concepts params
+    sourceNodeId: { type: "string", description: "Source node ID" },
+    targetNodeId: { type: "string", description: "Target node ID" },
+    edgeType: { type: "string", enum: ["relates_to", "implements", "depends_on", "conflicts_with", "supports", "covers"], description: "Relationship type" },
+    
+    // record_tesseract_cell params
+    elementId: { type: "string", description: "Dataset 1 element ID" },
+    elementLabel: { type: "string", description: "Human-readable label" },
+    step: { type: "integer", description: "Analysis step 1-5" },
+    stepLabel: { type: "string", description: "Label for this step" },
+    polarity: { type: "number", description: "Alignment score -1 to +1" },
+    criticality: { type: "string", enum: ["critical", "major", "minor", "info"], description: "Severity level" },
+    evidenceSummary: { type: "string", description: "Summary of evidence" },
+    
+    // finalize_venn params
+    uniqueToD1: { 
+      type: "array", 
+      items: { 
+        type: "object", 
+        properties: {
+          id: { type: "string" },
+          label: { type: "string" },
+          criticality: { type: "string" },
+          evidence: { type: "string" }
+        }
+      },
+      description: "Elements unique to Dataset 1 (gaps)" 
+    },
+    aligned: { 
+      type: "array", 
+      items: { 
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          label: { type: "string" },
+          criticality: { type: "string" },
+          evidence: { type: "string" },
+          sourceElement: { type: "string" },
+          targetElement: { type: "string" }
+        }
+      },
+      description: "Elements present in both datasets" 
+    },
+    uniqueToD2: { 
+      type: "array", 
+      items: { 
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          label: { type: "string" },
+          criticality: { type: "string" },
+          evidence: { type: "string" }
+        }
+      },
+      description: "Elements unique to Dataset 2 (orphans)" 
+    },
+    summary: { 
+      type: "object",
+      properties: {
+        totalD1Coverage: { type: "number" },
+        totalD2Coverage: { type: "number" },
+        alignmentScore: { type: "number" }
+      },
+      description: "Summary statistics" 
+    },
+  },
+  additionalProperties: false,
+};
+
+// Convert tools to Grok response_format schema with explicit params
 export function getGrokToolSchema() {
   return {
     type: "json_schema",
@@ -212,24 +312,33 @@ export function getGrokToolSchema() {
         properties: {
           thinking: { type: "string", description: "Your internal reasoning about what to do next" },
           perspective: { 
-            type: "string", 
-            description: "Which perspective lens you are applying (architect, security, business, developer, user)" 
+            type: "string",
+            enum: ["architect", "security", "business", "developer", "user"],
+            description: "Which perspective lens you are applying" 
           },
           toolCalls: {
             type: "array",
             items: {
               type: "object",
               properties: {
-                tool: { type: "string", description: "Name of the tool to invoke" },
-                params: { type: "object", description: "Parameters for the tool" },
+                tool: { 
+                  type: "string", 
+                  enum: ["read_dataset_item", "query_knowledge_graph", "get_concept_links", 
+                         "write_blackboard", "read_blackboard", "create_concept", 
+                         "link_concepts", "record_tesseract_cell", "finalize_venn"],
+                  description: "Name of the tool to invoke" 
+                },
+                params: TOOL_PARAMS_SCHEMA,
                 rationale: { type: "string", description: "Why you are calling this tool" },
               },
               required: ["tool", "params"],
+              additionalProperties: false,
             },
           },
           continueAnalysis: { type: "boolean", description: "Whether more analysis iterations are needed" },
         },
         required: ["thinking", "toolCalls", "continueAnalysis"],
+        additionalProperties: false,
       },
     },
   };
@@ -244,11 +353,37 @@ export function getClaudeTools() {
   }));
 }
 
-// Convert tools to Gemini function declarations
+// Convert tools to Gemini function declarations with explicit params
 export function getGeminiFunctionDeclarations() {
-  return ORCHESTRATOR_TOOLS.map(tool => ({
-    name: tool.name,
-    description: tool.description,
-    parameters: tool.parameters,
-  }));
+  return {
+    type: "object",
+    properties: {
+      thinking: { type: "string", description: "Your internal reasoning about what to do next" },
+      perspective: { 
+        type: "string",
+        enum: ["architect", "security", "business", "developer", "user"],
+        description: "Which perspective lens you are applying" 
+      },
+      toolCalls: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            tool: { 
+              type: "string", 
+              enum: ["read_dataset_item", "query_knowledge_graph", "get_concept_links", 
+                     "write_blackboard", "read_blackboard", "create_concept", 
+                     "link_concepts", "record_tesseract_cell", "finalize_venn"],
+              description: "Name of the tool to invoke" 
+            },
+            params: TOOL_PARAMS_SCHEMA,
+            rationale: { type: "string", description: "Why you are calling this tool" },
+          },
+          required: ["tool", "params"],
+        },
+      },
+      continueAnalysis: { type: "boolean", description: "Whether more analysis iterations are needed" },
+    },
+    required: ["thinking", "toolCalls", "continueAnalysis"],
+  };
 }

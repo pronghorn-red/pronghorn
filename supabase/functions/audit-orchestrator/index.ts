@@ -4,7 +4,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
-import { ORCHESTRATOR_TOOLS, getGrokToolSchema, getClaudeTools } from "./tools.ts";
+import { ORCHESTRATOR_TOOLS, getGrokToolSchema, getClaudeTools, getGeminiFunctionDeclarations } from "./tools.ts";
 import { PERSPECTIVE_LENSES, getPerspectiveById } from "./perspectives.ts";
 
 const corsHeaders = {
@@ -165,19 +165,10 @@ async function executeTool(
     
     switch (toolName) {
       case "read_dataset_item": {
-        // Handle parameter name variations (LLM might use datasetId/elementId or dataset/itemId)
-        const dataset = params.dataset || params.datasetId;
-        const itemId = params.itemId || params.elementId || params.id;
+        // Schema enforces: dataset, itemId
+        const { dataset, itemId } = params;
         
-        // Normalize dataset identifier (handle integer, string, or enum)
-        let datasetKey: string;
-        if (dataset === "dataset1" || dataset === 1 || dataset === "1" || dataset === "dataset_1") {
-          datasetKey = "dataset1";
-        } else {
-          datasetKey = "dataset2";
-        }
-        
-        const elements = datasetKey === "dataset1" 
+        const elements = dataset === "dataset1" 
           ? problemShape.dataset1.elements 
           : problemShape.dataset2.elements;
         
@@ -185,11 +176,11 @@ async function executeTool(
         const item = elements.find(e => e.id === itemId || e.id.startsWith(itemId));
         
         if (item) {
-          console.log(`[read_dataset_item] Found item:`, item.id);
+          console.log(`[read_dataset_item] Found:`, item.id);
           return { success: true, result: item };
         }
-        console.log(`[read_dataset_item] Item not found: ${itemId} in ${datasetKey}`);
-        return { success: true, result: { error: `Item ${itemId} not found in ${datasetKey}` } };
+        console.log(`[read_dataset_item] Not found: ${itemId} in ${dataset}`);
+        return { success: true, result: { error: `Item ${itemId} not found in ${dataset}` } };
       }
 
       case "query_knowledge_graph": {
@@ -237,18 +228,10 @@ async function executeTool(
       }
 
       case "write_blackboard": {
-        // Handle parameter variations (LLM might send 'entry' as single field)
-        let entryType = params.entryType || params.entry_type || params.type || "observation";
-        let content = params.content || params.entry || params.message || params.text || "";
-        const confidence = params.confidence ?? 0.7;
-        const targetAgent = params.targetAgent || params.target_agent || null;
+        // Schema enforces: entryType, content, confidence?, targetAgent?
+        const { entryType, content, confidence = 0.7, targetAgent = null } = params;
         
-        // If 'entry' contains the content directly and no content was provided
-        if (params.entry && typeof params.entry === 'string' && !params.content) {
-          content = params.entry;
-        }
-        
-        console.log(`[write_blackboard] entryType=${entryType}, content length=${content.length}`);
+        console.log(`[write_blackboard] entryType=${entryType}, content length=${content?.length || 0}`);
         
         await rpc("insert_audit_blackboard_with_token", {
           p_session_id: sessionId,
@@ -261,7 +244,7 @@ async function executeTool(
           p_target_agent: targetAgent,
           p_evidence: null,
         });
-        await logActivity("orchestrator", "blackboard_write", `Blackboard: ${entryType}`, content.slice(0, 200));
+        await logActivity("orchestrator", "blackboard_write", `Blackboard: ${entryType}`, content?.slice(0, 200));
         return { success: true, result: { written: true } };
       }
 
@@ -273,12 +256,8 @@ async function executeTool(
       }
 
       case "create_concept": {
-        // Handle parameter name variations (LLM might use 'name' instead of 'label')
-        const label = params.label || params.name;
-        const description = params.description;
-        const nodeType = params.nodeType || params.node_type || params.type || "dataset1_concept";
-        const sourceDataset = params.sourceDataset || params.source_dataset || "dataset1";
-        const sourceElementIds = params.sourceElementIds || params.source_element_ids || [];
+        // Schema enforces: label, description, nodeType, sourceDataset, sourceElementIds
+        const { label, description, nodeType = "dataset1_concept", sourceDataset = "dataset1", sourceElementIds } = params;
         
         if (!sourceElementIds || sourceElementIds.length === 0) {
           return { success: false, error: "sourceElementIds is REQUIRED - concepts must link to source artifacts", result: null };
@@ -308,10 +287,8 @@ async function executeTool(
       }
 
       case "link_concepts": {
-        const sourceNodeId = params.sourceNodeId || params.source_node_id || params.sourceId;
-        const targetNodeId = params.targetNodeId || params.target_node_id || params.targetId;
-        const edgeType = params.edgeType || params.edge_type || params.type || "relates_to";
-        const label = params.label;
+        // Schema enforces: sourceNodeId, targetNodeId, edgeType, label?
+        const { sourceNodeId, targetNodeId, edgeType, label } = params;
         
         const nodes = await rpc("get_audit_graph_nodes_with_token", { p_session_id: sessionId, p_token: shareToken });
         
@@ -337,14 +314,8 @@ async function executeTool(
       }
 
       case "record_tesseract_cell": {
-        // Handle parameter name variations
-        const elementId = params.elementId || params.element_id || params.id;
-        const elementLabel = params.elementLabel || params.element_label || params.label;
-        const step = params.step || params.y_step || 1;
-        const stepLabel = params.stepLabel || params.step_label || params.y_step_label;
-        const polarity = params.polarity ?? params.z_polarity ?? 0;
-        const criticality = params.criticality || params.z_criticality;
-        const evidenceSummary = params.evidenceSummary || params.evidence_summary || params.evidence;
+        // Schema enforces: elementId, elementLabel?, step, stepLabel?, polarity, criticality?, evidenceSummary
+        const { elementId, elementLabel, step, stepLabel, polarity, criticality, evidenceSummary } = params;
         
         // Resolve partial element ID
         const resolvedElementId = resolveElementId(elementId) || elementId;
@@ -426,8 +397,109 @@ async function executeTool(
 }
 
 // ==================== CLAUDE RESPONSE TOOL FOR STRUCTURED OUTPUT ====================
+// Explicit parameter schemas to enforce exact parameter names - Claude cannot invent names
 
 function getClaudeResponseTool() {
+  // Define explicit params schema matching ORCHESTRATOR_TOOLS exactly
+  const toolParamsSchema = {
+    type: "object",
+    properties: {
+      // read_dataset_item params
+      dataset: { type: "string", enum: ["dataset1", "dataset2"], description: "Which dataset to read from" },
+      itemId: { type: "string", description: "The item ID or 8-char prefix to read" },
+      
+      // query_knowledge_graph params
+      filter: { type: "string", enum: ["all", "dataset1_only", "dataset2_only", "shared", "orphans"], description: "Filter nodes by source dataset" },
+      nodeType: { type: "string", description: "Filter by node type" },
+      limit: { type: "integer", description: "Max results to return" },
+      
+      // get_concept_links params
+      nodeId: { type: "string", description: "The knowledge graph node ID" },
+      
+      // write_blackboard params
+      entryType: { type: "string", enum: ["plan", "finding", "observation", "question", "conclusion", "tool_result"], description: "Type of blackboard entry" },
+      content: { type: "string", description: "The content to write" },
+      confidence: { type: "number", description: "Confidence level 0.0-1.0" },
+      targetAgent: { type: "string", description: "Optional target perspective" },
+      
+      // read_blackboard params
+      entryTypes: { type: "array", items: { type: "string" }, description: "Filter to specific entry types" },
+      
+      // create_concept params
+      label: { type: "string", description: "Short label for the concept" },
+      description: { type: "string", description: "Detailed description of the concept" },
+      sourceDataset: { type: "string", enum: ["dataset1", "dataset2", "both"], description: "Which dataset this concept originates from" },
+      sourceElementIds: { type: "array", items: { type: "string" }, description: "REQUIRED: UUIDs or 8-char prefixes of source artifacts" },
+      
+      // link_concepts params
+      sourceNodeId: { type: "string", description: "Source node ID" },
+      targetNodeId: { type: "string", description: "Target node ID" },
+      edgeType: { type: "string", enum: ["relates_to", "implements", "depends_on", "conflicts_with", "supports", "covers"], description: "Relationship type" },
+      
+      // record_tesseract_cell params
+      elementId: { type: "string", description: "Dataset 1 element ID" },
+      elementLabel: { type: "string", description: "Human-readable label" },
+      step: { type: "integer", description: "Analysis step 1-5" },
+      stepLabel: { type: "string", description: "Label for this step" },
+      polarity: { type: "number", description: "Alignment score -1 to +1" },
+      criticality: { type: "string", enum: ["critical", "major", "minor", "info"], description: "Severity level" },
+      evidenceSummary: { type: "string", description: "Summary of evidence" },
+      
+      // finalize_venn params
+      uniqueToD1: { 
+        type: "array", 
+        items: { 
+          type: "object", 
+          properties: {
+            id: { type: "string" },
+            label: { type: "string" },
+            criticality: { type: "string" },
+            evidence: { type: "string" }
+          }
+        },
+        description: "Elements unique to Dataset 1 (gaps)" 
+      },
+      aligned: { 
+        type: "array", 
+        items: { 
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            label: { type: "string" },
+            criticality: { type: "string" },
+            evidence: { type: "string" },
+            sourceElement: { type: "string" },
+            targetElement: { type: "string" }
+          }
+        },
+        description: "Elements present in both datasets" 
+      },
+      uniqueToD2: { 
+        type: "array", 
+        items: { 
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            label: { type: "string" },
+            criticality: { type: "string" },
+            evidence: { type: "string" }
+          }
+        },
+        description: "Elements unique to Dataset 2 (orphans)" 
+      },
+      summary: { 
+        type: "object",
+        properties: {
+          totalD1Coverage: { type: "number" },
+          totalD2Coverage: { type: "number" },
+          alignmentScore: { type: "number" }
+        },
+        description: "Summary statistics" 
+      },
+    },
+    additionalProperties: false,
+  };
+
   return {
     name: "respond_with_actions",
     description: "Return your reasoning, tool calls, and continuation flag. You MUST use this tool to respond.",
@@ -436,19 +508,27 @@ function getClaudeResponseTool() {
       properties: {
         thinking: { type: "string", description: "Your internal reasoning about what to do next" },
         perspective: { 
-          type: "string", 
-          description: "Which perspective lens you are applying (architect, security, business, developer, user)" 
+          type: "string",
+          enum: ["architect", "security", "business", "developer", "user"],
+          description: "Which perspective lens you are applying" 
         },
         toolCalls: {
           type: "array",
           items: {
             type: "object",
             properties: {
-              tool: { type: "string", description: "Name of the tool to invoke (read_dataset_item, create_concept, etc.)" },
-              params: { type: "object", description: "Parameters for the tool" },
+              tool: { 
+                type: "string", 
+                enum: ["read_dataset_item", "query_knowledge_graph", "get_concept_links", 
+                       "write_blackboard", "read_blackboard", "create_concept", 
+                       "link_concepts", "record_tesseract_cell", "finalize_venn"],
+                description: "Name of the tool to invoke" 
+              },
+              params: toolParamsSchema,
               rationale: { type: "string", description: "Why you are calling this tool" },
             },
             required: ["tool", "params"],
+            additionalProperties: false,
           },
         },
         continueAnalysis: { type: "boolean", description: "Set to true if more iterations needed, false if done" },
@@ -482,7 +562,7 @@ async function callLLMWithStreaming(
       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: getGrokToolSchema().json_schema.schema,
+        responseSchema: getGeminiFunctionDeclarations(), // Use explicit Gemini schema
         maxOutputTokens: 32768,
         temperature: 0.7,
       },
