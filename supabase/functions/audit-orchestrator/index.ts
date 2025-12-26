@@ -726,6 +726,28 @@ async function buildProblemShape(
     const artifacts = data || [];
     d1Elements = (d1Ids.length > 0 ? artifacts.filter((a: any) => d1Ids.includes(a.id)) : artifacts)
       .map((a: any) => ({ id: a.id, label: a.ai_title || "Artifact", content: a.content?.slice(0, 500) }));
+  } else if (d1Type === "standards") {
+    // Query standards table directly using the stored IDs
+    const { data: allStandards } = await supabase
+      .from("standards")
+      .select("id, code, title, description")
+      .in("id", d1Ids.length > 0 ? d1Ids : []);
+    d1Elements = (allStandards || []).map((s: any) => ({
+      id: s.id,
+      label: s.code ? `${s.code}: ${s.title}` : s.title,
+      content: s.description || "",
+    }));
+  } else if (d1Type === "tech_stacks") {
+    // Query tech_stacks table directly using the stored IDs
+    const { data: allTechStacks } = await supabase
+      .from("tech_stacks")
+      .select("id, name, description, type")
+      .in("id", d1Ids.length > 0 ? d1Ids : []);
+    d1Elements = (allTechStacks || []).map((t: any) => ({
+      id: t.id,
+      label: t.name,
+      content: t.description || `Tech stack of type: ${t.type}`,
+    }));
   }
 
   // Fetch Dataset 2
@@ -755,6 +777,28 @@ async function buildProblemShape(
     const artifacts = data || [];
     d2Elements = (d2Ids.length > 0 ? artifacts.filter((a: any) => d2Ids.includes(a.id)) : artifacts)
       .map((a: any) => ({ id: a.id, label: a.ai_title || "Artifact", content: a.content?.slice(0, 500) }));
+  } else if (d2Type === "standards") {
+    // Query standards table directly using the stored IDs
+    const { data: allStandards } = await supabase
+      .from("standards")
+      .select("id, code, title, description")
+      .in("id", d2Ids.length > 0 ? d2Ids : []);
+    d2Elements = (allStandards || []).map((s: any) => ({
+      id: s.id,
+      label: s.code ? `${s.code}: ${s.title}` : s.title,
+      content: s.description || "",
+    }));
+  } else if (d2Type === "tech_stacks") {
+    // Query tech_stacks table directly using the stored IDs
+    const { data: allTechStacks } = await supabase
+      .from("tech_stacks")
+      .select("id, name, description, type")
+      .in("id", d2Ids.length > 0 ? d2Ids : []);
+    d2Elements = (allTechStacks || []).map((t: any) => ({
+      id: t.id,
+      label: t.name,
+      content: t.description || `Tech stack of type: ${t.type}`,
+    }));
   }
 
   return {
