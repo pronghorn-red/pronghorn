@@ -11,7 +11,7 @@ import { KnowledgeGraph } from "@/components/audit/KnowledgeGraph";
 import { AuditActivityStream } from "@/components/audit/AuditActivityStream";
 import { PipelineActivityStream } from "@/components/audit/PipelineActivityStream";
 import { useRealtimeAudit } from "@/hooks/useRealtimeAudit";
-import { useAuditPipeline, PipelineProgress, PipelineResults, LocalGraphNode, LocalGraphEdge } from "@/hooks/useAuditPipeline";
+import { useAuditPipeline, PipelineProgress, PipelineResults, LocalGraphNode, LocalGraphEdge, PipelineStepId } from "@/hooks/useAuditPipeline";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,7 +61,7 @@ export default function Audit() {
   const manualStopRef = useRef(false);
   
   // New pipeline hook
-  const { runPipeline, isRunning: isPipelineRunning, progress: pipelineProgress, steps: pipelineSteps, error: pipelineError, abort: abortPipeline, results: pipelineResults, clearResults: clearPipelineResults } = useAuditPipeline();
+  const { runPipeline, isRunning: isPipelineRunning, progress: pipelineProgress, steps: pipelineSteps, error: pipelineError, abort: abortPipeline, results: pipelineResults, clearResults: clearPipelineResults, restartStep: restartPipelineStep } = useAuditPipeline();
   
   const {
     session,
@@ -678,6 +678,7 @@ export default function Audit() {
                     <PipelineActivityStream
                       steps={pipelineSteps}
                       isRunning={isPipelineRunning}
+                      onRestartStep={restartPipelineStep}
                     />
                   ) : (
                     <AuditActivityStream

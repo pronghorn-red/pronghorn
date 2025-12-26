@@ -232,6 +232,9 @@ async function streamSSE(
   return result;
 }
 
+// Step ID type for restart functionality
+export type PipelineStepId = "nodes" | "d1" | "d2" | "merge" | "graph" | "tesseract" | "venn";
+
 export function useAuditPipeline() {
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState<PipelineProgress>({ phase: "idle", message: "", progress: 0 });
@@ -239,6 +242,22 @@ export function useAuditPipeline() {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<PipelineResults | null>(null);
   const abortRef = useRef(false);
+
+  // Persistent state for restart functionality
+  const lastInputRef = useRef<PipelineInput | null>(null);
+  const intermediateStateRef = useRef<{
+    d1Concepts: Concept[];
+    d2Concepts: Concept[];
+    mergedConcepts: MergedConcept[];
+    unmergedD1Concepts: Concept[];
+    unmergedD2Concepts: Concept[];
+  }>({
+    d1Concepts: [],
+    d2Concepts: [],
+    mergedConcepts: [],
+    unmergedD1Concepts: [],
+    unmergedD2Concepts: [],
+  });
 
   const updateStep = useCallback((id: string, updates: Partial<PipelineStep>) => {
     setSteps(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
@@ -258,6 +277,7 @@ export function useAuditPipeline() {
     abortRef.current = false;
 
     const { sessionId, projectId, shareToken, d1Elements, d2Elements } = input;
+    lastInputRef.current = input;
 
     // LOCAL STATE - all nodes/edges/cells stored here, NO DB writes
     const localNodes: LocalGraphNode[] = [];
@@ -590,6 +610,15 @@ export function useAuditPipeline() {
         progress: 100, 
         completedAt: new Date() 
       });
+
+      // Save intermediate state for restart functionality
+      intermediateStateRef.current = {
+        d1Concepts,
+        d2Concepts,
+        mergedConcepts,
+        unmergedD1Concepts,
+        unmergedD2Concepts,
+      };
 
       setProgress({ phase: "building_graph", message: "Rebuilding graph with merged concepts...", progress: 50, mergedCount: mergedConcepts.length });
 
@@ -1059,7 +1088,279 @@ export function useAuditPipeline() {
     setSteps([]);
     setProgress({ phase: "idle", message: "", progress: 0 });
     setError(null);
+    intermediateStateRef.current = {
+      d1Concepts: [],
+      d2Concepts: [],
+      mergedConcepts: [],
+      unmergedD1Concepts: [],
+      unmergedD2Concepts: [],
+    };
   }, []);
+
+  // Restart a specific step using existing local data
+  const restartStep = useCallback(async (stepId: PipelineStepId) => {
+    if (!lastInputRef.current || !results) {
+      console.error("[restartStep] No input or results available");
+      return;
+    }
+    
+    const { sessionId, projectId, shareToken, d1Elements, d2Elements } = lastInputRef.current;
+    const { mergedConcepts, unmergedD1Concepts, unmergedD2Concepts } = intermediateStateRef.current;
+    
+    // Clone current results to work with
+    const localNodes = [...results.nodes];
+    const localEdges = [...results.edges];
+    let localTesseractCells = [...results.tesseractCells];
+    let localVennResult = results.vennResult;
+    
+    const updateResults = () => {
+      setResults({
+        nodes: [...localNodes],
+        edges: [...localEdges],
+        tesseractCells: [...localTesseractCells],
+        vennResult: localVennResult,
+      });
+    };
+
+    // Clear previous details for this step
+    setSteps(prev => prev.map(s => s.id === stepId ? { ...s, details: [], errorMessage: undefined } : s));
+    
+    setIsRunning(true);
+    abortRef.current = false;
+
+    try {
+      if (stepId === "tesseract") {
+        // Restart Tesseract phase
+        setProgress({ phase: "building_tesseract", message: "Restarting tesseract analysis...", progress: 65 });
+        updateStep("tesseract", { status: "running", message: "Restarting...", startedAt: new Date(), details: [] });
+
+        // Clear existing tesseract cells
+        localTesseractCells = [];
+        
+        // Get concept nodes for tesseract analysis
+        const conceptNodes = localNodes.filter(n => n.node_type === "concept");
+
+        // Build D1/D2 element content maps
+        const d1ContentMap = new Map<string, Element>();
+        const d2ContentMap = new Map<string, Element>();
+        d1Elements.forEach(e => d1ContentMap.set(e.id, e));
+        d2Elements.forEach(e => d2ContentMap.set(e.id, e));
+
+        // Prepare concepts for tesseract
+        const conceptsForTesseract = conceptNodes.map(node => {
+          const d1Els: Array<{ id: string; label: string; content: string }> = [];
+          const d2Els: Array<{ id: string; label: string; content: string }> = [];
+          
+          for (const elId of node.source_element_ids) {
+            const d1El = d1ContentMap.get(elId);
+            const d2El = d2ContentMap.get(elId);
+            if (d1El) d1Els.push({ id: d1El.id, label: d1El.label, content: d1El.content });
+            if (d2El) d2Els.push({ id: d2El.id, label: d2El.label, content: d2El.content });
+          }
+
+          return {
+            conceptId: node.id,
+            conceptLabel: node.label,
+            conceptDescription: node.description || "",
+            d1Elements: d1Els,
+            d2Elements: d2Els,
+          };
+        });
+
+        const totalConcepts = conceptsForTesseract.length;
+        updateStep("tesseract", { message: `Restarting: ${totalConcepts} concepts...`, progress: 5 });
+
+        if (totalConcepts === 0) {
+          updateStep("tesseract", { status: "completed", message: "No concepts to analyze", progress: 100, completedAt: new Date() });
+        } else {
+          let completedCount = 0;
+          let errorCount = 0;
+
+          // Process concepts one at a time
+          for (let i = 0; i < conceptsForTesseract.length; i++) {
+            if (abortRef.current) throw new Error("Aborted");
+            
+            const concept = conceptsForTesseract[i];
+            const conceptName = concept.conceptLabel.slice(0, 40);
+            console.log(`[tesseract-restart] === START concept ${i + 1}/${totalConcepts}: ${conceptName} ===`);
+            
+            updateStep("tesseract", { 
+              message: `Concept ${i + 1}/${totalConcepts}: ${conceptName}...`, 
+              progress: Math.round((i / totalConcepts) * 90) + 5 
+            });
+
+            try {
+              const payload = { sessionId, projectId, shareToken, concepts: [concept] };
+              const payloadStr = JSON.stringify(payload);
+              const payloadSizeKB = Math.round(payloadStr.length / 1024);
+              const d1ContentSize = concept.d1Elements.reduce((sum, e) => sum + (e.content?.length || 0), 0);
+              const d2ContentSize = concept.d2Elements.reduce((sum, e) => sum + (e.content?.length || 0), 0);
+
+              addStepDetail("tesseract", `Starting: ${conceptName} (${payloadSizeKB}KB payload, D1: ${Math.round(d1ContentSize/1024)}KB, D2: ${Math.round(d2ContentSize/1024)}KB)`);
+
+              let response: Response;
+              try {
+                response = await fetch(`${BASE_URL}/audit-build-tesseract`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: payloadStr,
+                });
+              } catch (fetchErr: any) {
+                const errMsg = `${conceptName}: Fetch failed - ${fetchErr?.message || 'Network error'}`;
+                console.error(`[tesseract-restart] Fetch error:`, errMsg);
+                addStepDetail("tesseract", `❌ ${errMsg}`);
+                errorCount++;
+                continue;
+              }
+
+              if (!response.ok) {
+                let errorText = "Unknown error";
+                try { errorText = await response.text(); } catch {}
+                const errMsg = `${conceptName}: HTTP ${response.status} - ${errorText.slice(0, 300)}`;
+                console.error(`[tesseract-restart] HTTP error:`, errMsg);
+                addStepDetail("tesseract", `❌ ${errMsg}`);
+                errorCount++;
+                continue;
+              }
+
+              let result: any;
+              try {
+                result = await response.json();
+              } catch (jsonErr: any) {
+                const errMsg = `${conceptName}: JSON parse failed - ${jsonErr?.message}`;
+                console.error(`[tesseract-restart] JSON error:`, errMsg);
+                addStepDetail("tesseract", `❌ ${errMsg}`);
+                errorCount++;
+                continue;
+              }
+
+              if (!result.success) {
+                const errMsg = `${conceptName}: ${result.error || 'Unknown error'}`;
+                console.error(`[tesseract-restart] Edge function error:`, errMsg);
+                addStepDetail("tesseract", `❌ ${errMsg}`);
+                errorCount++;
+                continue;
+              }
+
+              if (result.cells && result.cells.length > 0) {
+                for (const c of result.cells) {
+                  const cell: LocalTesseractCell = {
+                    id: localId(),
+                    conceptLabel: c.conceptLabel,
+                    conceptDescription: concept.conceptDescription,
+                    polarity: c.polarity,
+                    rationale: c.rationale || "",
+                    d1ElementIds: concept.d1Elements.map(e => e.id),
+                    d2ElementIds: concept.d2Elements.map(e => e.id),
+                  };
+                  localTesseractCells.push(cell);
+                  
+                  const polarityStr = c.polarity >= 0 ? `+${c.polarity.toFixed(2)}` : c.polarity.toFixed(2);
+                  addStepDetail("tesseract", `✓ ${c.conceptLabel}: ${polarityStr}`);
+                  console.log(`[tesseract-restart] Added cell: ${c.conceptLabel} = ${polarityStr}`);
+                  updateResults();
+                }
+                completedCount++;
+                console.log(`[tesseract-restart] === END concept ${i + 1}: SUCCESS ===`);
+              } else {
+                if (result.errors && result.errors.length > 0) {
+                  const errMsg = `${conceptName}: ${result.errors.join(', ')}`;
+                  addStepDetail("tesseract", `❌ ${errMsg}`);
+                  errorCount++;
+                } else {
+                  addStepDetail("tesseract", `⚠ ${conceptName}: No cells returned`);
+                  errorCount++;
+                }
+                console.log(`[tesseract-restart] === END concept ${i + 1}: NO CELLS ===`);
+              }
+
+            } catch (err: any) {
+              const errMsg = `${conceptName}: ${err?.message || 'Unknown error'}`;
+              console.error(`[tesseract-restart] Uncaught error:`, err);
+              addStepDetail("tesseract", `❌ ${errMsg}`);
+              errorCount++;
+            }
+            
+            // Update progress after concept
+            updateStep("tesseract", { 
+              message: `Completed ${completedCount}/${totalConcepts} concepts (${errorCount} errors)`, 
+              progress: Math.round(((i + 1) / totalConcepts) * 90) + 5 
+            });
+          }
+
+          const finalMessage = errorCount > 0 
+            ? `${localTesseractCells.length} cells analyzed (${errorCount} errors)`
+            : `${localTesseractCells.length} cells analyzed`;
+          
+          updateStep("tesseract", { 
+            status: errorCount === totalConcepts ? "error" : "completed", 
+            message: finalMessage, 
+            progress: 100, 
+            completedAt: new Date(),
+          });
+        }
+        
+        updateResults();
+        setProgress({ phase: "completed", message: "Tesseract restart complete", progress: 100 });
+
+      } else if (stepId === "venn") {
+        // Restart Venn phase
+        setProgress({ phase: "generating_venn", message: "Restarting Venn analysis...", progress: 85 });
+        updateStep("venn", { status: "running", message: "Restarting...", startedAt: new Date(), details: [] });
+
+        const vennResponse = await fetch(`${BASE_URL}/audit-generate-venn`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            sessionId, 
+            projectId, 
+            shareToken, 
+            mergedConcepts, 
+            unmergedD1Concepts, 
+            unmergedD2Concepts,
+            tesseractCells: localTesseractCells,
+          }),
+        });
+
+        if (!vennResponse.ok) {
+          const errorText = await vennResponse.text();
+          throw new Error(`Venn failed: ${vennResponse.status} - ${errorText.slice(0, 100)}`);
+        }
+
+        await streamSSE(
+          vennResponse,
+          (data) => {
+            updateStep("venn", { message: data.message || "Generating...", progress: data.progress || 50 });
+          },
+          () => {},
+          (data) => {
+            localVennResult = {
+              uniqueToD1: data.uniqueToD1 || [],
+              aligned: data.aligned || [],
+              uniqueToD2: data.uniqueToD2 || [],
+              summary: data.summary || "",
+            };
+            updateResults();
+          },
+          (err) => { throw new Error(`Venn stream error: ${err}`); }
+        );
+
+        updateStep("venn", { status: "completed", message: "Venn analysis complete", progress: 100, completedAt: new Date() });
+        setProgress({ phase: "completed", message: "Venn restart complete", progress: 100 });
+
+      } else {
+        console.warn(`[restartStep] Step ${stepId} restart not implemented yet`);
+        updateStep(stepId, { status: "error", message: "Restart not implemented for this step" });
+      }
+
+    } catch (err: any) {
+      console.error("[restartStep] Error:", err);
+      setError(err.message || "Restart failed");
+      updateStep(stepId, { status: "error", message: err.message || "Restart failed", errorMessage: err.message });
+    } finally {
+      setIsRunning(false);
+    }
+  }, [results, updateStep, addStepDetail]);
 
   return {
     isRunning,
@@ -1068,6 +1369,7 @@ export function useAuditPipeline() {
     error,
     results,
     runPipeline,
+    restartStep,
     abort,
     clearResults,
   };

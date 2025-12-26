@@ -16,13 +16,15 @@ import {
   GitMerge,
   Grid3X3,
   CircleDot,
+  RotateCcw,
 } from "lucide-react";
 import { useState } from "react";
-import type { PipelineStep, PipelinePhase } from "@/hooks/useAuditPipeline";
+import type { PipelineStep, PipelinePhase, PipelineStepId } from "@/hooks/useAuditPipeline";
 
 interface PipelineActivityStreamProps {
   steps: PipelineStep[];
   isRunning: boolean;
+  onRestartStep?: (stepId: PipelineStepId) => void;
 }
 
 const PHASE_ICONS: Record<PipelinePhase, React.ReactNode> = {
@@ -52,9 +54,23 @@ const STATUS_BG: Record<string, string> = {
   error: "bg-destructive/10 border-l-destructive",
 };
 
-function StepItem({ step }: { step: PipelineStep }) {
+// Steps that support restart
+const RESTARTABLE_STEPS: PipelineStepId[] = ["tesseract", "venn"];
+
+function StepItem({ 
+  step, 
+  onRestart, 
+  isRunning 
+}: { 
+  step: PipelineStep; 
+  onRestart?: (stepId: PipelineStepId) => void;
+  isRunning: boolean;
+}) {
   const [isOpen, setIsOpen] = useState(step.status === "running");
   const hasDetails = step.details && step.details.length > 0;
+  const canRestart = !isRunning && 
+    RESTARTABLE_STEPS.includes(step.id as PipelineStepId) && 
+    (step.status === "completed" || step.status === "error");
 
   return (
     <div className={`border-l-4 rounded-r-lg p-3 transition-all ${STATUS_BG[step.status]}`}>
@@ -91,6 +107,17 @@ function StepItem({ step }: { step: PipelineStep }) {
                     <span className="text-xs ml-1">{step.details!.length}</span>
                   </Button>
                 </CollapsibleTrigger>
+              )}
+              {canRestart && onRestart && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-5 px-2 ml-auto"
+                  onClick={() => onRestart(step.id as PipelineStepId)}
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Restart
+                </Button>
               )}
             </div>
 
@@ -135,7 +162,7 @@ function StepItem({ step }: { step: PipelineStep }) {
   );
 }
 
-export function PipelineActivityStream({ steps, isRunning }: PipelineActivityStreamProps) {
+export function PipelineActivityStream({ steps, isRunning, onRestartStep }: PipelineActivityStreamProps) {
   const completedCount = steps.filter(s => s.status === "completed").length;
   const errorCount = steps.filter(s => s.status === "error").length;
 
@@ -172,7 +199,14 @@ export function PipelineActivityStream({ steps, isRunning }: PipelineActivityStr
                 Pipeline not started. Configure and start an audit to see progress.
               </div>
             ) : (
-              steps.map((step) => <StepItem key={step.id} step={step} />)
+              steps.map((step) => (
+                <StepItem 
+                  key={step.id} 
+                  step={step} 
+                  onRestart={onRestartStep}
+                  isRunning={isRunning}
+                />
+              ))
             )}
           </div>
         </ScrollArea>
