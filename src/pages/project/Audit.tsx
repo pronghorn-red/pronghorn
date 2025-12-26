@@ -174,7 +174,8 @@ export default function Audit() {
   };
 
   const activeAgents = agentInstances.filter((a) => a.status === "active");
-  const isRunning = session?.status === "running" || session?.status === "agents_active" || session?.status === "analyzing_shape";
+  const isRunning = session?.status === "running" || session?.status === "agents_active" || session?.status === "analyzing_shape" || session?.status === "pending";
+  const currentPhase = (session as any)?.phase;
 
   return (
     <div className="min-h-screen bg-background">
@@ -265,6 +266,11 @@ export default function Audit() {
                         <div className={`w-3 h-3 rounded-full ${getStatusColor(session.status)} ${isRunning ? "animate-pulse" : ""}`} />
                         <span className="font-medium capitalize">{session.status.replace(/_/g, " ")}</span>
                       </div>
+                      {currentPhase && (
+                        <Badge variant="outline" className="capitalize">
+                          Phase: {currentPhase.replace(/_/g, " ")}
+                        </Badge>
+                      )}
                       <Badge variant="outline">
                         <Activity className="h-3 w-3 mr-1" />
                         Iteration {session.current_iteration} / {session.max_iterations}

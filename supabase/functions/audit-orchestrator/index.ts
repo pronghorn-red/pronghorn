@@ -694,19 +694,48 @@ serve(async (req) => {
 
     if (!apiKey) throw new Error(`API key not configured for: ${modelSettings.selectedModel}`);
 
+    // Setup real-time channel with proper subscription
     const channel = supabase.channel(`audit-${sessionId}`);
+    await new Promise<void>((resolve) => {
+      channel.subscribe((status: string) => {
+        console.log(`Channel subscription status: ${status}`);
+        if (status === "SUBSCRIBED") resolve();
+      });
+      // Timeout after 2 seconds if subscription doesn't complete
+      setTimeout(resolve, 2000);
+    });
+
+    // Helper to broadcast and log
+    const broadcast = async (phase: string, extra: Record<string, any> = {}) => {
+      const payload = { phase, sessionId, timestamp: new Date().toISOString(), ...extra };
+      console.log(`Broadcasting: ${phase}`, extra);
+      await channel.send({ type: "broadcast", event: "audit_refresh", payload });
+    };
+
+    // Helper to call RPC with error logging
+    const rpc = async (name: string, params: Record<string, any>): Promise<any> => {
+      console.log(`RPC call: ${name}`, JSON.stringify(params).slice(0, 200));
+      const { data, error } = await supabase.rpc(name, params);
+      if (error) {
+        console.error(`RPC ERROR [${name}]:`, error.message, error.details, error.hint);
+        throw new Error(`RPC ${name} failed: ${error.message}`);
+      }
+      console.log(`RPC success: ${name}`, data ? `(${Array.isArray(data) ? data.length + " rows" : "ok"})` : "(no data)");
+      return data;
+    };
 
     // Build problem shape
     const problemShape = await buildProblemShape(supabase, session, projectId, shareToken);
     console.log("Problem shape:", { d1Count: problemShape.dataset1.count, d2Type: problemShape.dataset2.type });
 
-    await supabase.rpc("update_audit_session_with_token", {
+    await rpc("update_audit_session_with_token", {
       p_session_id: sessionId,
       p_token: shareToken,
       p_status: "running",
       p_phase: "conference",
       p_problem_shape: problemShape,
     });
+    await broadcast("conference", { status: "running" });
 
     // Get enabled agents
     const agentDefs = session.agent_definitions || {};
@@ -720,7 +749,7 @@ serve(async (req) => {
 
     // Create agent instances
     for (const agent of agents) {
-      await supabase.rpc("insert_audit_agent_instance_with_token", {
+      await rpc("insert_audit_agent_instance_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
         p_agent_role: agent.role,
@@ -731,7 +760,7 @@ serve(async (req) => {
       });
     }
 
-    channel.send({ type: "broadcast", event: "audit_refresh", payload: { phase: "conference" } });
+    await broadcast("conference", { agentsCreated: agents.length });
 
     // ==================== PHASE 1: CONFERENCE ====================
     console.log("=== PHASE 1: CONFERENCE ===");
@@ -747,9 +776,9 @@ serve(async (req) => {
 
         console.log(`Conference response from ${agent.role}:`, response.proposedNodes?.length || 0, "nodes");
 
-        // Insert proposed nodes
+        // Insert proposed nodes - use UPSERT function (not insert)
         for (const node of response.proposedNodes || []) {
-          await supabase.rpc("insert_audit_graph_node_with_token", {
+          await rpc("upsert_audit_graph_node_with_token", {
             p_session_id: sessionId,
             p_token: shareToken,
             p_label: node.label,
@@ -763,7 +792,7 @@ serve(async (req) => {
 
         // Blackboard entry
         if (response.blackboardEntry?.content) {
-          await supabase.rpc("insert_audit_blackboard_with_token", {
+          await rpc("insert_audit_blackboard_with_token", {
             p_session_id: sessionId,
             p_token: shareToken,
             p_agent_role: agent.role,
@@ -782,15 +811,16 @@ serve(async (req) => {
     });
 
     await Promise.all(conferencePromises);
-    channel.send({ type: "broadcast", event: "audit_refresh", payload: { phase: "conference_complete" } });
+    await broadcast("conference_complete", { agents: agents.length });
 
     // ==================== PHASE 2: GRAPH BUILDING ====================
     console.log("=== PHASE 2: GRAPH BUILDING ===");
-    await supabase.rpc("update_audit_session_with_token", {
+    await rpc("update_audit_session_with_token", {
       p_session_id: sessionId,
       p_token: shareToken,
       p_phase: "graph_building",
     });
+    await broadcast("graph_building", { iteration: 0 });
 
     const MAX_GRAPH_ITERATIONS = 5;
     let graphComplete = false;
@@ -800,18 +830,19 @@ serve(async (req) => {
       graphIteration++;
       console.log(`Graph building iteration ${graphIteration}`);
 
-      await supabase.rpc("update_audit_session_with_token", {
+      await rpc("update_audit_session_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
         p_current_iteration: graphIteration,
       });
+      await broadcast("graph_building", { iteration: graphIteration });
 
       // Get current graph state
-      const { data: existingNodes } = await supabase.rpc("get_audit_graph_nodes_with_token", {
+      const existingNodes = await rpc("get_audit_graph_nodes_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
       });
-      const { data: existingEdges } = await supabase.rpc("get_audit_graph_edges_with_token", {
+      const existingEdges = await rpc("get_audit_graph_edges_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
       });
@@ -825,11 +856,11 @@ serve(async (req) => {
             getGrokGraphBuildingSchema(), getClaudeGraphBuildingTool()
           );
 
-          // Insert new nodes (deduplicate by label)
+          // Insert new nodes (deduplicate by label) - use UPSERT
           const existingLabels = new Set((existingNodes || []).map((n: any) => n.label.toLowerCase()));
           for (const node of response.proposedNodes || []) {
             if (!existingLabels.has(node.label.toLowerCase())) {
-              await supabase.rpc("insert_audit_graph_node_with_token", {
+              await rpc("upsert_audit_graph_node_with_token", {
                 p_session_id: sessionId,
                 p_token: shareToken,
                 p_label: node.label,
@@ -844,7 +875,7 @@ serve(async (req) => {
           }
 
           // Insert edges (need to resolve labels to IDs)
-          const { data: refreshedNodes } = await supabase.rpc("get_audit_graph_nodes_with_token", {
+          const refreshedNodes = await rpc("get_audit_graph_nodes_with_token", {
             p_session_id: sessionId,
             p_token: shareToken,
           });
@@ -854,7 +885,7 @@ serve(async (req) => {
             const sourceId = labelToId.get(edge.sourceNodeLabel?.toLowerCase());
             const targetId = labelToId.get(edge.targetNodeLabel?.toLowerCase());
             if (sourceId && targetId) {
-              await supabase.rpc("insert_audit_graph_edge_with_token", {
+              await rpc("insert_audit_graph_edge_with_token", {
                 p_session_id: sessionId,
                 p_token: shareToken,
                 p_source_node_id: sourceId,
@@ -868,7 +899,7 @@ serve(async (req) => {
 
           // Blackboard
           if (response.blackboardEntry?.content) {
-            await supabase.rpc("insert_audit_blackboard_with_token", {
+            await rpc("insert_audit_blackboard_with_token", {
               p_session_id: sessionId,
               p_token: shareToken,
               p_agent_role: agent.role,
@@ -887,7 +918,7 @@ serve(async (req) => {
       });
 
       const results = await Promise.all(graphPromises);
-      channel.send({ type: "broadcast", event: "audit_refresh", payload: { phase: "graph_building", iteration: graphIteration } });
+      await broadcast("graph_building", { iteration: graphIteration, votes: results.map(r => r.graphCompleteVote) });
 
       // Check if majority votes graph complete
       const completeVotes = results.filter(r => r.graphCompleteVote === true).length;
@@ -900,7 +931,7 @@ serve(async (req) => {
       // Store votes
       const votes: Record<string, boolean> = {};
       results.forEach(r => { votes[r.agent] = r.graphCompleteVote || false; });
-      await supabase.rpc("update_audit_session_with_token", {
+      await rpc("update_audit_session_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
         p_graph_complete_votes: votes,
@@ -909,17 +940,18 @@ serve(async (req) => {
 
     // ==================== PHASE 3: ASSIGNMENT ====================
     console.log("=== PHASE 3: ASSIGNMENT ===");
-    await supabase.rpc("update_audit_session_with_token", {
+    await rpc("update_audit_session_with_token", {
       p_session_id: sessionId,
       p_token: shareToken,
       p_phase: "assignment",
     });
-    channel.send({ type: "broadcast", event: "audit_refresh", payload: { phase: "assignment" } });
 
-    const { data: graphNodes } = await supabase.rpc("get_audit_graph_nodes_with_token", {
+    const graphNodes = await rpc("get_audit_graph_nodes_with_token", {
       p_session_id: sessionId,
       p_token: shareToken,
     });
+
+    await broadcast("assignment", { graphNodes: graphNodes?.length || 0 });
 
     const agentSelections: Map<string, string[]> = new Map();
 
@@ -935,7 +967,7 @@ serve(async (req) => {
         agentSelections.set(agent.role, response.selectedNodeIds || []);
 
         if (response.blackboardEntry?.content) {
-          await supabase.rpc("insert_audit_blackboard_with_token", {
+          await rpc("insert_audit_blackboard_with_token", {
             p_session_id: sessionId,
             p_token: shareToken,
             p_agent_role: agent.role,
@@ -954,6 +986,7 @@ serve(async (req) => {
     });
 
     await Promise.all(assignmentPromises);
+    await broadcast("assignment_complete", { agents: agents.length });
 
     // Confirm assignments (mixed approach - orchestrator ensures coverage)
     const nodeAssignments: Map<string, string[]> = new Map();
@@ -1001,12 +1034,12 @@ serve(async (req) => {
 
     // ==================== PHASE 4: PARALLEL ANALYSIS ====================
     console.log("=== PHASE 4: PARALLEL ANALYSIS ===");
-    await supabase.rpc("update_audit_session_with_token", {
+    await rpc("update_audit_session_with_token", {
       p_session_id: sessionId,
       p_token: shareToken,
       p_phase: "analysis",
     });
-    channel.send({ type: "broadcast", event: "audit_refresh", payload: { phase: "analysis" } });
+    await broadcast("analysis", { iteration: 0 });
 
     const MAX_ANALYSIS_ITERATIONS = session.max_iterations || 10;
     let analysisIteration = 0;
@@ -1016,25 +1049,26 @@ serve(async (req) => {
       analysisIteration++;
       console.log(`Analysis iteration ${analysisIteration}`);
 
-      await supabase.rpc("update_audit_session_with_token", {
+      await rpc("update_audit_session_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
         p_current_iteration: graphIteration + analysisIteration,
       });
+      await broadcast("analysis", { iteration: analysisIteration });
 
       // Check for abort
-      const { data: currentSession } = await supabase.rpc("get_audit_sessions_with_token", {
+      const currentSessions = await rpc("get_audit_sessions_with_token", {
         p_project_id: projectId,
         p_token: shareToken,
       });
-      const sessionState = currentSession?.find((s: any) => s.id === sessionId);
+      const sessionState = currentSessions?.find((s: any) => s.id === sessionId);
       if (sessionState?.status === "stopped" || sessionState?.status === "paused") {
         console.log("Session stopped/paused");
         break;
       }
 
       // Get blackboard context
-      const { data: recentBlackboard } = await supabase.rpc("get_audit_blackboard_with_token", {
+      const recentBlackboard = await rpc("get_audit_blackboard_with_token", {
         p_session_id: sessionId,
         p_token: shareToken,
       });
@@ -1062,7 +1096,7 @@ serve(async (req) => {
           // Record observations to tesseract
           for (const obs of response.observations || []) {
             const elementIndex = problemShape.dataset1.elements.findIndex((e: any) => e.id === obs.elementId);
-            await supabase.rpc("upsert_audit_tesseract_cell_with_token", {
+            await rpc("upsert_audit_tesseract_cell_with_token", {
               p_session_id: sessionId,
               p_token: shareToken,
               p_x_index: elementIndex >= 0 ? elementIndex : 0,
@@ -1080,7 +1114,7 @@ serve(async (req) => {
 
           // Blackboard
           if (response.blackboardEntry?.content) {
-            await supabase.rpc("insert_audit_blackboard_with_token", {
+            await rpc("insert_audit_blackboard_with_token", {
               p_session_id: sessionId,
               p_token: shareToken,
               p_agent_role: agent.role,
@@ -1099,7 +1133,7 @@ serve(async (req) => {
       });
 
       const results = await Promise.all(analysisPromises);
-      channel.send({ type: "broadcast", event: "audit_refresh", payload: { phase: "analysis", iteration: analysisIteration } });
+      await broadcast("analysis", { iteration: analysisIteration, completed: results.filter(r => r.analysisComplete).length });
 
       // Check consensus
       const votes = results.filter((r) => r.consensusVote === true);
@@ -1113,7 +1147,7 @@ serve(async (req) => {
     console.log("=== FINALIZING ===");
     const vennResult = await generateVennResult(supabase, sessionId, shareToken, problemShape);
 
-    await supabase.rpc("update_audit_session_with_token", {
+    await rpc("update_audit_session_with_token", {
       p_session_id: sessionId,
       p_token: shareToken,
       p_status: consensusReached ? "completed" : "completed_max_iterations",
@@ -1122,7 +1156,7 @@ serve(async (req) => {
       p_consensus_reached: consensusReached,
     });
 
-    channel.send({ type: "broadcast", event: "audit_refresh", payload: { completed: true } });
+    await broadcast("completed", { consensusReached, vennResult: !!vennResult });
 
     return new Response(JSON.stringify({ 
       success: true, 
