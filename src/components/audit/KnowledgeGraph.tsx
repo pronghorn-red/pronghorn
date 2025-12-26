@@ -9,7 +9,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Network, ZoomIn, ZoomOut, Maximize2, RefreshCw } from "lucide-react";
+import { Network, ZoomIn, ZoomOut, Maximize2, RefreshCw, Download, Trash2 } from "lucide-react";
 
 interface GraphNode {
   id: string;
@@ -60,6 +60,7 @@ interface KnowledgeGraphProps {
   }>;
   currentPhase?: string;
   onNodeClick?: (nodeId: string) => void;
+  onPruneOrphans?: () => void;
 }
 
 // Color scheme for node types
@@ -88,8 +89,59 @@ export function KnowledgeGraph({
   edges,
   currentPhase = "conference",
   onNodeClick,
+  onPruneOrphans,
 }: KnowledgeGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  
+  // Calculate orphan count (nodes with no edges)
+  const orphanCount = useMemo(() => {
+    const connectedNodeIds = new Set<string>();
+    edges.forEach(e => {
+      connectedNodeIds.add(e.source_node_id);
+      connectedNodeIds.add(e.target_node_id);
+    });
+    return nodes.filter(n => !connectedNodeIds.has(n.id)).length;
+  }, [nodes, edges]);
+  
+  // Download graph as JSON
+  const handleDownload = useCallback(() => {
+    const graphData = {
+      exportedAt: new Date().toISOString(),
+      phase: currentPhase,
+      stats: {
+        totalNodes: nodes.length,
+        totalEdges: edges.length,
+        orphanNodes: orphanCount,
+      },
+      nodes: nodes.map(n => ({
+        id: n.id,
+        label: n.label,
+        description: n.description,
+        type: n.node_type,
+        sourceDataset: n.source_dataset,
+        createdBy: n.created_by_agent,
+      })),
+      edges: edges.map(e => ({
+        id: e.id,
+        source: e.source_node_id,
+        target: e.target_node_id,
+        type: e.edge_type,
+        label: e.label,
+        weight: e.weight,
+        createdBy: e.created_by_agent,
+      })),
+    };
+    
+    const blob = new Blob([JSON.stringify(graphData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `knowledge-graph-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [nodes, edges, currentPhase, orphanCount]);
   const containerRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphEdge> | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
@@ -384,11 +436,16 @@ export function KnowledgeGraph({
             <Network className="h-5 w-5" />
             Knowledge Graph
           </CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline">{getPhaseLabel(currentPhase)}</Badge>
             <Badge variant="secondary">
               {nodes.length} nodes · {edges.length} edges
             </Badge>
+            {orphanCount > 0 && (
+              <Badge variant="destructive" className="text-xs">
+                {orphanCount} orphans
+              </Badge>
+            )}
             <div className="flex items-center gap-1 ml-2">
               <TooltipProvider>
                 <Tooltip>
@@ -430,6 +487,29 @@ export function KnowledgeGraph({
                   <TooltipContent>Re-layout</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              <div className="w-px h-6 bg-border mx-1" />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="icon" onClick={handleDownload}>
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Download Graph (JSON)</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {orphanCount > 0 && onPruneOrphans && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="icon" onClick={onPruneOrphans} className="text-destructive hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Prune {orphanCount} orphan nodes</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           </div>
         </div>

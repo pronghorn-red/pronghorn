@@ -1108,6 +1108,94 @@ serve(async (req) => {
       });
     }
 
+    // ==================== ORPHAN EDGE CREATION (ORCHESTRATOR PASS) ====================
+    console.log("=== ORCHESTRATOR: Creating edges for orphan nodes ===");
+    await logActivity(null, "thinking", "Orchestrator: Connecting orphan nodes", "Finding isolated nodes and creating logical edges...");
+    
+    const finalNodes = await rpc("get_audit_graph_nodes_with_token", { p_session_id: sessionId, p_token: shareToken });
+    const finalEdges = await rpc("get_audit_graph_edges_with_token", { p_session_id: sessionId, p_token: shareToken });
+    
+    // Find orphan nodes
+    const connectedNodeIds = new Set<string>();
+    (finalEdges || []).forEach((e: any) => {
+      connectedNodeIds.add(e.source_node_id);
+      connectedNodeIds.add(e.target_node_id);
+    });
+    const orphanNodes = (finalNodes || []).filter((n: any) => !connectedNodeIds.has(n.id));
+    
+    if (orphanNodes.length > 0 && (finalNodes || []).length > orphanNodes.length) {
+      console.log(`Found ${orphanNodes.length} orphan nodes out of ${(finalNodes || []).length} total`);
+      await logActivity(null, "thinking", `Found ${orphanNodes.length} orphan nodes`, "Using LLM to create logical connections...");
+      
+      // Prepare context for LLM
+      const connectedNodes = (finalNodes || []).filter((n: any) => connectedNodeIds.has(n.id));
+      const orphanList = orphanNodes.map((n: any) => `${n.id.slice(0, 8)}: "${n.label}"`).join("\n");
+      const connectedList = connectedNodes.slice(0, 30).map((n: any) => `${n.id.slice(0, 8)}: "${n.label}"`).join("\n");
+      
+      const edgePrompt = `You are an orchestrator connecting orphan nodes to the knowledge graph.
+
+## ORPHAN NODES (need edges):
+${orphanList}
+
+## CONNECTED NODES (already in graph):
+${connectedList}
+
+## Task
+For each orphan node, identify the MOST RELEVANT connected node it should link to.
+Create edges that make semantic sense based on the labels.
+
+CRITICAL: Use the exact 8-character ID prefixes shown above for sourceNodeId and targetNodeId.`;
+
+      try {
+        const edgeResponse = await callLLM(
+          apiEndpoint, apiKey, modelSettings,
+          edgePrompt, "Create edges to connect orphan nodes to the graph.",
+          getGrokGraphBuildingSchema(), getClaudeGraphBuildingTool()
+        );
+        
+        // Build prefix-to-full-ID map
+        const prefixToFullId = new Map<string, string>();
+        for (const n of (finalNodes || [])) {
+          prefixToFullId.set(n.id.slice(0, 8).toLowerCase(), n.id);
+        }
+        
+        let edgesCreated = 0;
+        for (const edge of edgeResponse.proposedEdges || []) {
+          const sourceIdRaw = edge.sourceNodeId || edge.source_node_id || "";
+          const targetIdRaw = edge.targetNodeId || edge.target_node_id || "";
+          const sourceId = prefixToFullId.get(sourceIdRaw.toLowerCase().slice(0, 8));
+          const targetId = prefixToFullId.get(targetIdRaw.toLowerCase().slice(0, 8));
+          
+          if (sourceId && targetId) {
+            try {
+              await rpc("insert_audit_graph_edge_with_token", {
+                p_session_id: sessionId,
+                p_token: shareToken,
+                p_source_node_id: sourceId,
+                p_target_node_id: targetId,
+                p_edge_type: edge.edgeType || edge.edge_type || "relates_to",
+                p_label: edge.label || null,
+                p_created_by_agent: "orchestrator",
+              });
+              edgesCreated++;
+            } catch (err) {
+              console.warn(`Failed to create edge: ${err}`);
+            }
+          }
+        }
+        
+        await logActivity(null, "success", `Orchestrator created ${edgesCreated} edges`, 
+          `Connected ${edgesCreated} orphan nodes to the graph`);
+        await broadcast("edges_created", { count: edgesCreated, by: "orchestrator" });
+      } catch (err) {
+        console.error("Orchestrator edge creation failed:", err);
+        await logActivity(null, "error", "Orchestrator edge creation failed", String(err));
+      }
+    } else if (orphanNodes.length > 0) {
+      await logActivity(null, "thinking", `${orphanNodes.length} orphan nodes (all nodes orphaned)`, 
+        "No connected nodes to link to - nodes may need manual pruning");
+    }
+
     // ==================== PHASE 3: ASSIGNMENT ====================
     console.log("=== PHASE 3: ASSIGNMENT ===");
     await logActivity(null, "phase_change", "Assignment Phase Started", "Agents selecting nodes to analyze");

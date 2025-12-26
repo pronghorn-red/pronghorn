@@ -3473,6 +3473,10 @@ export type Database = {
         Args: { p_id: string; p_token: string }
         Returns: undefined
       }
+      delete_audit_graph_node_with_token: {
+        Args: { p_node_id: string; p_token: string }
+        Returns: undefined
+      }
       delete_audit_session_with_token: {
         Args: { p_session_id: string; p_token?: string }
         Returns: boolean

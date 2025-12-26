@@ -69,6 +69,7 @@ export interface UseRealtimeAuditReturn {
   writeToBlackboard: (entry: WriteBlackboardParams) => Promise<void>;
   writeTesseractCell: (cell: WriteTesseractCellParams) => Promise<void>;
   refreshSession: (sessionId: string) => Promise<void>;
+  pruneOrphanNodes: (sessionId: string) => Promise<number>;
 }
 
 interface CreateSessionParams {
@@ -235,5 +236,39 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
 
   const refreshSession = useCallback(async (sid: string) => { await loadSessionData(sid); }, [loadSessionData]);
 
-  return { session, blackboardEntries, tesseractCells, agentInstances, graphNodes, graphEdges, activityStream, isLoading, error, createSession, updateSessionStatus, writeToBlackboard, writeTesseractCell, refreshSession };
+  const pruneOrphanNodes = useCallback(async (sid: string): Promise<number> => {
+    if (!shareToken) return 0;
+    
+    // Find orphan nodes (nodes with no edges)
+    const connectedNodeIds = new Set<string>();
+    graphEdges.forEach(e => {
+      connectedNodeIds.add(e.source_node_id);
+      connectedNodeIds.add(e.target_node_id);
+    });
+    
+    const orphanNodeIds = graphNodes
+      .filter(n => !connectedNodeIds.has(n.id))
+      .map(n => n.id);
+    
+    if (orphanNodeIds.length === 0) return 0;
+    
+    // Delete orphan nodes via RPC
+    let deletedCount = 0;
+    for (const nodeId of orphanNodeIds) {
+      const { error } = await supabase.rpc("delete_audit_graph_node_with_token", {
+        p_node_id: nodeId,
+        p_token: shareToken,
+      });
+      if (!error) {
+        deletedCount++;
+        // Update local state immediately
+        setGraphNodes((prev) => prev.filter((n) => n.id !== nodeId));
+      }
+    }
+    
+    channelRef.current?.send({ type: "broadcast", event: "audit_refresh", payload: {} });
+    return deletedCount;
+  }, [shareToken, graphNodes, graphEdges]);
+
+  return { session, blackboardEntries, tesseractCells, agentInstances, graphNodes, graphEdges, activityStream, isLoading, error, createSession, updateSessionStatus, writeToBlackboard, writeTesseractCell, refreshSession, pruneOrphanNodes };
 }

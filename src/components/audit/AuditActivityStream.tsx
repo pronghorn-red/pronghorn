@@ -113,7 +113,7 @@ function ActivityItem({ activity }: { activity: ActivityEntry }) {
                       </Button>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <pre className="mt-2 p-3 bg-background/50 rounded text-xs overflow-x-auto max-h-[400px] overflow-y-auto font-mono whitespace-pre-wrap break-words">
+                      <pre className="mt-2 p-3 bg-background/50 rounded text-xs overflow-x-auto max-h-[600px] overflow-y-auto font-mono whitespace-pre-wrap break-all">
                         {activity.content}
                       </pre>
                     </CollapsibleContent>
@@ -171,8 +171,8 @@ export function AuditActivityStream({ activities, isLoading }: AuditActivityStre
           <Badge variant="outline">{activities.length} events</Badge>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 overflow-hidden">
-        <ScrollArea className="h-full pr-4" ref={scrollRef}>
+      <CardContent className="flex-1 min-h-0 overflow-hidden">
+        <ScrollArea className="h-full" ref={scrollRef}>
           {isLoading && activities.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

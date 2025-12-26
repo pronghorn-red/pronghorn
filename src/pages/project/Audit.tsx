@@ -64,6 +64,7 @@ export default function Audit() {
     createSession,
     updateSessionStatus,
     refreshSession,
+    pruneOrphanNodes,
   } = useRealtimeAudit(projectId!, selectedSessionId);
 
   // Load all sessions for this project
@@ -390,6 +391,15 @@ export default function Audit() {
                     currentPhase={(session as any)?.phase || "conference"}
                     onNodeClick={(nodeId) => {
                       toast.info(`Node: ${graphNodes.find(n => n.id === nodeId)?.label || nodeId}`);
+                    }}
+                    onPruneOrphans={async () => {
+                      if (!session) return;
+                      const count = await pruneOrphanNodes(session.id);
+                      if (count > 0) {
+                        toast.success(`Pruned ${count} orphan node${count > 1 ? 's' : ''}`);
+                      } else {
+                        toast.info("No orphan nodes to prune");
+                      }
                     }}
                   />
                 </TabsContent>

@@ -135,7 +135,7 @@ export function AuditBlackboard({
     entryTypeConfig[type] || { variant: "outline" as const, label: type };
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden">
+    <Card className="h-[600px] flex flex-col overflow-hidden">
       <CardHeader className="pb-3 shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -190,9 +190,9 @@ export function AuditBlackboard({
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full max-h-[500px]">
-          <div className="px-4 pb-4 space-y-2">
+      <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
+        <ScrollArea className="h-full">
+          <div className="px-4 pb-4 space-y-2 min-h-0">
             {filteredEntries.length === 0 ? (
               <div className="flex items-center justify-center h-32 text-muted-foreground">
                 {entries.length === 0
