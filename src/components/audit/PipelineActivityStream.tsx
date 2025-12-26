@@ -106,6 +106,16 @@ function StepItem({ step }: { step: PipelineStep }) {
               </div>
             )}
 
+            {/* Error message display */}
+            {step.errorMessage && (
+              <div className="mt-2 p-2 bg-destructive/10 border border-destructive/30 rounded text-xs text-destructive">
+                <div className="font-medium mb-1">Error Details:</div>
+                <pre className="whitespace-pre-wrap font-mono max-h-[150px] overflow-y-auto">
+                  {step.errorMessage}
+                </pre>
+              </div>
+            )}
+
             {/* Expandable details */}
             <CollapsibleContent>
               {hasDetails && (

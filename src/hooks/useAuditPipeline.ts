@@ -34,6 +34,7 @@ export interface PipelineStep {
   startedAt?: Date;
   completedAt?: Date;
   details?: string[];
+  errorMessage?: string; // Full error message for display
 }
 
 interface Concept {
@@ -453,41 +454,82 @@ export function useAuditPipeline() {
         return concepts;
       };
 
-      // Process all batches for D1 and D2
+      // Process all batches for a dataset - marks itself complete when done
       const processAllBatches = async (
         dataset: "d1" | "d2",
         batches: Element[][],
         stepId: string
-      ): Promise<Concept[]> => {
+      ): Promise<{ concepts: Concept[]; error?: string }> => {
         const allConcepts: Concept[] = [];
+        const batchErrors: string[] = [];
+        
         for (let i = 0; i < batches.length; i++) {
-          if (abortRef.current) throw new Error("Aborted");
-          const batchConcepts = await extractBatch(dataset, batches[i], i, batches.length, stepId);
-          allConcepts.push(...batchConcepts);
+          if (abortRef.current) {
+            updateStep(stepId, { status: "error", message: "Aborted", errorMessage: "User aborted pipeline" });
+            throw new Error("Aborted");
+          }
+          
+          try {
+            const batchConcepts = await extractBatch(dataset, batches[i], i, batches.length, stepId);
+            allConcepts.push(...batchConcepts);
+          } catch (batchErr: any) {
+            const errMsg = batchErr.message || String(batchErr);
+            console.error(`[${stepId}] Batch ${i + 1} error:`, errMsg);
+            batchErrors.push(`Batch ${i + 1}: ${errMsg}`);
+            addStepDetail(stepId, `ERROR Batch ${i + 1}: ${errMsg}`);
+            // Continue with other batches
+          }
         }
-        return allConcepts;
+        
+        // Mark step complete/error IMMEDIATELY (don't wait for other dataset)
+        if (batchErrors.length > 0) {
+          const fullError = batchErrors.join("\n\n");
+          if (allConcepts.length > 0) {
+            // Partial success
+            updateStep(stepId, { 
+              status: "completed", 
+              message: `${allConcepts.length} concepts (${batchErrors.length} batches failed)`, 
+              progress: 100, 
+              completedAt: new Date(),
+              errorMessage: fullError 
+            });
+          } else {
+            // Complete failure
+            updateStep(stepId, { 
+              status: "error", 
+              message: `All ${batches.length} batches failed`, 
+              errorMessage: fullError 
+            });
+          }
+          return { concepts: allConcepts, error: fullError };
+        } else {
+          updateStep(stepId, { 
+            status: "completed", 
+            message: `${allConcepts.length} concepts`, 
+            progress: 100, 
+            completedAt: new Date() 
+          });
+          return { concepts: allConcepts };
+        }
       };
 
-      // Run D1 and D2 extraction in parallel
+      // Run D1 and D2 extraction in parallel - each marks itself complete independently
       const [d1Result, d2Result] = await Promise.allSettled([
         processAllBatches("d1", d1Batches, "d1"),
         processAllBatches("d2", d2Batches, "d2"),
       ]);
 
+      // Collect results (steps already marked complete/error inside processAllBatches)
       if (d1Result.status === "fulfilled") {
-        d1Concepts = d1Result.value;
-        updateStep("d1", { status: "completed", message: `${d1Concepts.length} concepts`, progress: 100, completedAt: new Date() });
+        d1Concepts = d1Result.value.concepts;
       } else {
-        console.error("[d1] Extraction failed:", d1Result.reason);
-        updateStep("d1", { status: "error", message: String(d1Result.reason) });
+        console.error("[d1] Extraction threw:", d1Result.reason);
       }
 
       if (d2Result.status === "fulfilled") {
-        d2Concepts = d2Result.value;
-        updateStep("d2", { status: "completed", message: `${d2Concepts.length} concepts`, progress: 100, completedAt: new Date() });
+        d2Concepts = d2Result.value.concepts;
       } else {
-        console.error("[d2] Extraction failed:", d2Result.reason);
-        updateStep("d2", { status: "error", message: String(d2Result.reason) });
+        console.error("[d2] Extraction threw:", d2Result.reason);
       }
 
       setProgress({ 
