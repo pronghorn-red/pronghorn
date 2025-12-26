@@ -407,100 +407,86 @@ function getClaudeAnalysisTool() {
   };
 }
 
-// ==================== ROBUST JSON PARSER ====================
+// ==================== BATTLE-TESTED JSON PARSER (from coding-agent-orchestrator) ====================
 
-function parseJsonResponse(rawText: string, defaultResponse: any = {}): any {
-  // Attempt 1: Direct parse
-  try {
-    return JSON.parse(rawText);
-  } catch {}
+function parseAgentResponseText(rawText: string, defaultResponse: any = {}): any {
+  const originalText = rawText.trim();
+  let text = originalText;
 
-  // Attempt 2: Try to find JSON in code fences
-  const fenceMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) {
+  console.log("Parsing agent response, length:", rawText.length);
+  console.log("Raw preview:", rawText.slice(0, 300) + (rawText.length > 300 ? "..." : ""));
+
+  // Helper to try parsing safely
+  const tryParse = (jsonStr: string, method: string): any | null => {
     try {
-      return JSON.parse(fenceMatch[1].trim());
-    } catch {}
+      const parsed = JSON.parse(jsonStr);
+      console.log(`JSON parsed successfully via ${method}`);
+      return parsed;
+    } catch (e) {
+      console.log(`JSON.parse failed in ${method}:`, (e as Error).message);
+      return null;
+    }
+  };
+
+  // Method 1: Direct parse (clean JSON)
+  let result = tryParse(text, "direct parse");
+  if (result) return result;
+
+  // Method 2: Extract from LAST ```json fence
+  const lastFenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```[\s\S]*$/i);
+  if (lastFenceMatch?.[1]) {
+    const extracted = lastFenceMatch[1].trim();
+    const cleaned = extracted
+      .replace(/^[\s\n]*here.?is.?the.?json.?[:\s]*/i, "")
+      .replace(/^[\s\n]*json[:\s]*/i, "")
+      .trim();
+    result = tryParse(cleaned, "last code fence");
+    if (result) return result;
   }
 
-  // Attempt 3: Find first { to last }
-  const firstBrace = rawText.indexOf("{");
-  const lastBrace = rawText.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    try {
-      return JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
-    } catch {}
+  // Method 3: Find ALL code blocks and try each one (in reverse order)
+  const allFences = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)];
+  for (let i = allFences.length - 1; i >= 0; i--) {
+    const content = allFences[i][1].trim();
+    if (content) {
+      result = tryParse(content, `code fence #${i + 1} (reverse)`);
+      if (result) return result;
+    }
   }
 
-  // Attempt 4: Try to fix common issues (trailing commas, unescaped quotes)
-  try {
-    let fixed = rawText.slice(firstBrace, lastBrace + 1);
-    // Remove trailing commas before } or ]
-    fixed = fixed.replace(/,\s*([}\]])/g, "$1");
-    // Try to balance braces by truncating at a valid point
-    let depth = 0;
-    let validEnd = 0;
-    for (let i = 0; i < fixed.length; i++) {
-      if (fixed[i] === "{" || fixed[i] === "[") depth++;
-      else if (fixed[i] === "}" || fixed[i] === "]") depth--;
-      if (depth === 0 && i > 0) {
-        validEnd = i + 1;
-        break;
-      }
-    }
-    if (validEnd > 0) {
-      return JSON.parse(fixed.slice(0, validEnd));
-    }
-  } catch {}
+  // Method 4: Brace matching on ORIGINAL text (most resilient)
+  const firstBrace = originalText.indexOf("{");
+  const lastBrace = originalText.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    const candidate = originalText.slice(firstBrace, lastBrace + 1);
 
-  // Attempt 5: Extract key fields manually using regex
-  try {
-    const result: any = {};
-    
-    // Extract arrays
-    const nodesMatch = rawText.match(/"proposedNodes"\s*:\s*\[([\s\S]*?)\]/);
-    if (nodesMatch) {
-      try {
-        result.proposedNodes = JSON.parse(`[${nodesMatch[1]}]`);
-      } catch {
-        result.proposedNodes = [];
-      }
-    }
-    
-    const edgesMatch = rawText.match(/"proposedEdges"\s*:\s*\[([\s\S]*?)\]/);
-    if (edgesMatch) {
-      try {
-        result.proposedEdges = JSON.parse(`[${edgesMatch[1]}]`);
-      } catch {
-        result.proposedEdges = [];
-      }
-    }
+    // Try raw first (preserves formatting)
+    result = tryParse(candidate, "brace extraction (raw)");
+    if (result) return result;
 
-    // Extract booleans
-    const voteMatch = rawText.match(/"graphCompleteVote"\s*:\s*(true|false)/i);
-    if (voteMatch) {
-      result.graphCompleteVote = voteMatch[1].toLowerCase() === "true";
-    }
+    // Try with whitespace normalization
+    const cleaned = candidate
+      .replace(/[\r\n]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    result = tryParse(cleaned, "brace extraction (cleaned)");
+    if (result) return result;
+  }
 
-    // Extract strings
-    const reasoningMatch = rawText.match(/"reasoning"\s*:\s*"([^"]+)"/);
-    if (reasoningMatch) {
-      result.reasoning = reasoningMatch[1];
-    }
+  // Method 5: Heuristic object match (last resort)
+  const heuristicMatch = originalText.match(/(\{(?:[^{}]|"(?:\\.|[^"\\])*")*\})/);
+  if (heuristicMatch) {
+    result = tryParse(heuristicMatch[1], "heuristic object match");
+    if (result) return result;
+  }
 
-    // Extract blackboard entry
-    const contentMatch = rawText.match(/"content"\s*:\s*"([^"]+)"/);
-    if (contentMatch && !result.blackboardEntry) {
-      result.blackboardEntry = { content: contentMatch[1] };
-    }
-
-    if (Object.keys(result).length > 0) {
-      return { ...defaultResponse, ...result };
-    }
-  } catch {}
-
-  console.warn("All JSON parse attempts failed, returning default:", rawText.slice(0, 200));
-  return defaultResponse;
+  // Final fallback - return default with raw output for debugging
+  console.error("All JSON parsing methods failed for response:", originalText.slice(0, 1000));
+  return {
+    ...defaultResponse,
+    reasoning: "Failed to parse agent response as JSON. Raw output preserved.",
+    raw_output: originalText.slice(0, 2000),
+  };
 }
 
 // ==================== LLM CALL HELPER ====================
@@ -512,7 +498,8 @@ async function callLLM(
   systemPrompt: string,
   userPrompt: string,
   schema: any,
-  tool: any
+  tool: any,
+  maxTokens: number
 ): Promise<any> {
   const defaultResponse = {
     reasoning: "",
@@ -536,14 +523,14 @@ async function callLLM(
           { role: "user", content: userPrompt },
         ],
         response_format: schema,
-        max_tokens: 8192,
-        temperature: 0.5,
+        max_tokens: maxTokens,
+        temperature: 0.7,
       }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(`Grok API error: ${JSON.stringify(data)}`);
     const rawText = data.choices?.[0]?.message?.content || "{}";
-    return parseJsonResponse(rawText, defaultResponse);
+    return parseAgentResponseText(rawText, defaultResponse);
   } else if (selectedModel.startsWith("claude")) {
     const response = await fetch(apiEndpoint, {
       method: "POST",
@@ -555,7 +542,7 @@ async function callLLM(
       },
       body: JSON.stringify({
         model: selectedModel,
-        max_tokens: 8192,
+        max_tokens: maxTokens,
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
         tools: [tool],
@@ -574,13 +561,13 @@ async function callLLM(
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, temperature: 0.5 },
+        generationConfig: { responseMimeType: "application/json", maxOutputTokens: maxTokens, temperature: 0.7 },
       }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(`Gemini API error: ${JSON.stringify(data)}`);
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    return parseJsonResponse(rawText, defaultResponse);
+    return parseAgentResponseText(rawText, defaultResponse);
   }
 }
 
@@ -649,7 +636,8 @@ serve(async (req) => {
       p_token: shareToken,
     });
 
-    const selectedModel = project?.selected_model || "grok-3-mini";
+    const selectedModel = project?.selected_model || "gemini-2.5-flash";
+    const maxTokens = project?.max_tokens || 32768;
     let apiKey: string;
     let apiEndpoint: string;
 
@@ -714,7 +702,7 @@ serve(async (req) => {
         const response = await callLLM(
           apiEndpoint, apiKey, selectedModel,
           systemPrompt, "Identify key concepts for the knowledge graph.",
-          getGrokConferenceSchema(), getClaudeConferenceTool()
+          getGrokConferenceSchema(), getClaudeConferenceTool(), maxTokens
         );
 
         console.log(`Conference response from ${agent.role}:`, response.proposedNodes?.length || 0, "nodes");
@@ -794,7 +782,7 @@ serve(async (req) => {
           const response = await callLLM(
             apiEndpoint, apiKey, selectedModel,
             systemPrompt, "Review and propose updates to the knowledge graph.",
-            getGrokGraphBuildingSchema(), getClaudeGraphBuildingTool()
+            getGrokGraphBuildingSchema(), getClaudeGraphBuildingTool(), maxTokens
           );
 
           // Insert new nodes (deduplicate by label)
@@ -901,7 +889,7 @@ serve(async (req) => {
         const response = await callLLM(
           apiEndpoint, apiKey, selectedModel,
           systemPrompt, "Select the nodes you want to analyze.",
-          getGrokAssignmentSchema(), getClaudeAssignmentTool()
+          getGrokAssignmentSchema(), getClaudeAssignmentTool(), maxTokens
         );
 
         agentSelections.set(agent.role, response.selectedNodeIds || []);
@@ -1028,7 +1016,7 @@ serve(async (req) => {
           const response = await callLLM(
             apiEndpoint, apiKey, selectedModel,
             systemPrompt, "Analyze your assigned nodes and report findings.",
-            getGrokAnalysisSchema(), getClaudeAnalysisTool()
+            getGrokAnalysisSchema(), getClaudeAnalysisTool(), maxTokens
           );
 
           // Record observations to tesseract
