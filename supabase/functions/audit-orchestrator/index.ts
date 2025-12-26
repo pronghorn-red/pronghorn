@@ -407,6 +407,102 @@ function getClaudeAnalysisTool() {
   };
 }
 
+// ==================== ROBUST JSON PARSER ====================
+
+function parseJsonResponse(rawText: string, defaultResponse: any = {}): any {
+  // Attempt 1: Direct parse
+  try {
+    return JSON.parse(rawText);
+  } catch {}
+
+  // Attempt 2: Try to find JSON in code fences
+  const fenceMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) {
+    try {
+      return JSON.parse(fenceMatch[1].trim());
+    } catch {}
+  }
+
+  // Attempt 3: Find first { to last }
+  const firstBrace = rawText.indexOf("{");
+  const lastBrace = rawText.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
+    } catch {}
+  }
+
+  // Attempt 4: Try to fix common issues (trailing commas, unescaped quotes)
+  try {
+    let fixed = rawText.slice(firstBrace, lastBrace + 1);
+    // Remove trailing commas before } or ]
+    fixed = fixed.replace(/,\s*([}\]])/g, "$1");
+    // Try to balance braces by truncating at a valid point
+    let depth = 0;
+    let validEnd = 0;
+    for (let i = 0; i < fixed.length; i++) {
+      if (fixed[i] === "{" || fixed[i] === "[") depth++;
+      else if (fixed[i] === "}" || fixed[i] === "]") depth--;
+      if (depth === 0 && i > 0) {
+        validEnd = i + 1;
+        break;
+      }
+    }
+    if (validEnd > 0) {
+      return JSON.parse(fixed.slice(0, validEnd));
+    }
+  } catch {}
+
+  // Attempt 5: Extract key fields manually using regex
+  try {
+    const result: any = {};
+    
+    // Extract arrays
+    const nodesMatch = rawText.match(/"proposedNodes"\s*:\s*\[([\s\S]*?)\]/);
+    if (nodesMatch) {
+      try {
+        result.proposedNodes = JSON.parse(`[${nodesMatch[1]}]`);
+      } catch {
+        result.proposedNodes = [];
+      }
+    }
+    
+    const edgesMatch = rawText.match(/"proposedEdges"\s*:\s*\[([\s\S]*?)\]/);
+    if (edgesMatch) {
+      try {
+        result.proposedEdges = JSON.parse(`[${edgesMatch[1]}]`);
+      } catch {
+        result.proposedEdges = [];
+      }
+    }
+
+    // Extract booleans
+    const voteMatch = rawText.match(/"graphCompleteVote"\s*:\s*(true|false)/i);
+    if (voteMatch) {
+      result.graphCompleteVote = voteMatch[1].toLowerCase() === "true";
+    }
+
+    // Extract strings
+    const reasoningMatch = rawText.match(/"reasoning"\s*:\s*"([^"]+)"/);
+    if (reasoningMatch) {
+      result.reasoning = reasoningMatch[1];
+    }
+
+    // Extract blackboard entry
+    const contentMatch = rawText.match(/"content"\s*:\s*"([^"]+)"/);
+    if (contentMatch && !result.blackboardEntry) {
+      result.blackboardEntry = { content: contentMatch[1] };
+    }
+
+    if (Object.keys(result).length > 0) {
+      return { ...defaultResponse, ...result };
+    }
+  } catch {}
+
+  console.warn("All JSON parse attempts failed, returning default:", rawText.slice(0, 200));
+  return defaultResponse;
+}
+
 // ==================== LLM CALL HELPER ====================
 
 async function callLLM(
@@ -418,6 +514,17 @@ async function callLLM(
   schema: any,
   tool: any
 ): Promise<any> {
+  const defaultResponse = {
+    reasoning: "",
+    proposedNodes: [],
+    proposedEdges: [],
+    graphCompleteVote: false,
+    blackboardEntry: { content: "" },
+    observations: [],
+    selectedNodeIds: [],
+    analysisComplete: false,
+  };
+
   if (selectedModel.startsWith("grok")) {
     const response = await fetch(apiEndpoint, {
       method: "POST",
@@ -429,14 +536,14 @@ async function callLLM(
           { role: "user", content: userPrompt },
         ],
         response_format: schema,
-        max_tokens: 4096,
-        temperature: 0.7,
+        max_tokens: 8192,
+        temperature: 0.5,
       }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(`Grok API error: ${JSON.stringify(data)}`);
     const rawText = data.choices?.[0]?.message?.content || "{}";
-    return JSON.parse(rawText);
+    return parseJsonResponse(rawText, defaultResponse);
   } else if (selectedModel.startsWith("claude")) {
     const response = await fetch(apiEndpoint, {
       method: "POST",
@@ -448,7 +555,7 @@ async function callLLM(
       },
       body: JSON.stringify({
         model: selectedModel,
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
         tools: [tool],
@@ -458,7 +565,7 @@ async function callLLM(
     const data = await response.json();
     if (!response.ok) throw new Error(`Claude API error: ${JSON.stringify(data)}`);
     const toolUse = data.content?.find((c: any) => c.type === "tool_use");
-    return toolUse?.input || {};
+    return toolUse?.input || defaultResponse;
   } else {
     // Gemini
     const response = await fetch(`${apiEndpoint}?key=${apiKey}`, {
@@ -467,13 +574,13 @@ async function callLLM(
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: { responseMimeType: "application/json", maxOutputTokens: 4096, temperature: 0.7 },
+        generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, temperature: 0.5 },
       }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(`Gemini API error: ${JSON.stringify(data)}`);
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    return JSON.parse(rawText);
+    return parseJsonResponse(rawText, defaultResponse);
   }
 }
 
