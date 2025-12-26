@@ -5302,15 +5302,30 @@ export type Database = {
       }
       insert_audit_activity_with_token: {
         Args: {
-          p_activity_type?: string
-          p_agent_role?: string
+          p_activity_type: string
+          p_agent_role: string
           p_content?: string
           p_metadata?: Json
           p_session_id: string
-          p_title?: string
+          p_title: string
           p_token: string
         }
-        Returns: string
+        Returns: {
+          activity_type: string
+          agent_role: string | null
+          content: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          session_id: string
+          title: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "audit_activity_stream"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       insert_audit_agent_instance_with_token: {
         Args: {
