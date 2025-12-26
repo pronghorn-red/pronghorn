@@ -83,58 +83,63 @@ async function streamSSE(
   const decoder = new TextDecoder();
   let buffer = "";
   let result: any = null;
-  let currentEvent = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    
-    // Process complete lines only
-    let newlineIndex: number;
-    while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
-      const line = buffer.slice(0, newlineIndex).trim();
-      buffer = buffer.slice(newlineIndex + 1);
+      buffer += decoder.decode(value, { stream: true });
       
-      if (!line) {
-        // Empty line marks end of an event - reset
-        currentEvent = "";
-        continue;
-      }
+      // Process complete events (separated by double newline)
+      const events = buffer.split("\n\n");
+      // Keep incomplete last part in buffer
+      buffer = events.pop() || "";
       
-      if (line.startsWith("event: ")) {
-        currentEvent = line.slice(7).trim();
-      } else if (line.startsWith("data: ")) {
-        const dataStr = line.slice(6);
-        if (currentEvent && dataStr) {
-          try {
-            const data = JSON.parse(dataStr);
-            switch (currentEvent) {
-              case "progress":
-                onProgress(data);
-                break;
-              case "concept":
-                onConcept(data);
-                break;
-              case "result":
-                result = data;
-                onResult(data);
-                break;
-              case "done":
-                // Stream complete
-                break;
-              case "error":
-                onError(data.message || String(data));
-                break;
-            }
-          } catch (e) {
-            // Not valid JSON - just skip this line
-            console.warn("SSE: skipping non-JSON data line");
+      for (const eventBlock of events) {
+        if (!eventBlock.trim()) continue;
+        
+        const lines = eventBlock.split("\n");
+        let eventType = "";
+        let dataStr = "";
+        
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            eventType = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            dataStr = line.slice(5).trim();
           }
+        }
+        
+        if (!eventType || !dataStr) continue;
+        
+        try {
+          const data = JSON.parse(dataStr);
+          switch (eventType) {
+            case "progress":
+              onProgress(data);
+              break;
+            case "concept":
+              onConcept(data);
+              break;
+            case "result":
+              result = data;
+              onResult(data);
+              break;
+            case "done":
+              // Stream complete - ignore
+              break;
+            case "error":
+              onError(data.message || String(data));
+              break;
+          }
+        } catch {
+          // Skip unparseable data
         }
       }
     }
+  } finally {
+    reader.releaseLock();
   }
 
   return result;
