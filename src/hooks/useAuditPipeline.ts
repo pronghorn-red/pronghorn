@@ -426,25 +426,35 @@ export function useAuditPipeline() {
       });
 
       if (!mergeResponse.ok) {
-        throw new Error(`Merge failed: ${mergeResponse.status}`);
+        const errorText = await mergeResponse.text();
+        throw new Error(`Merge failed: ${mergeResponse.status} - ${errorText.slice(0, 100)}`);
       }
 
-      const mergeResult = await mergeResponse.json();
-      if (!mergeResult.success) {
-        throw new Error(`Merge error: ${mergeResult.error}`);
-      }
-
-      mergedConcepts = mergeResult.mergedConcepts || [];
-      unmergedD1Concepts = (mergeResult.unmergedD1Concepts || []).map((c: any) => ({
-        label: c.label,
-        description: c.description,
-        elementIds: c.d1Ids || [],
-      }));
-      unmergedD2Concepts = (mergeResult.unmergedD2Concepts || []).map((c: any) => ({
-        label: c.label,
-        description: c.description,
-        elementIds: c.d2Ids || [],
-      }));
+      // Parse SSE stream from merge endpoint
+      await streamSSE(
+        mergeResponse,
+        (data) => {
+          updateStep("merge", { message: data.message || "Merging...", progress: data.progress || 50 });
+        },
+        () => {}, // no individual concepts streamed
+        (data) => {
+          // Result event contains the merged data
+          mergedConcepts = data.mergedConcepts || [];
+          unmergedD1Concepts = (data.unmergedD1Concepts || []).map((c: any) => ({
+            label: c.label,
+            description: c.description,
+            elementIds: c.d1Ids || [],
+          }));
+          unmergedD2Concepts = (data.unmergedD2Concepts || []).map((c: any) => ({
+            label: c.label,
+            description: c.description,
+            elementIds: c.d2Ids || [],
+          }));
+        },
+        (err) => {
+          throw new Error(`Merge stream error: ${err}`);
+        }
+      );
 
       updateStep("merge", { 
         status: "completed", 

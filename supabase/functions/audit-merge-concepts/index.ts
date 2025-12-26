@@ -47,30 +47,46 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
+  const encoder = new TextEncoder();
+  const stream = new TransformStream();
+  const writer = stream.writable.getWriter();
 
-    const authHeader = req.headers.get("Authorization");
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      global: { headers: authHeader ? { Authorization: authHeader } : {} },
-    });
+  const sendSSE = async (event: string, data: any) => {
+    const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    await writer.write(encoder.encode(message));
+  };
 
-    const { sessionId, projectId, shareToken, d1Concepts, d2Concepts }: MergeRequest = await req.json();
-    
-    console.log(`[merge] Starting: ${d1Concepts.length} D1 concepts, ${d2Concepts.length} D2 concepts`);
+  (async () => {
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
 
-    // Build the prompt - now includes within-dataset merging
-    const d1ConceptsText = d1Concepts.map((c, i) => 
-      `D1-${i + 1}: "${c.label}"\nDescription: ${c.description}\nLinked D1 element IDs: ${c.d1Ids.join(", ")}`
-    ).join("\n\n");
+      const authHeader = req.headers.get("Authorization");
+      const supabase = createClient(supabaseUrl, supabaseKey, {
+        global: { headers: authHeader ? { Authorization: authHeader } : {} },
+      });
 
-    const d2ConceptsText = d2Concepts.map((c, i) => 
-      `D2-${i + 1}: "${c.label}"\nDescription: ${c.description}\nLinked D2 element IDs: ${c.d2Ids.join(", ")}`
-    ).join("\n\n");
+      const { sessionId, projectId, shareToken, d1Concepts, d2Concepts }: MergeRequest = await req.json();
+      
+      console.log(`[merge] Starting: ${d1Concepts.length} D1 concepts, ${d2Concepts.length} D2 concepts`);
+      
+      await sendSSE("progress", { 
+        phase: "concept_merge", 
+        message: `Analyzing ${d1Concepts.length} D1 + ${d2Concepts.length} D2 concepts for merging...`, 
+        progress: 0 
+      });
 
-    const prompt = `You are merging concepts from two datasets. Your job is to identify concepts that are identical or nearly identical and should be merged.
+      // Build the prompt - now includes within-dataset merging
+      const d1ConceptsText = d1Concepts.map((c, i) => 
+        `D1-${i + 1}: "${c.label}"\nDescription: ${c.description}\nLinked D1 element IDs: ${c.d1Ids.join(", ")}`
+      ).join("\n\n");
+
+      const d2ConceptsText = d2Concepts.map((c, i) => 
+        `D2-${i + 1}: "${c.label}"\nDescription: ${c.description}\nLinked D2 element IDs: ${c.d2Ids.join(", ")}`
+      ).join("\n\n");
+
+      const prompt = `You are merging concepts from two datasets. Your job is to identify concepts that are identical or nearly identical and should be merged.
 
 IMPORTANT: Check for duplicates WITHIN each dataset as well as ACROSS datasets:
 - D1 with D1 (duplicates within D1)
@@ -137,123 +153,129 @@ Notes:
 
 Return ONLY the JSON object, no other text.`;
 
-    const payloadChars = prompt.length;
-    console.log(`[merge] Prompt: ${payloadChars.toLocaleString()} chars (~${Math.ceil(payloadChars/4).toLocaleString()} tokens)`);
+      const payloadChars = prompt.length;
+      console.log(`[merge] Prompt: ${payloadChars.toLocaleString()} chars (~${Math.ceil(payloadChars/4).toLocaleString()} tokens)`);
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+      await sendSSE("progress", { phase: "concept_merge", message: "Calling LLM for concept matching...", progress: 20 });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[merge] Claude API error:", response.status, errorText);
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: `Claude API error: ${response.status} - ${errorText.slice(0, 200)}` 
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: CLAUDE_MODEL,
+          max_tokens: MAX_OUTPUT_TOKENS,
+          messages: [{ role: "user", content: prompt }],
+        }),
       });
-    }
 
-    const result = await response.json();
-    const rawText = result.content?.[0]?.text || "{}";
-    
-    console.log(`[merge] Response: ${rawText.length} chars`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[merge] Claude API error:", response.status, errorText);
+        throw new Error(`Claude API error: ${response.status} - ${errorText.slice(0, 200)}`);
+      }
 
-    // Parse JSON
-    let parsed: { 
-      mergedConcepts: MergeInstruction[]; 
-      unmergeedD1Concepts?: D1Concept[];
-      unmergedD1Concepts?: D1Concept[];
-      unmergedD2Concepts?: D2Concept[];
-    };
-    try {
-      parsed = JSON.parse(rawText);
-    } catch {
-      console.error("[merge] JSON parse failed, attempting recovery...");
-      const firstBrace = rawText.indexOf("{");
-      const lastBrace = rawText.lastIndexOf("}");
-      if (firstBrace !== -1 && lastBrace > firstBrace) {
-        parsed = JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
-      } else {
-        return new Response(JSON.stringify({ 
-          success: false, 
-          error: "Could not parse JSON from LLM response" 
-        }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      const result = await response.json();
+      const rawText = result.content?.[0]?.text || "{}";
+      
+      console.log(`[merge] Response: ${rawText.length} chars`);
+      
+      await sendSSE("progress", { phase: "concept_merge", message: "Parsing merge instructions...", progress: 60 });
+
+      // Parse JSON
+      let parsed: { 
+        mergedConcepts: MergeInstruction[]; 
+        unmergeedD1Concepts?: D1Concept[];
+        unmergedD1Concepts?: D1Concept[];
+        unmergedD2Concepts?: D2Concept[];
+      };
+      try {
+        parsed = JSON.parse(rawText);
+      } catch {
+        console.error("[merge] JSON parse failed, attempting recovery...");
+        const firstBrace = rawText.indexOf("{");
+        const lastBrace = rawText.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          parsed = JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
+        } else {
+          throw new Error("Could not parse JSON from LLM response");
+        }
+      }
+
+      const mergedConcepts = parsed.mergedConcepts || [];
+      const unmergedD1Concepts = parsed.unmergedD1Concepts || parsed.unmergeedD1Concepts || [];
+      const unmergedD2Concepts = parsed.unmergedD2Concepts || [];
+
+      // Count different merge types
+      const d1OnlyMerges = mergedConcepts.filter(c => c.d1ConceptLabels.length > 1 && c.d2ConceptLabels.length === 0).length;
+      const d2OnlyMerges = mergedConcepts.filter(c => c.d2ConceptLabels.length > 1 && c.d1ConceptLabels.length === 0).length;
+      const crossMerges = mergedConcepts.filter(c => c.d1ConceptLabels.length > 0 && c.d2ConceptLabels.length > 0).length;
+
+      console.log(`[merge] Results: ${mergedConcepts.length} merged (${d1OnlyMerges} D1↔D1, ${d2OnlyMerges} D2↔D2, ${crossMerges} D1↔D2), ${unmergedD1Concepts.length} D1-only, ${unmergedD2Concepts.length} D2-only`);
+
+      await sendSSE("progress", { 
+        phase: "concept_merge", 
+        message: `Found ${mergedConcepts.length} merged, ${unmergedD1Concepts.length} D1-only, ${unmergedD2Concepts.length} D2-only`, 
+        progress: 80 
+      });
+
+      // Write to blackboard
+      await supabase.rpc("insert_audit_blackboard_with_token", {
+        p_session_id: sessionId,
+        p_token: shareToken,
+        p_agent_role: "concept_merger",
+        p_entry_type: "merge_results",
+        p_content: `Concept Merge Results:\n- Total merged concepts: ${mergedConcepts.length}\n  - D1↔D1 merges: ${d1OnlyMerges}\n  - D2↔D2 merges: ${d2OnlyMerges}\n  - D1↔D2 merges: ${crossMerges}\n- D1-only (gaps): ${unmergedD1Concepts.length}\n- D2-only (potential orphans): ${unmergedD2Concepts.length}\n\nMerged:\n${mergedConcepts.map(c => `• ${c.mergedLabel} (${c.d1Ids.length} D1, ${c.d2Ids.length} D2)`).join("\n")}`,
+        p_iteration: 2,
+        p_confidence: 0.85,
+        p_evidence: null,
+        p_target_agent: null,
+      });
+
+      // Log activity
+      await supabase.rpc("insert_audit_activity_with_token", {
+        p_session_id: sessionId,
+        p_token: shareToken,
+        p_agent_role: "concept_merger",
+        p_activity_type: "concept_merge",
+        p_title: `Concept Merge Complete`,
+        p_content: `Merged ${mergedConcepts.length} concepts (${d1OnlyMerges} D1↔D1, ${d2OnlyMerges} D2↔D2, ${crossMerges} D1↔D2), ${unmergedD1Concepts.length} D1-only gaps, ${unmergedD2Concepts.length} D2-only orphans`,
+        p_metadata: { 
+          mergedCount: mergedConcepts.length,
+          d1OnlyMerges,
+          d2OnlyMerges,
+          crossMerges,
+          d1OnlyCount: unmergedD1Concepts.length,
+          d2OnlyCount: unmergedD2Concepts.length
+        },
+      });
+
+      await sendSSE("progress", { phase: "concept_merge", message: "Merge analysis complete", progress: 100 });
+      await sendSSE("result", { mergedConcepts, unmergedD1Concepts, unmergedD2Concepts });
+      await sendSSE("done", { success: true });
+
+    } catch (error: unknown) {
+      console.error("Concept merge error:", error);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      await sendSSE("error", { message: errMsg });
+    } finally {
+      try {
+        await writer.close();
+      } catch {
+        // Already closed
       }
     }
+  })();
 
-    const mergedConcepts = parsed.mergedConcepts || [];
-    const unmergedD1Concepts = parsed.unmergedD1Concepts || parsed.unmergeedD1Concepts || [];
-    const unmergedD2Concepts = parsed.unmergedD2Concepts || [];
-
-    // Count different merge types
-    const d1OnlyMerges = mergedConcepts.filter(c => c.d1ConceptLabels.length > 1 && c.d2ConceptLabels.length === 0).length;
-    const d2OnlyMerges = mergedConcepts.filter(c => c.d2ConceptLabels.length > 1 && c.d1ConceptLabels.length === 0).length;
-    const crossMerges = mergedConcepts.filter(c => c.d1ConceptLabels.length > 0 && c.d2ConceptLabels.length > 0).length;
-
-    console.log(`[merge] Results: ${mergedConcepts.length} merged (${d1OnlyMerges} D1↔D1, ${d2OnlyMerges} D2↔D2, ${crossMerges} D1↔D2), ${unmergedD1Concepts.length} D1-only, ${unmergedD2Concepts.length} D2-only`);
-
-    // Write to blackboard
-    await supabase.rpc("insert_audit_blackboard_with_token", {
-      p_session_id: sessionId,
-      p_token: shareToken,
-      p_agent_role: "concept_merger",
-      p_entry_type: "merge_results",
-      p_content: `Concept Merge Results:\n- Total merged concepts: ${mergedConcepts.length}\n  - D1↔D1 merges: ${d1OnlyMerges}\n  - D2↔D2 merges: ${d2OnlyMerges}\n  - D1↔D2 merges: ${crossMerges}\n- D1-only (gaps): ${unmergedD1Concepts.length}\n- D2-only (potential orphans): ${unmergedD2Concepts.length}\n\nMerged:\n${mergedConcepts.map(c => `• ${c.mergedLabel} (${c.d1Ids.length} D1, ${c.d2Ids.length} D2)`).join("\n")}`,
-      p_iteration: 2,
-      p_confidence: 0.85,
-      p_evidence: null,
-      p_target_agent: null,
-    });
-
-    // Log activity
-    await supabase.rpc("insert_audit_activity_with_token", {
-      p_session_id: sessionId,
-      p_token: shareToken,
-      p_agent_role: "concept_merger",
-      p_activity_type: "concept_merge",
-      p_title: `Concept Merge Complete`,
-      p_content: `Merged ${mergedConcepts.length} concepts (${d1OnlyMerges} D1↔D1, ${d2OnlyMerges} D2↔D2, ${crossMerges} D1↔D2), ${unmergedD1Concepts.length} D1-only gaps, ${unmergedD2Concepts.length} D2-only orphans`,
-      p_metadata: { 
-        mergedCount: mergedConcepts.length,
-        d1OnlyMerges,
-        d2OnlyMerges,
-        crossMerges,
-        d1OnlyCount: unmergedD1Concepts.length,
-        d2OnlyCount: unmergedD2Concepts.length
-      },
-    });
-
-    return new Response(JSON.stringify({ 
-      success: true,
-      mergedConcepts, 
-      unmergedD1Concepts, 
-      unmergedD2Concepts 
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-
-  } catch (error: unknown) {
-    console.error("Concept merge error:", error);
-    const errMsg = error instanceof Error ? error.message : String(error);
-    return new Response(JSON.stringify({ success: false, error: errMsg }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  return new Response(stream.readable, {
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
 });
