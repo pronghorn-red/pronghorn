@@ -313,9 +313,8 @@ export function TesseractVisualizer({
             </div>
           </div>
         ) : (
-        <div className="overflow-auto max-h-[400px]">
-          <ScrollArea className="w-full">
-            <div className="min-w-max">
+        <ScrollArea className="w-full h-[350px]">
+          <div className="min-w-max pb-4 pr-4">
               {/* Header row with X labels */}
               <div className="flex">
                 <div
@@ -424,7 +423,6 @@ export function TesseractVisualizer({
             <ScrollBar orientation="horizontal" />
             <ScrollBar orientation="vertical" />
           </ScrollArea>
-        </div>
         )}
 
         {/* Legend - Responsive */}
