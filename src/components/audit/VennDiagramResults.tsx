@@ -289,7 +289,7 @@ export function VennDiagramResults({
         <div className="grid grid-cols-3 gap-4 mt-4">
           <div className="text-center p-3 rounded-lg bg-red-500/10">
             <div className="text-2xl font-bold text-red-500">
-              {result.summary.total_d1_coverage}%
+              {Number(result.summary.total_d1_coverage).toFixed(1)}%
             </div>
             <div className="text-xs text-muted-foreground">
               {dataset1Label} Coverage
@@ -297,13 +297,13 @@ export function VennDiagramResults({
           </div>
           <div className="text-center p-3 rounded-lg bg-green-500/10">
             <div className="text-2xl font-bold text-green-500">
-              {result.summary.alignment_score}%
+              {Number(result.summary.alignment_score).toFixed(1)}%
             </div>
             <div className="text-xs text-muted-foreground">Alignment Score</div>
           </div>
           <div className="text-center p-3 rounded-lg bg-blue-500/10">
             <div className="text-2xl font-bold text-blue-500">
-              {result.summary.total_d2_coverage}%
+              {Number(result.summary.total_d2_coverage).toFixed(1)}%
             </div>
             <div className="text-xs text-muted-foreground">
               {dataset2Label} Coverage
