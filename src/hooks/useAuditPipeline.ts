@@ -232,9 +232,27 @@ export function useAuditPipeline() {
       // ========================================
       // PHASE 1: Extract D1 and D2 concepts in parallel
       // ========================================
+      
+      // Calculate character counts upfront
+      const d1TotalChars = d1Elements.reduce((sum, e) => sum + (e.content?.length || 0), 0);
+      const d2TotalChars = d2Elements.reduce((sum, e) => sum + (e.content?.length || 0), 0);
+      const d1EstTokens = Math.ceil(d1TotalChars / 4);
+      const d2EstTokens = Math.ceil(d2TotalChars / 4);
+      
       setProgress({ phase: "extracting_d1", message: "Extracting concepts...", progress: 15 });
-      updateStep("d1", { status: "running", message: "Calling LLM...", startedAt: new Date() });
-      updateStep("d2", { status: "running", message: "Calling LLM...", startedAt: new Date() });
+      updateStep("d1", { 
+        status: "running", 
+        message: `${d1TotalChars.toLocaleString()} chars (~${d1EstTokens.toLocaleString()} tokens)`, 
+        startedAt: new Date() 
+      });
+      addStepDetail("d1", `Total content: ${d1TotalChars.toLocaleString()} chars (~${d1EstTokens.toLocaleString()} tokens)`);
+      
+      updateStep("d2", { 
+        status: "running", 
+        message: `${d2TotalChars.toLocaleString()} chars (~${d2EstTokens.toLocaleString()} tokens)`, 
+        startedAt: new Date() 
+      });
+      addStepDetail("d2", `Total content: ${d2TotalChars.toLocaleString()} chars (~${d2EstTokens.toLocaleString()} tokens)`);
 
       // Start both extractions in parallel
       const d1Promise = fetch(`${BASE_URL}/audit-extract-concepts`, {
