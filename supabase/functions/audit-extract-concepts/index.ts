@@ -12,6 +12,8 @@ const corsHeaders = {
 };
 
 const BATCH_SIZE = 8; // Process 8 elements at a time
+const CLAUDE_MODEL = "claude-sonnet-4-20250514";
+const MAX_OUTPUT_TOKENS = 16384;
 
 interface DatasetElement {
   id: string;
@@ -39,7 +41,7 @@ async function extractConceptsFromBatch(
   batchIndex: number,
   totalBatches: number,
   dataset: string,
-  geminiKey: string,
+  anthropicKey: string,
   sendSSE: (event: string, data: any) => Promise<void>
 ): Promise<ExtractedConcept[]> {
   const datasetLabel = dataset === "d1" ? "requirements/specifications" : "implementation/code";
@@ -83,7 +85,7 @@ CRITICAL RULES:
   // Log payload size
   const payloadChars = prompt.length;
   const estimatedTokens = Math.ceil(payloadChars / 4); // rough estimate: 4 chars per token
-  console.log(`[${dataset}] Batch ${batchIndex + 1}/${totalBatches}: ${payloadChars} chars (~${estimatedTokens} tokens)`);
+  console.log(`[${dataset}] Batch ${batchIndex + 1}/${totalBatches}: ${payloadChars.toLocaleString()} chars (~${estimatedTokens.toLocaleString()} tokens)`);
 
   await sendSSE("progress", { 
     phase: `${dataset}_extraction`, 
@@ -95,30 +97,30 @@ CRITICAL RULES:
     estimatedTokens
   });
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 8192,
-          responseMimeType: "application/json",
-        },
-      }),
-    }
-  );
+  // Use Claude with 1M context window
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json",
+      "x-api-key": anthropicKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-beta": "context-1m-2025-08-07",
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`[${dataset}] Batch ${batchIndex + 1} Gemini error:`, response.status, errorText);
-    throw new Error(`Gemini API error: ${response.status} - ${errorText.slice(0, 200)}`);
+    console.error(`[${dataset}] Batch ${batchIndex + 1} Claude error:`, response.status, errorText);
+    throw new Error(`Claude API error: ${response.status} - ${errorText.slice(0, 200)}`);
   }
 
   const result = await response.json();
-  const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+  const rawText = result.content?.[0]?.text || "{}";
   
   console.log(`[${dataset}] Batch ${batchIndex + 1} response: ${rawText.length} chars`);
 
@@ -158,7 +160,7 @@ serve(async (req) => {
     try {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const geminiKey = Deno.env.get("GEMINI_API_KEY")!;
+      const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
 
       const authHeader = req.headers.get("Authorization");
       const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -211,7 +213,7 @@ serve(async (req) => {
             batchIndex, 
             batches.length, 
             dataset, 
-            geminiKey,
+            anthropicKey,
             sendSSE
           );
 
