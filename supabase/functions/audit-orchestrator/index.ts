@@ -146,11 +146,34 @@ ${perspectiveDescriptions}
 - Link D1 elements to concepts
 - Continue calling request_next_batch until all D1 read (startIndex=10, 20, 30...)
 
-### PHASE 2: Read D2 (Implementation)
-- Call request_next_batch(dataset="dataset2", startIndex=0) to start
-- For each batch, identify which D1 requirements they implement
-- Link D2 elements to relevant concepts
-- Note orphans (D2 without D1 match)
+### PHASE 2: Read D2 (Implementation) - CRITICAL DEEP ANALYSIS
+
+For each D2 element (code file), you MUST perform DEEP ANALYSIS:
+1. **Identify ALL functions/exports** in the file - list each function name and its purpose
+2. **Map each function to D1 requirements** - which specific D1 requirements does this function implement?
+3. **Assess completeness** - does the implementation fully satisfy the D1 requirement, or is it partial?
+4. **Note missing pieces** - what does D1 require that this D2 file doesn't implement?
+
+**EXAMPLE OF GOOD D2 ANALYSIS:**
+\`\`\`
+File: auth/login.ts
+Functions found:
+- validateCredentials(email, password): Validates user login → MAPS TO D1 "User Authentication" (uuid1)
+- generateToken(userId): Creates JWT → MAPS TO D1 "Session Management" (uuid2)  
+- refreshToken(token): Extends session → MAPS TO D1 "Session Management" (uuid2)
+MISSING: No password reset function → GAP for D1 "Password Reset" (uuid3)
+\`\`\`
+
+**EXAMPLE OF BAD D2 ANALYSIS (DO NOT DO THIS):**
+\`\`\`
+File: auth/login.ts - handles authentication. MAPS TO: D1 Auth requirements.
+\`\`\`
+
+**MANDATORY ACTIONS FOR EACH D2 BATCH:**
+- Call request_next_batch(dataset="dataset2", startIndex=N)
+- For EACH D2 element, call **link_concepts** to connect it to matching concepts:
+  \`link_concepts(sourceNodeId="<D2 8-char UUID prefix>", targetNodeId="<concept node ID>", edgeType="implements")\`
+- Write detailed blackboard entry with function-level mappings
 - Continue until all D2 read
 
 ### PHASE 3: Synthesis

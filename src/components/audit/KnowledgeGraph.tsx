@@ -219,20 +219,21 @@ export function KnowledgeGraph({
       return node;
     })];
 
-    // Create edges from anchor to concept nodes to keep them anchored
+    // Create edges from anchor to ALL nodes to keep them from drifting away
     // Debug: log what node types we have
     console.log("Graph nodes by type:", nodes.map(n => ({ id: n.id.slice(0, 8), type: n.node_type, label: n.label?.slice(0, 20) })));
     
-    const conceptNodes = nodes.filter(n => n.node_type === "concept" || n.node_type?.toLowerCase() === "concept");
-    console.log("Concept nodes found for anchoring:", conceptNodes.length);
+    // Anchor ALL nodes, not just concepts - prevents D1/D2 nodes from flying off
+    const allNonAnchorNodes = nodes;
+    console.log("Total nodes to anchor:", allNonAnchorNodes.length);
     
-    const anchorEdges: GraphEdge[] = conceptNodes.map(n => ({
+    const anchorEdges: GraphEdge[] = allNonAnchorNodes.map(n => ({
       id: `anchor-to-${n.id}`,
       source: "__project_anchor__",
       target: n.id,
       label: null,
       edge_type: "anchors",
-      weight: 0.3,
+      weight: 0.05, // Very low weight for subtle anchoring
       created_by_agent: "system",
     }));
 
