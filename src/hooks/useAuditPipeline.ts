@@ -83,41 +83,56 @@ async function streamSSE(
   const decoder = new TextDecoder();
   let buffer = "";
   let result: any = null;
+  let currentEvent = "";
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    let currentEvent = "";
-    for (const line of lines) {
+    
+    // Process complete lines only
+    let newlineIndex: number;
+    while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+      
+      if (!line) {
+        // Empty line marks end of an event - reset
+        currentEvent = "";
+        continue;
+      }
+      
       if (line.startsWith("event: ")) {
         currentEvent = line.slice(7).trim();
-      } else if (line.startsWith("data: ") && currentEvent) {
-        try {
-          const data = JSON.parse(line.slice(6));
-          switch (currentEvent) {
-            case "progress":
-              onProgress(data);
-              break;
-            case "concept":
-              onConcept(data);
-              break;
-            case "result":
-              result = data;
-              onResult(data);
-              break;
-            case "error":
-              onError(data.message);
-              break;
+      } else if (line.startsWith("data: ")) {
+        const dataStr = line.slice(6);
+        if (currentEvent && dataStr) {
+          try {
+            const data = JSON.parse(dataStr);
+            switch (currentEvent) {
+              case "progress":
+                onProgress(data);
+                break;
+              case "concept":
+                onConcept(data);
+                break;
+              case "result":
+                result = data;
+                onResult(data);
+                break;
+              case "done":
+                // Stream complete
+                break;
+              case "error":
+                onError(data.message || String(data));
+                break;
+            }
+          } catch (e) {
+            // Not valid JSON - just skip this line
+            console.warn("SSE: skipping non-JSON data line");
           }
-        } catch (e) {
-          console.warn("Failed to parse SSE data:", line);
         }
-        currentEvent = "";
       }
     }
   }
@@ -240,8 +255,14 @@ export function useAuditPipeline() {
       
       const BATCH_CHAR_LIMIT = 50000; // 50k chars per batch
       
-      // Helper to batch elements by character count
-      const batchByCharLimit = (elements: Element[], limit: number): Element[][] => {
+      // Helper to batch elements by character count - only if total exceeds limit
+      const batchByCharLimit = (elements: Element[], limit: number, totalChars: number): Element[][] => {
+        // If total chars fits in one batch, send all at once
+        if (totalChars <= limit) {
+          return [elements];
+        }
+        
+        // Otherwise split by character count
         const batches: Element[][] = [];
         let currentBatch: Element[] = [];
         let currentChars = 0;
@@ -262,9 +283,9 @@ export function useAuditPipeline() {
         return batches;
       };
       
-      // Create batches
-      const d1Batches = batchByCharLimit(d1Elements, BATCH_CHAR_LIMIT);
-      const d2Batches = batchByCharLimit(d2Elements, BATCH_CHAR_LIMIT);
+      // Create batches - D1 likely stays as 1 batch, D2 gets split
+      const d1Batches = batchByCharLimit(d1Elements, BATCH_CHAR_LIMIT, d1TotalChars);
+      const d2Batches = batchByCharLimit(d2Elements, BATCH_CHAR_LIMIT, d2TotalChars);
       
       setProgress({ phase: "extracting_d1", message: "Extracting concepts...", progress: 15 });
       updateStep("d1", { 

@@ -11,9 +11,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BATCH_SIZE = 8; // Process 8 elements at a time
+// Elements per LLM batch - only used if > 200k chars total
+// For smaller inputs, we send ALL elements in one LLM call
+const BATCH_SIZE = 15; // Larger batches when needed
 const CLAUDE_MODEL = "claude-sonnet-4-20250514";
 const MAX_OUTPUT_TOKENS = 16384;
+const CHAR_THRESHOLD_FOR_BATCHING = 200000; // Only batch if > 200k chars
 
 interface DatasetElement {
   id: string;
@@ -186,19 +189,27 @@ serve(async (req) => {
         totalEstimatedTokens
       });
 
-      // Split elements into batches
+      // Split elements into batches ONLY if total content is very large
+      // For small/medium content, send ALL elements in one LLM call
       const batches: DatasetElement[][] = [];
-      for (let i = 0; i < elements.length; i += BATCH_SIZE) {
-        batches.push(elements.slice(i, i + BATCH_SIZE));
+      if (totalContentChars > CHAR_THRESHOLD_FOR_BATCHING) {
+        // Large content: batch by element count
+        for (let i = 0; i < elements.length; i += BATCH_SIZE) {
+          batches.push(elements.slice(i, i + BATCH_SIZE));
+        }
+        console.log(`[${dataset}] Content exceeds ${CHAR_THRESHOLD_FOR_BATCHING.toLocaleString()} chars, splitting into ${batches.length} batches of up to ${BATCH_SIZE} elements`);
+      } else {
+        // Small/medium content: single batch with all elements
+        batches.push(elements);
+        console.log(`[${dataset}] Content under threshold, processing all ${elements.length} elements in single LLM call`);
       }
-
-      console.log(`[${dataset}] Split into ${batches.length} batches of up to ${BATCH_SIZE} elements`);
 
       await sendSSE("progress", { 
         phase: `${dataset}_extraction`, 
-        message: `Processing ${batches.length} batches...`,
+        message: `Processing ${batches.length} batch(es)...`,
         progress: 10,
-        batchCount: batches.length
+        batchCount: batches.length,
+        singleBatch: batches.length === 1
       });
 
       const allConcepts: ExtractedConcept[] = [];
