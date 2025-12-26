@@ -39,6 +39,7 @@ import { DatabaseSchemaSelector } from "./DatabaseSchemaSelector";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 export interface DatabaseSchemaItem {
+  id: string; // UUID assigned when selected
   databaseId: string;
   databaseName: string;
   schemaName: string;
@@ -69,6 +70,12 @@ export interface DatabaseSchemaItem {
   object_type?: string;
 }
 
+export interface FileItem {
+  id: string; // UUID assigned when selected
+  path: string;
+  content: string;
+}
+
 export interface ProjectSelectionResult {
   projectMetadata: any | null;
   artifacts: any[];
@@ -79,7 +86,7 @@ export interface ProjectSelectionResult {
   canvasNodes: any[];
   canvasEdges: any[];
   canvasLayers: any[];
-  files: Array<{ path: string; content: string }>;
+  files: FileItem[];
   databases: DatabaseSchemaItem[];
 }
 
@@ -484,7 +491,7 @@ export function ProjectSelector({
       }
 
       // Fetch repository files content
-      const files: Array<{ path: string; content: string }> = [];
+      const files: FileItem[] = [];
       if (selectedFiles.size > 0) {
         // Get Prime repo
         const { data: repos } = await supabase.rpc("get_project_repos_with_token", {
@@ -527,7 +534,7 @@ export function ProjectSelector({
           for (const path of selectedFiles) {
             const content = fileContentMap.get(path);
             if (content !== undefined) {
-              files.push({ path, content });
+              files.push({ id: crypto.randomUUID(), path, content });
             }
           }
         }
@@ -621,6 +628,7 @@ export function ProjectSelector({
 
           for (const item of items) {
             const dbSchemaItem: DatabaseSchemaItem = {
+              id: crypto.randomUUID(),
               databaseId,
               databaseName: dbInfo.name,
               schemaName: item.schemaName,

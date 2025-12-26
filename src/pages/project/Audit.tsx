@@ -303,10 +303,10 @@ export default function Audit() {
               });
             });
             
-            // Files - use crypto.randomUUID() since files don't have DB IDs
+            // Files - use ID from ProjectSelector
             content.files?.forEach((f) => {
               elements.push({
-                id: crypto.randomUUID(),
+                id: f.id,
                 label: f.path,
                 content: f.content || "",
                 category: "files",
@@ -323,10 +323,10 @@ export default function Audit() {
               });
             });
             
-            // Databases - use crypto.randomUUID() since these are composite objects
+            // Databases - use ID from ProjectSelector
             content.databases?.forEach(d => {
               elements.push({
-                id: crypto.randomUUID(),
+                id: d.id,
                 label: `${d.schemaName}.${d.name}`,
                 content: d.definition || JSON.stringify(d.columns || []),
                 category: "database",
