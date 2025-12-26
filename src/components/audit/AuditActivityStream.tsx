@@ -127,23 +127,21 @@ function extractIteration(activity: ActivityEntry): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
-// Extract phase from activity - ONLY from phase_change activities or explicit phase metadata
+// Extract phase from activity - look for "thinking" activities with "Phase: xxx" content
 function extractPhase(activity: ActivityEntry): string | null {
-  // Only extract phase from phase_change activities (they define the current phase)
+  // Check "thinking" activities which contain "Phase: xxx" in content
+  if (activity.activity_type === 'thinking' && activity.content?.startsWith('Phase:')) {
+    const rawPhase = activity.content.replace('Phase:', '').trim();
+    return PHASE_DISPLAY_NAMES[rawPhase] || rawPhase;
+  }
+  // Also check phase_change activities
   if (activity.activity_type === 'phase_change') {
-    // Check for phaseDisplayName first (human-readable)
     if (activity.metadata?.phaseDisplayName) {
       return String(activity.metadata.phaseDisplayName);
     }
-    // Check for raw phase and convert to display name
     if (activity.metadata?.phase) {
       const rawPhase = String(activity.metadata.phase);
       return PHASE_DISPLAY_NAMES[rawPhase] || rawPhase;
-    }
-    // Use the title if it's not a generic one
-    const title = activity.title;
-    if (title !== 'Audit Started' && title !== 'Audit Complete') {
-      return title;
     }
   }
   return null;
@@ -254,11 +252,16 @@ function CondensedIterationRow({
         <CollapsibleTrigger asChild>
           <button className="w-full p-2 text-left">
             <div className="flex items-center justify-between gap-2">
-              {/* Left: Iteration number */}
+              {/* Left: Iteration number and phase */}
               <div className="flex items-center gap-1.5 min-w-0">
                 <div className="text-lg font-bold text-primary min-w-[2ch] text-center">
                   {summary.iteration}
                 </div>
+                {summary.phase && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 whitespace-nowrap truncate max-w-[80px]">
+                    {summary.phase}
+                  </Badge>
+                )}
                 {isExpanded ? (
                   <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                 ) : (
