@@ -618,12 +618,14 @@ async function callLLM(
     const toolUse = data.content?.find((c: any) => c.type === "tool_use");
     return toolUse?.input || defaultResponse;
   } else {
-    // Gemini - thinkingEnabled maps to thinkingConfig for Gemini 2.5+ models
+    // Gemini - use responseSchema for structured output
     const requestBody: any = {
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
       generationConfig: { 
-        responseMimeType: "application/json", 
+        responseMimeType: "application/json",
+        // Convert the JSON schema to Gemini format
+        responseSchema: schema?.json_schema?.schema || undefined,
         maxOutputTokens: maxTokens, 
         temperature: 0.7,
       },
