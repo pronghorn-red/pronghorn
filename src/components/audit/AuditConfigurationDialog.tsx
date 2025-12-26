@@ -160,16 +160,26 @@ export function AuditConfigurationDialog({
           label: a.ai_title || a.content?.slice(0, 40) || "Untitled",
         }));
       } else if (type === "standards") {
-        const { data } = await supabase.rpc("get_project_standards_with_token", {
-          p_project_id: projectId,
-          p_token: shareToken || "",
-        });
-        if (Array.isArray(data)) {
-          items = data.map((s: any) => ({
-            id: s.standard_id || s.id,
-            label: s.name || s.title || "Untitled",
-          }));
-        }
+        // Query standards table directly to get actual titles
+        const { data } = await supabase
+          .from("standards")
+          .select("id, code, title, description")
+          .order("order_index");
+        items = (data || []).map((s: any) => ({
+          id: s.id,
+          label: s.code ? `${s.code}: ${s.title || 'Untitled'}` : (s.title || 'Untitled'),
+        }));
+      } else if (type === "tech_stacks") {
+        // Query tech_stacks table directly to get actual names
+        const { data } = await supabase
+          .from("tech_stacks")
+          .select("id, name, description, icon, type")
+          .order("name");
+        items = (data || []).map((ts: any) => ({
+          id: ts.id,
+          label: ts.name || 'Untitled',
+          type: ts.type || 'tech_stack',
+        }));
       } else if (type === "repository_files") {
         const { data: repos } = await supabase.rpc("get_project_repos_with_token", {
           p_project_id: projectId,
