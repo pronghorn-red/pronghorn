@@ -113,6 +113,8 @@ export default function Audit() {
         dataset2Ids: config.dataset2Ids,
         maxIterations: config.maxIterations,
         agentDefinitions: agentDefs,
+        dataset1Content: config.dataset1Content,
+        dataset2Content: config.dataset2Content,
       });
       
       if (newSession) {
