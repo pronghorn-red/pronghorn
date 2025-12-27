@@ -327,7 +327,7 @@ export function TesseractVisualizer({
                             {d1Items.length || column.d1ElementIds.length}
                           </Badge>
                         </div>
-                        <div className="space-y-1 max-h-24 overflow-y-auto">
+                        <div className="space-y-1">
                           {d1Items.length > 0 ? (
                             d1Items.map((item) => (
                               <TooltipProvider key={item.id}>
@@ -370,7 +370,7 @@ export function TesseractVisualizer({
                             {d2Items.length || column.d2ElementIds.length}
                           </Badge>
                         </div>
-                        <div className="space-y-1 max-h-24 overflow-y-auto">
+                        <div className="space-y-1">
                           {d2Items.length > 0 ? (
                             d2Items.map((item) => (
                               <TooltipProvider key={item.id}>
