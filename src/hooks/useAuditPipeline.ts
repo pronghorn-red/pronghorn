@@ -235,6 +235,17 @@ async function streamSSE(
 // Step ID type for restart functionality
 export type PipelineStepId = "nodes" | "d1" | "d2" | "merge" | "graph" | "tesseract" | "venn";
 
+// Activity entry type for reconstruction
+interface ActivityEntry {
+  id: string;
+  activity_type: string;
+  title: string;
+  content?: string | null;
+  agent_role?: string | null;
+  metadata?: Record<string, any> | null;
+  created_at: string;
+}
+
 export function useAuditPipeline() {
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState<PipelineProgress>({ phase: "idle", message: "", progress: 0 });
@@ -242,6 +253,110 @@ export function useAuditPipeline() {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<PipelineResults | null>(null);
   const abortRef = useRef(false);
+
+  // Reconstruct pipeline steps from activity stream (for viewing completed audits)
+  const reconstructStepsFromActivity = useCallback((activityStream: ActivityEntry[]) => {
+    if (activityStream.length === 0) {
+      setSteps([]);
+      setProgress({ phase: "idle", message: "", progress: 0 });
+      return;
+    }
+
+    // Map activity types to step phases
+    const phaseMap: Record<string, { id: string; phase: PipelinePhase; title: string }> = {
+      "nodes_created": { id: "nodes", phase: "creating_nodes", title: "Create Graph Nodes" },
+      "d1_extraction_started": { id: "d1", phase: "extracting_d1", title: "Extract D1 Concepts" },
+      "d1_extraction_complete": { id: "d1", phase: "extracting_d1", title: "Extract D1 Concepts" },
+      "d2_extraction_started": { id: "d2", phase: "extracting_d2", title: "Extract D2 Concepts" },
+      "d2_extraction_complete": { id: "d2", phase: "extracting_d2", title: "Extract D2 Concepts" },
+      "merge_started": { id: "merge", phase: "merging_concepts", title: "Merge Concepts" },
+      "merge_complete": { id: "merge", phase: "merging_concepts", title: "Merge Concepts" },
+      "graph_building_started": { id: "graph", phase: "building_graph", title: "Build Graph Edges" },
+      "graph_complete": { id: "graph", phase: "building_graph", title: "Build Graph Edges" },
+      "tesseract_started": { id: "tesseract", phase: "building_tesseract", title: "Build Tesseract" },
+      "tesseract_complete": { id: "tesseract", phase: "building_tesseract", title: "Build Tesseract" },
+      "venn_started": { id: "venn", phase: "generating_venn", title: "Generate Venn Analysis" },
+      "venn_complete": { id: "venn", phase: "generating_venn", title: "Generate Venn Analysis" },
+      "pipeline_complete": { id: "venn", phase: "completed", title: "Pipeline Complete" },
+    };
+
+    // Build a map of step states from activity
+    const stepStates: Record<string, { status: "pending" | "running" | "completed" | "error"; message: string; details: string[] }> = {
+      nodes: { status: "pending", message: "Waiting...", details: [] },
+      d1: { status: "pending", message: "Waiting...", details: [] },
+      d2: { status: "pending", message: "Waiting...", details: [] },
+      merge: { status: "pending", message: "Waiting...", details: [] },
+      graph: { status: "pending", message: "Waiting...", details: [] },
+      tesseract: { status: "pending", message: "Waiting...", details: [] },
+      venn: { status: "pending", message: "Waiting...", details: [] },
+    };
+
+    let pipelineCompleted = false;
+
+    // Process activity stream chronologically
+    const sortedActivity = [...activityStream].sort((a, b) => 
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    for (const activity of sortedActivity) {
+      const mapping = phaseMap[activity.activity_type];
+      if (mapping) {
+        if (activity.activity_type.endsWith("_started")) {
+          stepStates[mapping.id] = { status: "running", message: activity.title, details: [] };
+        } else if (activity.activity_type.endsWith("_complete") || activity.activity_type === "nodes_created") {
+          stepStates[mapping.id] = { status: "completed", message: activity.title, details: [] };
+        }
+        if (activity.activity_type === "pipeline_complete") {
+          pipelineCompleted = true;
+        }
+      }
+
+      // Collect concept details for d1/d2 steps
+      if (activity.activity_type === "concept_extracted") {
+        const dataset = (activity.metadata as any)?.dataset;
+        const stepId = dataset === "d1" ? "d1" : dataset === "d2" ? "d2" : null;
+        if (stepId && stepStates[stepId]) {
+          stepStates[stepId].details.push(activity.title);
+        }
+      }
+
+      // Collect tesseract cell details
+      if (activity.activity_type === "tesseract_cell_analyzed") {
+        stepStates.tesseract.details.push(activity.title);
+      }
+
+      // Handle errors
+      if (activity.activity_type === "error" || activity.activity_type.includes("_error")) {
+        const stepId = (activity.metadata as any)?.step || "venn";
+        if (stepStates[stepId]) {
+          stepStates[stepId].status = "error";
+          stepStates[stepId].message = activity.title;
+        }
+      }
+    }
+
+    // Build reconstructed steps array
+    const reconstructedSteps: PipelineStep[] = [
+      { id: "nodes", phase: "creating_nodes", title: "Create Graph Nodes", ...stepStates.nodes, progress: stepStates.nodes.status === "completed" ? 100 : 0 },
+      { id: "d1", phase: "extracting_d1", title: "Extract D1 Concepts", ...stepStates.d1, progress: stepStates.d1.status === "completed" ? 100 : 0 },
+      { id: "d2", phase: "extracting_d2", title: "Extract D2 Concepts", ...stepStates.d2, progress: stepStates.d2.status === "completed" ? 100 : 0 },
+      { id: "merge", phase: "merging_concepts", title: "Merge Concepts", ...stepStates.merge, progress: stepStates.merge.status === "completed" ? 100 : 0 },
+      { id: "graph", phase: "building_graph", title: "Build Graph Edges", ...stepStates.graph, progress: stepStates.graph.status === "completed" ? 100 : 0 },
+      { id: "tesseract", phase: "building_tesseract", title: "Build Tesseract", ...stepStates.tesseract, progress: stepStates.tesseract.status === "completed" ? 100 : 0 },
+      { id: "venn", phase: "generating_venn", title: "Generate Venn Analysis", ...stepStates.venn, progress: stepStates.venn.status === "completed" ? 100 : 0 },
+    ];
+
+    setSteps(reconstructedSteps);
+    
+    if (pipelineCompleted) {
+      setProgress({ phase: "completed", message: "Pipeline complete", progress: 100 });
+    } else {
+      const runningStep = reconstructedSteps.find(s => s.status === "running");
+      if (runningStep) {
+        setProgress({ phase: runningStep.phase, message: runningStep.message, progress: 50 });
+      }
+    }
+  }, []);
 
   // Persistent state for restart functionality
   const lastInputRef = useRef<PipelineInput | null>(null);
@@ -1442,5 +1557,6 @@ export function useAuditPipeline() {
     restartStep,
     abort,
     clearResults,
+    reconstructStepsFromActivity,
   };
 }

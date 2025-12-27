@@ -63,7 +63,7 @@ export default function Audit() {
   const manualStopRef = useRef(false);
   
   // New pipeline hook
-  const { runPipeline, isRunning: isPipelineRunning, progress: pipelineProgress, steps: pipelineSteps, error: pipelineError, abort: abortPipeline, results: pipelineResults, clearResults: clearPipelineResults, restartStep: restartPipelineStep } = useAuditPipeline();
+  const { runPipeline, isRunning: isPipelineRunning, progress: pipelineProgress, steps: pipelineSteps, error: pipelineError, abort: abortPipeline, results: pipelineResults, clearResults: clearPipelineResults, restartStep: restartPipelineStep, reconstructStepsFromActivity } = useAuditPipeline();
   
   const {
     session,
@@ -113,7 +113,14 @@ export default function Audit() {
     loadSessions();
   }, [projectId, shareToken, selectedSessionId]);
 
-  // Resume orchestrator function
+  // Reconstruct pipeline steps from activity stream when loading an existing session
+  useEffect(() => {
+    // Only reconstruct if we have activity data and the pipeline isn't running
+    if (!isPipelineRunning && activityStream.length > 0 && pipelineSteps.length === 0) {
+      reconstructStepsFromActivity(activityStream);
+    }
+  }, [activityStream, isPipelineRunning, pipelineSteps.length, reconstructStepsFromActivity]);
+
   const resumeOrchestrator = useCallback(async (sessionToResume: AuditSession) => {
     if (isResuming) return;
     
