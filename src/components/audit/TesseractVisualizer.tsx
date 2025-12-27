@@ -9,109 +9,137 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Grid3X3, Layers, ZoomIn, ZoomOut, FileJson, FileSpreadsheet, X } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Grid3X3, FileJson, FileSpreadsheet, Search, MessageSquare } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type TesseractCell = Database["public"]["Tables"]["audit_tesseract_cells"]["Row"];
+
+export interface TesseractElement {
+  id: string;
+  label: string;
+  content: string;
+  category?: string;
+}
 
 interface TesseractVisualizerProps {
   cells: TesseractCell[];
   currentIteration?: number;
   onCellClick?: (cell: TesseractCell) => void;
+  d1Elements?: TesseractElement[];
+  d2Elements?: TesseractElement[];
+  d1Label?: string;
+  d2Label?: string;
+  onDeepDive?: (conceptLabel: string, d1Items: TesseractElement[], d2Items: TesseractElement[]) => void;
+}
+
+interface ConceptColumn {
+  conceptLabel: string;
+  conceptId: string;
+  polarity: number;
+  criticality: string | null;
+  rationale: string | null;
+  d1ElementIds: string[];
+  d2ElementIds: string[];
 }
 
 export function TesseractVisualizer({
   cells,
   currentIteration = 0,
   onCellClick,
+  d1Elements = [],
+  d2Elements = [],
+  d1Label = "D1",
+  d2Label = "D2",
+  onDeepDive,
 }: TesseractVisualizerProps) {
-  const [zoom, setZoom] = useState(1);
-  const [showLabels, setShowLabels] = useState(true);
-  const [selectedCell, setSelectedCell] = useState<TesseractCell | null>(null);
+  const [selectedColumn, setSelectedColumn] = useState<string | null>(null);
+  const [deepDiveOpen, setDeepDiveOpen] = useState(false);
+  const [deepDiveData, setDeepDiveData] = useState<{
+    conceptLabel: string;
+    d1Items: TesseractElement[];
+    d2Items: TesseractElement[];
+    polarity: number;
+    rationale: string | null;
+  } | null>(null);
 
-  // Build grid structure from cells - ensure we have proper x/y grid layout
-  const { xElements, ySteps, cellMap, maxPolarity } = useMemo(() => {
-    const xSet = new Map<number, { id: string; label: string; type: string }>();
-    const ySet = new Map<number, string>();
-    const cMap = new Map<string, TesseractCell>();
-    let maxP = 1;
-
-    // Default analysis steps if none provided
-    const defaultSteps = [
-      { step: 1, label: "Identify" },
-      { step: 2, label: "Complete" },
-      { step: 3, label: "Correct" },
-      { step: 4, label: "Quality" },
-      { step: 5, label: "Integrate" },
-    ];
+  // Build column-based structure from cells
+  const columns = useMemo<ConceptColumn[]>(() => {
+    const columnMap = new Map<string, ConceptColumn>();
 
     cells.forEach((cell, idx) => {
-      // Use x_index from cell, or fall back to index in array if all are 0
-      const xIndex = cell.x_index !== 0 ? cell.x_index : idx;
-      
-      xSet.set(xIndex, {
-        id: cell.x_element_id,
-        label: cell.x_element_label || `Element ${xIndex + 1}`,
-        type: cell.x_element_type,
-      });
-      
-      const stepLabel = cell.y_step_label || defaultSteps.find(s => s.step === cell.y_step)?.label || `Step ${cell.y_step}`;
-      ySet.set(cell.y_step, stepLabel);
-      
-      cMap.set(`${xIndex}-${cell.y_step}`, cell);
-      maxP = Math.max(maxP, Math.abs(cell.z_polarity));
+      const conceptLabel = cell.x_element_label || `Concept ${idx + 1}`;
+      const conceptId = cell.x_element_id;
+
+      if (!columnMap.has(conceptId)) {
+        // Parse evidence_refs to get D1/D2 element IDs
+        let d1Ids: string[] = [];
+        let d2Ids: string[] = [];
+        
+        if (cell.evidence_refs) {
+          const refs = cell.evidence_refs as { d1ElementIds?: string[]; d2ElementIds?: string[] };
+          d1Ids = refs.d1ElementIds || [];
+          d2Ids = refs.d2ElementIds || [];
+        }
+
+        columnMap.set(conceptId, {
+          conceptLabel,
+          conceptId,
+          polarity: cell.z_polarity,
+          criticality: cell.z_criticality,
+          rationale: cell.evidence_summary,
+          d1ElementIds: d1Ids,
+          d2ElementIds: d2Ids,
+        });
+      }
     });
 
-    // If no steps recorded, add defaults
-    if (ySet.size === 0) {
-      defaultSteps.forEach(s => ySet.set(s.step, s.label));
-    }
-
-    return {
-      xElements: Array.from(xSet.entries()).sort((a, b) => a[0] - b[0]),
-      ySteps: Array.from(ySet.entries()).sort((a, b) => a[0] - b[0]),
-      cellMap: cMap,
-      maxPolarity: maxP,
-    };
+    return Array.from(columnMap.values());
   }, [cells]);
 
-  // Get color based on polarity (-1 to +1)
-  const getPolarityColor = (polarity: number): string => {
-    if (polarity === 0) return "bg-muted";
-    if (polarity > 0) {
-      const intensity = Math.min(polarity / maxPolarity, 1);
-      if (intensity > 0.7) return "bg-green-500";
-      if (intensity > 0.4) return "bg-green-400";
-      return "bg-green-300";
+  // Get polarity display info
+  const getPolarityInfo = (polarity: number) => {
+    if (polarity > 0.5) {
+      return { label: "HIGH", color: "bg-green-500 text-white", textColor: "text-green-600" };
+    } else if (polarity > 0) {
+      return { label: "MED", color: "bg-yellow-500 text-white", textColor: "text-yellow-600" };
+    } else if (polarity === 0) {
+      return { label: "NEUTRAL", color: "bg-muted text-muted-foreground", textColor: "text-muted-foreground" };
     } else {
-      const intensity = Math.min(Math.abs(polarity) / maxPolarity, 1);
-      if (intensity > 0.7) return "bg-red-500";
-      if (intensity > 0.4) return "bg-red-400";
-      return "bg-red-300";
+      return { label: "LOW", color: "bg-red-500 text-white", textColor: "text-red-600" };
     }
   };
 
-  // Get criticality badge variant
-  const getCriticalityVariant = (
-    criticality?: string | null
-  ): "destructive" | "default" | "secondary" | "outline" => {
-    switch (criticality) {
-      case "critical":
-        return "destructive";
-      case "major":
-        return "default";
-      case "minor":
-        return "secondary";
-      default:
-        return "outline";
-    }
+  // Get D1/D2 elements for a column
+  const getD1Items = useCallback((elementIds: string[]): TesseractElement[] => {
+    return d1Elements.filter(el => elementIds.includes(el.id));
+  }, [d1Elements]);
+
+  const getD2Items = useCallback((elementIds: string[]): TesseractElement[] => {
+    return d2Elements.filter(el => elementIds.includes(el.id));
+  }, [d2Elements]);
+
+  // Handle column click for selection
+  const handleColumnClick = (column: ConceptColumn) => {
+    setSelectedColumn(selectedColumn === column.conceptId ? null : column.conceptId);
   };
 
-  // Handle cell click - set selected cell and call parent handler
-  const handleCellClick = useCallback((cell: TesseractCell) => {
-    setSelectedCell(cell);
-    onCellClick?.(cell);
-  }, [onCellClick]);
+  // Handle deep dive button click
+  const handleDeepDiveClick = (column: ConceptColumn) => {
+    const d1Items = getD1Items(column.d1ElementIds);
+    const d2Items = getD2Items(column.d2ElementIds);
+    
+    setDeepDiveData({
+      conceptLabel: column.conceptLabel,
+      d1Items,
+      d2Items,
+      polarity: column.polarity,
+      rationale: column.rationale,
+    });
+    setDeepDiveOpen(true);
+    
+    onDeepDive?.(column.conceptLabel, d1Items, d2Items);
+  };
 
   // Export as JSON
   const exportAsJson = useCallback(() => {
@@ -120,19 +148,18 @@ export function TesseractVisualizer({
       iteration: currentIteration,
       stats: {
         totalCells: cells.length,
-        elements: xElements.length,
-        steps: ySteps.length,
+        columns: columns.length,
       },
-      cells: cells.map(cell => ({
-        elementId: cell.x_element_id,
-        elementLabel: cell.x_element_label,
-        elementType: cell.x_element_type,
-        step: cell.y_step,
-        stepLabel: cell.y_step_label,
-        polarity: cell.z_polarity,
-        criticality: cell.z_criticality,
-        evidenceSummary: cell.evidence_summary,
-        contributingAgents: cell.contributing_agents,
+      columns: columns.map(col => ({
+        conceptLabel: col.conceptLabel,
+        conceptId: col.conceptId,
+        polarity: col.polarity,
+        criticality: col.criticality,
+        rationale: col.rationale,
+        d1ElementIds: col.d1ElementIds,
+        d2ElementIds: col.d2ElementIds,
+        d1Elements: getD1Items(col.d1ElementIds),
+        d2Elements: getD2Items(col.d2ElementIds),
       })),
     };
     
@@ -145,22 +172,19 @@ export function TesseractVisualizer({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [cells, currentIteration, xElements.length, ySteps.length]);
+  }, [cells, currentIteration, columns, getD1Items, getD2Items]);
 
   // Export as CSV
   const exportAsCsv = useCallback(() => {
     const rows = [
-      ["Element ID", "Element Label", "Element Type", "Step", "Step Label", "Polarity", "Criticality", "Evidence Summary", "Contributing Agents"],
-      ...cells.map(cell => [
-        cell.x_element_id,
-        cell.x_element_label || "",
-        cell.x_element_type,
-        cell.y_step.toString(),
-        cell.y_step_label || "",
-        cell.z_polarity.toString(),
-        cell.z_criticality || "",
-        cell.evidence_summary || "",
-        (cell.contributing_agents || []).join("; "),
+      ["Concept", "Polarity", "Criticality", "Rationale", "D1 Element IDs", "D2 Element IDs"],
+      ...columns.map(col => [
+        col.conceptLabel,
+        col.polarity.toString(),
+        col.criticality || "",
+        col.rationale || "",
+        col.d1ElementIds.join("; "),
+        col.d2ElementIds.join("; "),
       ]),
     ];
     const csv = rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -173,289 +197,346 @@ export function TesseractVisualizer({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [cells]);
+  }, [columns]);
 
-  const cellSize = 40 * zoom;
-
-  // Show empty grid skeleton when no cells but session exists
-  const showEmptyGrid = cells.length === 0;
+  // Show empty grid skeleton when no cells
+  const showEmptyGrid = cells.length === 0 || columns.length === 0;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex flex-col gap-2">
-          {/* Title row */}
-          <CardTitle className="flex items-center gap-2 flex-wrap">
-            <Grid3X3 className="h-5 w-5" />
-            <span>Tesseract Visualization</span>
-            {currentIteration > 0 && (
-              <Badge variant="outline" className="text-xs">
-                Iteration {currentIteration}
-              </Badge>
-            )}
-          </CardTitle>
-          
-          {/* Controls row */}
-          <div className="flex items-center gap-1 flex-wrap">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setShowLabels(!showLabels)}
-            >
-              <Layers className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
-              disabled={zoom <= 0.5}
-            >
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setZoom(Math.min(2, zoom + 0.25))}
-              disabled={zoom >= 2}
-            >
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-            {cells.length > 0 && (
-              <>
-                <div className="w-px h-6 bg-border mx-1" />
-                <Button variant="outline" size="sm" className="h-8" onClick={exportAsJson}>
-                  <FileJson className="h-4 w-4 sm:mr-1" />
-                  <span className="hidden sm:inline">JSON</span>
-                </Button>
-                <Button variant="outline" size="sm" className="h-8" onClick={exportAsCsv}>
-                  <FileSpreadsheet className="h-4 w-4 sm:mr-1" />
-                  <span className="hidden sm:inline">CSV</span>
-                </Button>
-              </>
-            )}
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-2">
+            {/* Title row */}
+            <CardTitle className="flex items-center gap-2 flex-wrap">
+              <Grid3X3 className="h-5 w-5" />
+              <span>Tesseract Visualization</span>
+              {currentIteration > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  Iteration {currentIteration}
+                </Badge>
+              )}
+            </CardTitle>
+            
+            {/* Controls row */}
+            <div className="flex items-center gap-1 flex-wrap">
+              {cells.length > 0 && (
+                <>
+                  <Button variant="outline" size="sm" className="h-8" onClick={exportAsJson}>
+                    <FileJson className="h-4 w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">JSON</span>
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-8" onClick={exportAsCsv}>
+                    <FileSpreadsheet className="h-4 w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">CSV</span>
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {/* Selected cell detail panel */}
-        {selectedCell && (
-          <div className="mb-4 p-3 rounded-lg border bg-muted/30">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium text-sm">{selectedCell.x_element_label || `Element ${selectedCell.x_index}`}</span>
-                  <Badge variant="outline" className="text-xs">{selectedCell.y_step_label || `Step ${selectedCell.y_step}`}</Badge>
-                  <Badge variant={getCriticalityVariant(selectedCell.z_criticality)}>
-                    {selectedCell.z_criticality || "info"}
-                  </Badge>
-                  <span className="text-sm text-muted-foreground">
-                    Polarity: {selectedCell.z_polarity.toFixed(2)}
-                  </span>
-                </div>
-                {selectedCell.evidence_summary && (
-                  <p className="text-sm text-muted-foreground">
-                    {selectedCell.evidence_summary}
-                  </p>
-                )}
-                {selectedCell.contributing_agents && selectedCell.contributing_agents.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Contributors: {selectedCell.contributing_agents.join(", ")}
-                  </p>
-                )}
+        </CardHeader>
+        <CardContent>
+          {showEmptyGrid ? (
+            <div className="space-y-4">
+              <div className="text-center text-muted-foreground mb-4">
+                <p className="font-medium">Empty Tesseract Framework</p>
+                <p className="text-sm">Agents will populate this grid during analysis</p>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 shrink-0"
-                onClick={() => setSelectedCell(null)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {showEmptyGrid ? (
-          <div className="space-y-4">
-            <div className="text-center text-muted-foreground mb-4">
-              <p className="font-medium">Empty Tesseract Framework</p>
-              <p className="text-sm">Agents will populate this grid during analysis</p>
-            </div>
-            {/* Empty grid skeleton */}
-            <div className="grid gap-1 justify-center">
-              <div className="flex items-center gap-1">
-                <div className="w-20 h-8" />
-                {[1, 2, 3, 4, 5].map((i) => (
+              {/* Empty grid skeleton - now column-based */}
+              <div className="flex gap-4 justify-center">
+                {[1, 2, 3].map((i) => (
                   <div
-                    key={`header-${i}`}
-                    className="w-10 h-8 bg-muted/30 rounded flex items-center justify-center text-xs text-muted-foreground"
+                    key={`skeleton-${i}`}
+                    className="w-48 border border-border/30 rounded-lg p-3 bg-muted/10"
                   >
-                    E{i}
+                    <div className="h-5 bg-muted/30 rounded mb-3" />
+                    <div className="h-8 bg-muted/20 rounded mb-3" />
+                    <div className="space-y-2 mb-3">
+                      <div className="h-4 bg-blue-500/10 rounded w-3/4" />
+                      <div className="h-4 bg-blue-500/10 rounded w-1/2" />
+                    </div>
+                    <div className="space-y-2 mb-3">
+                      <div className="h-4 bg-green-500/10 rounded w-2/3" />
+                      <div className="h-4 bg-green-500/10 rounded w-3/4" />
+                    </div>
+                    <div className="h-8 bg-muted/20 rounded" />
                   </div>
                 ))}
               </div>
-              {["Identify", "Complete", "Correct", "Quality", "Integrate"].map((step, stepIdx) => (
-                <div key={step} className="flex items-center gap-1">
-                  <div className="w-20 h-10 flex items-center text-xs text-muted-foreground truncate pr-1">
-                    {step}
-                  </div>
-                  {[1, 2, 3, 4, 5].map((i) => (
+            </div>
+          ) : (
+            <ScrollArea className="w-full">
+              <div className="flex gap-4 pb-4 pr-4 min-w-max">
+                {columns.map((column) => {
+                  const polarityInfo = getPolarityInfo(column.polarity);
+                  const d1Items = getD1Items(column.d1ElementIds);
+                  const d2Items = getD2Items(column.d2ElementIds);
+                  const isSelected = selectedColumn === column.conceptId;
+
+                  return (
                     <div
-                      key={`cell-${stepIdx}-${i}`}
-                      className="w-10 h-10 bg-muted/20 border border-border/30 rounded"
-                    />
-                  ))}
-                </div>
-              ))}
+                      key={column.conceptId}
+                      className={`
+                        min-w-[220px] max-w-[280px] flex-shrink-0 border rounded-lg overflow-hidden
+                        transition-all duration-200 cursor-pointer
+                        ${isSelected 
+                          ? "ring-2 ring-primary border-primary shadow-lg" 
+                          : "border-border hover:border-primary/50 hover:shadow-md"
+                        }
+                      `}
+                      onClick={() => handleColumnClick(column)}
+                    >
+                      {/* Concept Title Header */}
+                      <div className="bg-muted/50 p-3 border-b">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <h3 className="font-semibold text-sm truncate">
+                                {column.conceptLabel}
+                              </h3>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              <p className="font-medium">{column.conceptLabel}</p>
+                              {column.rationale && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {column.rationale}
+                                </p>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+
+                      {/* Alignment / Polarity Row */}
+                      <div className="p-3 border-b bg-background">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Alignment</span>
+                          <Badge className={`${polarityInfo.color} text-xs`}>
+                            {polarityInfo.label} ({column.polarity > 0 ? "+" : ""}{column.polarity.toFixed(1)})
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* D1 Items Section */}
+                      <div className="p-3 border-b">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-2 h-2 rounded-full bg-blue-500" />
+                          <span className="text-xs font-medium text-blue-600">{d1Label}</span>
+                          <Badge variant="secondary" className="text-[10px] h-4 px-1 ml-auto">
+                            {d1Items.length || column.d1ElementIds.length}
+                          </Badge>
+                        </div>
+                        <div className="space-y-1 max-h-24 overflow-y-auto">
+                          {d1Items.length > 0 ? (
+                            d1Items.map((item) => (
+                              <TooltipProvider key={item.id}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="text-xs px-2 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-300 rounded truncate cursor-help">
+                                      {item.label}
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-sm">
+                                    <p className="font-medium">{item.label}</p>
+                                    <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap line-clamp-4">
+                                      {item.content.slice(0, 200)}...
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ))
+                          ) : column.d1ElementIds.length > 0 ? (
+                            column.d1ElementIds.slice(0, 3).map((id) => (
+                              <div 
+                                key={id} 
+                                className="text-xs px-2 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-300 rounded truncate"
+                              >
+                                {id.slice(0, 20)}...
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-xs text-muted-foreground italic">No items</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* D2 Items Section */}
+                      <div className="p-3 border-b">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-2 h-2 rounded-full bg-green-500" />
+                          <span className="text-xs font-medium text-green-600">{d2Label}</span>
+                          <Badge variant="secondary" className="text-[10px] h-4 px-1 ml-auto">
+                            {d2Items.length || column.d2ElementIds.length}
+                          </Badge>
+                        </div>
+                        <div className="space-y-1 max-h-24 overflow-y-auto">
+                          {d2Items.length > 0 ? (
+                            d2Items.map((item) => (
+                              <TooltipProvider key={item.id}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="text-xs px-2 py-1 bg-green-500/10 text-green-700 dark:text-green-300 rounded truncate cursor-help">
+                                      {item.label}
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-sm">
+                                    <p className="font-medium">{item.label}</p>
+                                    <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap line-clamp-4">
+                                      {item.content.slice(0, 200)}...
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ))
+                          ) : column.d2ElementIds.length > 0 ? (
+                            column.d2ElementIds.slice(0, 3).map((id) => (
+                              <div 
+                                key={id} 
+                                className="text-xs px-2 py-1 bg-green-500/10 text-green-700 dark:text-green-300 rounded truncate"
+                              >
+                                {id.slice(0, 20)}...
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-xs text-muted-foreground italic">No items</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Deep Dive Button */}
+                      <div className="p-3 bg-muted/30">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full gap-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeepDiveClick(column);
+                          }}
+                        >
+                          <Search className="h-4 w-4" />
+                          Deep Dive
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          )}
+
+          {/* Legend */}
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 mt-4 pt-4 border-t text-xs">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-blue-500" />
+              <span>{d1Label} Items</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-green-500" />
+              <span>{d2Label} Items</span>
+            </div>
+            <div className="border-l pl-2 flex items-center gap-1">
+              <Badge className="bg-green-500 text-white text-[10px] h-4 px-1">HIGH</Badge>
+              <span className="hidden sm:inline">Strong Alignment</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Badge className="bg-yellow-500 text-white text-[10px] h-4 px-1">MED</Badge>
+              <span className="hidden sm:inline">Partial</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Badge className="bg-red-500 text-white text-[10px] h-4 px-1">LOW</Badge>
+              <span className="hidden sm:inline">Gap</span>
             </div>
           </div>
-        ) : (
-        <ScrollArea className="w-full h-[350px]">
-          <div className="min-w-max pb-4 pr-4">
-              {/* Header row with X labels */}
-              <div className="flex">
-                <div
-                  style={{ width: cellSize * 2, height: cellSize }}
-                  className="shrink-0"
-                />
-                {xElements.map(([xIndex, xData]) => (
-                  <TooltipProvider key={xIndex}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div
-                          style={{ width: cellSize, height: cellSize }}
-                          className="flex items-center justify-center text-xs font-medium text-muted-foreground truncate px-1 cursor-help"
-                        >
-                          {showLabels ? xData.label.slice(0, 6) : xIndex}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="font-medium">{xData.label}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Type: {xData.type}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ))}
+        </CardContent>
+      </Card>
+
+      {/* Deep Dive Panel */}
+      <Sheet open={deepDiveOpen} onOpenChange={setDeepDiveOpen}>
+        <SheetContent className="sm:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Search className="h-5 w-5" />
+              Deep Dive: {deepDiveData?.conceptLabel}
+            </SheetTitle>
+            <SheetDescription>
+              Analyze the fit/gap between {d1Label} and {d2Label} elements for this concept
+            </SheetDescription>
+          </SheetHeader>
+          
+          {deepDiveData && (
+            <div className="mt-6 space-y-6">
+              {/* Alignment Summary */}
+              <div className="p-4 rounded-lg bg-muted/30 border">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Current Alignment</span>
+                  <Badge className={getPolarityInfo(deepDiveData.polarity).color}>
+                    {getPolarityInfo(deepDiveData.polarity).label} ({deepDiveData.polarity > 0 ? "+" : ""}{deepDiveData.polarity.toFixed(2)})
+                  </Badge>
+                </div>
+                {deepDiveData.rationale && (
+                  <p className="text-sm text-muted-foreground">{deepDiveData.rationale}</p>
+                )}
               </div>
 
-              {/* Data rows */}
-              {ySteps.map(([yStep, yLabel]) => (
-                <div key={yStep} className="flex">
-                  {/* Y axis label */}
-                  <div
-                    style={{ width: cellSize * 2, height: cellSize }}
-                    className="flex items-center text-xs font-medium text-muted-foreground truncate pr-2 shrink-0"
-                  >
-                    {showLabels ? yLabel : `Step ${yStep}`}
-                  </div>
-
-                  {/* Cells */}
-                  {xElements.map(([xIndex]) => {
-                    const cell = cellMap.get(`${xIndex}-${yStep}`);
-                    const isSelected = selectedCell?.id === cell?.id;
-                    return (
-                      <TooltipProvider key={`${xIndex}-${yStep}`}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div
-                              style={{ width: cellSize, height: cellSize }}
-                              className={`
-                                border flex items-center justify-center cursor-pointer
-                                transition-all duration-200 hover:ring-2 hover:ring-primary/50
-                                ${cell ? getPolarityColor(cell.z_polarity) : "bg-muted/30"}
-                                ${isSelected ? "ring-2 ring-primary border-primary" : "border-border/50"}
-                              `}
-                              onClick={() => cell && handleCellClick(cell)}
-                            >
-                              {cell?.z_criticality && (
-                                <span className="text-[8px] font-bold text-white drop-shadow">
-                                  {cell.z_criticality[0].toUpperCase()}
-                                </span>
-                              )}
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-xs">
-                            {cell ? (
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <Badge
-                                    variant={getCriticalityVariant(
-                                      cell.z_criticality
-                                    )}
-                                  >
-                                    {cell.z_criticality || "info"}
-                                  </Badge>
-                                  <span className="text-sm">
-                                    Polarity: {cell.z_polarity.toFixed(2)}
-                                  </span>
-                                </div>
-                                {cell.evidence_summary && (
-                                  <p className="text-xs">
-                                    {cell.evidence_summary}
-                                  </p>
-                                )}
-                                {cell.contributing_agents &&
-                                  cell.contributing_agents.length > 0 && (
-                                    <p className="text-xs text-muted-foreground">
-                                      Contributors:{" "}
-                                      {cell.contributing_agents.join(", ")}
-                                    </p>
-                                  )}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">
-                                No data for this cell
-                              </p>
-                            )}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    );
-                  })}
+              {/* D1 Elements */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-3 h-3 rounded-full bg-blue-500" />
+                  <h4 className="font-medium">{d1Label} Elements ({deepDiveData.d1Items.length})</h4>
                 </div>
-              ))}
-            </div>
-            <ScrollBar orientation="horizontal" />
-            <ScrollBar orientation="vertical" />
-          </ScrollArea>
-        )}
+                <div className="space-y-2">
+                  {deepDiveData.d1Items.map((item) => (
+                    <div key={item.id} className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      <p className="text-sm font-medium text-blue-700 dark:text-blue-300">{item.label}</p>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.content.slice(0, 150)}...</p>
+                    </div>
+                  ))}
+                  {deepDiveData.d1Items.length === 0 && (
+                    <p className="text-sm text-muted-foreground italic">No {d1Label} elements linked to this concept</p>
+                  )}
+                </div>
+              </div>
 
-        {/* Legend - Responsive */}
-        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 mt-4 pt-4 border-t text-xs">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-red-500 rounded" />
-            <span className="hidden sm:inline">Negative (-1)</span>
-            <span className="sm:hidden">-1</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-muted rounded" />
-            <span className="hidden sm:inline">Neutral (0)</span>
-            <span className="sm:hidden">0</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded" />
-            <span className="hidden sm:inline">Positive (+1)</span>
-            <span className="sm:hidden">+1</span>
-          </div>
-          <div className="border-l pl-2 flex items-center gap-1">
-            <Badge variant="destructive" className="text-[10px] h-4 px-1">
-              C
-            </Badge>
-            <span className="hidden sm:inline">Critical</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Badge variant="default" className="text-[10px] h-4 px-1">
-              M
-            </Badge>
-            <span className="hidden sm:inline">Major</span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+              {/* D2 Elements */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-3 h-3 rounded-full bg-green-500" />
+                  <h4 className="font-medium">{d2Label} Elements ({deepDiveData.d2Items.length})</h4>
+                </div>
+                <div className="space-y-2">
+                  {deepDiveData.d2Items.map((item) => (
+                    <div key={item.id} className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                      <p className="text-sm font-medium text-green-700 dark:text-green-300">{item.label}</p>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.content.slice(0, 150)}...</p>
+                    </div>
+                  ))}
+                  {deepDiveData.d2Items.length === 0 && (
+                    <p className="text-sm text-muted-foreground italic">No {d2Label} elements linked to this concept</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Deep Dive Chat Placeholder */}
+              <div className="p-4 rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/10">
+                <div className="flex items-center gap-3 mb-3">
+                  <MessageSquare className="h-5 w-5 text-muted-foreground" />
+                  <span className="font-medium">Ask AI (Coming Soon)</span>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Perform a deep dive fit/gap analysis between the {d1Label} and {d2Label} elements.
+                  The AI will analyze specific gaps and provide recommendations.
+                </p>
+                <Button disabled className="w-full gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Start Deep Dive Analysis
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }

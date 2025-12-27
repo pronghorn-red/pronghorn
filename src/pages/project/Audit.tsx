@@ -62,6 +62,12 @@ export default function Audit() {
   const lastResumeAttemptRef = useRef<number>(0);
   const manualStopRef = useRef(false);
   
+  // Store D1/D2 elements for Tesseract visualization
+  const [d1Elements, setD1Elements] = useState<Array<{ id: string; label: string; content: string; category: string }>>([]);
+  const [d2Elements, setD2Elements] = useState<Array<{ id: string; label: string; content: string; category: string }>>([]);
+  const [d1Label, setD1Label] = useState("D1");
+  const [d2Label, setD2Label] = useState("D2");
+  
   // New pipeline hook
   const { runPipeline, isRunning: isPipelineRunning, progress: pipelineProgress, steps: pipelineSteps, error: pipelineError, abort: abortPipeline, results: pipelineResults, clearResults: clearPipelineResults, restartStep: restartPipelineStep, reconstructStepsFromActivity } = useAuditPipeline();
   
@@ -345,16 +351,22 @@ export default function Audit() {
             return elements;
           };
           
-          const d1Elements = extractElements(config.dataset1Content);
-          const d2Elements = extractElements(config.dataset2Content);
+          const extractedD1 = extractElements(config.dataset1Content);
+          const extractedD2 = extractElements(config.dataset2Content);
+          
+          // Store elements in state for Tesseract visualization
+          setD1Elements(extractedD1);
+          setD2Elements(extractedD2);
+          setD1Label(config.dataset1Type);
+          setD2Label(config.dataset2Type);
           
           // Run the pipeline (now fully local - no DB writes)
           await runPipeline({
             sessionId: newSession.id,
             projectId: projectId!,
             shareToken: shareToken!,
-            d1Elements,
-            d2Elements,
+            d1Elements: extractedD1,
+            d2Elements: extractedD2,
           });
           
           // Refresh session data after pipeline completes
@@ -962,14 +974,21 @@ export default function Audit() {
                       z_polarity: c.polarity,
                       z_criticality: c.polarity > 0.5 ? "high" : c.polarity > 0 ? "medium" : "low",
                       evidence_summary: c.rationale,
-                      evidence_refs: null,
+                      evidence_refs: { d1ElementIds: c.d1ElementIds, d2ElementIds: c.d2ElementIds },
                       contributing_agents: ["pipeline"],
                       created_at: new Date().toISOString(),
                       updated_at: new Date().toISOString(),
                     })) : tesseractCells}
                     currentIteration={session.current_iteration}
+                    d1Elements={d1Elements}
+                    d2Elements={d2Elements}
+                    d1Label={d1Label || session.dataset_1_type}
+                    d2Label={d2Label || session.dataset_2_type}
                     onCellClick={(cell) => {
                       toast.info(`${cell.x_element_label || cell.x_element_id}: ${cell.evidence_summary || "No evidence"}`);
+                    }}
+                    onDeepDive={(conceptLabel, d1Items, d2Items) => {
+                      console.log("Deep Dive:", conceptLabel, d1Items.length, d2Items.length);
                     }}
                   />
                 </TabsContent>
