@@ -55,6 +55,16 @@ export interface AuditActivityEntry {
   created_at: string;
 }
 
+// Types for batch saving
+interface SaveAuditDataParams {
+  nodes?: any[];
+  edges?: any[];
+  tesseractCells?: any[];
+  vennResult?: any;
+  activityLog?: any[];
+  markComplete?: boolean;
+}
+
 export interface UseRealtimeAuditReturn {
   session: AuditSession | null;
   blackboardEntries: AuditBlackboard[];
@@ -75,6 +85,8 @@ export interface UseRealtimeAuditReturn {
   addGraphNodes: (nodes: Partial<AuditGraphNode>[]) => void;
   addGraphEdges: (edges: Partial<AuditGraphEdge>[]) => void;
   removeGraphNodes: (nodeIds: string[]) => void;
+  // Batch save to database
+  saveAuditData: (sessionId: string, data: SaveAuditDataParams) => Promise<{ success: boolean; error?: string }>;
 }
 
 interface CreateSessionParams {
@@ -342,5 +354,81 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
     setGraphEdges((prev) => prev.filter((e) => !nodeIdSet.has(e.source_node_id) && !nodeIdSet.has(e.target_node_id)));
   }, []);
 
-  return { session, blackboardEntries, tesseractCells, agentInstances, graphNodes, graphEdges, activityStream, isLoading, error, createSession, updateSessionStatus, writeToBlackboard, writeTesseractCell, refreshSession, pruneOrphanNodes, addGraphNodes, addGraphEdges, removeGraphNodes };
+  // Batch save all audit data to database
+  const saveAuditData = useCallback(async (
+    sid: string, 
+    data: SaveAuditDataParams
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!shareToken) return { success: false, error: "No share token" };
+    
+    try {
+      const results: string[] = [];
+      
+      // Save nodes in batch
+      if (data.nodes && data.nodes.length > 0) {
+        const { data: nodeCount, error: nodeErr } = await supabase.rpc("insert_audit_graph_nodes_batch_with_token", {
+          p_session_id: sid,
+          p_token: shareToken,
+          p_nodes: JSON.parse(JSON.stringify(data.nodes)),
+        });
+        if (nodeErr) throw new Error(`Nodes: ${nodeErr.message}`);
+        results.push(`${nodeCount || data.nodes.length} nodes`);
+      }
+      
+      // Save edges in batch
+      if (data.edges && data.edges.length > 0) {
+        const { data: edgeCount, error: edgeErr } = await supabase.rpc("insert_audit_graph_edges_batch_with_token", {
+          p_session_id: sid,
+          p_token: shareToken,
+          p_edges: JSON.parse(JSON.stringify(data.edges)),
+        });
+        if (edgeErr) throw new Error(`Edges: ${edgeErr.message}`);
+        results.push(`${edgeCount || data.edges.length} edges`);
+      }
+      
+      // Save tesseract cells in batch
+      if (data.tesseractCells && data.tesseractCells.length > 0) {
+        const { data: cellCount, error: cellErr } = await supabase.rpc("insert_audit_tesseract_cells_batch_with_token", {
+          p_session_id: sid,
+          p_token: shareToken,
+          p_cells: JSON.parse(JSON.stringify(data.tesseractCells)),
+        });
+        if (cellErr) throw new Error(`Tesseract cells: ${cellErr.message}`);
+        results.push(`${cellCount || data.tesseractCells.length} tesseract cells`);
+      }
+      
+      // Save activity log in batch
+      if (data.activityLog && data.activityLog.length > 0) {
+        const { data: actCount, error: actErr } = await supabase.rpc("insert_audit_activity_batch_with_token", {
+          p_session_id: sid,
+          p_token: shareToken,
+          p_activities: JSON.parse(JSON.stringify(data.activityLog)),
+        });
+        if (actErr) throw new Error(`Activity log: ${actErr.message}`);
+        results.push(`${actCount || data.activityLog.length} activity entries`);
+      }
+      
+      // Save venn result and optionally mark complete
+      if (data.vennResult || data.markComplete) {
+        const { error: vennErr } = await supabase.rpc("update_audit_session_venn_with_token", {
+          p_session_id: sid,
+          p_token: shareToken,
+          p_venn_result: data.vennResult ? JSON.parse(JSON.stringify(data.vennResult)) : null,
+          p_status: data.markComplete ? "completed" : null,
+        });
+        if (vennErr) throw new Error(`Venn result: ${vennErr.message}`);
+        if (data.vennResult) results.push("venn result");
+      }
+      
+      // Trigger refresh
+      channelRef.current?.send({ type: "broadcast", event: "audit_refresh", payload: {} });
+      
+      return { success: true };
+    } catch (err: any) {
+      console.error("saveAuditData error:", err);
+      return { success: false, error: err.message || String(err) };
+    }
+  }, [shareToken]);
+
+  return { session, blackboardEntries, tesseractCells, agentInstances, graphNodes, graphEdges, activityStream, isLoading, error, createSession, updateSessionStatus, writeToBlackboard, writeTesseractCell, refreshSession, pruneOrphanNodes, addGraphNodes, addGraphEdges, removeGraphNodes, saveAuditData };
 }
