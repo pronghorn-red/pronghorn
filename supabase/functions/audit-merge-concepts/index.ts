@@ -292,7 +292,7 @@ Look at the element labels within each concept to help determine if they're trul
 **CRITICAL RULES:**
 1. Each concept can ONLY appear in ONE merge group
 2. Only output merges for concepts that should be combined (2+ concepts)
-3. Use the EXACT concept labels from the input
+3. Use ONLY the concept NAME - do NOT include the [D1, X elements] or [D2, X elements] metadata
 4. Do NOT list individual elements - only identify which CONCEPTS to merge
 
 ## Output Format
@@ -301,12 +301,15 @@ Return a JSON object with this structure:
 {
   "merges": [
     {
-      "sourceConcepts": ["Concept Label A", "Concept Label B", "Concept Label C"],
-      "mergedLabel": "New Combined Concept Name",
-      "mergedDescription": "Description capturing the merged concept"
+      "sourceConcepts": ["User Authentication", "Login System"],
+      "mergedLabel": "Authentication & Login",
+      "mergedDescription": "Handles user authentication and login functionality"
     }
   ]
 }
+
+**IMPORTANT**: In "sourceConcepts", use ONLY the concept name (e.g., "User Authentication").
+Do NOT include the [D1, X elements] or [D2, X elements] suffix that appears in the input list.
 
 Notes:
 - "sourceConcepts" is the list of concept labels to merge (can include any mix of D1 and D2 concepts)
@@ -322,7 +325,7 @@ Return ONLY the JSON object, no other text.`;
 
       const rawText = await callLLM(prompt, modelConfig, maxTokens);
       
-      console.log(`[merge] Response: ${rawText.length} chars`);
+      console.log(`[merge] RAW LLM Response (${rawText.length} chars):\n${rawText}`);
       
       await sendSSE("progress", { phase: "concept_merge", message: "Parsing merge instructions...", progress: 60 });
 
