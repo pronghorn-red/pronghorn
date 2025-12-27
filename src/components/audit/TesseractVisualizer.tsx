@@ -374,6 +374,15 @@ export function TesseractVisualizer({
                         </TooltipProvider>
                       </div>
 
+                      {/* Analysis/Rationale Section - collapsed when in compact mode */}
+                      {!collapsedItems && column.rationale && (
+                        <div className="px-3 py-2 border-b bg-muted/20">
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            {column.rationale}
+                          </p>
+                        </div>
+                      )}
+
                       {/* Alignment / Polarity Row */}
                       <div className="p-3 border-b bg-background">
                         <div className="flex items-center justify-between gap-2">
