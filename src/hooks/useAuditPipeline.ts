@@ -833,6 +833,8 @@ export function useAuditPipeline() {
           const updatedConcepts = [...concepts];
           for (const rc of recoveryConcepts) {
             const existingIdx = updatedConcepts.findIndex(c => c.label.toLowerCase() === rc.label.toLowerCase());
+            let targetConceptNode: LocalGraphNode | undefined;
+            
             if (existingIdx >= 0) {
               // Add elements to existing concept
               const existing = updatedConcepts[existingIdx];
@@ -843,13 +845,16 @@ export function useAuditPipeline() {
                 }
               }
               addStepDetail(stepId, `  → Added ${rc.elementIds.length} to existing: ${rc.label}`);
-            } else {
-              // New concept
-              updatedConcepts.push(rc);
-              addStepDetail(stepId, `  → New concept: ${rc.label} (${rc.elementIds.length} elements)`);
               
-              // Create graph node for new concept
-              const conceptNode: LocalGraphNode = {
+              // Find existing concept's graph node to link edges to
+              targetConceptNode = localNodes.find(n => 
+                n.node_type === "concept" && 
+                n.label.toLowerCase() === existing.label.toLowerCase() &&
+                n.source_dataset === (dataset === "d1" ? "dataset1" : "dataset2")
+              );
+            } else {
+              // New concept - create graph node
+              targetConceptNode = {
                 id: localId(),
                 label: rc.label,
                 description: rc.description || "",
@@ -860,21 +865,32 @@ export function useAuditPipeline() {
                 size: 20,
                 metadata: { source: dataset, premerge: true, recovery: true },
               };
-              localNodes.push(conceptNode);
+              localNodes.push(targetConceptNode);
+              updatedConcepts.push(rc);
+              addStepDetail(stepId, `  → New concept: ${rc.label} (${rc.elementIds.length} elements)`);
+            }
 
-              // Create edges from element nodes to concept node
+            // ALWAYS create edges for recovered elements (whether assigned to existing or new concept)
+            if (targetConceptNode) {
               for (const elId of rc.elementIds) {
                 const elementNode = localNodes.find(n => n.metadata?.originalElementId === elId);
                 if (elementNode) {
-                  localEdges.push({
-                    id: localId(),
-                    source_node_id: elementNode.id,
-                    target_node_id: conceptNode.id,
-                    edge_type: dataset === "d1" ? "defines" : "implements",
-                    label: dataset === "d1" ? "defines" : "implements",
-                    weight: 1.0,
-                    metadata: { premerge: true, recovery: true },
-                  });
+                  // Check if edge already exists (avoid duplicates)
+                  const edgeExists = localEdges.some(e => 
+                    e.source_node_id === elementNode.id && 
+                    e.target_node_id === targetConceptNode!.id
+                  );
+                  if (!edgeExists) {
+                    localEdges.push({
+                      id: localId(),
+                      source_node_id: elementNode.id,
+                      target_node_id: targetConceptNode.id,
+                      edge_type: dataset === "d1" ? "defines" : "implements",
+                      label: dataset === "d1" ? "defines" : "implements",
+                      weight: 1.0,
+                      metadata: { premerge: true, recovery: true },
+                    });
+                  }
                 }
               }
             }
