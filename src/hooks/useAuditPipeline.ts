@@ -1034,10 +1034,11 @@ export function useAuditPipeline() {
         },
         () => {},
         (data) => {
+          // Handle both snake_case (from server) and camelCase field names
           localVennResult = {
-            uniqueToD1: data.uniqueToD1 || [],
+            uniqueToD1: data.unique_to_d1 || data.uniqueToD1 || [],
             aligned: data.aligned || [],
-            uniqueToD2: data.uniqueToD2 || [],
+            uniqueToD2: data.unique_to_d2 || data.uniqueToD2 || [],
             summary: data.summary || "",
           };
           updateResults();
@@ -1334,10 +1335,11 @@ export function useAuditPipeline() {
           },
           () => {},
           (data) => {
+            // Handle both snake_case (from server) and camelCase field names
             localVennResult = {
-              uniqueToD1: data.uniqueToD1 || [],
+              uniqueToD1: data.unique_to_d1 || data.uniqueToD1 || [],
               aligned: data.aligned || [],
-              uniqueToD2: data.uniqueToD2 || [],
+              uniqueToD2: data.unique_to_d2 || data.uniqueToD2 || [],
               summary: data.summary || "",
             };
             updateResults();

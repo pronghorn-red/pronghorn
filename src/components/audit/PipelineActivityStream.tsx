@@ -95,8 +95,11 @@ function StepItem({
               <span className={`font-medium text-sm ${STATUS_COLORS[step.status]}`}>
                 {step.title}
               </span>
-              {step.status === "running" && step.progress > 0 && (
-                <Badge variant="outline" className="text-xs">
+              {step.progress > 0 && (
+                <Badge 
+                  variant={step.status === "completed" ? "default" : "outline"} 
+                  className={`text-xs ${step.status === "completed" ? "bg-green-500" : ""}`}
+                >
                   {step.progress}%
                 </Badge>
               )}
@@ -123,8 +126,8 @@ function StepItem({
 
             <p className="text-xs text-muted-foreground mt-0.5">{step.message}</p>
 
-            {/* Progress bar for running steps */}
-            {step.status === "running" && step.progress > 0 && (
+            {/* Progress bar for running or completed steps with progress */}
+            {step.progress > 0 && step.progress < 100 && (
               <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary transition-all duration-300"

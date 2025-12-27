@@ -108,6 +108,9 @@ serve(async (req) => {
       const aligned: VennItem[] = [];
       const uniqueToD2: VennItem[] = [];
 
+      // Track merged concept labels to avoid duplicates when processing tesseract
+      const mergedLabels = new Set(mergedConcepts.map(c => c.mergedLabel));
+
       await sendSSE("progress", { phase: "venn", message: "Processing unmerged D1 concepts (gaps)...", progress: 20 });
 
       // Unmerged D1 concepts = unique to D1 (gaps - requirements not met)
@@ -167,11 +170,36 @@ serve(async (req) => {
         });
       }
 
+      // Also check tesseract cells for D2-only concepts (concepts with D2 elements but no D1 elements)
+      // These represent implementation that the Tesseract identified as unmatched
+      for (const cell of (tesseractCells || [])) {
+        const d1Count = cell.d1ElementIds?.length || 0;
+        const d2Count = cell.d2ElementIds?.length || 0;
+        
+        // If concept has D2 elements but no D1 elements, it's unique to D2
+        if (d2Count > 0 && d1Count === 0 && !mergedLabels.has(cell.conceptLabel)) {
+          // Check if already in uniqueToD2
+          const alreadyExists = uniqueToD2.some(item => item.label === cell.conceptLabel);
+          if (!alreadyExists) {
+            uniqueToD2.push({
+              id: crypto.randomUUID(),
+              label: cell.conceptLabel,
+              category: "unique_d2",
+              criticality: "info",
+              evidence: cell.rationale || "",
+              sourceElement: cell.d2ElementIds?.[0] || "",
+              polarity: 0,
+              description: `D2 implementation identified by Tesseract with no matching D1 requirements`,
+            });
+          }
+        }
+      }
+
       await sendSSE("progress", { phase: "venn", message: "Calculating coverage statistics...", progress: 85 });
 
       // Calculate summary statistics
-      const totalD1Concepts = mergedConcepts.length + unmergedD1Concepts.length;
-      const totalD2Concepts = mergedConcepts.length + unmergedD2Concepts.length;
+      const totalD1Concepts = mergedConcepts.length + (unmergedD1Concepts?.length || 0);
+      const totalD2Concepts = mergedConcepts.length + uniqueToD2.length; // Use uniqueToD2 which includes tesseract-identified orphans
       
       const d1Coverage = totalD1Concepts > 0 ? (mergedConcepts.length / totalD1Concepts) * 100 : 0;
       const d2Coverage = totalD2Concepts > 0 ? (mergedConcepts.length / totalD2Concepts) * 100 : 0;
@@ -180,8 +208,13 @@ serve(async (req) => {
         ? aligned.reduce((sum, a) => sum + a.polarity, 0) / aligned.length 
         : 0;
 
-      // Alignment score considers both coverage and quality
-      const alignmentScore = (d1Coverage + d2Coverage) / 2 * (avgPolarity > 0 ? avgPolarity : 0.1);
+      // Alignment score: prioritize aligned count, with polarity as secondary factor
+      // New formula: (aligned / max(totalD1, totalD2)) * 100 * (0.5 + avgPolarity * 0.5)
+      // This gives a more intuitive percentage where high alignment = high score
+      const maxTotal = Math.max(totalD1Concepts, totalD2Concepts);
+      const baseAlignmentRatio = maxTotal > 0 ? (aligned.length / maxTotal) * 100 : 0;
+      const polarityBonus = avgPolarity > 0 ? (0.5 + avgPolarity * 0.5) : 0.5;
+      const alignmentScore = baseAlignmentRatio * polarityBonus;
 
       const vennResult = {
         unique_to_d1: uniqueToD1,

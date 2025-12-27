@@ -37,6 +37,7 @@ import {
   Brain,
   RotateCcw,
   Loader2,
+  Save,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useShareToken } from "@/hooks/useShareToken";
@@ -55,6 +56,7 @@ export default function Audit() {
   const [isStarting, setIsStarting] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [usePipeline, setUsePipeline] = useState(true); // Use new pipeline by default
   const staleCheckRef = useRef<NodeJS.Timeout | null>(null);
   const lastResumeAttemptRef = useRef<number>(0);
@@ -416,6 +418,64 @@ export default function Audit() {
     toast.success("Audit stopped");
   };
 
+  // Save pipeline results to database
+  const handleSaveResults = async () => {
+    if (!session || !pipelineResults || isSaving) return;
+    
+    setIsSaving(true);
+    try {
+      // Save graph nodes (optimistic update - adds to local state)
+      if (pipelineResults.nodes.length > 0) {
+        const nodesToSave = pipelineResults.nodes.map(n => ({
+          id: n.id,
+          session_id: session.id,
+          label: n.label,
+          description: n.description,
+          node_type: n.node_type,
+          source_dataset: n.source_dataset,
+          source_element_ids: n.source_element_ids,
+          color: n.color,
+          size: n.size,
+          metadata: n.metadata,
+          created_by_agent: "pipeline",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          x_position: null,
+          y_position: null,
+        }));
+        addGraphNodes(nodesToSave);
+      }
+      
+      // Save graph edges (optimistic update)
+      if (pipelineResults.edges.length > 0) {
+        const edgesToSave = pipelineResults.edges.map(e => ({
+          id: e.id,
+          session_id: session.id,
+          source_node_id: e.source_node_id,
+          target_node_id: e.target_node_id,
+          edge_type: e.edge_type,
+          label: e.label,
+          weight: e.weight,
+          metadata: e.metadata,
+          created_by_agent: "pipeline",
+          created_at: new Date().toISOString(),
+        }));
+        addGraphEdges(edgesToSave);
+      }
+      
+      // Tesseract cells and Venn results are saved by the edge function
+      // Refresh to show the saved data
+      await refreshSession(session.id);
+      
+      toast.success(`Saved ${pipelineResults.nodes.length} nodes and ${pipelineResults.edges.length} edges`);
+    } catch (err: any) {
+      console.error("Save failed:", err);
+      toast.error("Failed to save results: " + (err.message || "Unknown error"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "running":
@@ -590,6 +650,39 @@ export default function Audit() {
                     <Button size="sm" variant="outline" onClick={abortPipeline}>
                       <StopCircle className="h-4 w-4" />
                     </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Pipeline Complete - Save Results */}
+            {!isPipelineRunning && pipelineResults && pipelineProgress.phase === "completed" && (
+              <Card className="mb-6 border-green-500">
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-green-600">Pipeline Complete</p>
+                      <p className="text-sm text-muted-foreground">
+                        {pipelineResults.nodes.length} nodes, {pipelineResults.edges.length} edges, {pipelineResults.tesseractCells.length} tesseract cells
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={handleSaveResults} 
+                        disabled={isSaving}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        {isSaving ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4 mr-2" />
+                        )}
+                        Save to Database
+                      </Button>
+                      <Button variant="outline" onClick={clearPipelineResults}>
+                        Discard
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
