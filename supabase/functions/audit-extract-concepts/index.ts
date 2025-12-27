@@ -32,6 +32,7 @@ interface ExtractRequest {
   shareToken: string;
   dataset: "d1" | "d2";
   elements: DatasetElement[];
+  mappingMode?: "one_to_one" | "one_to_many"; // New setting
 }
 
 interface ProjectSettings {
@@ -153,7 +154,7 @@ serve(async (req) => {
       global: { headers: authHeader ? { Authorization: authHeader } : {} },
     });
 
-    const { sessionId, projectId, shareToken, dataset, elements }: ExtractRequest = await req.json();
+    const { sessionId, projectId, shareToken, dataset, elements, mappingMode }: ExtractRequest = await req.json();
 
     // Get project settings for model configuration
     const { data: project } = await supabase.rpc("get_project_with_token", {
@@ -185,7 +186,33 @@ Content:
 ${e.content || "(empty)"}`;
     }).join("\n\n---\n\n");
 
-    // ENHANCED PROMPT - no hardcoded concept count, evidence-based
+    // Build prompt based on mapping mode
+    const isOneToOne = mappingMode === "one_to_one";
+    
+    const mappingInstructions = isOneToOne
+      ? `IMPORTANT GUIDELINES (1:1 MAPPING - STRICT):
+1. Each element MUST belong to EXACTLY ONE concept (its PRIMARY/best-fit theme)
+2. Every element MUST be assigned - no orphans allowed
+3. If an element could fit multiple concepts, assign it to the MOST SPECIFIC one
+4. Create broader concepts if needed to ensure single assignment
+
+ASSIGNMENT RULES:
+- Each element UUID can appear in exactly ONE concept's elementIds
+- No duplications allowed
+- No orphans allowed (every input element must appear exactly once)
+- If unsure, create a more general concept that encompasses multiple themes`
+      : `IMPORTANT GUIDELINES (1:MANY MAPPING - FLEXIBLE):
+1. The number of concepts should reflect the content
+2. A single element CAN belong to multiple concepts if it spans multiple themes
+3. Every element MUST be assigned to at least one concept
+
+ASSIGNMENT RULES:
+- No orphans allowed (every input element must be mapped to at least one concept)
+- Elements spanning multiple themes should appear in multiple concepts`;
+
+    console.log(`[${dataset}] Using ${isOneToOne ? "1:1" : "1:Many"} mapping mode`);
+
+    // ENHANCED PROMPT with mapping mode awareness
     const prompt = `You are analyzing ${datasetLabel} elements to identify high-level concepts.
 
 ## Elements to analyze (${elements.length} total):
@@ -194,12 +221,7 @@ ${elementsText}
 ## Task
 Identify ALL meaningful high-level CONCEPTS that group these elements by theme, purpose, or functionality.
 
-IMPORTANT GUIDELINES:
-1. The number of concepts should reflect the content - create as many as needed to comprehensively cover all themes
-2. A single element can belong to multiple concepts if it spans multiple themes
-3. Every element MUST be assigned to at least one concept
-4. Complex elements (like large files with multiple functions) may warrant multiple concept mappings
-5. Create concepts that represent distinct functional areas, not just category labels
+${mappingInstructions}
 
 ## Output Format (JSON only)
 {
@@ -217,7 +239,7 @@ IMPORTANT GUIDELINES:
 }
 
 CRITICAL RULES:
-1. Every element UUID listed above MUST appear in at least one concept's elementIds
+1. Every element UUID listed above MUST appear in ${isOneToOne ? "exactly one" : "at least one"} concept's elementIds
 2. Use the exact UUIDs from the elements
 3. Descriptions must be thorough and evidence-based, not generic
 4. supportingEvidence should contain 1-3 SHORT direct quotes (max 50 chars each) from the elements that demonstrate why they belong to this concept

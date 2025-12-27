@@ -13,6 +13,13 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   PlayCircle,
   Settings2,
   Package,
@@ -28,6 +35,11 @@ import {
 } from "lucide-react";
 import { ProjectSelector, ProjectSelectionResult } from "@/components/project/ProjectSelector";
 
+// Audit processing settings
+export type ConsolidationLevel = "low" | "medium" | "high";
+export type ChunkSize = "small" | "medium" | "large";
+export type BatchSize = "10" | "50" | "unlimited";
+export type MappingMode = "one_to_one" | "one_to_many";
 
 interface AuditConfigurationDialogProps {
   open: boolean;
@@ -49,6 +61,11 @@ export interface AuditConfiguration {
   // New fields for mixed-category selection
   dataset1Content?: ProjectSelectionResult;
   dataset2Content?: ProjectSelectionResult;
+  // Processing settings
+  consolidationLevel: ConsolidationLevel;
+  chunkSize: ChunkSize;
+  batchSize: BatchSize;
+  mappingMode: MappingMode;
 }
 
 
@@ -120,6 +137,12 @@ export function AuditConfigurationDialog({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   
+  // Processing settings
+  const [consolidationLevel, setConsolidationLevel] = useState<ConsolidationLevel>("medium");
+  const [chunkSize, setChunkSize] = useState<ChunkSize>("medium");
+  const [batchSize, setBatchSize] = useState<BatchSize>("unlimited");
+  const [mappingMode, setMappingMode] = useState<MappingMode>("one_to_one");
+  
   // ProjectSelector state
   const [dataset1Selection, setDataset1Selection] = useState<ProjectSelectionResult | null>(null);
   const [dataset2Selection, setDataset2Selection] = useState<ProjectSelectionResult | null>(null);
@@ -157,6 +180,11 @@ export function AuditConfigurationDialog({
       // New content fields
       dataset1Content: dataset1Selection || undefined,
       dataset2Content: dataset2Selection || undefined,
+      // Processing settings
+      consolidationLevel,
+      chunkSize,
+      batchSize,
+      mappingMode,
     };
     onStartAudit(config);
   };
@@ -267,6 +295,89 @@ export function AuditConfigurationDialog({
                       {d2Count} items selected across {d2Badges.length} categories
                     </p>
                   </div>
+                </div>
+
+                {/* Processing Settings */}
+                <div className="border rounded-lg p-4 space-y-4">
+                  <p className="text-sm font-medium flex items-center gap-2">
+                    <Settings2 className="h-4 w-4" />
+                    Processing Settings
+                  </p>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Consolidation Level */}
+                    <div className="space-y-2">
+                      <Label htmlFor="consolidation" className="text-xs text-muted-foreground">
+                        Consolidation Level
+                      </Label>
+                      <Select value={consolidationLevel} onValueChange={(v) => setConsolidationLevel(v as ConsolidationLevel)}>
+                        <SelectTrigger id="consolidation" className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low (1 round, exact matches)</SelectItem>
+                          <SelectItem value="medium">Medium (2 rounds, thematic)</SelectItem>
+                          <SelectItem value="high">High (3 rounds, aggressive)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Mapping Mode */}
+                    <div className="space-y-2">
+                      <Label htmlFor="mapping" className="text-xs text-muted-foreground">
+                        Element Mapping
+                      </Label>
+                      <Select value={mappingMode} onValueChange={(v) => setMappingMode(v as MappingMode)}>
+                        <SelectTrigger id="mapping" className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="one_to_one">1:1 (strict, one concept each)</SelectItem>
+                          <SelectItem value="one_to_many">1:Many (flexible, multi-concept)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Chunk Size */}
+                    <div className="space-y-2">
+                      <Label htmlFor="chunkSize" className="text-xs text-muted-foreground">
+                        Chunk Size
+                      </Label>
+                      <Select value={chunkSize} onValueChange={(v) => setChunkSize(v as ChunkSize)}>
+                        <SelectTrigger id="chunkSize" className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="small">Small (10KB per batch)</SelectItem>
+                          <SelectItem value="medium">Medium (50KB per batch)</SelectItem>
+                          <SelectItem value="large">Large (100KB per batch)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Batch Size */}
+                    <div className="space-y-2">
+                      <Label htmlFor="batchSize" className="text-xs text-muted-foreground">
+                        Batch Size (Elements)
+                      </Label>
+                      <Select value={batchSize} onValueChange={(v) => setBatchSize(v as BatchSize)}>
+                        <SelectTrigger id="batchSize" className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="10">10 elements max</SelectItem>
+                          <SelectItem value="50">50 elements max</SelectItem>
+                          <SelectItem value="unlimited">Unlimited (char limit only)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  <p className="text-xs text-muted-foreground">
+                    {consolidationLevel === "low" && "Near/exact matches only - precise but may miss related concepts"}
+                    {consolidationLevel === "medium" && "Thematic similarity - balances precision with broader grouping"}
+                    {consolidationLevel === "high" && "Aggressive consolidation - fewer, broader concept categories"}
+                  </p>
                 </div>
 
                 {/* Selection Summary */}

@@ -37,6 +37,8 @@ interface MergeRequest {
   shareToken: string;
   d1Concepts: D1Concept[];
   d2Concepts: D2Concept[];
+  consolidationRound?: number; // 1, 2, or 3
+  totalRounds?: number;       // Total rounds for this audit
 }
 
 interface ProjectSettings {
@@ -168,7 +170,7 @@ serve(async (req) => {
         global: { headers: authHeader ? { Authorization: authHeader } : {} },
       });
 
-      const { sessionId, projectId, shareToken, d1Concepts, d2Concepts }: MergeRequest = await req.json();
+      const { sessionId, projectId, shareToken, d1Concepts, d2Concepts, consolidationRound, totalRounds }: MergeRequest = await req.json();
 
       // Get project settings for model configuration
       const { data: project } = await supabase.rpc("get_project_with_token", {
@@ -180,7 +182,10 @@ serve(async (req) => {
       const maxTokens = project?.max_tokens || 16384;
       const modelConfig = getModelConfig(selectedModel);
 
-      console.log(`[merge] Using model: ${selectedModel}, maxTokens: ${maxTokens}`);
+      const round = consolidationRound || 1;
+      const rounds = totalRounds || 1;
+      
+      console.log(`[merge] Using model: ${selectedModel}, maxTokens: ${maxTokens}, round ${round}/${rounds}`);
       console.log(`[merge] Starting: ${d1Concepts.length} D1 concepts, ${d2Concepts.length} D2 concepts`);
       
       await sendSSE("progress", { 
@@ -238,11 +243,42 @@ ${sharedD2Sources.length > 0 ? `### D2 sources with multiple concepts:\n${shared
       const totalSourceElements = new Set([...d1Concepts.flatMap(c => c.d1Ids), ...d2Concepts.flatMap(c => c.d2Ids)]).size;
       const targetConceptRatio = Math.max(Math.ceil(totalSourceElements / 4), Math.ceil(totalInputConcepts / 3));
 
-      const prompt = `You are merging concepts from two datasets. Your job is to AGGRESSIVELY identify and merge concepts that are identical, similar, or closely related.
+      // Round-specific merge aggressiveness
+      const roundDescriptions: Record<number, { label: string; criteria: string }> = {
+        1: { 
+          label: "EXACT/NEAR MATCHES", 
+          criteria: `Only merge concepts that are:
+- Nearly identical names (e.g., "User Auth" and "User Authentication")
+- Obvious duplicates created from the same source
+- Clearly the same concept with minor wording differences` 
+        },
+        2: { 
+          label: "THEMATIC SIMILARITY", 
+          criteria: `Merge concepts that are:
+- Thematically related (e.g., "Login Flow" and "Session Management" → "Authentication System")
+- Part of the same functional domain (e.g., "Create User", "Update User", "Delete User" → "User Management")
+- Logically connected sub-concepts that belong together` 
+        },
+        3: { 
+          label: "BROAD CATEGORIES", 
+          criteria: `Aggressively merge into broad categories:
+- Combine related domains (e.g., "Auth", "Permissions", "Roles" → "Access Control")
+- Create high-level architectural concepts
+- Aim for 5-15 final concepts maximum
+- If in doubt, MERGE - fewer broad concepts are better than many narrow ones` 
+        },
+      };
+      
+      const roundConfig = roundDescriptions[round] || roundDescriptions[1];
+      
+      const prompt = `You are merging concepts from two datasets. This is ROUND ${round}/${rounds}: ${roundConfig.label}
 
-**CRITICAL**: You are generating TOO MANY concepts. Be MORE AGGRESSIVE in merging. 
-- Current input: ${totalInputConcepts} concepts from ${totalSourceElements} source elements
-- Target output: approximately ${targetConceptRatio} unified concepts (aim for 1 concept per 3-5 source elements)
+**MERGE CRITERIA FOR THIS ROUND:**
+${roundConfig.criteria}
+
+**Current input:** ${totalInputConcepts} concepts from ${totalSourceElements} source elements
+
+${round === 3 ? "**AGGRESSIVE MODE**: Merge liberally. Target 5-15 final broad concepts." : ""}
 
 MERGE PRIORITY (highest to lowest):
 1. Concepts from the SAME source element → ALWAYS merge (they're different aspects of one thing)
@@ -260,17 +296,11 @@ ${d2ConceptsText || "(none)"}
 
 ## Your Task
 
-BE AGGRESSIVE - merge liberally. It's better to have fewer, broader concepts than many overlapping ones.
+${round === 1 ? "Be CONSERVATIVE - only merge obvious duplicates and near-exact matches." : ""}
+${round === 2 ? "Be MODERATE - merge thematically related concepts into functional groups." : ""}
+${round === 3 ? "Be AGGRESSIVE - combine into broad categories, fewer is better." : ""}
 
-1. First, merge concepts from the same source element (see SHARED SOURCE ELEMENTS above)
-2. Then, merge concepts with similar names or overlapping domains
-3. Finally, cross-match D1↔D2 for the same functional areas
-
-Concepts should be merged if they:
-- Come from the same source element (ALWAYS merge these)
-- Have similar names (e.g., "Agent Data Management", "Agent Config", "Agent Control" → "Agent System")
-- Cover related functionality (e.g., "API Calls", "HTTP Requests", "Network" → "Network/API")
-- Describe the same theme even with different wording
+Concepts should be merged if they meet the criteria for this round.
 
 Only keep concepts separate if they are genuinely UNRELATED functional areas.
 

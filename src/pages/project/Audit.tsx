@@ -399,6 +399,11 @@ export default function Audit() {
             shareToken: shareToken!,
             d1Elements: extractedD1,
             d2Elements: extractedD2,
+            // Pass processing settings
+            consolidationLevel: config.consolidationLevel,
+            chunkSize: config.chunkSize,
+            batchSize: config.batchSize,
+            mappingMode: config.mappingMode,
           });
           
           // Refresh session data after pipeline completes

@@ -98,12 +98,23 @@ export interface LocalVennResult {
   summary: string;
 }
 
+// Audit processing settings types (match dialog)
+export type ConsolidationLevel = "low" | "medium" | "high";
+export type ChunkSize = "small" | "medium" | "large";
+export type BatchSize = "10" | "50" | "unlimited";
+export type MappingMode = "one_to_one" | "one_to_many";
+
 interface PipelineInput {
   sessionId: string;
   projectId: string;
   shareToken: string;
   d1Elements: Element[];
   d2Elements: Element[];
+  // Processing settings
+  consolidationLevel?: ConsolidationLevel;
+  chunkSize?: ChunkSize;
+  batchSize?: BatchSize;
+  mappingMode?: MappingMode;
 }
 
 export interface PipelineResults {
@@ -488,16 +499,44 @@ export function useAuditPipeline() {
       const d1EstTokens = Math.ceil(d1TotalChars / 4);
       const d2EstTokens = Math.ceil(d2TotalChars / 4);
       
-      const BATCH_CHAR_LIMIT = 50000;
+      // Extract processing settings with defaults
+      const consolidationLevel = input.consolidationLevel || "medium";
+      const chunkSizeSetting = input.chunkSize || "medium";
+      const batchSizeSetting = input.batchSize || "unlimited";
+      const mappingMode = input.mappingMode || "one_to_one";
       
-      const batchByCharLimit = (elements: Element[], limit: number, totalChars: number): Element[][] => {
-        if (totalChars <= limit) return [elements];
+      // Convert chunk size to character limit
+      const CHUNK_SIZE_MAP: Record<ChunkSize, number> = {
+        small: 10000,   // 10KB
+        medium: 50000,  // 50KB
+        large: 100000,  // 100KB
+      };
+      const BATCH_CHAR_LIMIT = CHUNK_SIZE_MAP[chunkSizeSetting];
+      
+      // Convert batch size to element limit
+      const BATCH_ELEMENT_MAP: Record<BatchSize, number> = {
+        "10": 10,
+        "50": 50,
+        "unlimited": Infinity,
+      };
+      const BATCH_ELEMENT_LIMIT = BATCH_ELEMENT_MAP[batchSizeSetting];
+      
+      console.log(`[pipeline] Settings: consolidation=${consolidationLevel}, chunkSize=${chunkSizeSetting}(${BATCH_CHAR_LIMIT}), batchSize=${batchSizeSetting}(${BATCH_ELEMENT_LIMIT}), mappingMode=${mappingMode}`);
+      
+      const batchByCharLimit = (elements: Element[], charLimit: number, elementLimit: number, totalChars: number): Element[][] => {
+        // If everything fits in one batch, return as single batch
+        if (totalChars <= charLimit && elements.length <= elementLimit) return [elements];
+        
         const batches: Element[][] = [];
         let currentBatch: Element[] = [];
         let currentChars = 0;
+        
         for (const el of elements) {
           const elChars = el.content?.length || 0;
-          if (currentChars + elChars > limit && currentBatch.length > 0) {
+          const wouldExceedChars = currentChars + elChars > charLimit && currentBatch.length > 0;
+          const wouldExceedElements = currentBatch.length >= elementLimit;
+          
+          if (wouldExceedChars || wouldExceedElements) {
             batches.push(currentBatch);
             currentBatch = [];
             currentChars = 0;
@@ -509,8 +548,8 @@ export function useAuditPipeline() {
         return batches;
       };
       
-      const d1Batches = batchByCharLimit(d1Elements, BATCH_CHAR_LIMIT, d1TotalChars);
-      const d2Batches = batchByCharLimit(d2Elements, BATCH_CHAR_LIMIT, d2TotalChars);
+      const d1Batches = batchByCharLimit(d1Elements, BATCH_CHAR_LIMIT, BATCH_ELEMENT_LIMIT, d1TotalChars);
+      const d2Batches = batchByCharLimit(d2Elements, BATCH_CHAR_LIMIT, BATCH_ELEMENT_LIMIT, d2TotalChars);
       
       setProgress({ phase: "extracting_d1", message: "Extracting concepts...", progress: 15 });
       updateStep("d1", { status: "running", message: `${d1TotalChars.toLocaleString()} chars in ${d1Batches.length} batch(es)`, startedAt: new Date() });
@@ -533,7 +572,14 @@ export function useAuditPipeline() {
         const response = await fetch(`${BASE_URL}/audit-extract-concepts`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, projectId, shareToken, dataset, elements: batchElements }),
+          body: JSON.stringify({ 
+            sessionId, 
+            projectId, 
+            shareToken, 
+            dataset, 
+            elements: batchElements,
+            mappingMode, // Pass mapping mode to edge function
+          }),
         });
         
         if (!response.ok) {
@@ -687,45 +733,92 @@ export function useAuditPipeline() {
       if (abortRef.current) throw new Error("Aborted");
 
       // ========================================
-      // PHASE 2: Merge concepts
+      // PHASE 2: Merge concepts (with consolidation rounds)
       // ========================================
       updateStep("merge", { status: "running", message: "Calling merge LLM...", startedAt: new Date() });
 
-      const d1ForMerge = d1Concepts.map(c => ({ label: c.label, description: c.description, d1Ids: c.elementIds }));
-      const d2ForMerge = d2Concepts.map(c => ({ label: c.label, description: c.description, d2Ids: c.elementIds }));
+      // Determine number of merge rounds based on consolidation level
+      const CONSOLIDATION_ROUNDS: Record<ConsolidationLevel, number> = {
+        low: 1,    // Single round - exact matches only
+        medium: 2, // Two rounds - thematic similarity
+        high: 3,   // Three rounds - aggressive consolidation
+      };
+      const mergeRounds = CONSOLIDATION_ROUNDS[consolidationLevel];
+      
+      let currentD1Concepts = d1Concepts.map(c => ({ label: c.label, description: c.description, d1Ids: c.elementIds }));
+      let currentD2Concepts = d2Concepts.map(c => ({ label: c.label, description: c.description, d2Ids: c.elementIds }));
 
-      const mergeResponse = await fetch(`${BASE_URL}/audit-merge-concepts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, projectId, shareToken, d1Concepts: d1ForMerge, d2Concepts: d2ForMerge }),
-      });
+      // Run multiple merge rounds if consolidation > low
+      for (let round = 1; round <= mergeRounds; round++) {
+        if (abortRef.current) throw new Error("Aborted");
+        
+        // Determine aggressiveness for this round
+        const roundAggressiveness = round === 1 ? "exact" : round === 2 ? "thematic" : "aggressive";
+        
+        updateStep("merge", { 
+          message: `Round ${round}/${mergeRounds}: ${roundAggressiveness} matching...`, 
+          progress: Math.round((round - 1) / mergeRounds * 80) 
+        });
+        addStepDetail("merge", `Round ${round}/${mergeRounds}: ${roundAggressiveness} matching`);
+        
+        const mergeResponse = await fetch(`${BASE_URL}/audit-merge-concepts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            sessionId, 
+            projectId, 
+            shareToken, 
+            d1Concepts: currentD1Concepts, 
+            d2Concepts: currentD2Concepts,
+            consolidationRound: round,
+            totalRounds: mergeRounds,
+          }),
+        });
 
-      if (!mergeResponse.ok) {
-        const errorText = await mergeResponse.text();
-        throw new Error(`Merge failed: ${mergeResponse.status} - ${errorText.slice(0, 100)}`);
+        if (!mergeResponse.ok) {
+          const errorText = await mergeResponse.text();
+          throw new Error(`Merge failed: ${mergeResponse.status} - ${errorText.slice(0, 100)}`);
+        }
+
+        await streamSSE(
+          mergeResponse,
+          (data) => {
+            updateStep("merge", { message: data.message || "Merging...", progress: Math.round((round - 0.5) / mergeRounds * 80) });
+          },
+          () => {},
+          (data) => {
+            mergedConcepts = data.mergedConcepts || [];
+            unmergedD1Concepts = (data.unmergedD1Concepts || []).map((c: any) => ({
+              label: c.label,
+              description: c.description,
+              elementIds: c.d1Ids || [],
+            }));
+            unmergedD2Concepts = (data.unmergedD2Concepts || []).map((c: any) => ({
+              label: c.label,
+              description: c.description,
+              elementIds: c.d2Ids || [],
+            }));
+          },
+          (err) => { throw new Error(`Merge stream error: ${err}`); }
+        );
+        
+        addStepDetail("merge", `Round ${round} complete: ${mergedConcepts.length} merged, ${unmergedD1Concepts.length}+${unmergedD2Concepts.length} unmerged`);
+        
+        // For subsequent rounds, feed unmerged concepts back as input
+        if (round < mergeRounds) {
+          // Convert merged concepts back to D1/D2 format for next round
+          // Merged concepts become "super-concepts" that can be merged again
+          const mergedAsD1 = mergedConcepts
+            .filter(m => m.d1Ids && m.d1Ids.length > 0)
+            .map(m => ({ label: m.mergedLabel, description: m.mergedDescription, d1Ids: m.d1Ids }));
+          const mergedAsD2 = mergedConcepts
+            .filter(m => m.d2Ids && m.d2Ids.length > 0)
+            .map(m => ({ label: m.mergedLabel, description: m.mergedDescription, d2Ids: m.d2Ids }));
+          
+          currentD1Concepts = [...unmergedD1Concepts.map(c => ({ label: c.label, description: c.description, d1Ids: c.elementIds })), ...mergedAsD1];
+          currentD2Concepts = [...unmergedD2Concepts.map(c => ({ label: c.label, description: c.description, d2Ids: c.elementIds })), ...mergedAsD2];
+        }
       }
-
-      await streamSSE(
-        mergeResponse,
-        (data) => {
-          updateStep("merge", { message: data.message || "Merging...", progress: data.progress || 50 });
-        },
-        () => {},
-        (data) => {
-          mergedConcepts = data.mergedConcepts || [];
-          unmergedD1Concepts = (data.unmergedD1Concepts || []).map((c: any) => ({
-            label: c.label,
-            description: c.description,
-            elementIds: c.d1Ids || [],
-          }));
-          unmergedD2Concepts = (data.unmergedD2Concepts || []).map((c: any) => ({
-            label: c.label,
-            description: c.description,
-            elementIds: c.d2Ids || [],
-          }));
-        },
-        (err) => { throw new Error(`Merge stream error: ${err}`); }
-      );
 
       updateStep("merge", { 
         status: "completed", 
