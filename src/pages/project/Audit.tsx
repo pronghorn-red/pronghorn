@@ -69,7 +69,6 @@ export default function Audit() {
     session,
     blackboardEntries,
     tesseractCells,
-    agentInstances,
     graphNodes,
     graphEdges,
     activityStream,
@@ -592,7 +591,7 @@ export default function Audit() {
     }
   };
 
-  const activeAgents = agentInstances.filter((a) => a.status === "active");
+  // Agent instances removed - pipeline-based audit doesn't use individual agents
   const isRunning = session?.status === "running" || session?.status === "agents_active" || session?.status === "analyzing_shape" || session?.status === "pending";
   const currentPhase = (session as any)?.phase;
   return (
@@ -736,11 +735,6 @@ export default function Audit() {
                             <Badge variant="outline" className="text-xs">
                               <Activity className="h-3 w-3 mr-1" />
                               {session.current_iteration}/{session.max_iterations}
-                            </Badge>
-                          )}
-                          {activeAgents.length > 0 && (
-                            <Badge variant="secondary" className="text-xs">
-                              {activeAgents.length} active
                             </Badge>
                           )}
                         </>

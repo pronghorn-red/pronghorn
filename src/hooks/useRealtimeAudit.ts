@@ -8,7 +8,6 @@ import type { ProjectSelectionResult } from "@/components/project/ProjectSelecto
 type AuditSession = Database["public"]["Tables"]["audit_sessions"]["Row"];
 type AuditBlackboard = Database["public"]["Tables"]["audit_blackboard"]["Row"];
 type AuditTesseractCell = Database["public"]["Tables"]["audit_tesseract_cells"]["Row"];
-type AuditAgentInstance = Database["public"]["Tables"]["audit_agent_instances"]["Row"];
 
 // Type for graph nodes (from new tables)
 interface AuditGraphNode {
@@ -69,7 +68,6 @@ export interface UseRealtimeAuditReturn {
   session: AuditSession | null;
   blackboardEntries: AuditBlackboard[];
   tesseractCells: AuditTesseractCell[];
-  agentInstances: AuditAgentInstance[];
   graphNodes: AuditGraphNode[];
   graphEdges: AuditGraphEdge[];
   activityStream: AuditActivityEntry[];
@@ -136,7 +134,6 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
   const [session, setSession] = useState<AuditSession | null>(null);
   const [blackboardEntries, setBlackboardEntries] = useState<AuditBlackboard[]>([]);
   const [tesseractCells, setTesseractCells] = useState<AuditTesseractCell[]>([]);
-  const [agentInstances, setAgentInstances] = useState<AuditAgentInstance[]>([]);
   const [graphNodes, setGraphNodes] = useState<AuditGraphNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<AuditGraphEdge[]>([]);
   const [activityStream, setActivityStream] = useState<AuditActivityEntry[]>([]);
@@ -158,9 +155,6 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
       
       const { data: cells } = await supabase.rpc("get_audit_tesseract_cells_with_token", { p_session_id: sid, p_token: shareToken });
       setTesseractCells(cells || []);
-      
-      const { data: agents } = await supabase.rpc("get_audit_agent_instances_with_token", { p_session_id: sid, p_token: shareToken });
-      setAgentInstances(agents || []);
 
       // Load graph data
       const { data: nodes } = await supabase.rpc("get_audit_graph_nodes_with_token", { p_session_id: sid, p_token: shareToken });
@@ -430,5 +424,5 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
     }
   }, [shareToken]);
 
-  return { session, blackboardEntries, tesseractCells, agentInstances, graphNodes, graphEdges, activityStream, isLoading, error, createSession, updateSessionStatus, writeToBlackboard, writeTesseractCell, refreshSession, pruneOrphanNodes, addGraphNodes, addGraphEdges, removeGraphNodes, saveAuditData };
+  return { session, blackboardEntries, tesseractCells, graphNodes, graphEdges, activityStream, isLoading, error, createSession, updateSessionStatus, writeToBlackboard, writeTesseractCell, refreshSession, pruneOrphanNodes, addGraphNodes, addGraphEdges, removeGraphNodes, saveAuditData };
 }
