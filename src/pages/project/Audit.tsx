@@ -452,20 +452,32 @@ export default function Audit() {
       }));
       
       // Transform tesseract cells for database
-      const cellsToSave = pipelineResults.tesseractCells.map((c, idx) => ({
-        id: c.id,
-        x_index: idx,
-        x_element_id: c.d1ElementIds[0] || `concept-${idx}`,
-        x_element_type: "concept",
-        x_element_label: c.conceptLabel,
-        y_step: 0,
-        y_step_label: "Alignment",
-        z_polarity: c.polarity,
-        z_criticality: c.polarity > 0.5 ? "high" : c.polarity > 0 ? "medium" : "low",
-        evidence_summary: c.rationale,
-        evidence_refs: { d1Ids: c.d1ElementIds, d2Ids: c.d2ElementIds },
-        contributing_agents: ["pipeline"],
-      }));
+      // Helper to validate UUID format
+      const isValidUuid = (str: string) => 
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+      
+      const cellsToSave = pipelineResults.tesseractCells.map((c, idx) => {
+        // Use the cell's own id as x_element_id (it should be a proper UUID)
+        // Or check if d1ElementIds[0] is a valid UUID, otherwise use cell id
+        const xElementId = (c.d1ElementIds[0] && isValidUuid(c.d1ElementIds[0])) 
+          ? c.d1ElementIds[0] 
+          : c.id; // cell.id is already a UUID from the pipeline
+          
+        return {
+          id: c.id,
+          x_index: idx,
+          x_element_id: xElementId,
+          x_element_type: "concept",
+          x_element_label: c.conceptLabel,
+          y_step: 0,
+          y_step_label: "Alignment",
+          z_polarity: c.polarity,
+          z_criticality: c.polarity > 0.5 ? "high" : c.polarity > 0 ? "medium" : "low",
+          evidence_summary: c.rationale,
+          evidence_refs: { d1Ids: c.d1ElementIds, d2Ids: c.d2ElementIds },
+          contributing_agents: ["pipeline"],
+        };
+      });
       
       // Transform pipeline steps to activity log
       const activityToSave = pipelineSteps.map(step => ({
