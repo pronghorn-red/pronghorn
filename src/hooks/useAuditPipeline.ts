@@ -262,24 +262,6 @@ export function useAuditPipeline() {
       return;
     }
 
-    // Map activity types to step phases
-    const phaseMap: Record<string, { id: string; phase: PipelinePhase; title: string }> = {
-      "nodes_created": { id: "nodes", phase: "creating_nodes", title: "Create Graph Nodes" },
-      "d1_extraction_started": { id: "d1", phase: "extracting_d1", title: "Extract D1 Concepts" },
-      "d1_extraction_complete": { id: "d1", phase: "extracting_d1", title: "Extract D1 Concepts" },
-      "d2_extraction_started": { id: "d2", phase: "extracting_d2", title: "Extract D2 Concepts" },
-      "d2_extraction_complete": { id: "d2", phase: "extracting_d2", title: "Extract D2 Concepts" },
-      "merge_started": { id: "merge", phase: "merging_concepts", title: "Merge Concepts" },
-      "merge_complete": { id: "merge", phase: "merging_concepts", title: "Merge Concepts" },
-      "graph_building_started": { id: "graph", phase: "building_graph", title: "Build Graph Edges" },
-      "graph_complete": { id: "graph", phase: "building_graph", title: "Build Graph Edges" },
-      "tesseract_started": { id: "tesseract", phase: "building_tesseract", title: "Build Tesseract" },
-      "tesseract_complete": { id: "tesseract", phase: "building_tesseract", title: "Build Tesseract" },
-      "venn_started": { id: "venn", phase: "generating_venn", title: "Generate Venn Analysis" },
-      "venn_complete": { id: "venn", phase: "generating_venn", title: "Generate Venn Analysis" },
-      "pipeline_complete": { id: "venn", phase: "completed", title: "Pipeline Complete" },
-    };
-
     // Build a map of step states from activity
     const stepStates: Record<string, { status: "pending" | "running" | "completed" | "error"; message: string; details: string[] }> = {
       nodes: { status: "pending", message: "Waiting...", details: [] },
@@ -292,6 +274,10 @@ export function useAuditPipeline() {
     };
 
     let pipelineCompleted = false;
+    let d1ConceptCount = 0;
+    let d2ConceptCount = 0;
+    let mergeCount = 0;
+    let tesseractCount = 0;
 
     // Process activity stream chronologically
     const sortedActivity = [...activityStream].sort((a, b) => 
@@ -299,50 +285,72 @@ export function useAuditPipeline() {
     );
 
     for (const activity of sortedActivity) {
-      const mapping = phaseMap[activity.activity_type];
-      if (mapping) {
-        if (activity.activity_type.endsWith("_started")) {
-          stepStates[mapping.id] = { status: "running", message: activity.title, details: [] };
-        } else if (activity.activity_type.endsWith("_complete") || activity.activity_type === "nodes_created") {
-          stepStates[mapping.id] = { status: "completed", message: activity.title, details: [] };
-        }
-        if (activity.activity_type === "pipeline_complete") {
-          pipelineCompleted = true;
+      const type = activity.activity_type;
+      const title = activity.title.toLowerCase();
+
+      // Auto-populate = nodes created
+      if (type === "auto_populate" || title.includes("auto-created graph nodes")) {
+        stepStates.nodes = { status: "completed", message: activity.title, details: [] };
+      }
+
+      // Concept extraction
+      if (type === "concept_extraction") {
+        if (title.includes("d1")) {
+          stepStates.d1 = { status: "completed", message: activity.title, details: stepStates.d1.details };
+          d1ConceptCount++;
+          stepStates.d1.details.push(activity.title);
+        } else if (title.includes("d2")) {
+          stepStates.d2 = { status: "completed", message: activity.title, details: stepStates.d2.details };
+          d2ConceptCount++;
+          stepStates.d2.details.push(activity.title);
         }
       }
 
-      // Collect concept details for d1/d2 steps
-      if (activity.activity_type === "concept_extracted") {
-        const dataset = (activity.metadata as any)?.dataset;
-        const stepId = dataset === "d1" ? "d1" : dataset === "d2" ? "d2" : null;
-        if (stepId && stepStates[stepId]) {
-          stepStates[stepId].details.push(activity.title);
-        }
+      // Concept merge
+      if (type === "concept_merge") {
+        stepStates.merge = { status: "completed", message: activity.title, details: stepStates.merge.details };
+        mergeCount++;
+        stepStates.merge.details.push(activity.title);
+        // Graph is also done after merge
+        stepStates.graph = { status: "completed", message: "Graph built from merged concepts", details: [] };
       }
 
-      // Collect tesseract cell details
-      if (activity.activity_type === "tesseract_cell_analyzed") {
+      // Tesseract analysis
+      if (type === "tesseract_analysis") {
+        stepStates.tesseract = { status: "completed", message: activity.title, details: stepStates.tesseract.details };
+        tesseractCount++;
         stepStates.tesseract.details.push(activity.title);
       }
 
+      // Venn analysis
+      if (type === "venn_analysis" || title.includes("venn")) {
+        stepStates.venn = { status: "completed", message: activity.title, details: [] };
+      }
+
+      // Pipeline complete
+      if (type === "pipeline_complete" || title.includes("audit complete") || title.includes("pipeline complete")) {
+        pipelineCompleted = true;
+      }
+
       // Handle errors
-      if (activity.activity_type === "error" || activity.activity_type.includes("_error")) {
-        const stepId = (activity.metadata as any)?.step || "venn";
-        if (stepStates[stepId]) {
-          stepStates[stepId].status = "error";
-          stepStates[stepId].message = activity.title;
-        }
+      if (type === "error") {
+        // Don't override completed status with error from other steps
       }
     }
 
-    // Build reconstructed steps array
+    // If we have venn analysis, mark pipeline as complete
+    if (stepStates.venn.status === "completed") {
+      pipelineCompleted = true;
+    }
+
+    // Build reconstructed steps array with actual counts
     const reconstructedSteps: PipelineStep[] = [
       { id: "nodes", phase: "creating_nodes", title: "Create Graph Nodes", ...stepStates.nodes, progress: stepStates.nodes.status === "completed" ? 100 : 0 },
-      { id: "d1", phase: "extracting_d1", title: "Extract D1 Concepts", ...stepStates.d1, progress: stepStates.d1.status === "completed" ? 100 : 0 },
-      { id: "d2", phase: "extracting_d2", title: "Extract D2 Concepts", ...stepStates.d2, progress: stepStates.d2.status === "completed" ? 100 : 0 },
-      { id: "merge", phase: "merging_concepts", title: "Merge Concepts", ...stepStates.merge, progress: stepStates.merge.status === "completed" ? 100 : 0 },
+      { id: "d1", phase: "extracting_d1", title: `Extract D1 Concepts${d1ConceptCount > 0 ? ` (${d1ConceptCount} found)` : ''}`, ...stepStates.d1, progress: stepStates.d1.status === "completed" ? 100 : 0 },
+      { id: "d2", phase: "extracting_d2", title: `Extract D2 Concepts${d2ConceptCount > 0 ? ` (${d2ConceptCount} found)` : ''}`, ...stepStates.d2, progress: stepStates.d2.status === "completed" ? 100 : 0 },
+      { id: "merge", phase: "merging_concepts", title: `Merge Concepts${mergeCount > 0 ? ` (${mergeCount} merged)` : ''}`, ...stepStates.merge, progress: stepStates.merge.status === "completed" ? 100 : 0 },
       { id: "graph", phase: "building_graph", title: "Build Graph Edges", ...stepStates.graph, progress: stepStates.graph.status === "completed" ? 100 : 0 },
-      { id: "tesseract", phase: "building_tesseract", title: "Build Tesseract", ...stepStates.tesseract, progress: stepStates.tesseract.status === "completed" ? 100 : 0 },
+      { id: "tesseract", phase: "building_tesseract", title: `Build Tesseract${tesseractCount > 0 ? ` (${tesseractCount} cells)` : ''}`, ...stepStates.tesseract, progress: stepStates.tesseract.status === "completed" ? 100 : 0 },
       { id: "venn", phase: "generating_venn", title: "Generate Venn Analysis", ...stepStates.venn, progress: stepStates.venn.status === "completed" ? 100 : 0 },
     ];
 
