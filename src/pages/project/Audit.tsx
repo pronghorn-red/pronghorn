@@ -8,7 +8,6 @@ import { AuditBlackboard } from "@/components/audit/AuditBlackboard";
 import { VennDiagramResults } from "@/components/audit/VennDiagramResults";
 import { AuditConfigurationDialog, AuditConfiguration } from "@/components/audit/AuditConfigurationDialog";
 import { KnowledgeGraph } from "@/components/audit/KnowledgeGraph";
-import { AuditActivityStream } from "@/components/audit/AuditActivityStream";
 import { PipelineActivityStream } from "@/components/audit/PipelineActivityStream";
 import { useRealtimeAudit } from "@/hooks/useRealtimeAudit";
 import { useAuditPipeline, PipelineProgress, PipelineResults, LocalGraphNode, LocalGraphEdge, PipelineStepId } from "@/hooks/useAuditPipeline";
@@ -850,18 +849,11 @@ export default function Audit() {
                 </div>
 
                 <TabsContent value="activity">
-                  {isPipelineRunning || pipelineSteps.length > 0 ? (
-                    <PipelineActivityStream
-                      steps={pipelineSteps}
-                      isRunning={isPipelineRunning}
-                      onRestartStep={restartPipelineStep}
-                    />
-                  ) : (
-                    <AuditActivityStream
-                      activities={activityStream}
-                      isLoading={isLoading}
-                    />
-                  )}
+                  <PipelineActivityStream
+                    steps={pipelineSteps}
+                    isRunning={isPipelineRunning}
+                    onRestartStep={restartPipelineStep}
+                  />
                 </TabsContent>
 
                 <TabsContent value="graph">
