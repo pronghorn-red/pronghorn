@@ -57,6 +57,55 @@ const STATUS_BG: Record<string, string> = {
 // Steps that support restart
 const RESTARTABLE_STEPS: PipelineStepId[] = ["tesseract", "venn"];
 
+// Generate dynamic step title based on status
+function getStepTitle(step: PipelineStep): string {
+  const baseTitle = step.title;
+  
+  // Extract count info from title if present (e.g., "Extract D1 Concepts (43 items)")
+  const countMatch = baseTitle.match(/\((\d+)\s+items?\)/);
+  const itemCount = countMatch ? countMatch[1] : null;
+  
+  // Get concept count from details if available
+  const conceptMatch = step.details?.find(d => d.includes("concepts"))?.match(/(\d+)\s*concepts?/);
+  const conceptCount = conceptMatch ? conceptMatch[1] : null;
+  
+  switch (step.status) {
+    case "pending":
+      return baseTitle;
+    case "running":
+      if (step.phase === "extracting_d1" || step.phase === "extracting_d2") {
+        const dataset = step.phase === "extracting_d1" ? "D1" : "D2";
+        return `Extracting ${dataset} Concepts${itemCount ? ` (${itemCount} items)` : ""}...`;
+      }
+      return `${baseTitle.replace(/^(Extract|Create|Build|Generate|Merge)\s+/i, "$1ing ")}...`;
+    case "completed":
+      if (step.phase === "extracting_d1" || step.phase === "extracting_d2") {
+        const dataset = step.phase === "extracting_d1" ? "D1" : "D2";
+        return `${dataset} Concepts Extracted${conceptCount ? ` (${conceptCount} concepts)` : ""}`;
+      }
+      if (step.phase === "creating_nodes") {
+        return "Graph Nodes Created";
+      }
+      if (step.phase === "merging_concepts") {
+        return "Concepts Merged";
+      }
+      if (step.phase === "building_graph") {
+        return "Graph Edges Built";
+      }
+      if (step.phase === "building_tesseract") {
+        return "Tesseract Built";
+      }
+      if (step.phase === "generating_venn") {
+        return "Venn Analysis Complete";
+      }
+      return `✓ ${baseTitle.replace(/^(Extract|Create|Build|Generate|Merge)\s+/i, "")}`;
+    case "error":
+      return `✗ ${baseTitle} Failed`;
+    default:
+      return baseTitle;
+  }
+}
+
 function StepItem({ 
   step, 
   onRestart, 
@@ -66,11 +115,13 @@ function StepItem({
   onRestart?: (stepId: PipelineStepId) => void;
   isRunning: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(step.status === "running");
+  const [isOpen, setIsOpen] = useState(step.status === "running" || step.status === "error");
   const hasDetails = step.details && step.details.length > 0;
   const canRestart = !isRunning && 
     RESTARTABLE_STEPS.includes(step.id as PipelineStepId) && 
     (step.status === "completed" || step.status === "error");
+
+  const dynamicTitle = getStepTitle(step);
 
   return (
     <div className={`border-l-4 rounded-r-lg p-3 transition-all ${STATUS_BG[step.status]}`}>
@@ -93,14 +144,22 @@ function StepItem({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`font-medium text-sm ${STATUS_COLORS[step.status]}`}>
-                {step.title}
+                {dynamicTitle}
               </span>
-              {step.progress > 0 && (
+              {step.status === "running" && step.progress > 0 && (
                 <Badge 
-                  variant={step.status === "completed" ? "default" : "outline"} 
-                  className={`text-xs ${step.status === "completed" ? "bg-green-500" : ""}`}
+                  variant="outline" 
+                  className="text-xs bg-primary/10"
                 >
                   {step.progress}%
+                </Badge>
+              )}
+              {step.status === "completed" && step.progress === 100 && (
+                <Badge 
+                  variant="default" 
+                  className="text-xs bg-green-500"
+                >
+                  Complete
                 </Badge>
               )}
               {hasDetails && (
@@ -126,8 +185,8 @@ function StepItem({
 
             <p className="text-xs text-muted-foreground mt-0.5">{step.message}</p>
 
-            {/* Progress bar for running or completed steps with progress */}
-            {step.progress > 0 && step.progress < 100 && (
+            {/* Progress bar for running steps */}
+            {step.status === "running" && step.progress > 0 && step.progress < 100 && (
               <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary transition-all duration-300"

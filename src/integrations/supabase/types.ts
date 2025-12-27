@@ -5310,6 +5310,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      insert_audit_activity_batch_with_token: {
+        Args: { p_activities: Json; p_session_id: string; p_token: string }
+        Returns: number
+      }
       insert_audit_activity_with_token: {
         Args: {
           p_activity_type: string
@@ -5430,6 +5434,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      insert_audit_graph_edges_batch_with_token: {
+        Args: { p_edges: Json; p_session_id: string; p_token: string }
+        Returns: number
+      }
+      insert_audit_graph_nodes_batch_with_token: {
+        Args: { p_nodes: Json; p_session_id: string; p_token: string }
+        Returns: number
+      }
       insert_audit_session_with_token:
         | {
             Args: {
@@ -5527,6 +5539,10 @@ export type Database = {
               isSetofReturn: false
             }
           }
+      insert_audit_tesseract_cells_batch_with_token: {
+        Args: { p_cells: Json; p_session_id: string; p_token: string }
+        Returns: number
+      }
       insert_chat_message_with_token: {
         Args: {
           p_chat_session_id: string
@@ -6858,6 +6874,15 @@ export type Database = {
           p_phase: string
           p_session_id: string
           p_token: string
+        }
+        Returns: undefined
+      }
+      update_audit_session_venn_with_token: {
+        Args: {
+          p_session_id: string
+          p_status?: string
+          p_token: string
+          p_venn_result: Json
         }
         Returns: undefined
       }

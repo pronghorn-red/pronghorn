@@ -38,6 +38,7 @@ import {
   RotateCcw,
   Loader2,
   Save,
+  Download,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useShareToken } from "@/hooks/useShareToken";
@@ -82,6 +83,7 @@ export default function Audit() {
     addGraphNodes,
     addGraphEdges,
     removeGraphNodes,
+    saveAuditData,
   } = useRealtimeAudit(projectId!, selectedSessionId);
 
   // Load all sessions for this project
@@ -418,62 +420,146 @@ export default function Audit() {
     toast.success("Audit stopped");
   };
 
-  // Save pipeline results to database
+  // Save complete pipeline results to database
   const handleSaveResults = async () => {
     if (!session || !pipelineResults || isSaving) return;
     
     setIsSaving(true);
     try {
-      // Save graph nodes (optimistic update - adds to local state)
-      if (pipelineResults.nodes.length > 0) {
-        const nodesToSave = pipelineResults.nodes.map(n => ({
-          id: n.id,
-          session_id: session.id,
-          label: n.label,
-          description: n.description,
-          node_type: n.node_type,
-          source_dataset: n.source_dataset,
-          source_element_ids: n.source_element_ids,
-          color: n.color,
-          size: n.size,
-          metadata: n.metadata,
-          created_by_agent: "pipeline",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          x_position: null,
-          y_position: null,
-        }));
-        addGraphNodes(nodesToSave);
+      // Transform nodes for database
+      const nodesToSave = pipelineResults.nodes.map(n => ({
+        id: n.id,
+        label: n.label,
+        description: n.description,
+        node_type: n.node_type,
+        source_dataset: n.source_dataset,
+        source_element_ids: n.source_element_ids,
+        color: n.color,
+        size: n.size,
+        metadata: n.metadata,
+        created_by_agent: "pipeline",
+      }));
+      
+      // Transform edges for database
+      const edgesToSave = pipelineResults.edges.map(e => ({
+        id: e.id,
+        source_node_id: e.source_node_id,
+        target_node_id: e.target_node_id,
+        edge_type: e.edge_type,
+        label: e.label,
+        weight: e.weight,
+        metadata: e.metadata,
+        created_by_agent: "pipeline",
+      }));
+      
+      // Transform tesseract cells for database
+      const cellsToSave = pipelineResults.tesseractCells.map((c, idx) => ({
+        id: c.id,
+        x_index: idx,
+        x_element_id: c.d1ElementIds[0] || `concept-${idx}`,
+        x_element_type: "concept",
+        x_element_label: c.conceptLabel,
+        y_step: 0,
+        y_step_label: "Alignment",
+        z_polarity: c.polarity,
+        z_criticality: c.polarity > 0.5 ? "high" : c.polarity > 0 ? "medium" : "low",
+        evidence_summary: c.rationale,
+        evidence_refs: { d1Ids: c.d1ElementIds, d2Ids: c.d2ElementIds },
+        contributing_agents: ["pipeline"],
+      }));
+      
+      // Transform pipeline steps to activity log
+      const activityToSave = pipelineSteps.map(step => ({
+        agent_role: "pipeline",
+        activity_type: "pipeline_step",
+        title: step.title,
+        content: step.message,
+        metadata: { 
+          phase: step.phase, 
+          status: step.status, 
+          progress: step.progress,
+          details: step.details,
+        },
+      }));
+      
+      // Call batch save function
+      const result = await saveAuditData(session.id, {
+        nodes: nodesToSave,
+        edges: edgesToSave,
+        tesseractCells: cellsToSave,
+        vennResult: pipelineResults.vennResult,
+        activityLog: activityToSave,
+        markComplete: true,
+      });
+      
+      if (!result.success) {
+        throw new Error(result.error || "Save failed");
       }
       
-      // Save graph edges (optimistic update)
-      if (pipelineResults.edges.length > 0) {
-        const edgesToSave = pipelineResults.edges.map(e => ({
-          id: e.id,
-          session_id: session.id,
-          source_node_id: e.source_node_id,
-          target_node_id: e.target_node_id,
-          edge_type: e.edge_type,
-          label: e.label,
-          weight: e.weight,
-          metadata: e.metadata,
-          created_by_agent: "pipeline",
-          created_at: new Date().toISOString(),
-        }));
-        addGraphEdges(edgesToSave);
-      }
+      // Optimistic update local state
+      addGraphNodes(nodesToSave.map(n => ({ ...n, session_id: session.id })));
+      addGraphEdges(edgesToSave.map(e => ({ ...e, session_id: session.id })));
       
-      // Tesseract cells and Venn results are saved by the edge function
-      // Refresh to show the saved data
+      // Refresh to sync with DB
       await refreshSession(session.id);
       
-      toast.success(`Saved ${pipelineResults.nodes.length} nodes and ${pipelineResults.edges.length} edges`);
+      toast.success(`Saved complete audit: ${nodesToSave.length} nodes, ${edgesToSave.length} edges, ${cellsToSave.length} cells`);
     } catch (err: any) {
       console.error("Save failed:", err);
       toast.error("Failed to save results: " + (err.message || "Unknown error"));
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // Download complete audit as JSON
+  const handleDownloadAudit = () => {
+    if (!session) return;
+    
+    const nodes = pipelineResults?.nodes || graphNodes;
+    const edges = pipelineResults?.edges || graphEdges;
+    const cells = pipelineResults?.tesseractCells?.map((c, idx) => ({
+      id: c.id,
+      conceptLabel: c.conceptLabel,
+      conceptDescription: c.conceptDescription,
+      polarity: c.polarity,
+      rationale: c.rationale,
+      d1ElementIds: c.d1ElementIds,
+      d2ElementIds: c.d2ElementIds,
+    })) || tesseractCells;
+    const venn = pipelineResults?.vennResult || session.venn_result;
+    
+    const auditData = {
+      session: {
+        id: session.id,
+        name: session.name,
+        description: session.description,
+        dataset1Type: session.dataset_1_type,
+        dataset2Type: session.dataset_2_type,
+        status: session.status,
+        createdAt: session.created_at,
+        completedAt: session.completed_at,
+      },
+      nodes,
+      edges,
+      tesseractCells: cells,
+      vennResult: venn,
+      activityLog: pipelineSteps.length > 0 ? pipelineSteps : activityStream,
+      blackboard: blackboardEntries,
+      exportedAt: new Date().toISOString(),
+    };
+    
+    const blob = new Blob([JSON.stringify(auditData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit-${session.name.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast.success("Audit downloaded");
   };
 
   const getStatusColor = (status: string) => {
@@ -628,45 +714,18 @@ export default function Audit() {
               </Card>
             )}
 
-            {/* Pipeline Progress */}
-            {isPipelineRunning && (
-              <Card className="mb-6 border-primary">
-                <CardContent className="py-4">
-                  <div className="flex items-center gap-3">
-                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    <div className="flex-1">
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="font-medium capitalize">{pipelineProgress.phase.replace(/_/g, " ")}</span>
-                        <span className="text-muted-foreground">{pipelineProgress.progress}%</span>
-                      </div>
-                      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-primary transition-all duration-300" 
-                          style={{ width: `${pipelineProgress.progress}%` }} 
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">{pipelineProgress.message}</p>
-                    </div>
-                    <Button size="sm" variant="outline" onClick={abortPipeline}>
-                      <StopCircle className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
             {/* Pipeline Complete - Save Results */}
             {!isPipelineRunning && pipelineResults && pipelineProgress.phase === "completed" && (
               <Card className="mb-6 border-green-500">
                 <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
                     <div>
                       <p className="font-medium text-green-600">Pipeline Complete</p>
                       <p className="text-sm text-muted-foreground">
                         {pipelineResults.nodes.length} nodes, {pipelineResults.edges.length} edges, {pipelineResults.tesseractCells.length} tesseract cells
                       </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Button 
                         onClick={handleSaveResults} 
                         disabled={isSaving}
@@ -679,10 +738,34 @@ export default function Audit() {
                         )}
                         Save to Database
                       </Button>
+                      <Button variant="outline" onClick={handleDownloadAudit}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
                       <Button variant="outline" onClick={clearPipelineResults}>
                         Discard
                       </Button>
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Saved Session - Download option */}
+            {!isPipelineRunning && !pipelineResults && session?.status === "completed" && (
+              <Card className="mb-6 border-blue-500/50">
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div>
+                      <p className="font-medium text-blue-600">Audit Complete</p>
+                      <p className="text-sm text-muted-foreground">
+                        {graphNodes.length} nodes, {graphEdges.length} edges, {tesseractCells.length} tesseract cells
+                      </p>
+                    </div>
+                    <Button variant="outline" onClick={handleDownloadAudit}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Download Audit
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
