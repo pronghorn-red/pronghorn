@@ -131,6 +131,20 @@ function localId(): string {
   return crypto.randomUUID();
 }
 
+// Find elements that aren't assigned to any concept
+function findOrphanedElements(
+  elements: Element[],
+  concepts: Concept[]
+): Element[] {
+  const assignedIds = new Set<string>();
+  for (const concept of concepts) {
+    for (const id of concept.elementIds || []) {
+      assignedIds.add(id);
+    }
+  }
+  return elements.filter(el => !assignedIds.has(el.id));
+}
+
 // Parse SSE stream and call callbacks for each event
 async function streamSSE(
   response: Response,
@@ -760,6 +774,143 @@ export function useAuditPipeline() {
         console.error("[d2] Extraction threw:", d2Result.reason);
       }
 
+      // ========================================
+      // ORPHAN RECOVERY PASS: Catch any missed elements
+      // ========================================
+      const runOrphanRecovery = async (
+        dataset: "d1" | "d2",
+        elements: Element[],
+        concepts: Concept[],
+        stepId: string
+      ): Promise<Concept[]> => {
+        const orphans = findOrphanedElements(elements, concepts);
+        if (orphans.length === 0) {
+          console.log(`[${stepId}] No orphans found`);
+          return concepts;
+        }
+
+        console.log(`[${stepId}] Found ${orphans.length} orphaned elements, running recovery...`);
+        addStepDetail(stepId, `⚠️ Found ${orphans.length} orphaned elements, running recovery...`);
+        
+        const existingLabels = concepts.map(c => c.label);
+        
+        try {
+          const response = await fetch(`${BASE_URL}/audit-extract-concepts`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              sessionId, 
+              projectId, 
+              shareToken, 
+              dataset, 
+              elements: orphans,
+              mappingMode: "one_to_one",
+              recoveryMode: true,
+              existingConceptLabels: existingLabels,
+            }),
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[${stepId}] Recovery HTTP error:`, response.status, errorText);
+            addStepDetail(stepId, `❌ Recovery failed: HTTP ${response.status}`);
+            return concepts;
+          }
+          
+          const result = await response.json();
+          
+          if (!result.success || !result.concepts?.length) {
+            console.error(`[${stepId}] Recovery returned no concepts`);
+            addStepDetail(stepId, `❌ Recovery returned no concepts`);
+            return concepts;
+          }
+          
+          const recoveryConcepts: Concept[] = result.concepts;
+          console.log(`[${stepId}] Recovery found ${recoveryConcepts.length} concepts for ${orphans.length} orphans`);
+          addStepDetail(stepId, `✅ Recovery: ${recoveryConcepts.length} concepts for ${orphans.length} orphans`);
+          
+          // Merge recovery concepts: existing concepts get elements added, new concepts are appended
+          const updatedConcepts = [...concepts];
+          for (const rc of recoveryConcepts) {
+            const existingIdx = updatedConcepts.findIndex(c => c.label.toLowerCase() === rc.label.toLowerCase());
+            if (existingIdx >= 0) {
+              // Add elements to existing concept
+              const existing = updatedConcepts[existingIdx];
+              const existingIds = new Set(existing.elementIds);
+              for (const id of rc.elementIds) {
+                if (!existingIds.has(id)) {
+                  existing.elementIds.push(id);
+                }
+              }
+              addStepDetail(stepId, `  → Added ${rc.elementIds.length} to existing: ${rc.label}`);
+            } else {
+              // New concept
+              updatedConcepts.push(rc);
+              addStepDetail(stepId, `  → New concept: ${rc.label} (${rc.elementIds.length} elements)`);
+              
+              // Create graph node for new concept
+              const conceptNode: LocalGraphNode = {
+                id: localId(),
+                label: rc.label,
+                description: rc.description || "",
+                node_type: "concept",
+                source_dataset: dataset === "d1" ? "dataset1" : "dataset2",
+                source_element_ids: rc.elementIds,
+                color: dataset === "d1" ? "#60a5fa" : "#4ade80",
+                size: 20,
+                metadata: { source: dataset, premerge: true, recovery: true },
+              };
+              localNodes.push(conceptNode);
+
+              // Create edges from element nodes to concept node
+              for (const elId of rc.elementIds) {
+                const elementNode = localNodes.find(n => n.metadata?.originalElementId === elId);
+                if (elementNode) {
+                  localEdges.push({
+                    id: localId(),
+                    source_node_id: elementNode.id,
+                    target_node_id: conceptNode.id,
+                    edge_type: dataset === "d1" ? "defines" : "implements",
+                    label: dataset === "d1" ? "defines" : "implements",
+                    weight: 1.0,
+                    metadata: { premerge: true, recovery: true },
+                  });
+                }
+              }
+            }
+          }
+          
+          updateResults();
+          return updatedConcepts;
+          
+        } catch (err: any) {
+          console.error(`[${stepId}] Recovery error:`, err);
+          addStepDetail(stepId, `❌ Recovery error: ${err.message || String(err)}`);
+          return concepts;
+        }
+      };
+
+      // Run orphan recovery for D1 and D2
+      if (d1Concepts.length > 0) {
+        d1Concepts = await runOrphanRecovery("d1", d1Elements, d1Concepts, "d1");
+      }
+      if (d2Concepts.length > 0) {
+        d2Concepts = await runOrphanRecovery("d2", d2Elements, d2Concepts, "d2");
+      }
+
+      // Final orphan check after recovery
+      const remainingD1Orphans = findOrphanedElements(d1Elements, d1Concepts);
+      const remainingD2Orphans = findOrphanedElements(d2Elements, d2Concepts);
+      if (remainingD1Orphans.length > 0 || remainingD2Orphans.length > 0) {
+        console.warn(`[pipeline] After recovery: ${remainingD1Orphans.length} D1 + ${remainingD2Orphans.length} D2 orphans remain`);
+        if (remainingD1Orphans.length > 0) {
+          addStepDetail("d1", `⚠️ ${remainingD1Orphans.length} elements still orphaned after recovery`);
+        }
+        if (remainingD2Orphans.length > 0) {
+          addStepDetail("d2", `⚠️ ${remainingD2Orphans.length} elements still orphaned after recovery`);
+        }
+      }
+
       setProgress({ 
         phase: "merging_concepts", 
         message: `Merging ${d1Concepts.length} D1 and ${d2Concepts.length} D2 concepts...`, 
@@ -867,6 +1018,51 @@ export function useAuditPipeline() {
         progress: 100, 
         completedAt: new Date() 
       });
+
+      // ========================================
+      // FINAL ORPHAN VERIFICATION after all merge rounds
+      // ========================================
+      const allD1IdsInConcepts = new Set<string>();
+      const allD2IdsInConcepts = new Set<string>();
+
+      for (const mc of mergedConcepts) {
+        (mc.d1Ids || []).forEach(id => allD1IdsInConcepts.add(id));
+        (mc.d2Ids || []).forEach(id => allD2IdsInConcepts.add(id));
+      }
+      for (const c of unmergedD1Concepts) {
+        (c.elementIds || []).forEach(id => allD1IdsInConcepts.add(id));
+      }
+      for (const c of unmergedD2Concepts) {
+        (c.elementIds || []).forEach(id => allD2IdsInConcepts.add(id));
+      }
+
+      const finalD1Orphans = d1Elements.filter(e => !allD1IdsInConcepts.has(e.id));
+      const finalD2Orphans = d2Elements.filter(e => !allD2IdsInConcepts.has(e.id));
+
+      if (finalD1Orphans.length > 0 || finalD2Orphans.length > 0) {
+        console.warn(`[merge] FINAL ORPHAN CHECK: ${finalD1Orphans.length} D1, ${finalD2Orphans.length} D2 orphans remain`);
+        addStepDetail("merge", `⚠️ Final check: ${finalD1Orphans.length} D1 + ${finalD2Orphans.length} D2 orphans after merge`);
+        
+        // Create "Uncategorized" catch-all concepts for any remaining orphans
+        if (finalD1Orphans.length > 0) {
+          unmergedD1Concepts.push({
+            label: "Uncategorized D1 Elements",
+            description: `Elements that could not be categorized during extraction or merge: ${finalD1Orphans.map(o => o.label).slice(0, 5).join(", ")}${finalD1Orphans.length > 5 ? "..." : ""}`,
+            elementIds: finalD1Orphans.map(e => e.id),
+          });
+          addStepDetail("merge", `  → Created catch-all for ${finalD1Orphans.length} D1 orphans`);
+        }
+        if (finalD2Orphans.length > 0) {
+          unmergedD2Concepts.push({
+            label: "Uncategorized D2 Elements",
+            description: `Elements that could not be categorized during extraction or merge: ${finalD2Orphans.map(o => o.label).slice(0, 5).join(", ")}${finalD2Orphans.length > 5 ? "..." : ""}`,
+            elementIds: finalD2Orphans.map(e => e.id),
+          });
+          addStepDetail("merge", `  → Created catch-all for ${finalD2Orphans.length} D2 orphans`);
+        }
+      } else {
+        addStepDetail("merge", `✅ Final check: Zero orphans - all elements assigned`);
+      }
 
       // Save intermediate state for restart functionality
       intermediateStateRef.current = {

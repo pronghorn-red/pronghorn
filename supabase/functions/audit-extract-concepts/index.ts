@@ -32,7 +32,9 @@ interface ExtractRequest {
   shareToken: string;
   dataset: "d1" | "d2";
   elements: DatasetElement[];
-  mappingMode?: "one_to_one" | "one_to_many"; // New setting
+  mappingMode?: "one_to_one" | "one_to_many";
+  recoveryMode?: boolean;
+  existingConceptLabels?: string[];
 }
 
 interface ProjectSettings {
@@ -154,7 +156,7 @@ serve(async (req) => {
       global: { headers: authHeader ? { Authorization: authHeader } : {} },
     });
 
-    const { sessionId, projectId, shareToken, dataset, elements, mappingMode }: ExtractRequest = await req.json();
+    const { sessionId, projectId, shareToken, dataset, elements, mappingMode, recoveryMode, existingConceptLabels }: ExtractRequest = await req.json();
 
     // Get project settings for model configuration
     const { data: project } = await supabase.rpc("get_project_with_token", {
@@ -166,7 +168,7 @@ serve(async (req) => {
     const maxTokens = project?.max_tokens || 32768;
     const modelConfig = getModelConfig(selectedModel);
 
-    console.log(`[${dataset}] Using model: ${selectedModel}, maxTokens: ${maxTokens}`);
+    console.log(`[${dataset}] Using model: ${selectedModel}, maxTokens: ${maxTokens}, recoveryMode: ${recoveryMode || false}`);
     
     const datasetLabel = dataset === "d1" ? "requirements/specifications" : "implementation/code";
     
@@ -186,11 +188,55 @@ Content:
 ${e.content || "(empty)"}`;
     }).join("\n\n---\n\n");
 
-    // Build prompt based on mapping mode
+    // Build prompt based on mapping mode and recovery mode
     const isOneToOne = mappingMode === "one_to_one";
     
-    const mappingInstructions = isOneToOne
-      ? `IMPORTANT GUIDELINES (1:1 MAPPING - STRICT):
+    let prompt: string;
+    
+    if (recoveryMode) {
+      // RECOVERY MODE: More aggressive prompt for orphaned elements
+      const existingLabels = existingConceptLabels?.length 
+        ? `\n\nEXISTING CONCEPTS IN THIS DATASET:\n${existingConceptLabels.map(l => `• ${l}`).join("\n")}`
+        : "";
+      
+      prompt = `You are analyzing ORPHANED ${datasetLabel} elements that were missed in the initial extraction pass.
+
+CRITICAL: These elements MUST be assigned. Every single one. No exceptions.
+${existingLabels}
+
+## Orphaned Elements to Categorize (${elements.length} total):
+${elementsText}
+
+## Task
+Assign EVERY element above to a concept. You have two options for each:
+1. Assign to an EXISTING concept (use exact label from the list above)
+2. Create a NEW concept if the element truly doesn't fit any existing concept
+
+RULES (MANDATORY):
+- EVERY element ID must appear in exactly ONE concept
+- Prefer assigning to existing concepts when there's ANY reasonable fit
+- Only create new concepts for genuinely unique themes
+- Even if an element seems ambiguous, pick the BEST FIT - do not leave orphans
+- If an element is too generic, create a "General ${dataset.toUpperCase()} Elements" catch-all
+
+## Output Format (JSON only)
+{
+  "concepts": [
+    {
+      "label": "Exact existing label OR new concept name",
+      "description": "Brief explanation of this concept",
+      "elementIds": ["element-uuid-1", "element-uuid-2"],
+      "isExisting": true or false
+    }
+  ]
+}
+
+ABSOLUTE REQUIREMENT: Every single element ID from the list above MUST appear in exactly one concept. Zero orphans.`;
+
+    } else {
+      // NORMAL MODE: Standard extraction prompt
+      const mappingInstructions = isOneToOne
+        ? `IMPORTANT GUIDELINES (1:1 MAPPING - STRICT):
 1. Each element MUST belong to EXACTLY ONE concept (its PRIMARY/best-fit theme)
 2. Every element MUST be assigned - no orphans allowed
 3. If an element could fit multiple concepts, assign it to the MOST SPECIFIC one
@@ -201,7 +247,7 @@ ASSIGNMENT RULES:
 - No duplications allowed
 - No orphans allowed (every input element must appear exactly once)
 - If unsure, create a more general concept that encompasses multiple themes`
-      : `IMPORTANT GUIDELINES (1:MANY MAPPING - FLEXIBLE):
+        : `IMPORTANT GUIDELINES (1:MANY MAPPING - FLEXIBLE):
 1. The number of concepts should reflect the content
 2. A single element CAN belong to multiple concepts if it spans multiple themes
 3. Every element MUST be assigned to at least one concept
@@ -210,10 +256,9 @@ ASSIGNMENT RULES:
 - No orphans allowed (every input element must be mapped to at least one concept)
 - Elements spanning multiple themes should appear in multiple concepts`;
 
-    console.log(`[${dataset}] Using ${isOneToOne ? "1:1" : "1:Many"} mapping mode`);
+      console.log(`[${dataset}] Using ${isOneToOne ? "1:1" : "1:Many"} mapping mode`);
 
-    // ENHANCED PROMPT with mapping mode awareness
-    const prompt = `You are analyzing ${datasetLabel} elements to identify high-level concepts.
+      prompt = `You are analyzing ${datasetLabel} elements to identify high-level concepts.
 
 ## Elements to analyze (${elements.length} total):
 ${elementsText}
@@ -244,6 +289,7 @@ CRITICAL RULES:
 3. Descriptions must be thorough and evidence-based, not generic
 4. supportingEvidence should contain 1-3 SHORT direct quotes (max 50 chars each) from the elements that demonstrate why they belong to this concept
 5. Return ONLY valid JSON, no other text`;
+    }
 
     // Log payload size
     const payloadChars = prompt.length;
