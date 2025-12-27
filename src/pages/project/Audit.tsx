@@ -682,23 +682,58 @@ export default function Audit() {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${getStatusColor(session.status)} ${isRunning ? "animate-pulse" : ""}`} />
-                        <span className="font-medium capitalize text-sm">{session.status.replace(/_/g, " ")}</span>
+                        <div className={`w-3 h-3 rounded-full ${isPipelineRunning ? "bg-green-500 animate-pulse" : getStatusColor(session.status)} ${isRunning && !isPipelineRunning ? "animate-pulse" : ""}`} />
+                        <span className="font-medium capitalize text-sm">
+                          {isPipelineRunning ? pipelineProgress.phase.replace(/_/g, " ") : session.status.replace(/_/g, " ")}
+                        </span>
                       </div>
-                      {currentPhase && (
-                        <Badge variant="outline" className="capitalize text-xs">
-                          {currentPhase.replace(/_/g, " ")}
-                        </Badge>
+                      
+                      {/* Pipeline Progress - show step progress when pipeline is running */}
+                      {(isPipelineRunning || pipelineSteps.length > 0) && (
+                        <>
+                          {(() => {
+                            const completedSteps = pipelineSteps.filter(s => s.status === 'completed').length;
+                            const totalSteps = pipelineSteps.length;
+                            const currentStep = pipelineSteps.find(s => s.status === 'running');
+                            return (
+                              <>
+                                <Badge variant="outline" className="text-xs">
+                                  <Activity className="h-3 w-3 mr-1" />
+                                  {completedSteps}/{totalSteps} steps
+                                </Badge>
+                                {currentStep && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {currentStep.title}
+                                  </Badge>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </>
                       )}
-                      <Badge variant="outline" className="text-xs">
-                        <Activity className="h-3 w-3 mr-1" />
-                        {session.current_iteration}/{session.max_iterations}
-                      </Badge>
-                      {activeAgents.length > 0 && (
-                        <Badge variant="secondary" className="text-xs">
-                          {activeAgents.length} active
-                        </Badge>
+                      
+                      {/* Legacy orchestrator info - only show if not using pipeline */}
+                      {!isPipelineRunning && pipelineSteps.length === 0 && (
+                        <>
+                          {currentPhase && (
+                            <Badge variant="outline" className="capitalize text-xs">
+                              {currentPhase.replace(/_/g, " ")}
+                            </Badge>
+                          )}
+                          {session.current_iteration > 0 && (
+                            <Badge variant="outline" className="text-xs">
+                              <Activity className="h-3 w-3 mr-1" />
+                              {session.current_iteration}/{session.max_iterations}
+                            </Badge>
+                          )}
+                          {activeAgents.length > 0 && (
+                            <Badge variant="secondary" className="text-xs">
+                              {activeAgents.length} active
+                            </Badge>
+                          )}
+                        </>
                       )}
+                      
                       {session.consensus_reached && (
                         <Badge variant="default" className="bg-green-500 text-xs">
                           Consensus
