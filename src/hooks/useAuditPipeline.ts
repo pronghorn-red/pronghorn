@@ -1204,29 +1204,18 @@ export function useAuditPipeline() {
       await pauseIfStepMode("merge");
 
       // ========================================
-      // PHASE 2.5: Rebuild graph locally with merged concepts
+      // PHASE 2.5: SAFE GRAPH MIGRATION with merged concepts
+      // Uses migrate-first-delete-later pattern to prevent orphans
       // ========================================
-      updateStep("graph", { status: "running", message: "Rebuilding graph...", startedAt: new Date() });
+      updateStep("graph", { status: "running", message: "Migrating concepts...", startedAt: new Date() });
 
-      // Remove premerge concept nodes and their edges
-      const premergeConcepts = localNodes.filter(n => n.metadata?.premerge === true);
-      const premergeNodeIds = new Set(premergeConcepts.map(n => n.id));
-      
-      // Remove premerge nodes
-      for (let i = localNodes.length - 1; i >= 0; i--) {
-        if (premergeNodeIds.has(localNodes[i].id)) {
-          localNodes.splice(i, 1);
-        }
-      }
-      
-      // Remove edges pointing to/from premerge nodes
-      for (let i = localEdges.length - 1; i >= 0; i--) {
-        if (premergeNodeIds.has(localEdges[i].source_node_id) || premergeNodeIds.has(localEdges[i].target_node_id)) {
-          localEdges.splice(i, 1);
-        }
-      }
+      // Get current concept nodes (premerge = true)
+      const oldConceptNodes = localNodes.filter(n => n.metadata?.premerge === true);
+      const oldConceptNodeMap = new Map<string, LocalGraphNode>();
+      oldConceptNodes.forEach(n => oldConceptNodeMap.set(n.label.toLowerCase(), n));
 
-      addStepDetail("graph", `Removed ${premergeConcepts.length} pre-merge concepts`);
+      // Track which old concept labels map to which new merged concept IDs
+      const oldLabelToNewConceptId = new Map<string, string>();
 
       // Handle fallback if merge returned empty
       const hasMergeResults = mergedConcepts.length > 0 || unmergedD1Concepts.length > 0 || unmergedD2Concepts.length > 0;
@@ -1254,6 +1243,11 @@ export function useAuditPipeline() {
         }
       }
 
+      // ========================================
+      // STEP 1: Create new merged/gap/orphan concept nodes
+      // ========================================
+      const newConceptNodes: LocalGraphNode[] = [];
+
       // Create merged concept nodes
       for (const concept of mergedConcepts) {
         const conceptNode: LocalGraphNode = {
@@ -1262,53 +1256,23 @@ export function useAuditPipeline() {
           description: concept.mergedDescription,
           node_type: "concept",
           source_dataset: "both",
-          source_element_ids: [...concept.d1Ids, ...concept.d2Ids],
+          source_element_ids: [], // Will be populated from edge migration
           color: "#a855f7",
           size: 25,
           metadata: { merged: true, d1Labels: concept.d1ConceptLabels, d2Labels: concept.d2ConceptLabels },
         };
+        newConceptNodes.push(conceptNode);
         localNodes.push(conceptNode);
 
-        // Create edges from D1 elements
-        for (const d1Id of concept.d1Ids) {
-          const d1Node = localNodes.find(n => n.metadata?.originalElementId === d1Id);
-          if (d1Node) {
-            localEdges.push({
-              id: localId(),
-              source_node_id: d1Node.id,
-              target_node_id: conceptNode.id,
-              edge_type: "defines",
-              label: "defines",
-              weight: 1.0,
-              metadata: { merged: true },
-            });
-          } else {
-            console.warn(`[graph] Missing D1 node for element ${d1Id} in merged concept "${concept.mergedLabel}"`);
-          }
+        // Map old concept labels to new concept node ID
+        for (const oldLabel of [...concept.d1ConceptLabels, ...concept.d2ConceptLabels]) {
+          oldLabelToNewConceptId.set(oldLabel.toLowerCase(), conceptNode.id);
         }
 
-        // Create edges from D2 elements
-        for (const d2Id of concept.d2Ids) {
-          const d2Node = localNodes.find(n => n.metadata?.originalElementId === d2Id);
-          if (d2Node) {
-            localEdges.push({
-              id: localId(),
-              source_node_id: d2Node.id,
-              target_node_id: conceptNode.id,
-              edge_type: "implements",
-              label: "implements",
-              weight: 1.0,
-              metadata: { merged: true },
-            });
-          } else {
-            console.warn(`[graph] Missing D2 node for element ${d2Id} in merged concept "${concept.mergedLabel}"`);
-          }
-        }
-        
         addStepDetail("graph", `Created merged: ${concept.mergedLabel}`);
       }
 
-      // Create gap concept nodes (D1 only)
+      // Create gap concept nodes (D1-only)
       for (const concept of unmergedD1Concepts) {
         const gapNode: LocalGraphNode = {
           id: localId(),
@@ -1316,33 +1280,18 @@ export function useAuditPipeline() {
           description: concept.description,
           node_type: "concept",
           source_dataset: "dataset1",
-          source_element_ids: concept.elementIds,
+          source_element_ids: [],
           color: "#ef4444",
           size: 22,
           metadata: { gap: true },
         };
+        newConceptNodes.push(gapNode);
         localNodes.push(gapNode);
-
-        for (const d1Id of concept.elementIds) {
-          const d1Node = localNodes.find(n => n.metadata?.originalElementId === d1Id);
-          if (d1Node) {
-            localEdges.push({
-              id: localId(),
-              source_node_id: d1Node.id,
-              target_node_id: gapNode.id,
-              edge_type: "defines",
-              label: "defines",
-              weight: 1.0,
-              metadata: { gap: true },
-            });
-          } else {
-            console.warn(`[graph] Missing D1 node for element ${d1Id} in gap concept "${concept.label}"`);
-          }
-        }
+        oldLabelToNewConceptId.set(concept.label.toLowerCase(), gapNode.id);
         addStepDetail("graph", `Created gap: ${concept.label}`);
       }
 
-      // Create orphan concept nodes (D2 only)
+      // Create orphan concept nodes (D2-only)
       for (const concept of unmergedD2Concepts) {
         const orphanNode: LocalGraphNode = {
           id: localId(),
@@ -1350,35 +1299,110 @@ export function useAuditPipeline() {
           description: concept.description,
           node_type: "concept",
           source_dataset: "dataset2",
-          source_element_ids: concept.elementIds,
+          source_element_ids: [],
           color: "#f97316",
           size: 22,
           metadata: { orphan: true },
         };
+        newConceptNodes.push(orphanNode);
         localNodes.push(orphanNode);
-
-        for (const d2Id of concept.elementIds) {
-          const d2Node = localNodes.find(n => n.metadata?.originalElementId === d2Id);
-          if (d2Node) {
-            localEdges.push({
-              id: localId(),
-              source_node_id: d2Node.id,
-              target_node_id: orphanNode.id,
-              edge_type: "implements",
-              label: "implements",
-              weight: 1.0,
-              metadata: { orphan: true },
-            });
-          } else {
-            console.warn(`[graph] Missing D2 node for element ${d2Id} in orphan concept "${concept.label}"`);
-          }
-        }
+        oldLabelToNewConceptId.set(concept.label.toLowerCase(), orphanNode.id);
         addStepDetail("graph", `Created orphan: ${concept.label}`);
       }
 
+      addStepDetail("graph", `Created ${newConceptNodes.length} new concept nodes`);
+
+      // ========================================
+      // STEP 2: MIGRATE edges from element nodes to new concept nodes
+      // Find all edges from elements to old concepts, create new edges to merged concepts
+      // ========================================
+      const edgesToRemove: string[] = [];
+      const newEdgesCreated = new Set<string>(); // Track "elementId->conceptId" to prevent duplicates
+      const newConceptNodeIds = new Set(newConceptNodes.map(n => n.id));
+
+      for (const edge of localEdges) {
+        // Is this an edge TO an old premerge concept node?
+        const targetOldConcept = oldConceptNodes.find(n => n.id === edge.target_node_id);
+        if (targetOldConcept) {
+          // Find where this old concept maps to
+          const newConceptId = oldLabelToNewConceptId.get(targetOldConcept.label.toLowerCase());
+
+          if (newConceptId) {
+            // Create new edge from same source to new concept (if not already done)
+            const edgeKey = `${edge.source_node_id}->${newConceptId}`;
+            if (!newEdgesCreated.has(edgeKey)) {
+              localEdges.push({
+                id: localId(),
+                source_node_id: edge.source_node_id,
+                target_node_id: newConceptId,
+                edge_type: edge.edge_type,
+                label: edge.label,
+                weight: edge.weight,
+                metadata: { merged: true },
+              });
+              newEdgesCreated.add(edgeKey);
+
+              // Track element ID on the new concept node
+              const newConceptNode = localNodes.find(n => n.id === newConceptId);
+              const sourceNode = localNodes.find(n => n.id === edge.source_node_id);
+              if (newConceptNode && sourceNode?.metadata?.originalElementId) {
+                if (!newConceptNode.source_element_ids.includes(sourceNode.metadata.originalElementId)) {
+                  newConceptNode.source_element_ids.push(sourceNode.metadata.originalElementId);
+                }
+              }
+            }
+          } else {
+            console.warn(`[graph] No mapping for old concept "${targetOldConcept.label}" - edge will remain orphaned`);
+          }
+
+          // Mark old edge for removal
+          edgesToRemove.push(edge.id);
+        }
+      }
+
+      addStepDetail("graph", `Migrated ${newEdgesCreated.size} element edges to new concepts`);
+
+      // ========================================
+      // STEP 3: Remove old edges (only after new edges exist)
+      // ========================================
+      for (let i = localEdges.length - 1; i >= 0; i--) {
+        if (edgesToRemove.includes(localEdges[i].id)) {
+          localEdges.splice(i, 1);
+        }
+      }
+
+      addStepDetail("graph", `Removed ${edgesToRemove.length} old edges`);
+
+      // ========================================
+      // STEP 4: Remove old concept nodes ONLY if they have zero edges
+      // ========================================
+      let deletedCount = 0;
+      let keptCount = 0;
+      for (let i = localNodes.length - 1; i >= 0; i--) {
+        const node = localNodes[i];
+        if (node.metadata?.premerge === true) {
+          // Check if any edges still point to/from this node
+          const hasEdges = localEdges.some(e =>
+            e.source_node_id === node.id || e.target_node_id === node.id
+          );
+
+          if (!hasEdges) {
+            localNodes.splice(i, 1);
+            deletedCount++;
+          } else {
+            keptCount++;
+            console.warn(`[graph] Keeping old concept "${node.label}" - still has ${localEdges.filter(e => e.source_node_id === node.id || e.target_node_id === node.id).length} edges`);
+          }
+        }
+      }
+
+      addStepDetail("graph", `Cleaned up ${deletedCount} old concept nodes${keptCount > 0 ? `, kept ${keptCount} with remaining edges` : ''}`);
+
       updateResults();
-      
-      // Graph-level orphan verification
+
+      // ========================================
+      // STEP 5: Verification - check for graph-level orphans
+      // ========================================
       const connectedNodeIds = new Set<string>();
       localEdges.forEach(e => {
         connectedNodeIds.add(e.source_node_id);
@@ -1386,10 +1410,10 @@ export function useAuditPipeline() {
       });
       const graphOrphans = localNodes.filter(n => !connectedNodeIds.has(n.id));
       if (graphOrphans.length > 0) {
-        console.warn(`[graph] ${graphOrphans.length} graph-level orphans after rebuild:`, 
+        console.warn(`[graph] ${graphOrphans.length} graph-level orphans after safe migration:`,
           graphOrphans.map(n => ({ id: n.id.slice(0, 8), label: n.label?.slice(0, 30), type: n.node_type, dataset: n.source_dataset })));
-        addStepDetail("graph", `⚠️ ${graphOrphans.length} nodes have no edges after graph rebuild`);
-        
+        addStepDetail("graph", `⚠️ ${graphOrphans.length} nodes have no edges after migration`);
+
         // Log breakdown by type
         const orphansByType: Record<string, number> = {};
         graphOrphans.forEach(n => {
@@ -1399,7 +1423,7 @@ export function useAuditPipeline() {
       } else {
         addStepDetail("graph", `✓ All ${localNodes.length} nodes have edges`);
       }
-      
+
       updateStep("graph", { status: "completed", message: `${localNodes.length} nodes, ${localEdges.length} edges`, progress: 100, completedAt: new Date() });
 
       if (abortRef.current) throw new Error("Aborted");
