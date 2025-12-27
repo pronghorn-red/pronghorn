@@ -69,7 +69,7 @@ export default function Audit() {
   const [d2Label, setD2Label] = useState("D2");
   
   // New pipeline hook
-  const { runPipeline, isRunning: isPipelineRunning, progress: pipelineProgress, steps: pipelineSteps, error: pipelineError, abort: abortPipeline, results: pipelineResults, clearResults: clearPipelineResults, restartStep: restartPipelineStep, reconstructStepsFromActivity } = useAuditPipeline();
+  const { runPipeline, isRunning: isPipelineRunning, progress: pipelineProgress, steps: pipelineSteps, error: pipelineError, abort: abortPipeline, results: pipelineResults, clearResults: clearPipelineResults, restartStep: restartPipelineStep, reconstructStepsFromActivity, stepMode, setStepMode, pausedAfterStep, continueToNextStep } = useAuditPipeline();
   
   const {
     session,
@@ -404,6 +404,8 @@ export default function Audit() {
             chunkSize: config.chunkSize,
             batchSize: config.batchSize,
             mappingMode: config.mappingMode,
+            // Pass step mode
+            stepMode,
           });
           
           // Refresh session data after pipeline completes
@@ -728,6 +730,20 @@ export default function Audit() {
                     </>
                   )}
                   
+                  {/* Step Mode Toggle - before starting audit */}
+                  <div className="hidden sm:flex items-center gap-2 mr-2">
+                    <input
+                      type="checkbox"
+                      id="stepModeToggle"
+                      checked={stepMode}
+                      onChange={(e) => setStepMode(e.target.checked)}
+                      className="w-4 h-4 rounded border-border"
+                    />
+                    <label htmlFor="stepModeToggle" className="text-xs text-muted-foreground whitespace-nowrap">
+                      Step Mode
+                    </label>
+                  </div>
+                  
                   <Button onClick={() => setConfigDialogOpen(true)} size="sm">
                     <PlayCircle className="h-4 w-4 mr-1 md:mr-2" />
                     <span className="hidden sm:inline">New Audit</span>
@@ -801,6 +817,47 @@ export default function Audit() {
                       {session.dataset_1_type} ↔ {session.dataset_2_type}
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Step Mode Toggle & Paused State */}
+            {(isPipelineRunning || pausedAfterStep) && (
+              <Card className={`mb-6 ${pausedAfterStep ? "border-amber-500" : "border-border"}`}>
+                <CardContent className="py-3">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="stepMode"
+                          checked={stepMode}
+                          onChange={(e) => setStepMode(e.target.checked)}
+                          disabled={isPipelineRunning && !pausedAfterStep}
+                          className="w-4 h-4 rounded border-border"
+                        />
+                        <label htmlFor="stepMode" className="text-sm font-medium">
+                          Step-through Mode
+                        </label>
+                      </div>
+                      {pausedAfterStep && (
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500">
+                          Paused after: {pausedAfterStep}
+                        </Badge>
+                      )}
+                    </div>
+                    {pausedAfterStep && (
+                      <Button onClick={continueToNextStep} size="sm" className="bg-amber-600 hover:bg-amber-700">
+                        <PlayCircle className="h-4 w-4 mr-2" />
+                        Continue to Next Step
+                      </Button>
+                    )}
+                  </div>
+                  {pausedAfterStep && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Inspect the Graph and Tesseract tabs to verify concept-element linkages before continuing.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             )}

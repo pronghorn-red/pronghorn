@@ -264,6 +264,11 @@ export function useAuditPipeline() {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<PipelineResults | null>(null);
   const abortRef = useRef(false);
+  
+  // Step-through mode state
+  const [stepMode, setStepMode] = useState(false);
+  const [pausedAfterStep, setPausedAfterStep] = useState<PipelineStepId | null>(null);
+  const continueSignalRef = useRef<(() => void) | null>(null);
 
   // Reconstruct pipeline steps from activity stream (for viewing completed audits)
   const reconstructStepsFromActivity = useCallback((activityStream: ActivityEntry[]) => {
@@ -404,13 +409,34 @@ export function useAuditPipeline() {
     }));
   }, []);
 
-  const runPipeline = useCallback(async (input: PipelineInput) => {
+  // Helper to wait for continue signal in step mode
+  const waitForContinue = useCallback(async (afterStep: PipelineStepId): Promise<void> => {
+    return new Promise((resolve) => {
+      setPausedAfterStep(afterStep);
+      continueSignalRef.current = () => {
+        setPausedAfterStep(null);
+        continueSignalRef.current = null;
+        resolve();
+      };
+    });
+  }, []);
+
+  // Continue to next step (called from UI)
+  const continueToNextStep = useCallback(() => {
+    if (continueSignalRef.current) {
+      continueSignalRef.current();
+    }
+  }, []);
+
+  const runPipeline = useCallback(async (input: PipelineInput & { stepMode?: boolean }) => {
     setIsRunning(true);
     setError(null);
     setResults(null);
     abortRef.current = false;
+    setPausedAfterStep(null);
 
     const { sessionId, projectId, shareToken, d1Elements, d2Elements } = input;
+    const isStepMode = input.stepMode ?? stepMode;
     lastInputRef.current = input;
 
     // LOCAL STATE - all nodes/edges/cells stored here, NO DB writes
@@ -445,6 +471,15 @@ export function useAuditPipeline() {
         tesseractCells: [...localTesseractCells],
         vennResult: localVennResult,
       });
+    };
+
+    // Helper to pause after a step if in step mode
+    const pauseIfStepMode = async (afterStep: PipelineStepId) => {
+      if (isStepMode) {
+        setProgress(prev => ({ ...prev, message: `Paused after ${afterStep}. Click Continue to proceed.` }));
+        await waitForContinue(afterStep);
+        if (abortRef.current) throw new Error("Aborted");
+      }
     };
 
     try {
@@ -490,6 +525,9 @@ export function useAuditPipeline() {
       updateStep("nodes", { status: "completed", message: `Created ${d1Elements.length + d2Elements.length} nodes`, progress: 100, completedAt: new Date() });
 
       if (abortRef.current) throw new Error("Aborted");
+      
+      // Step mode pause after nodes
+      await pauseIfStepMode("nodes");
 
       // ========================================
       // PHASE 1: Extract D1 and D2 concepts IN PARALLEL
@@ -731,6 +769,9 @@ export function useAuditPipeline() {
       });
 
       if (abortRef.current) throw new Error("Aborted");
+      
+      // Step mode pause after extraction
+      await pauseIfStepMode("d2");
 
       // ========================================
       // PHASE 2: Merge concepts (with consolidation rounds)
@@ -839,6 +880,9 @@ export function useAuditPipeline() {
       setProgress({ phase: "building_graph", message: "Rebuilding graph with merged concepts...", progress: 50, mergedCount: mergedConcepts.length });
 
       if (abortRef.current) throw new Error("Aborted");
+      
+      // Step mode pause after merge
+      await pauseIfStepMode("merge");
 
       // ========================================
       // PHASE 2.5: Rebuild graph locally with merged concepts
@@ -1011,10 +1055,40 @@ export function useAuditPipeline() {
       if (abortRef.current) throw new Error("Aborted");
 
       // ========================================
-      // PHASE 3: Build Tesseract cells - ONE CALL PER CONCEPT
+      // PHASE 2.75: Generate SKELETON Tesseract cells (pre-analysis preview)
+      // ========================================
+      // This allows inspection of concept<->element linkage before full analysis
+      const conceptNodesForSkeleton = localNodes.filter(n => n.node_type === "concept");
+      for (const node of conceptNodesForSkeleton) {
+        // Determine which element IDs are D1 vs D2 based on original input
+        const d1IdsInConcept = node.source_element_ids.filter(id => d1Elements.some(e => e.id === id));
+        const d2IdsInConcept = node.source_element_ids.filter(id => d2Elements.some(e => e.id === id));
+        
+        const skeletonCell: LocalTesseractCell = {
+          id: localId(),
+          conceptLabel: node.label,
+          conceptDescription: node.description || "",
+          polarity: 0, // Placeholder - pending analysis
+          rationale: "⏳ Pending alignment analysis...",
+          d1ElementIds: d1IdsInConcept,
+          d2ElementIds: d2IdsInConcept,
+        };
+        localTesseractCells.push(skeletonCell);
+      }
+      updateResults(); // UI now shows skeleton tesseract with linked elements
+      addStepDetail("graph", `Created ${localTesseractCells.length} skeleton tesseract cells for preview`);
+      
+      // Step mode pause after graph (with skeleton tesseract visible)
+      await pauseIfStepMode("graph");
+
+      // ========================================
+      // PHASE 3: Build Tesseract cells - ONE CALL PER CONCEPT (replaces skeletons)
       // ========================================
       setProgress({ phase: "building_tesseract", message: "Analyzing alignment...", progress: 65 });
       updateStep("tesseract", { status: "running", message: "Preparing concepts...", startedAt: new Date() });
+      
+      // Clear skeleton cells before real analysis
+      localTesseractCells.length = 0;
 
       // Get concept nodes for tesseract analysis
       const conceptNodes = localNodes.filter(n => n.node_type === "concept");
@@ -1217,6 +1291,9 @@ export function useAuditPipeline() {
       }
 
       if (abortRef.current) throw new Error("Aborted");
+      
+      // Step mode pause after tesseract
+      await pauseIfStepMode("tesseract");
 
       // ========================================
       // PHASE 4: Generate Venn analysis locally
@@ -1292,10 +1369,12 @@ export function useAuditPipeline() {
     } finally {
       setIsRunning(false);
     }
-  }, [updateStep, addStepDetail]);
+  }, [updateStep, addStepDetail, stepMode, waitForContinue]);
 
   const abort = useCallback(() => {
     abortRef.current = true;
+    setPausedAfterStep(null);
+    continueSignalRef.current = null;
     setProgress({ phase: "idle", message: "Aborted", progress: 0 });
     setIsRunning(false);
   }, []);
@@ -1305,6 +1384,8 @@ export function useAuditPipeline() {
     setSteps([]);
     setProgress({ phase: "idle", message: "", progress: 0 });
     setError(null);
+    setPausedAfterStep(null);
+    continueSignalRef.current = null;
     intermediateStateRef.current = {
       d1Concepts: [],
       d2Concepts: [],
@@ -1659,5 +1740,10 @@ export function useAuditPipeline() {
     abort,
     clearResults,
     reconstructStepsFromActivity,
+    // Step mode
+    stepMode,
+    setStepMode,
+    pausedAfterStep,
+    continueToNextStep,
   };
 }
