@@ -102,7 +102,7 @@ export interface LocalVennResult {
 // Audit processing settings types (match dialog)
 export type ConsolidationLevel = "low" | "medium" | "high";
 export type ChunkSize = "small" | "medium" | "large";
-export type BatchSize = "10" | "50" | "unlimited";
+export type BatchSize = "1" | "5" | "10" | "50" | "unlimited";
 export type MappingMode = "one_to_one" | "one_to_many";
 
 export interface EnhancedSortActions {
@@ -579,6 +579,8 @@ export function useAuditPipeline() {
       
       // Convert batch size to element limit
       const BATCH_ELEMENT_MAP: Record<BatchSize, number> = {
+        "1": 1,
+        "5": 5,
         "10": 10,
         "50": 50,
         "unlimited": Infinity,

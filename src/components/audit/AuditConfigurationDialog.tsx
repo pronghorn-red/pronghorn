@@ -41,7 +41,7 @@ import { ProjectSelector, ProjectSelectionResult } from "@/components/project/Pr
 // Audit processing settings
 export type ConsolidationLevel = "low" | "medium" | "high";
 export type ChunkSize = "small" | "medium" | "large";
-export type BatchSize = "10" | "50" | "unlimited";
+export type BatchSize = "1" | "5" | "10" | "50" | "unlimited";
 export type MappingMode = "one_to_one" | "one_to_many";
 
 interface AuditConfigurationDialogProps {
@@ -388,6 +388,8 @@ export function AuditConfigurationDialog({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="1">1 element max</SelectItem>
+                          <SelectItem value="5">5 elements max</SelectItem>
                           <SelectItem value="10">10 elements max</SelectItem>
                           <SelectItem value="50">50 elements max</SelectItem>
                           <SelectItem value="unlimited">Unlimited (char limit only)</SelectItem>
