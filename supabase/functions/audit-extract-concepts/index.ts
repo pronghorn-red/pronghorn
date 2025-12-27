@@ -1,5 +1,5 @@
 // Audit Pipeline Phase 1: Extract concepts from dataset elements
-// Simplified to return JSON directly (no SSE streaming)
+// Uses project model settings instead of hardcoded model
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
@@ -9,8 +9,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const CLAUDE_MODEL = "claude-sonnet-4-20250514";
-const MAX_OUTPUT_TOKENS = 16384;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
@@ -25,6 +23,7 @@ interface ExtractedConcept {
   label: string;
   description: string;
   elementIds: string[];
+  supportingEvidence?: string[]; // Direct quotes/citations from elements
 }
 
 interface ExtractRequest {
@@ -35,6 +34,111 @@ interface ExtractRequest {
   elements: DatasetElement[];
 }
 
+interface ProjectSettings {
+  selected_model: string | null;
+  max_tokens: number | null;
+  thinking_enabled: boolean | null;
+  thinking_budget: number | null;
+}
+
+// Model routing helper
+function getModelConfig(selectedModel: string): { 
+  apiType: "anthropic" | "gemini" | "xai"; 
+  modelName: string;
+  apiKeyEnv: string;
+} {
+  if (selectedModel.startsWith("claude")) {
+    return { apiType: "anthropic", modelName: selectedModel, apiKeyEnv: "ANTHROPIC_API_KEY" };
+  } else if (selectedModel.startsWith("gemini")) {
+    return { apiType: "gemini", modelName: selectedModel, apiKeyEnv: "GEMINI_API_KEY" };
+  } else if (selectedModel.startsWith("grok")) {
+    return { apiType: "xai", modelName: selectedModel, apiKeyEnv: "XAI_API_KEY" };
+  }
+  // Default to Gemini
+  return { apiType: "gemini", modelName: "gemini-2.5-flash", apiKeyEnv: "GEMINI_API_KEY" };
+}
+
+// Call LLM based on model type
+async function callLLM(
+  prompt: string,
+  config: { apiType: "anthropic" | "gemini" | "xai"; modelName: string; apiKeyEnv: string },
+  maxTokens: number
+): Promise<string> {
+  const apiKey = Deno.env.get(config.apiKeyEnv);
+  if (!apiKey) throw new Error(`API key not configured: ${config.apiKeyEnv}`);
+
+  if (config.apiType === "anthropic") {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: config.modelName,
+        max_tokens: maxTokens,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Anthropic API error: ${response.status} - ${errorText.slice(0, 300)}`);
+    }
+
+    const result = await response.json();
+    return result.content?.[0]?.text || "{}";
+  } else if (config.apiType === "gemini") {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${config.modelName}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.4,
+            maxOutputTokens: maxTokens,
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini API error: ${response.status} - ${errorText.slice(0, 300)}`);
+    }
+
+    const result = await response.json();
+    return result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+  } else {
+    // xAI/Grok
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.modelName,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: maxTokens,
+        temperature: 0.4,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`xAI API error: ${response.status} - ${errorText.slice(0, 300)}`);
+    }
+
+    const result = await response.json();
+    return result.choices?.[0]?.message?.content || "{}";
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -43,7 +147,6 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
 
     const authHeader = req.headers.get("Authorization");
     const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -51,6 +154,18 @@ serve(async (req) => {
     });
 
     const { sessionId, projectId, shareToken, dataset, elements }: ExtractRequest = await req.json();
+
+    // Get project settings for model configuration
+    const { data: project } = await supabase.rpc("get_project_with_token", {
+      p_project_id: projectId,
+      p_token: shareToken,
+    }) as { data: ProjectSettings | null };
+
+    const selectedModel = project?.selected_model || "gemini-2.5-flash";
+    const maxTokens = project?.max_tokens || 32768;
+    const modelConfig = getModelConfig(selectedModel);
+
+    console.log(`[${dataset}] Using model: ${selectedModel}, maxTokens: ${maxTokens}`);
     
     const datasetLabel = dataset === "d1" ? "requirements/specifications" : "implementation/code";
     
@@ -70,23 +185,33 @@ Content:
 ${e.content || "(empty)"}`;
     }).join("\n\n---\n\n");
 
-    const prompt = `You are analyzing ${datasetLabel} elements.
+    // ENHANCED PROMPT - no hardcoded concept count, evidence-based
+    const prompt = `You are analyzing ${datasetLabel} elements to identify high-level concepts.
 
-## Elements to analyze:
+## Elements to analyze (${elements.length} total):
 ${elementsText}
 
 ## Task
-Identify 2-8 high-level CONCEPTS that group these ${elements.length} elements by theme, purpose, or functionality.
-Each concept should capture a meaningful grouping.
-Every element MUST be assigned to at least one concept.
+Identify ALL meaningful high-level CONCEPTS that group these elements by theme, purpose, or functionality.
+
+IMPORTANT GUIDELINES:
+1. The number of concepts should reflect the content - create as many as needed to comprehensively cover all themes
+2. A single element can belong to multiple concepts if it spans multiple themes
+3. Every element MUST be assigned to at least one concept
+4. Complex elements (like large files with multiple functions) may warrant multiple concept mappings
+5. Create concepts that represent distinct functional areas, not just category labels
 
 ## Output Format (JSON only)
 {
   "concepts": [
     {
-      "label": "Concept Name (2-4 words)",
-      "description": "Clear explanation of what this concept covers and why the elements belong together (2-3 sentences)",
-      "elementIds": ["element-uuid-1", "element-uuid-2"]
+      "label": "Concept Name (2-5 words, descriptive)",
+      "description": "Comprehensive explanation of what this concept covers (4-8 sentences). Include: (1) The core purpose/theme of this concept, (2) Why these elements belong together, (3) Key features or capabilities represented, (4) Any important sub-themes within this concept.",
+      "elementIds": ["element-uuid-1", "element-uuid-2"],
+      "supportingEvidence": [
+        "Direct quote or key phrase from element 1 that demonstrates this concept",
+        "Direct quote or key phrase from element 2 that demonstrates this concept"
+      ]
     }
   ]
 }
@@ -94,7 +219,9 @@ Every element MUST be assigned to at least one concept.
 CRITICAL RULES:
 1. Every element UUID listed above MUST appear in at least one concept's elementIds
 2. Use the exact UUIDs from the elements
-3. Return ONLY valid JSON, no other text`;
+3. Descriptions must be thorough and evidence-based, not generic
+4. supportingEvidence should contain 1-3 SHORT direct quotes (max 50 chars each) from the elements that demonstrate why they belong to this concept
+5. Return ONLY valid JSON, no other text`;
 
     // Log payload size
     const payloadChars = prompt.length;
@@ -107,36 +234,9 @@ CRITICAL RULES:
     
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        console.log(`[${dataset}] Attempt ${attempt}/${MAX_RETRIES}...`);
+        console.log(`[${dataset}] Attempt ${attempt}/${MAX_RETRIES} using ${selectedModel}...`);
         
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 min timeout
-        
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "x-api-key": anthropicKey,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify({
-            model: CLAUDE_MODEL,
-            max_tokens: MAX_OUTPUT_TOKENS,
-            messages: [{ role: "user", content: prompt }],
-          }),
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`[${dataset}] Claude error (attempt ${attempt}):`, response.status, errorText);
-          throw new Error(`Claude API error: ${response.status} - ${errorText.slice(0, 300)}`);
-        }
-
-        const result = await response.json();
-        const rawText = result.content?.[0]?.text || "{}";
+        const rawText = await callLLM(prompt, modelConfig, maxTokens);
         
         console.log(`[${dataset}] Response: ${rawText.length} chars`);
 
@@ -198,7 +298,7 @@ CRITICAL RULES:
         p_token: shareToken,
         p_agent_role: `${dataset}_extractor`,
         p_entry_type: `${dataset}_concepts`,
-        p_content: `Extracted ${concepts.length} concepts from ${elements.length} elements:\n${concepts.map(c => `• ${c.label} (${c.elementIds.length} elements)`).join("\n")}`,
+        p_content: `Extracted ${concepts.length} concepts from ${elements.length} elements using ${selectedModel}:\n${concepts.map(c => `• ${c.label} (${c.elementIds.length} elements): ${c.description.slice(0, 100)}...`).join("\n")}`,
         p_iteration: 1,
         p_confidence: 0.9,
         p_evidence: null,
@@ -216,13 +316,14 @@ CRITICAL RULES:
         p_agent_role: `${dataset}_extractor`,
         p_activity_type: "concept_extraction",
         p_title: `${dataset === "d1" ? "D1" : "D2"} Concept Extraction Complete`,
-        p_content: `Extracted ${concepts.length} concepts from ${elements.length} elements`,
+        p_content: `Extracted ${concepts.length} concepts from ${elements.length} elements using ${selectedModel}`,
         p_metadata: { 
           conceptCount: concepts.length, 
           elementCount: elements.length, 
           dataset,
           totalContentChars,
-          totalEstimatedTokens
+          totalEstimatedTokens,
+          model: selectedModel,
         },
       });
     } catch (e) {
@@ -238,6 +339,7 @@ CRITICAL RULES:
       elementCount: elements.length,
       totalContentChars,
       totalEstimatedTokens,
+      model: selectedModel,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

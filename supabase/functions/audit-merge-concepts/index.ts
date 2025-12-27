@@ -1,6 +1,6 @@
 // Audit Pipeline Phase 2: Merge similar concepts
 // Merges D1↔D1, D1↔D2, D2↔D1, and D2↔D2 duplicates
-// Returns merged concepts plus unmerged ones for each dataset
+// Uses project model settings instead of hardcoded model
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
@@ -9,9 +9,6 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-const CLAUDE_MODEL = "claude-sonnet-4-20250514";
-const MAX_OUTPUT_TOKENS = 16384;
 
 interface D1Concept {
   label: string;
@@ -42,6 +39,111 @@ interface MergeRequest {
   d2Concepts: D2Concept[];
 }
 
+interface ProjectSettings {
+  selected_model: string | null;
+  max_tokens: number | null;
+  thinking_enabled: boolean | null;
+  thinking_budget: number | null;
+}
+
+// Model routing helper
+function getModelConfig(selectedModel: string): { 
+  apiType: "anthropic" | "gemini" | "xai"; 
+  modelName: string;
+  apiKeyEnv: string;
+} {
+  if (selectedModel.startsWith("claude")) {
+    return { apiType: "anthropic", modelName: selectedModel, apiKeyEnv: "ANTHROPIC_API_KEY" };
+  } else if (selectedModel.startsWith("gemini")) {
+    return { apiType: "gemini", modelName: selectedModel, apiKeyEnv: "GEMINI_API_KEY" };
+  } else if (selectedModel.startsWith("grok")) {
+    return { apiType: "xai", modelName: selectedModel, apiKeyEnv: "XAI_API_KEY" };
+  }
+  // Default to Gemini
+  return { apiType: "gemini", modelName: "gemini-2.5-flash", apiKeyEnv: "GEMINI_API_KEY" };
+}
+
+// Call LLM based on model type
+async function callLLM(
+  prompt: string,
+  config: { apiType: "anthropic" | "gemini" | "xai"; modelName: string; apiKeyEnv: string },
+  maxTokens: number
+): Promise<string> {
+  const apiKey = Deno.env.get(config.apiKeyEnv);
+  if (!apiKey) throw new Error(`API key not configured: ${config.apiKeyEnv}`);
+
+  if (config.apiType === "anthropic") {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: config.modelName,
+        max_tokens: maxTokens,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Anthropic API error: ${response.status} - ${errorText.slice(0, 300)}`);
+    }
+
+    const result = await response.json();
+    return result.content?.[0]?.text || "{}";
+  } else if (config.apiType === "gemini") {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${config.modelName}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: maxTokens,
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini API error: ${response.status} - ${errorText.slice(0, 300)}`);
+    }
+
+    const result = await response.json();
+    return result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+  } else {
+    // xAI/Grok
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.modelName,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: maxTokens,
+        temperature: 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`xAI API error: ${response.status} - ${errorText.slice(0, 300)}`);
+    }
+
+    const result = await response.json();
+    return result.choices?.[0]?.message?.content || "{}";
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -60,7 +162,6 @@ serve(async (req) => {
     try {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
 
       const authHeader = req.headers.get("Authorization");
       const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -68,23 +169,33 @@ serve(async (req) => {
       });
 
       const { sessionId, projectId, shareToken, d1Concepts, d2Concepts }: MergeRequest = await req.json();
-      
+
+      // Get project settings for model configuration
+      const { data: project } = await supabase.rpc("get_project_with_token", {
+        p_project_id: projectId,
+        p_token: shareToken,
+      }) as { data: ProjectSettings | null };
+
+      const selectedModel = project?.selected_model || "gemini-2.5-flash";
+      const maxTokens = project?.max_tokens || 16384;
+      const modelConfig = getModelConfig(selectedModel);
+
+      console.log(`[merge] Using model: ${selectedModel}, maxTokens: ${maxTokens}`);
       console.log(`[merge] Starting: ${d1Concepts.length} D1 concepts, ${d2Concepts.length} D2 concepts`);
       
       await sendSSE("progress", { 
         phase: "concept_merge", 
-        message: `Analyzing ${d1Concepts.length} D1 + ${d2Concepts.length} D2 concepts for merging...`, 
+        message: `Analyzing ${d1Concepts.length} D1 + ${d2Concepts.length} D2 concepts for merging using ${selectedModel}...`, 
         progress: 0 
       });
 
-      // Build the prompt - ONLY pass labels and descriptions, NOT the D1/D2 IDs
-      // The IDs will be re-attached after the LLM identifies which concepts to merge
+      // Build the prompt - include element counts for context
       const d1ConceptsText = d1Concepts.map((c, i) => 
-        `D1-${i + 1}: "${c.label}"\nDescription: ${c.description}`
+        `D1-${i + 1}: "${c.label}" (${c.d1Ids.length} elements)\nDescription: ${c.description}`
       ).join("\n\n");
 
       const d2ConceptsText = d2Concepts.map((c, i) => 
-        `D2-${i + 1}: "${c.label}"\nDescription: ${c.description}`
+        `D2-${i + 1}: "${c.label}" (${c.d2Ids.length} elements)\nDescription: ${c.description}`
       ).join("\n\n");
 
       const prompt = `You are merging concepts from two datasets. Your job is to identify concepts that are identical or nearly identical and should be merged.
@@ -142,30 +253,9 @@ Return ONLY the JSON object, no other text.`;
       const payloadChars = prompt.length;
       console.log(`[merge] Prompt: ${payloadChars.toLocaleString()} chars (~${Math.ceil(payloadChars/4).toLocaleString()} tokens)`);
 
-      await sendSSE("progress", { phase: "concept_merge", message: "Calling LLM for concept matching...", progress: 20 });
+      await sendSSE("progress", { phase: "concept_merge", message: `Calling ${selectedModel} for concept matching...`, progress: 20 });
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "x-api-key": anthropicKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: CLAUDE_MODEL,
-          max_tokens: MAX_OUTPUT_TOKENS,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("[merge] Claude API error:", response.status, errorText);
-        throw new Error(`Claude API error: ${response.status} - ${errorText.slice(0, 200)}`);
-      }
-
-      const result = await response.json();
-      const rawText = result.content?.[0]?.text || "{}";
+      const rawText = await callLLM(prompt, modelConfig, maxTokens);
       
       console.log(`[merge] Response: ${rawText.length} chars`);
       
@@ -272,7 +362,7 @@ Return ONLY the JSON object, no other text.`;
         p_token: shareToken,
         p_agent_role: "concept_merger",
         p_entry_type: "merge_results",
-        p_content: `Concept Merge Results:\n- Total merged concepts: ${mergedConcepts.length}\n  - D1↔D1 merges: ${d1OnlyMerges}\n  - D2↔D2 merges: ${d2OnlyMerges}\n  - D1↔D2 merges: ${crossMerges}\n- D1-only (gaps): ${unmergedD1Concepts.length}\n- D2-only (potential orphans): ${unmergedD2Concepts.length}\n\nMerged:\n${mergedConcepts.map(c => `• ${c.mergedLabel} (${c.d1Ids.length} D1, ${c.d2Ids.length} D2)`).join("\n")}`,
+        p_content: `Concept Merge Results (using ${selectedModel}):\n- Total merged concepts: ${mergedConcepts.length}\n  - D1↔D1 merges: ${d1OnlyMerges}\n  - D2↔D2 merges: ${d2OnlyMerges}\n  - D1↔D2 merges: ${crossMerges}\n- D1-only (gaps): ${unmergedD1Concepts.length}\n- D2-only (potential orphans): ${unmergedD2Concepts.length}\n\nMerged:\n${mergedConcepts.map(c => `• ${c.mergedLabel} (${c.d1Ids.length} D1, ${c.d2Ids.length} D2)`).join("\n")}`,
         p_iteration: 2,
         p_confidence: 0.85,
         p_evidence: null,
@@ -286,14 +376,15 @@ Return ONLY the JSON object, no other text.`;
         p_agent_role: "concept_merger",
         p_activity_type: "concept_merge",
         p_title: `Concept Merge Complete`,
-        p_content: `Merged ${mergedConcepts.length} concepts (${d1OnlyMerges} D1↔D1, ${d2OnlyMerges} D2↔D2, ${crossMerges} D1↔D2), ${unmergedD1Concepts.length} D1-only gaps, ${unmergedD2Concepts.length} D2-only orphans`,
+        p_content: `Merged ${mergedConcepts.length} concepts (${d1OnlyMerges} D1↔D1, ${d2OnlyMerges} D2↔D2, ${crossMerges} D1↔D2), ${unmergedD1Concepts.length} D1-only gaps, ${unmergedD2Concepts.length} D2-only orphans using ${selectedModel}`,
         p_metadata: { 
           mergedCount: mergedConcepts.length,
           d1OnlyMerges,
           d2OnlyMerges,
           crossMerges,
           d1OnlyCount: unmergedD1Concepts.length,
-          d2OnlyCount: unmergedD2Concepts.length
+          d2OnlyCount: unmergedD2Concepts.length,
+          model: selectedModel
         },
       });
 

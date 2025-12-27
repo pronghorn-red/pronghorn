@@ -1,6 +1,6 @@
 // Audit Pipeline Phase 3: Build Tesseract cells
 // Analyzes each concept from the graph for D1-D2 alignment
-// Returns JSON response (not SSE) for reliability
+// Uses project model settings instead of hardcoded model
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
@@ -41,6 +41,111 @@ interface TesseractRequest {
   concepts: ConceptForTesseract[];
 }
 
+interface ProjectSettings {
+  selected_model: string | null;
+  max_tokens: number | null;
+  thinking_enabled: boolean | null;
+  thinking_budget: number | null;
+}
+
+// Model routing helper
+function getModelConfig(selectedModel: string): { 
+  apiType: "anthropic" | "gemini" | "xai"; 
+  modelName: string;
+  apiKeyEnv: string;
+} {
+  if (selectedModel.startsWith("claude")) {
+    return { apiType: "anthropic", modelName: selectedModel, apiKeyEnv: "ANTHROPIC_API_KEY" };
+  } else if (selectedModel.startsWith("gemini")) {
+    return { apiType: "gemini", modelName: selectedModel, apiKeyEnv: "GEMINI_API_KEY" };
+  } else if (selectedModel.startsWith("grok")) {
+    return { apiType: "xai", modelName: selectedModel, apiKeyEnv: "XAI_API_KEY" };
+  }
+  // Default to Gemini Flash for speed
+  return { apiType: "gemini", modelName: "gemini-2.5-flash", apiKeyEnv: "GEMINI_API_KEY" };
+}
+
+// Call LLM based on model type
+async function callLLM(
+  prompt: string,
+  config: { apiType: "anthropic" | "gemini" | "xai"; modelName: string; apiKeyEnv: string },
+  maxTokens: number
+): Promise<string> {
+  const apiKey = Deno.env.get(config.apiKeyEnv);
+  if (!apiKey) throw new Error(`API key not configured: ${config.apiKeyEnv}`);
+
+  if (config.apiType === "anthropic") {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: config.modelName,
+        max_tokens: maxTokens,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Anthropic API error: ${response.status} - ${errorText.slice(0, 300)}`);
+    }
+
+    const result = await response.json();
+    return result.content?.[0]?.text || "{}";
+  } else if (config.apiType === "gemini") {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${config.modelName}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: maxTokens,
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini API error: ${response.status} - ${errorText.slice(0, 300)}`);
+    }
+
+    const result = await response.json();
+    return result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+  } else {
+    // xAI/Grok
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.modelName,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: maxTokens,
+        temperature: 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`xAI API error: ${response.status} - ${errorText.slice(0, 300)}`);
+    }
+
+    const result = await response.json();
+    return result.choices?.[0]?.message?.content || "{}";
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -49,7 +154,6 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const geminiKey = Deno.env.get("GEMINI_API_KEY")!;
 
     const authHeader = req.headers.get("Authorization");
     const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -57,6 +161,18 @@ serve(async (req) => {
     });
 
     const { sessionId, projectId, shareToken, concepts }: TesseractRequest = await req.json();
+
+    // Get project settings for model configuration
+    const { data: project } = await supabase.rpc("get_project_with_token", {
+      p_project_id: projectId,
+      p_token: shareToken,
+    }) as { data: ProjectSettings | null };
+
+    const selectedModel = project?.selected_model || "gemini-2.5-flash";
+    const maxTokens = project?.max_tokens || 8192;
+    const modelConfig = getModelConfig(selectedModel);
+
+    console.log(`[tesseract] Using model: ${selectedModel}, maxTokens: ${maxTokens}`);
     
     const totalConcepts = concepts.length;
     console.log(`[tesseract] Received ${totalConcepts} concepts for analysis`);
@@ -131,31 +247,7 @@ If there are no D2 elements, return polarity -1.0 with rationale explaining no i
 Return ONLY the JSON object.`;
 
       try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: prompt }] }],
-              generationConfig: {
-                temperature: 0.3,
-                maxOutputTokens: 4096, // Increased for full rationale
-                responseMimeType: "application/json",
-              },
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`[tesseract] Gemini error for concept ${concept.conceptLabel}:`, errorText);
-          errors.push(`${concept.conceptLabel}: Gemini API error - ${response.status}`);
-          continue;
-        }
-
-        const result = await response.json();
-        const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+        const rawText = await callLLM(prompt, modelConfig, maxTokens);
 
         let parsed: { polarity: number; rationale: string; d1Coverage: string; d2Implementation: string; gaps: string[] };
         try {
@@ -202,7 +294,8 @@ Return ONLY the JSON object.`;
             d1Coverage: cell.d1Coverage, 
             d2Implementation: cell.d2Implementation,
             d1Count: concept.d1Elements.length,
-            d2Count: concept.d2Elements.length
+            d2Count: concept.d2Elements.length,
+            model: selectedModel
           },
           p_contributing_agents: ["tesseract_analyzer"],
         });
@@ -221,7 +314,7 @@ Return ONLY the JSON object.`;
       ? tesseractCells.reduce((sum, c) => sum + c.polarity, 0) / tesseractCells.length 
       : 0;
 
-    console.log(`[tesseract] Complete: ${tesseractCells.length} cells, avgPolarity=${avgPolarity.toFixed(2)}`);
+    console.log(`[tesseract] Complete: ${tesseractCells.length} cells, avgPolarity=${avgPolarity.toFixed(2)}, model=${selectedModel}`);
 
     // Write summary to blackboard (only if we processed cells)
     if (tesseractCells.length > 0) {
@@ -230,7 +323,7 @@ Return ONLY the JSON object.`;
         p_token: shareToken,
         p_agent_role: "tesseract_analyzer",
         p_entry_type: "tesseract_cell",
-        p_content: `Analyzed: ${tesseractCells[0].conceptLabel} → polarity ${tesseractCells[0].polarity.toFixed(2)}\n${tesseractCells[0].rationale}`,
+        p_content: `Analyzed: ${tesseractCells[0].conceptLabel} → polarity ${tesseractCells[0].polarity.toFixed(2)} (using ${selectedModel})\n${tesseractCells[0].rationale}`,
         p_iteration: 3,
         p_confidence: 0.9,
         p_evidence: null,
@@ -247,7 +340,8 @@ Return ONLY the JSON object.`;
         p_metadata: { 
           conceptLabel: tesseractCells[0].conceptLabel,
           polarity: tesseractCells[0].polarity,
-          gapCount: tesseractCells[0].gaps.length
+          gapCount: tesseractCells[0].gaps.length,
+          model: selectedModel
         },
       });
     }
@@ -257,7 +351,7 @@ Return ONLY the JSON object.`;
       cells: tesseractCells, // Full cells with complete rationale
       avgPolarity,
       errors: errors.length > 0 ? errors : undefined,
-      message: `Analyzed ${tesseractCells.length} concept(s)`
+      message: `Analyzed ${tesseractCells.length} concept(s) using ${selectedModel}`
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
