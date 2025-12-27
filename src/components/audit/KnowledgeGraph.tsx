@@ -102,7 +102,7 @@ const edgeTypeStyles: Record<string, { color: string; dashArray?: string }> = {
   conflicts_with: { color: "#ef4444" },
   supports: { color: "#3b82f6" },
   covers: { color: "#8b5cf6" },
-  anchors: { color: "#8b5cf620", dashArray: "2,4" }, // Very faint for anchor lines
+  anchors: { color: "#8b5cf6" }, // Solid violet for anchor-to-concept lines
 };
 
 // Color scheme for agent roles
@@ -223,17 +223,17 @@ export function KnowledgeGraph({
     // Debug: log what node types we have
     console.log("Graph nodes by type:", nodes.map(n => ({ id: n.id.slice(0, 8), type: n.node_type, label: n.label?.slice(0, 20) })));
     
-    // Anchor ALL nodes, not just concepts - prevents D1/D2 nodes from flying off
-    const allNonAnchorNodes = nodes;
-    console.log("Total nodes to anchor:", allNonAnchorNodes.length);
+    // Only anchor CONCEPT nodes - D1/D2 elements connect through concepts via derived_from edges
+    const conceptNodes = nodes.filter(n => n.node_type === "concept");
+    console.log("Concept nodes to anchor:", conceptNodes.length);
     
-    const anchorEdges: GraphEdge[] = allNonAnchorNodes.map(n => ({
+    const anchorEdges: GraphEdge[] = conceptNodes.map(n => ({
       id: `anchor-to-${n.id}`,
       source: "__project_anchor__",
       target: n.id,
       label: null,
       edge_type: "anchors",
-      weight: 0.05, // Very low weight for subtle anchoring
+      weight: 0.8, // Strong weight for good tension
       created_by_agent: "system",
     }));
 
@@ -351,7 +351,11 @@ export function KnowledgeGraph({
       .join(
         enter => enter.append("line")
           .attr("stroke", (d) => edgeTypeStyles[d.edge_type]?.color || "#6b728080")
-          .attr("stroke-width", (d) => d.edge_type === "derived_from" ? 1.5 : Math.max(1, d.weight * 2))
+          .attr("stroke-width", (d) => {
+            if (d.edge_type === "anchors") return 3; // Thick lines for anchor-to-concept
+            if (d.edge_type === "derived_from") return 1.5;
+            return Math.max(1, d.weight * 2);
+          })
           .attr("stroke-dasharray", (d) => edgeTypeStyles[d.edge_type]?.dashArray || "")
           .attr("marker-end", "url(#arrow)"),
         update => update,
