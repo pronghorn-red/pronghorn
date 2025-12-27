@@ -3810,41 +3810,77 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      get_audit_tesseract_cells_with_token: {
-        Args: {
-          p_limit?: number
-          p_polarity_max?: number
-          p_polarity_min?: number
-          p_session_id: string
-          p_token?: string
-          p_x_element_id?: string
-          p_y_step_max?: number
-          p_y_step_min?: number
-        }
-        Returns: {
-          contributing_agents: string[] | null
-          created_at: string
-          evidence_refs: Json | null
-          evidence_summary: string | null
-          id: string
-          session_id: string
-          updated_at: string
-          x_element_id: string
-          x_element_label: string | null
-          x_element_type: string
-          x_index: number
-          y_step: number
-          y_step_label: string | null
-          z_criticality: string | null
-          z_polarity: number
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "audit_tesseract_cells"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
+      get_audit_tesseract_cells_with_token:
+        | {
+            Args: {
+              p_limit?: number
+              p_polarity_max?: number
+              p_polarity_min?: number
+              p_session_id: string
+              p_token?: string
+              p_x_element_id?: string
+              p_y_step_max?: number
+              p_y_step_min?: number
+            }
+            Returns: {
+              contributing_agents: string[] | null
+              created_at: string
+              evidence_refs: Json | null
+              evidence_summary: string | null
+              id: string
+              session_id: string
+              updated_at: string
+              x_element_id: string
+              x_element_label: string | null
+              x_element_type: string
+              x_index: number
+              y_step: number
+              y_step_label: string | null
+              z_criticality: string | null
+              z_polarity: number
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "audit_tesseract_cells"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
+        | {
+            Args: {
+              p_limit?: number
+              p_polarity_max?: number
+              p_polarity_min?: number
+              p_session_id: string
+              p_token?: string
+              p_x_element_id?: string
+              p_y_step_max?: number
+              p_y_step_min?: number
+            }
+            Returns: {
+              contributing_agents: string[] | null
+              created_at: string
+              evidence_refs: Json | null
+              evidence_summary: string | null
+              id: string
+              session_id: string
+              updated_at: string
+              x_element_id: string
+              x_element_label: string | null
+              x_element_type: string
+              x_index: number
+              y_step: number
+              y_step_label: string | null
+              z_criticality: string | null
+              z_polarity: number
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "audit_tesseract_cells"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
       get_audit_tesseract_summary_with_token: {
         Args: { p_session_id: string; p_token?: string }
         Returns: Json
