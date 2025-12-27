@@ -189,7 +189,7 @@ serve(async (req) => {
         progress: 0 
       });
 
-      // Build the prompt - include element counts for context
+      // Build the prompt - include element counts and source groupings for context
       const d1ConceptsText = d1Concepts.map((c, i) => 
         `D1-${i + 1}: "${c.label}" (${c.d1Ids.length} elements)\nDescription: ${c.description}`
       ).join("\n\n");
@@ -198,14 +198,59 @@ serve(async (req) => {
         `D2-${i + 1}: "${c.label}" (${c.d2Ids.length} elements)\nDescription: ${c.description}`
       ).join("\n\n");
 
-      const prompt = `You are merging concepts from two datasets. Your job is to identify concepts that are identical or nearly identical and should be merged.
+      // Build source element groupings to help identify concepts that should be merged
+      const d1SourceGroups = new Map<string, string[]>();
+      d1Concepts.forEach(c => {
+        c.d1Ids.forEach(id => {
+          if (!d1SourceGroups.has(id)) d1SourceGroups.set(id, []);
+          d1SourceGroups.get(id)!.push(c.label);
+        });
+      });
+      
+      const d2SourceGroups = new Map<string, string[]>();
+      d2Concepts.forEach(c => {
+        c.d2Ids.forEach(id => {
+          if (!d2SourceGroups.has(id)) d2SourceGroups.set(id, []);
+          d2SourceGroups.get(id)!.push(c.label);
+        });
+      });
 
-IMPORTANT: Check for duplicates WITHIN each dataset as well as ACROSS datasets:
-- D1 with D1 (duplicates within D1)
-- D1 with D2 (cross-dataset duplicates)  
-- D2 with D2 (duplicates within D2)
+      // Find source elements with multiple concepts (strong merge candidates)
+      const sharedD1Sources = Array.from(d1SourceGroups.entries())
+        .filter(([_, labels]) => labels.length > 1)
+        .map(([id, labels]) => `  • Source "${id.slice(0, 50)}..." → [${labels.map(l => `"${l}"`).join(", ")}]`);
+      
+      const sharedD2Sources = Array.from(d2SourceGroups.entries())
+        .filter(([_, labels]) => labels.length > 1)
+        .map(([id, labels]) => `  • Source "${id.slice(0, 50)}..." → [${labels.map(l => `"${l}"`).join(", ")}]`);
 
-## D1 Concepts (from requirements/source of truth)
+      const sourceGroupingSection = (sharedD1Sources.length > 0 || sharedD2Sources.length > 0) 
+        ? `## Shared Source Elements (STRONG MERGE CANDIDATES)
+These concepts were extracted from the SAME source element and should typically be merged into ONE concept:
+
+${sharedD1Sources.length > 0 ? `### D1 sources with multiple concepts:\n${sharedD1Sources.join("\n")}` : ""}
+${sharedD2Sources.length > 0 ? `### D2 sources with multiple concepts:\n${sharedD2Sources.join("\n")}` : ""}
+
+` : "";
+
+      // Calculate target concept count for guidance
+      const totalInputConcepts = d1Concepts.length + d2Concepts.length;
+      const totalSourceElements = new Set([...d1Concepts.flatMap(c => c.d1Ids), ...d2Concepts.flatMap(c => c.d2Ids)]).size;
+      const targetConceptRatio = Math.max(Math.ceil(totalSourceElements / 4), Math.ceil(totalInputConcepts / 3));
+
+      const prompt = `You are merging concepts from two datasets. Your job is to AGGRESSIVELY identify and merge concepts that are identical, similar, or closely related.
+
+**CRITICAL**: You are generating TOO MANY concepts. Be MORE AGGRESSIVE in merging. 
+- Current input: ${totalInputConcepts} concepts from ${totalSourceElements} source elements
+- Target output: approximately ${targetConceptRatio} unified concepts (aim for 1 concept per 3-5 source elements)
+
+MERGE PRIORITY (highest to lowest):
+1. Concepts from the SAME source element → ALWAYS merge (they're different aspects of one thing)
+2. Concepts with similar names → merge (e.g., "Agent Data", "Agent Management", "Agent Config" → "Agent System")
+3. Concepts covering the same functional domain → merge (e.g., "Auth", "Login", "Session" → "Authentication")
+4. Concepts with overlapping descriptions → merge
+
+${sourceGroupingSection}## D1 Concepts (from requirements/source of truth)
 
 ${d1ConceptsText || "(none)"}
 
@@ -215,16 +260,19 @@ ${d2ConceptsText || "(none)"}
 
 ## Your Task
 
-1. First, identify D1 concepts that are duplicates of other D1 concepts - merge these together
-2. Then, identify D2 concepts that are duplicates of other D2 concepts - merge these together  
-3. Finally, identify D1 concepts that match D2 concepts - merge these across datasets
+BE AGGRESSIVE - merge liberally. It's better to have fewer, broader concepts than many overlapping ones.
+
+1. First, merge concepts from the same source element (see SHARED SOURCE ELEMENTS above)
+2. Then, merge concepts with similar names or overlapping domains
+3. Finally, cross-match D1↔D2 for the same functional areas
 
 Concepts should be merged if they:
-- Have the same or similar names (e.g., "Authentication" and "User Authentication")
-- Cover the same functional area (e.g., "Login Flow" and "Auth Handlers")
+- Come from the same source element (ALWAYS merge these)
+- Have similar names (e.g., "Agent Data Management", "Agent Config", "Agent Control" → "Agent System")
+- Cover related functionality (e.g., "API Calls", "HTTP Requests", "Network" → "Network/API")
 - Describe the same theme even with different wording
 
-DO NOT merge concepts that are genuinely different functional areas.
+Only keep concepts separate if they are genuinely UNRELATED functional areas.
 
 ## Output Format
 
@@ -245,8 +293,8 @@ Return a JSON object with this exact structure (use labels to identify concepts,
 Notes:
 - mergedConcepts: concepts that were merged (can be D1+D1, D2+D2, or D1+D2 combinations)
 - Use the EXACT labels from the input concepts so we can match them back
-- unmergedD1Labels: labels of D1 concepts with NO matches anywhere
-- unmergedD2Labels: labels of D2 concepts with NO matches anywhere
+- unmergedD1Labels: labels of D1 concepts with NO matches anywhere (should be RARE)
+- unmergedD2Labels: labels of D2 concepts with NO matches anywhere (should be RARE)
 
 Return ONLY the JSON object, no other text.`;
 

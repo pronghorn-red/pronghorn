@@ -233,7 +233,7 @@ export function KnowledgeGraph({
       target: n.id,
       label: null,
       edge_type: "anchors",
-      weight: 0.8, // Strong weight for good tension
+      weight: 0.1, // Gentle tension
       created_by_agent: "system",
     }));
 
@@ -337,8 +337,9 @@ export function KnowledgeGraph({
           .distance(100)
           .strength((d) => d.weight * 0.5)
       )
-      .force("charge", d3.forceManyBody().strength(-300))
+      .force("charge", d3.forceManyBody().strength(-200))
       .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("radial", d3.forceRadial(200, width / 2, height / 2).strength(0.05))
       .force("collision", d3.forceCollide().radius(40));
 
     simulationRef.current = simulation;
