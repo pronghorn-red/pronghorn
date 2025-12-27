@@ -404,6 +404,9 @@ export default function Audit() {
             chunkSize: config.chunkSize,
             batchSize: config.batchSize,
             mappingMode: config.mappingMode,
+            // Pass enhanced sort settings
+            enhancedSortEnabled: config.enhancedSortEnabled,
+            enhancedSortActions: config.enhancedSortActions,
             // Pass step mode
             stepMode,
           });
