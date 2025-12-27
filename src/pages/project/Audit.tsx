@@ -997,7 +997,7 @@ export default function Audit() {
                     cells={pipelineResults?.tesseractCells?.length ? pipelineResults.tesseractCells.map((c, idx) => ({
                       id: c.id,
                       session_id: session.id,
-                      x_element_id: c.d1ElementIds[0] || `concept-${idx}`,
+                      x_element_id: c.id,  // Use unique cell ID, not d1ElementIds[0]
                       x_element_label: c.conceptLabel,
                       x_element_type: "concept",
                       x_index: idx,

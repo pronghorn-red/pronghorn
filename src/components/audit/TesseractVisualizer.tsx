@@ -10,7 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Grid3X3, FileJson, FileSpreadsheet, Search, MessageSquare } from "lucide-react";
+import { Grid3X3, FileJson, FileSpreadsheet, Search, MessageSquare, ArrowUpDown, ArrowUp, ArrowDown, List, LayoutList } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type TesseractCell = Database["public"]["Tables"]["audit_tesseract_cells"]["Row"];
@@ -62,6 +62,8 @@ export function TesseractVisualizer({
     polarity: number;
     rationale: string | null;
   } | null>(null);
+  const [sortOrder, setSortOrder] = useState<'none' | 'high-to-low' | 'low-to-high'>('none');
+  const [collapsedItems, setCollapsedItems] = useState(true);
 
   // Build column-based structure from cells
   const columns = useMemo<ConceptColumn[]>(() => {
@@ -69,7 +71,8 @@ export function TesseractVisualizer({
 
     cells.forEach((cell, idx) => {
       const conceptLabel = cell.x_element_label || `Concept ${idx + 1}`;
-      const conceptId = cell.x_element_id;
+      // Use cell.id as primary key (unique), fall back to x_element_id
+      const conceptId = cell.id || cell.x_element_id;
 
       if (!columnMap.has(conceptId)) {
         // Parse evidence_refs to get D1/D2 element IDs
@@ -97,6 +100,16 @@ export function TesseractVisualizer({
 
     return Array.from(columnMap.values());
   }, [cells]);
+
+  // Sort columns based on sortOrder
+  const sortedColumns = useMemo(() => {
+    if (sortOrder === 'high-to-low') {
+      return [...columns].sort((a, b) => b.polarity - a.polarity);
+    } else if (sortOrder === 'low-to-high') {
+      return [...columns].sort((a, b) => a.polarity - b.polarity);
+    }
+    return columns;
+  }, [columns, sortOrder]);
 
   // Get polarity display info
   const getPolarityInfo = (polarity: number) => {
@@ -223,6 +236,57 @@ export function TesseractVisualizer({
             <div className="flex items-center gap-1 flex-wrap">
               {cells.length > 0 && (
                 <>
+                  {/* Sort controls */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant={sortOrder === 'high-to-low' ? 'default' : 'outline'} 
+                          size="sm" 
+                          className="h-8"
+                          onClick={() => setSortOrder(sortOrder === 'high-to-low' ? 'none' : 'high-to-low')}
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Sort: Highest alignment first</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant={sortOrder === 'low-to-high' ? 'default' : 'outline'} 
+                          size="sm" 
+                          className="h-8"
+                          onClick={() => setSortOrder(sortOrder === 'low-to-high' ? 'none' : 'low-to-high')}
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Sort: Lowest alignment first</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  
+                  {/* Collapse toggle */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant={collapsedItems ? 'default' : 'outline'} 
+                          size="sm" 
+                          className="h-8"
+                          onClick={() => setCollapsedItems(!collapsedItems)}
+                        >
+                          {collapsedItems ? <List className="h-4 w-4" /> : <LayoutList className="h-4 w-4" />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{collapsedItems ? 'Showing counts only' : 'Showing full items'}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  
+                  <div className="w-px h-6 bg-border mx-1" />
+                  
                   <Button variant="outline" size="sm" className="h-8" onClick={exportAsJson}>
                     <FileJson className="h-4 w-4 sm:mr-1" />
                     <span className="hidden sm:inline">JSON</span>
@@ -268,17 +332,19 @@ export function TesseractVisualizer({
           ) : (
             <div className="w-full overflow-x-auto">
               <div className="flex gap-4 pb-4 pr-4" style={{ minWidth: 'max-content' }}>
-                {columns.map((column) => {
+                {sortedColumns.map((column) => {
                   const polarityInfo = getPolarityInfo(column.polarity);
                   const d1Items = getD1Items(column.d1ElementIds);
                   const d2Items = getD2Items(column.d2ElementIds);
                   const isSelected = selectedColumn === column.conceptId;
+                  const d1Count = d1Items.length || column.d1ElementIds.length;
+                  const d2Count = d2Items.length || column.d2ElementIds.length;
 
                   return (
                     <div
                       key={column.conceptId}
                       className={`
-                        min-w-[220px] max-w-[280px] flex-shrink-0 border rounded-lg overflow-hidden
+                        min-w-[180px] max-w-[280px] flex-shrink-0 border rounded-lg overflow-hidden
                         transition-all duration-200 cursor-pointer
                         ${isSelected 
                           ? "ring-2 ring-primary border-primary shadow-lg" 
@@ -320,88 +386,92 @@ export function TesseractVisualizer({
 
                       {/* D1 Items Section */}
                       <div className="p-3 border-b">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full bg-blue-500" />
                           <span className="text-xs font-medium text-blue-600">{d1Label}</span>
                           <Badge variant="secondary" className="text-[10px] h-4 px-1 ml-auto">
-                            {d1Items.length || column.d1ElementIds.length}
+                            {d1Count}
                           </Badge>
                         </div>
-                        <div className="space-y-1">
-                          {d1Items.length > 0 ? (
-                            d1Items.map((item) => (
-                              <TooltipProvider key={item.id}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="text-xs px-2 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-300 rounded truncate cursor-help">
-                                      {item.label}
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-sm">
-                                    <p className="font-medium">{item.label}</p>
-                                    <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap line-clamp-4">
-                                      {item.content.slice(0, 200)}...
-                                    </p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            ))
-                          ) : column.d1ElementIds.length > 0 ? (
-                            column.d1ElementIds.slice(0, 3).map((id) => (
-                              <div 
-                                key={id} 
-                                className="text-xs px-2 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-300 rounded truncate"
-                              >
-                                {id.slice(0, 20)}...
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-xs text-muted-foreground italic">No items</p>
-                          )}
-                        </div>
+                        {!collapsedItems && (
+                          <div className="space-y-1 mt-2">
+                            {d1Items.length > 0 ? (
+                              d1Items.map((item) => (
+                                <TooltipProvider key={item.id}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="text-xs px-2 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-300 rounded truncate cursor-help">
+                                        {item.label}
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-sm">
+                                      <p className="font-medium">{item.label}</p>
+                                      <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap line-clamp-4">
+                                        {item.content.slice(0, 200)}...
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ))
+                            ) : column.d1ElementIds.length > 0 ? (
+                              column.d1ElementIds.slice(0, 3).map((id) => (
+                                <div 
+                                  key={id} 
+                                  className="text-xs px-2 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-300 rounded truncate"
+                                >
+                                  {id.slice(0, 20)}...
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-xs text-muted-foreground italic">No items</p>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* D2 Items Section */}
                       <div className="p-3 border-b">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full bg-green-500" />
                           <span className="text-xs font-medium text-green-600">{d2Label}</span>
                           <Badge variant="secondary" className="text-[10px] h-4 px-1 ml-auto">
-                            {d2Items.length || column.d2ElementIds.length}
+                            {d2Count}
                           </Badge>
                         </div>
-                        <div className="space-y-1">
-                          {d2Items.length > 0 ? (
-                            d2Items.map((item) => (
-                              <TooltipProvider key={item.id}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="text-xs px-2 py-1 bg-green-500/10 text-green-700 dark:text-green-300 rounded truncate cursor-help">
-                                      {item.label}
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-sm">
-                                    <p className="font-medium">{item.label}</p>
-                                    <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap line-clamp-4">
-                                      {item.content.slice(0, 200)}...
-                                    </p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            ))
-                          ) : column.d2ElementIds.length > 0 ? (
-                            column.d2ElementIds.slice(0, 3).map((id) => (
-                              <div 
-                                key={id} 
-                                className="text-xs px-2 py-1 bg-green-500/10 text-green-700 dark:text-green-300 rounded truncate"
-                              >
-                                {id.slice(0, 20)}...
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-xs text-muted-foreground italic">No items</p>
-                          )}
-                        </div>
+                        {!collapsedItems && (
+                          <div className="space-y-1 mt-2">
+                            {d2Items.length > 0 ? (
+                              d2Items.map((item) => (
+                                <TooltipProvider key={item.id}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="text-xs px-2 py-1 bg-green-500/10 text-green-700 dark:text-green-300 rounded truncate cursor-help">
+                                        {item.label}
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-sm">
+                                      <p className="font-medium">{item.label}</p>
+                                      <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap line-clamp-4">
+                                        {item.content.slice(0, 200)}...
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ))
+                            ) : column.d2ElementIds.length > 0 ? (
+                              column.d2ElementIds.slice(0, 3).map((id) => (
+                                <div 
+                                  key={id} 
+                                  className="text-xs px-2 py-1 bg-green-500/10 text-green-700 dark:text-green-300 rounded truncate"
+                                >
+                                  {id.slice(0, 20)}...
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-xs text-muted-foreground italic">No items</p>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Deep Dive Button */}
