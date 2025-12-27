@@ -149,3 +149,6 @@ verify_jwt = false
 
 [functions.audit-generate-venn]
 verify_jwt = false
+
+[functions.audit-enhanced-sort]
+verify_jwt = false

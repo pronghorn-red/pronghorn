@@ -34,6 +34,7 @@ const PHASE_ICONS: Record<PipelinePhase, React.ReactNode> = {
   extracting_d2: <Brain className="h-4 w-4" />,
   merging_concepts: <GitMerge className="h-4 w-4" />,
   building_graph: <Network className="h-4 w-4" />,
+  enhanced_sort: <GitMerge className="h-4 w-4" />,
   building_tesseract: <Grid3X3 className="h-4 w-4" />,
   generating_venn: <CircleDot className="h-4 w-4" />,
   completed: <CheckCircle2 className="h-4 w-4" />,

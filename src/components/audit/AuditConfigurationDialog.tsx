@@ -32,7 +32,10 @@ import {
   FileCode,
   Database,
   Info,
+  Shuffle,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ProjectSelector, ProjectSelectionResult } from "@/components/project/ProjectSelector";
 
 // Audit processing settings
@@ -48,6 +51,12 @@ interface AuditConfigurationDialogProps {
   isLoading?: boolean;
   projectId: string;
   shareToken: string | null;
+}
+
+export interface EnhancedSortActions {
+  move: boolean;
+  clone: boolean;
+  create: boolean;
 }
 
 export interface AuditConfiguration {
@@ -66,6 +75,9 @@ export interface AuditConfiguration {
   chunkSize: ChunkSize;
   batchSize: BatchSize;
   mappingMode: MappingMode;
+  // Enhanced sort settings
+  enhancedSortEnabled?: boolean;
+  enhancedSortActions?: EnhancedSortActions;
 }
 
 
@@ -143,6 +155,14 @@ export function AuditConfigurationDialog({
   const [batchSize, setBatchSize] = useState<BatchSize>("unlimited");
   const [mappingMode, setMappingMode] = useState<MappingMode>("one_to_one");
   
+  // Enhanced Sort settings
+  const [enhancedSortEnabled, setEnhancedSortEnabled] = useState(false);
+  const [enhancedSortActions, setEnhancedSortActions] = useState<EnhancedSortActions>({
+    move: true,
+    clone: true,
+    create: true,
+  });
+  
   // ProjectSelector state
   const [dataset1Selection, setDataset1Selection] = useState<ProjectSelectionResult | null>(null);
   const [dataset2Selection, setDataset2Selection] = useState<ProjectSelectionResult | null>(null);
@@ -185,6 +205,9 @@ export function AuditConfigurationDialog({
       chunkSize,
       batchSize,
       mappingMode,
+      // Enhanced sort
+      enhancedSortEnabled,
+      enhancedSortActions: enhancedSortEnabled ? enhancedSortActions : undefined,
     };
     onStartAudit(config);
   };
@@ -378,6 +401,63 @@ export function AuditConfigurationDialog({
                     {consolidationLevel === "medium" && "Thematic similarity - balances precision with broader grouping"}
                     {consolidationLevel === "high" && "Aggressive consolidation - fewer, broader concept categories"}
                   </p>
+
+                  {/* Enhanced Sort Section */}
+                  <div className="border-t pt-4 mt-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Shuffle className="h-4 w-4 text-muted-foreground" />
+                        <Label className="text-sm font-medium">Enhanced Sort (Post-Merge)</Label>
+                      </div>
+                      <Switch 
+                        checked={enhancedSortEnabled} 
+                        onCheckedChange={setEnhancedSortEnabled} 
+                      />
+                    </div>
+                    
+                    {enhancedSortEnabled && (
+                      <div className="pl-6 space-y-3 animate-in slide-in-from-top-2 duration-200">
+                        <p className="text-xs text-muted-foreground">
+                          Individually review each element's categorization after merge. This validates placements and allows adjustments.
+                        </p>
+                        <div className="flex flex-wrap gap-4">
+                          <label className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox 
+                              checked={enhancedSortActions.move} 
+                              onCheckedChange={(checked) => 
+                                setEnhancedSortActions(prev => ({ ...prev, move: !!checked }))
+                              } 
+                            />
+                            <span>Move</span>
+                            <span className="text-xs text-muted-foreground">(relocate to better fit)</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox 
+                              checked={enhancedSortActions.clone} 
+                              onCheckedChange={(checked) => 
+                                setEnhancedSortActions(prev => ({ ...prev, clone: !!checked }))
+                              } 
+                            />
+                            <span>Clone</span>
+                            <span className="text-xs text-muted-foreground">(link to multiple)</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox 
+                              checked={enhancedSortActions.create} 
+                              onCheckedChange={(checked) => 
+                                setEnhancedSortActions(prev => ({ ...prev, create: !!checked }))
+                              } 
+                            />
+                            <span>Create</span>
+                            <span className="text-xs text-muted-foreground">(new category)</span>
+                          </label>
+                        </div>
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          ⚠️ This processes each element individually and may increase processing time.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Selection Summary */}

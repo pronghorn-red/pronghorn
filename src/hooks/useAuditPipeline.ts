@@ -10,6 +10,7 @@ export type PipelinePhase =
   | "extracting_d2" 
   | "merging_concepts" 
   | "building_graph"
+  | "enhanced_sort"
   | "building_tesseract" 
   | "generating_venn" 
   | "completed" 
@@ -104,6 +105,12 @@ export type ChunkSize = "small" | "medium" | "large";
 export type BatchSize = "10" | "50" | "unlimited";
 export type MappingMode = "one_to_one" | "one_to_many";
 
+export interface EnhancedSortActions {
+  move: boolean;
+  clone: boolean;
+  create: boolean;
+}
+
 interface PipelineInput {
   sessionId: string;
   projectId: string;
@@ -115,6 +122,9 @@ interface PipelineInput {
   chunkSize?: ChunkSize;
   batchSize?: BatchSize;
   mappingMode?: MappingMode;
+  // Enhanced sort settings
+  enhancedSortEnabled?: boolean;
+  enhancedSortActions?: EnhancedSortActions;
 }
 
 export interface PipelineResults {
@@ -258,7 +268,7 @@ async function streamSSE(
 }
 
 // Step ID type for restart functionality
-export type PipelineStepId = "nodes" | "d1" | "d2" | "merge" | "graph" | "tesseract" | "venn";
+export type PipelineStepId = "nodes" | "d1" | "d2" | "merge" | "graph" | "enhanced_sort" | "tesseract" | "venn";
 
 // Activity entry type for reconstruction
 interface ActivityEntry {
@@ -459,13 +469,15 @@ export function useAuditPipeline() {
     const localTesseractCells: LocalTesseractCell[] = [];
     let localVennResult: LocalVennResult | null = null;
 
-    // Initialize steps
+    // Initialize steps - include enhanced_sort if enabled
+    const enhancedSortEnabled = input.enhancedSortEnabled ?? false;
     const initialSteps: PipelineStep[] = [
       { id: "nodes", phase: "creating_nodes", title: "Create Graph Nodes", status: "pending", message: "Waiting...", progress: 0 },
       { id: "d1", phase: "extracting_d1", title: `Extract D1 Concepts (${d1Elements.length} items)`, status: "pending", message: "Waiting...", progress: 0 },
       { id: "d2", phase: "extracting_d2", title: `Extract D2 Concepts (${d2Elements.length} items)`, status: "pending", message: "Waiting...", progress: 0 },
       { id: "merge", phase: "merging_concepts", title: "Merge Concepts", status: "pending", message: "Waiting...", progress: 0 },
       { id: "graph", phase: "building_graph", title: "Build Graph Edges", status: "pending", message: "Waiting...", progress: 0 },
+      ...(enhancedSortEnabled ? [{ id: "enhanced_sort", phase: "enhanced_sort" as PipelinePhase, title: "Enhanced Sort", status: "pending" as const, message: "Waiting...", progress: 0 }] : []),
       { id: "tesseract", phase: "building_tesseract", title: "Build Tesseract", status: "pending", message: "Waiting...", progress: 0 },
       { id: "venn", phase: "generating_venn", title: "Generate Venn Analysis", status: "pending", message: "Waiting...", progress: 0 },
     ];
@@ -1332,6 +1344,232 @@ export function useAuditPipeline() {
       
       // Step mode pause after graph (with skeleton tesseract visible)
       await pauseIfStepMode("graph");
+
+      // ========================================
+      // PHASE 2.8: ENHANCED SORT (optional - parallel element review)
+      // ========================================
+      if (enhancedSortEnabled && input.enhancedSortActions) {
+        const sortActions = input.enhancedSortActions;
+        setProgress({ phase: "enhanced_sort", message: "Reviewing element placements...", progress: 52 });
+        updateStep("enhanced_sort", { status: "running", message: "Preparing elements...", startedAt: new Date() });
+
+        // Build concept list for LLM
+        const conceptList = localNodes
+          .filter(n => n.node_type === "concept")
+          .map(n => ({ id: n.id, label: n.label, description: n.description || "" }));
+
+        // Combine all elements to review
+        const elementsToReview = [
+          ...d1Elements.map(e => ({ ...e, dataset: "D1" as const })),
+          ...d2Elements.map(e => ({ ...e, dataset: "D2" as const })),
+        ];
+
+        const PARALLEL_BATCH = 5;
+        let processedCount = 0;
+        let moveCount = 0, cloneCount = 0, createCount = 0, noActionCount = 0;
+
+        addStepDetail("enhanced_sort", `Processing ${elementsToReview.length} elements in batches of ${PARALLEL_BATCH}`);
+
+        // Process in parallel batches
+        for (let i = 0; i < elementsToReview.length; i += PARALLEL_BATCH) {
+          if (abortRef.current) throw new Error("Aborted");
+
+          const batch = elementsToReview.slice(i, i + PARALLEL_BATCH);
+
+          const results = await Promise.all(
+            batch.map(async (element) => {
+              // Find current concept(s) for this element
+              const elementNode = localNodes.find(n => n.metadata?.originalElementId === element.id);
+              const currentConceptEdges = elementNode ? localEdges.filter(e => e.source_node_id === elementNode.id) : [];
+              const currentConcepts = currentConceptEdges.map(e => {
+                const conceptNode = localNodes.find(n => n.id === e.target_node_id && n.node_type === "concept");
+                return conceptNode?.label;
+              }).filter(Boolean) as string[];
+
+              try {
+                const response = await fetch(`${BASE_URL}/audit-enhanced-sort`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    sessionId,
+                    projectId,
+                    shareToken,
+                    element: { id: element.id, label: element.label, content: element.content, dataset: element.dataset },
+                    currentConcepts,
+                    availableConcepts: conceptList,
+                    allowedActions: sortActions,
+                  }),
+                });
+
+                if (!response.ok) {
+                  console.warn(`[enhanced-sort] HTTP ${response.status} for ${element.label.slice(0, 30)}`);
+                  return { element, action: "no_action" as const };
+                }
+
+                const result = await response.json();
+                return { element, ...result };
+              } catch (err) {
+                console.warn(`[enhanced-sort] Error for ${element.label.slice(0, 30)}:`, err);
+                return { element, action: "no_action" as const };
+              }
+            })
+          );
+
+          // Apply actions
+          for (const result of results) {
+            const { element, action, targetConcept, newConcept } = result;
+            const elementNode = localNodes.find(n => n.metadata?.originalElementId === element.id);
+
+            if (!elementNode) {
+              noActionCount++;
+              continue;
+            }
+
+            switch (action) {
+              case "move": {
+                if (targetConcept) {
+                  // Remove all existing concept edges for this element
+                  for (let j = localEdges.length - 1; j >= 0; j--) {
+                    if (localEdges[j].source_node_id === elementNode.id) {
+                      const targetNode = localNodes.find(n => n.id === localEdges[j].target_node_id);
+                      if (targetNode?.node_type === "concept") {
+                        localEdges.splice(j, 1);
+                      }
+                    }
+                  }
+                  // Add edge to new concept
+                  const newConceptNode = localNodes.find(n => n.node_type === "concept" && n.label === targetConcept);
+                  if (newConceptNode) {
+                    localEdges.push({
+                      id: localId(),
+                      source_node_id: elementNode.id,
+                      target_node_id: newConceptNode.id,
+                      edge_type: element.dataset === "D1" ? "defines" : "implements",
+                      label: element.dataset === "D1" ? "defines" : "implements",
+                      weight: 1.0,
+                      metadata: { enhanced_sort: true, action: "move" },
+                    });
+                    moveCount++;
+                    addStepDetail("enhanced_sort", `⬅️ Moved: ${element.label.slice(0, 30)} → ${targetConcept.slice(0, 25)}`);
+                  } else {
+                    noActionCount++;
+                  }
+                } else {
+                  noActionCount++;
+                }
+                break;
+              }
+              case "clone": {
+                if (targetConcept) {
+                  // Keep existing edges, add new edge to target concept
+                  const cloneTarget = localNodes.find(n => n.node_type === "concept" && n.label === targetConcept);
+                  if (cloneTarget) {
+                    // Check if edge already exists
+                    const existingEdge = localEdges.find(e => e.source_node_id === elementNode.id && e.target_node_id === cloneTarget.id);
+                    if (!existingEdge) {
+                      localEdges.push({
+                        id: localId(),
+                        source_node_id: elementNode.id,
+                        target_node_id: cloneTarget.id,
+                        edge_type: element.dataset === "D1" ? "defines" : "implements",
+                        label: element.dataset === "D1" ? "defines" : "implements",
+                        weight: 1.0,
+                        metadata: { enhanced_sort: true, action: "clone" },
+                      });
+                      cloneCount++;
+                      addStepDetail("enhanced_sort", `📋 Cloned: ${element.label.slice(0, 30)} → ${targetConcept.slice(0, 25)}`);
+                    } else {
+                      noActionCount++;
+                    }
+                  } else {
+                    noActionCount++;
+                  }
+                } else {
+                  noActionCount++;
+                }
+                break;
+              }
+              case "create": {
+                if (newConcept?.label) {
+                  // Create new concept node
+                  const newConceptNode: LocalGraphNode = {
+                    id: localId(),
+                    label: newConcept.label,
+                    description: newConcept.description || "",
+                    node_type: "concept",
+                    source_dataset: element.dataset === "D1" ? "dataset1" : "dataset2",
+                    source_element_ids: [element.id],
+                    color: "#06b6d4", // Cyan for enhanced-sort created concepts
+                    size: 22,
+                    metadata: { enhanced_sort_created: true },
+                  };
+                  localNodes.push(newConceptNode);
+
+                  // Remove existing concept edges and add to new concept
+                  for (let j = localEdges.length - 1; j >= 0; j--) {
+                    if (localEdges[j].source_node_id === elementNode.id) {
+                      const targetNode = localNodes.find(n => n.id === localEdges[j].target_node_id);
+                      if (targetNode?.node_type === "concept") {
+                        localEdges.splice(j, 1);
+                      }
+                    }
+                  }
+                  localEdges.push({
+                    id: localId(),
+                    source_node_id: elementNode.id,
+                    target_node_id: newConceptNode.id,
+                    edge_type: element.dataset === "D1" ? "defines" : "implements",
+                    label: element.dataset === "D1" ? "defines" : "implements",
+                    weight: 1.0,
+                    metadata: { enhanced_sort: true, action: "create" },
+                  });
+                  createCount++;
+                  addStepDetail("enhanced_sort", `✨ Created: "${newConcept.label}" for ${element.label.slice(0, 25)}`);
+
+                  // Also add to skeleton tesseract cells since we created a new concept
+                  const d1IdsInConcept = element.dataset === "D1" ? [element.id] : [];
+                  const d2IdsInConcept = element.dataset === "D2" ? [element.id] : [];
+                  localTesseractCells.push({
+                    id: localId(),
+                    conceptLabel: newConcept.label,
+                    conceptDescription: newConcept.description || "",
+                    polarity: 0,
+                    rationale: "⏳ Pending alignment analysis...",
+                    d1ElementIds: d1IdsInConcept,
+                    d2ElementIds: d2IdsInConcept,
+                  });
+                } else {
+                  noActionCount++;
+                }
+                break;
+              }
+              case "no_action":
+              default:
+                noActionCount++;
+            }
+          }
+
+          processedCount += batch.length;
+          const pct = Math.round((processedCount / elementsToReview.length) * 100);
+          updateStep("enhanced_sort", {
+            progress: pct,
+            message: `${processedCount}/${elementsToReview.length} reviewed`,
+          });
+          updateResults(); // Update graph view as we process
+        }
+
+        const summaryMsg = `${moveCount} moved, ${cloneCount} cloned, ${createCount} created, ${noActionCount} unchanged`;
+        updateStep("enhanced_sort", {
+          status: "completed",
+          message: summaryMsg,
+          progress: 100,
+          completedAt: new Date(),
+        });
+        addStepDetail("enhanced_sort", `✅ ${summaryMsg}`);
+
+        // Step mode pause after enhanced sort
+        await pauseIfStepMode("enhanced_sort");
+      }
 
       // ========================================
       // PHASE 3: Build Tesseract cells - ONE CALL PER CONCEPT (replaces skeletons)
