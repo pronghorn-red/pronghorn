@@ -54,8 +54,8 @@ const STATUS_BG: Record<string, string> = {
   error: "bg-destructive/10 border-l-destructive",
 };
 
-// Steps that support restart
-const RESTARTABLE_STEPS: PipelineStepId[] = ["tesseract", "venn"];
+// All completed steps can be restarted (will re-run from that step onwards)
+const RESTARTABLE_STEPS: PipelineStepId[] = ["nodes", "d1", "d2", "merge", "graph", "tesseract", "venn"];
 
 // Generate dynamic step title based on status
 function getStepTitle(step: PipelineStep): string {
