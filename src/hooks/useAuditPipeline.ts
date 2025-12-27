@@ -994,7 +994,7 @@ export function useAuditPipeline() {
           (err) => { throw new Error(`Merge stream error: ${err}`); }
         );
         
-        addStepDetail("merge", `Round ${round} complete: ${mergedConcepts.length} merged, ${unmergedD1Concepts.length}+${unmergedD2Concepts.length} unmerged`);
+        addStepDetail("merge", `Round ${round} complete: ${mergedConcepts.length} merged, ${unmergedD1Concepts.length} gaps + ${unmergedD2Concepts.length} orphans remaining`);
         
         // For subsequent rounds, feed unmerged concepts back as input
         if (round < mergeRounds) {
@@ -1041,7 +1041,7 @@ export function useAuditPipeline() {
 
       if (finalD1Orphans.length > 0 || finalD2Orphans.length > 0) {
         console.warn(`[merge] FINAL ORPHAN CHECK: ${finalD1Orphans.length} D1, ${finalD2Orphans.length} D2 orphans remain`);
-        addStepDetail("merge", `⚠️ Final check: ${finalD1Orphans.length} D1 + ${finalD2Orphans.length} D2 orphans after merge`);
+        addStepDetail("merge", `⚠️ Final check: ${finalD1Orphans.length} D1 elements + ${finalD2Orphans.length} D2 elements still unassigned`);
         
         // Create "Uncategorized" catch-all concepts for any remaining orphans
         if (finalD1Orphans.length > 0) {

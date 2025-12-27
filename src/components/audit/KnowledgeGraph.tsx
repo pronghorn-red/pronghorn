@@ -9,7 +9,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Network, ZoomIn, ZoomOut, Maximize2, RefreshCw, Download, Trash2 } from "lucide-react";
+import { Network, ZoomIn, ZoomOut, Maximize2, RefreshCw, Download, Trash2, Layers } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface GraphNode {
   id: string;
@@ -115,6 +122,14 @@ const agentColors: Record<string, string> = {
   orchestrator: "#6366f1",
 };
 
+// Graph density presets for D3 force simulation
+type GraphDensity = "tight" | "medium" | "relaxed";
+const densityPresets: Record<GraphDensity, { linkDistance: number; chargeStrength: number; collisionRadius: number }> = {
+  tight: { linkDistance: 80, chargeStrength: -150, collisionRadius: 35 },
+  medium: { linkDistance: 150, chargeStrength: -300, collisionRadius: 50 },
+  relaxed: { linkDistance: 250, chargeStrength: -500, collisionRadius: 70 },
+};
+
 export function KnowledgeGraph({
   nodes,
   edges,
@@ -125,6 +140,7 @@ export function KnowledgeGraph({
   dataset2Label = "Dataset 2",
 }: KnowledgeGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const [graphDensity, setGraphDensity] = useState<GraphDensity>("medium");
   
   // Calculate orphan count (nodes with no edges)
   const orphanCount = useMemo(() => {
@@ -326,7 +342,8 @@ export function KnowledgeGraph({
       simulationRef.current.stop();
     }
 
-    // Create simulation with preserved positions
+    // Create simulation with preserved positions using density presets
+    const density = densityPresets[graphDensity];
     const simulation = d3
       .forceSimulation<GraphNode>(graphData.nodes)
       .force(
@@ -334,13 +351,13 @@ export function KnowledgeGraph({
         d3
           .forceLink<GraphNode, GraphEdge>(graphData.edges)
           .id((d) => d.id)
-          .distance(100)
-          .strength((d) => d.weight * 0.5)
+          .distance(density.linkDistance)
+          .strength((d) => d.weight * 0.3)
       )
-      .force("charge", d3.forceManyBody().strength(-200))
+      .force("charge", d3.forceManyBody().strength(density.chargeStrength))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("radial", d3.forceRadial(200, width / 2, height / 2).strength(0.05))
-      .force("collision", d3.forceCollide().radius(40));
+      .force("radial", d3.forceRadial(density.linkDistance * 1.5, width / 2, height / 2).strength(0.03))
+      .force("collision", d3.forceCollide().radius(density.collisionRadius));
 
     simulationRef.current = simulation;
 
@@ -503,7 +520,7 @@ export function KnowledgeGraph({
     return () => {
       simulation.stop();
     };
-  }, [graphData, dimensions, onNodeClick]);
+  }, [graphData, dimensions, onNodeClick, graphDensity]);
 
   const handleZoom = useCallback((direction: "in" | "out" | "reset") => {
     if (!svgRef.current) return;
@@ -628,6 +645,26 @@ export function KnowledgeGraph({
               </Tooltip>
             </TooltipProvider>
             <div className="w-px h-6 bg-border mx-1" />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center">
+                    <Select value={graphDensity} onValueChange={(v) => setGraphDensity(v as GraphDensity)}>
+                      <SelectTrigger className="h-8 w-[110px] text-xs">
+                        <Layers className="h-3 w-3 mr-1" />
+                        <SelectValue placeholder="Density" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="tight">Tight</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="relaxed">Relaxed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>Graph node spacing</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
