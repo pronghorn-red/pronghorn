@@ -959,19 +959,33 @@ export function useAuditPipeline() {
       d1Elements.forEach(el => d1ElementLabelMap.set(el.id, el.label || el.id));
       d2Elements.forEach(el => d2ElementLabelMap.set(el.id, el.label || el.id));
       
-      // Enhance concepts with element labels for merge context
-      let currentD1Concepts = d1Concepts.map(c => ({ 
-        label: c.label, 
-        description: c.description, 
-        d1Ids: c.elementIds,
-        elementLabels: c.elementIds.map(id => d1ElementLabelMap.get(id) || id),
-      }));
-      let currentD2Concepts = d2Concepts.map(c => ({ 
-        label: c.label, 
-        description: c.description, 
-        d2Ids: c.elementIds,
-        elementLabels: c.elementIds.map(id => d2ElementLabelMap.get(id) || id),
-      }));
+      // Build UNIFIED concept list for merge (no D1/D2 split between rounds)
+      // Each concept tracks both D1 and D2 element IDs it contains
+      interface UnifiedConcept {
+        label: string;
+        description: string;
+        d1Ids: string[];
+        d2Ids: string[];
+        elementLabels: string[];
+      }
+      
+      // Initialize with D1 concepts (d2Ids = []) and D2 concepts (d1Ids = [])
+      let currentUnifiedConcepts: UnifiedConcept[] = [
+        ...d1Concepts.map(c => ({ 
+          label: c.label, 
+          description: c.description, 
+          d1Ids: c.elementIds,
+          d2Ids: [] as string[],
+          elementLabels: c.elementIds.map(id => d1ElementLabelMap.get(id) || id),
+        })),
+        ...d2Concepts.map(c => ({ 
+          label: c.label, 
+          description: c.description, 
+          d1Ids: [] as string[],
+          d2Ids: c.elementIds,
+          elementLabels: c.elementIds.map(id => d2ElementLabelMap.get(id) || id),
+        })),
+      ];
 
       // Run multiple merge rounds if consolidation > low
       for (let round = 1; round <= mergeRounds; round++) {
@@ -993,8 +1007,8 @@ export function useAuditPipeline() {
             sessionId, 
             projectId, 
             shareToken, 
-            d1Concepts: currentD1Concepts, 
-            d2Concepts: currentD2Concepts,
+            // Send unified concept list
+            concepts: currentUnifiedConcepts,
             consolidationRound: round,
             totalRounds: mergeRounds,
           }),
@@ -1005,6 +1019,10 @@ export function useAuditPipeline() {
           throw new Error(`Merge failed: ${mergeResponse.status} - ${errorText.slice(0, 100)}`);
         }
 
+        // Track merge results for this round
+        let roundMergedCount = 0;
+        let roundUnmergedCount = 0;
+
         await streamSSE(
           mergeResponse,
           (data) => {
@@ -1012,64 +1030,59 @@ export function useAuditPipeline() {
           },
           () => {},
           (data) => {
-            mergedConcepts = data.mergedConcepts || [];
-            unmergedD1Concepts = (data.unmergedD1Concepts || []).map((c: any) => ({
+            // Result now returns a unified concept list
+            const resultConcepts = data.concepts || [];
+            roundMergedCount = data.mergeCount || 0;
+            roundUnmergedCount = resultConcepts.length - roundMergedCount;
+            
+            // Update unified concepts for next round
+            currentUnifiedConcepts = resultConcepts.map((c: any) => ({
               label: c.label,
               description: c.description,
-              elementIds: c.d1Ids || [],
-            }));
-            unmergedD2Concepts = (data.unmergedD2Concepts || []).map((c: any) => ({
-              label: c.label,
-              description: c.description,
-              elementIds: c.d2Ids || [],
+              d1Ids: c.d1Ids || [],
+              d2Ids: c.d2Ids || [],
+              elementLabels: [
+                ...(c.d1Ids || []).map((id: string) => d1ElementLabelMap.get(id) || id),
+                ...(c.d2Ids || []).map((id: string) => d2ElementLabelMap.get(id) || id),
+              ],
             }));
           },
           (err) => { throw new Error(`Merge stream error: ${err}`); }
         );
         
-        addStepDetail("merge", `Round ${round} complete: ${mergedConcepts.length} merged, ${unmergedD1Concepts.length} gaps + ${unmergedD2Concepts.length} orphans remaining`);
-        
-        // For subsequent rounds, feed unmerged concepts back as input
-        if (round < mergeRounds) {
-          // Convert merged concepts back to D1/D2 format for next round
-          // Merged concepts become "super-concepts" that can be merged again
-          const mergedAsD1 = mergedConcepts
-            .filter(m => m.d1Ids && m.d1Ids.length > 0)
-            .map(m => ({ 
-              label: m.mergedLabel, 
-              description: m.mergedDescription, 
-              d1Ids: m.d1Ids,
-              elementLabels: m.d1Ids.map(id => d1ElementLabelMap.get(id) || id),
-            }));
-          const mergedAsD2 = mergedConcepts
-            .filter(m => m.d2Ids && m.d2Ids.length > 0)
-            .map(m => ({ 
-              label: m.mergedLabel, 
-              description: m.mergedDescription, 
-              d2Ids: m.d2Ids,
-              elementLabels: m.d2Ids.map(id => d2ElementLabelMap.get(id) || id),
-            }));
-          
-          currentD1Concepts = [
-            ...unmergedD1Concepts.map(c => ({ 
-              label: c.label, 
-              description: c.description, 
-              d1Ids: c.elementIds,
-              elementLabels: c.elementIds.map(id => d1ElementLabelMap.get(id) || id),
-            })), 
-            ...mergedAsD1
-          ];
-          currentD2Concepts = [
-            ...unmergedD2Concepts.map(c => ({ 
-              label: c.label, 
-              description: c.description, 
-              d2Ids: c.elementIds,
-              elementLabels: c.elementIds.map(id => d2ElementLabelMap.get(id) || id),
-            })), 
-            ...mergedAsD2
-          ];
-        }
+        addStepDetail("merge", `Round ${round} complete: ${roundMergedCount} merges performed, ${currentUnifiedConcepts.length} concepts remaining`);
       }
+      
+      // After all rounds, split unified concepts into merged/unmerged for downstream processing
+      // Merged = has both D1 and D2 IDs
+      // Unmerged D1 = only D1 IDs
+      // Unmerged D2 = only D2 IDs
+      mergedConcepts = currentUnifiedConcepts
+        .filter(c => c.d1Ids.length > 0 && c.d2Ids.length > 0)
+        .map(c => ({
+          mergedLabel: c.label,
+          mergedDescription: c.description,
+          d1ConceptLabels: [c.label],
+          d2ConceptLabels: [c.label],
+          d1Ids: c.d1Ids,
+          d2Ids: c.d2Ids,
+        }));
+      
+      unmergedD1Concepts = currentUnifiedConcepts
+        .filter(c => c.d1Ids.length > 0 && c.d2Ids.length === 0)
+        .map(c => ({
+          label: c.label,
+          description: c.description,
+          elementIds: c.d1Ids,
+        }));
+      
+      unmergedD2Concepts = currentUnifiedConcepts
+        .filter(c => c.d2Ids.length > 0 && c.d1Ids.length === 0)
+        .map(c => ({
+          label: c.label,
+          description: c.description,
+          elementIds: c.d2Ids,
+        }));
 
       updateStep("merge", { 
         status: "completed", 
@@ -1099,28 +1112,12 @@ export function useAuditPipeline() {
       const finalD2Orphans = d2Elements.filter(e => !allD2IdsInConcepts.has(e.id));
 
       if (finalD1Orphans.length > 0 || finalD2Orphans.length > 0) {
-        console.warn(`[merge] FINAL ORPHAN CHECK: ${finalD1Orphans.length} D1, ${finalD2Orphans.length} D2 orphans remain`);
-        addStepDetail("merge", `⚠️ Final check: ${finalD1Orphans.length} D1 elements + ${finalD2Orphans.length} D2 elements still unassigned`);
-        
-        // Create "Uncategorized" catch-all concepts for any remaining orphans
-        if (finalD1Orphans.length > 0) {
-          unmergedD1Concepts.push({
-            label: "Uncategorized D1 Elements",
-            description: `Elements that could not be categorized during extraction or merge: ${finalD1Orphans.map(o => o.label).slice(0, 5).join(", ")}${finalD1Orphans.length > 5 ? "..." : ""}`,
-            elementIds: finalD1Orphans.map(e => e.id),
-          });
-          addStepDetail("merge", `  → Created catch-all for ${finalD1Orphans.length} D1 orphans`);
-        }
-        if (finalD2Orphans.length > 0) {
-          unmergedD2Concepts.push({
-            label: "Uncategorized D2 Elements",
-            description: `Elements that could not be categorized during extraction or merge: ${finalD2Orphans.map(o => o.label).slice(0, 5).join(", ")}${finalD2Orphans.length > 5 ? "..." : ""}`,
-            elementIds: finalD2Orphans.map(e => e.id),
-          });
-          addStepDetail("merge", `  → Created catch-all for ${finalD2Orphans.length} D2 orphans`);
-        }
+        // Orphans here means elements that were never assigned to concepts during extraction
+        // This is an extraction phase issue, not a merge issue - don't create catch-all concepts
+        console.warn(`[merge] FINAL CHECK: ${finalD1Orphans.length} D1, ${finalD2Orphans.length} D2 elements never assigned to concepts`);
+        addStepDetail("merge", `⚠️ ${finalD1Orphans.length} D1 + ${finalD2Orphans.length} D2 elements were never categorized during extraction`);
       } else {
-        addStepDetail("merge", `✅ Final check: Zero orphans - all elements assigned`);
+        addStepDetail("merge", `✅ All elements assigned to concepts`);
       }
 
       // Save intermediate state for restart functionality
