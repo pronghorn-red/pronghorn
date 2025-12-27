@@ -1098,21 +1098,55 @@ export function useAuditPipeline() {
     };
   }, []);
 
-  // Restart a specific step using existing local data
+  // Restart from a specific step - re-runs that step and all subsequent steps
   const restartStep = useCallback(async (stepId: PipelineStepId) => {
-    if (!lastInputRef.current || !results) {
-      console.error("[restartStep] No input or results available");
+    if (!lastInputRef.current) {
+      console.error("[restartStep] No input available");
       return;
     }
     
-    const { sessionId, projectId, shareToken, d1Elements, d2Elements } = lastInputRef.current;
-    const { mergedConcepts, unmergedD1Concepts, unmergedD2Concepts } = intermediateStateRef.current;
+    const input = lastInputRef.current;
+    
+    // Determine which steps to re-run based on the restart point
+    const stepOrder: PipelineStepId[] = ["nodes", "d1", "d2", "merge", "graph", "tesseract", "venn"];
+    const restartIndex = stepOrder.indexOf(stepId);
+    
+    if (restartIndex === -1) {
+      console.error(`[restartStep] Unknown step: ${stepId}`);
+      return;
+    }
+    
+    // Mark steps from restart point onwards as pending
+    setSteps(prev => prev.map((s, idx) => {
+      const stepIdx = stepOrder.indexOf(s.id as PipelineStepId);
+      if (stepIdx >= restartIndex) {
+        return { ...s, status: "pending" as const, message: "Waiting...", progress: 0, details: [], errorMessage: undefined };
+      }
+      return s;
+    }));
+    
+    // If restarting from nodes (beginning), just run the full pipeline
+    if (stepId === "nodes") {
+      await runPipeline(input);
+      return;
+    }
+    
+    // For other steps, we need existing results
+    if (!results) {
+      console.error("[restartStep] No results available for partial restart");
+      return;
+    }
+    
+    const { sessionId, projectId, shareToken, d1Elements, d2Elements } = input;
     
     // Clone current results to work with
-    const localNodes = [...results.nodes];
-    const localEdges = [...results.edges];
+    let localNodes = [...results.nodes];
+    let localEdges = [...results.edges];
     let localTesseractCells = [...results.tesseractCells];
     let localVennResult = results.vennResult;
+    
+    // Get intermediate state
+    let { d1Concepts, d2Concepts, mergedConcepts, unmergedD1Concepts, unmergedD2Concepts } = intermediateStateRef.current;
     
     const updateResults = () => {
       setResults({
@@ -1122,247 +1156,281 @@ export function useAuditPipeline() {
         vennResult: localVennResult,
       });
     };
-
-    // Clear previous details for this step
-    setSteps(prev => prev.map(s => s.id === stepId ? { ...s, details: [], errorMessage: undefined } : s));
     
     setIsRunning(true);
     abortRef.current = false;
+    setError(null);
 
     try {
-      if (stepId === "tesseract") {
-        // Restart Tesseract phase
-        setProgress({ phase: "building_tesseract", message: "Restarting tesseract analysis...", progress: 65 });
-        updateStep("tesseract", { status: "running", message: "Restarting...", startedAt: new Date(), details: [] });
+      // Helper for D1/D2 extraction restart
+      const runExtractionStep = async (dataset: "d1" | "d2", elements: Element[], stepIdStr: string) => {
+        updateStep(stepIdStr, { status: "running", message: "Extracting concepts...", startedAt: new Date(), details: [] });
+        
+        // Remove old concept nodes for this dataset
+        const datasetStr = dataset === "d1" ? "dataset1" : "dataset2";
+        const oldConceptIds = new Set(localNodes.filter(n => n.node_type === "concept" && n.source_dataset === datasetStr && n.metadata?.premerge).map(n => n.id));
+        localNodes = localNodes.filter(n => !oldConceptIds.has(n.id));
+        localEdges = localEdges.filter(e => !oldConceptIds.has(e.source_node_id) && !oldConceptIds.has(e.target_node_id));
+        
+        const response = await fetch(`${BASE_URL}/audit-extract-concepts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, projectId, shareToken, dataset, elements }),
+        });
+        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || "Extraction failed");
+        
+        const concepts: Concept[] = result.concepts || [];
+        
+        // Add concept nodes
+        for (const concept of concepts) {
+          const conceptNode: LocalGraphNode = {
+            id: localId(),
+            label: concept.label,
+            description: concept.description || "",
+            node_type: "concept",
+            source_dataset: datasetStr,
+            source_element_ids: concept.elementIds,
+            color: dataset === "d1" ? "#60a5fa" : "#4ade80",
+            size: 20,
+            metadata: { source: dataset, premerge: true },
+          };
+          localNodes.push(conceptNode);
+          
+          for (const elId of concept.elementIds) {
+            const elementNode = localNodes.find(n => n.metadata?.originalElementId === elId);
+            if (elementNode) {
+              localEdges.push({
+                id: localId(),
+                source_node_id: elementNode.id,
+                target_node_id: conceptNode.id,
+                edge_type: dataset === "d1" ? "defines" : "implements",
+                label: dataset === "d1" ? "defines" : "implements",
+                weight: 1.0,
+                metadata: { premerge: true },
+              });
+            }
+          }
+          addStepDetail(stepIdStr, `Concept: ${concept.label}`);
+        }
+        
+        updateResults();
+        updateStep(stepIdStr, { status: "completed", message: `${concepts.length} concepts`, progress: 100, completedAt: new Date() });
+        return concepts;
+      };
 
-        // Clear existing tesseract cells
+      // Helper to run merge step
+      const runMergeStep = async () => {
+        updateStep("merge", { status: "running", message: "Merging concepts...", startedAt: new Date(), details: [] });
+        
+        const d1ForMerge = d1Concepts.map(c => ({ label: c.label, description: c.description, d1Ids: c.elementIds }));
+        const d2ForMerge = d2Concepts.map(c => ({ label: c.label, description: c.description, d2Ids: c.elementIds }));
+        
+        const response = await fetch(`${BASE_URL}/audit-merge-concepts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, projectId, shareToken, d1Concepts: d1ForMerge, d2Concepts: d2ForMerge }),
+        });
+        
+        if (!response.ok) throw new Error(`Merge failed: ${response.status}`);
+        
+        await streamSSE(
+          response,
+          (data) => updateStep("merge", { message: data.message || "Merging...", progress: data.progress || 50 }),
+          () => {},
+          (data) => {
+            mergedConcepts = data.mergedConcepts || [];
+            unmergedD1Concepts = (data.unmergedD1Concepts || []).map((c: any) => ({ label: c.label, description: c.description, elementIds: c.d1Ids || [] }));
+            unmergedD2Concepts = (data.unmergedD2Concepts || []).map((c: any) => ({ label: c.label, description: c.description, elementIds: c.d2Ids || [] }));
+          },
+          (err) => { throw new Error(err); }
+        );
+        
+        intermediateStateRef.current = { d1Concepts, d2Concepts, mergedConcepts, unmergedD1Concepts, unmergedD2Concepts };
+        updateStep("merge", { status: "completed", message: `${mergedConcepts.length} merged`, progress: 100, completedAt: new Date() });
+      };
+
+      // Helper to rebuild graph
+      const runGraphStep = async () => {
+        updateStep("graph", { status: "running", message: "Building graph edges...", startedAt: new Date(), details: [] });
+        
+        // Remove premerge concepts and their edges
+        const premergeIds = new Set(localNodes.filter(n => n.metadata?.premerge).map(n => n.id));
+        localNodes = localNodes.filter(n => !premergeIds.has(n.id));
+        localEdges = localEdges.filter(e => !premergeIds.has(e.source_node_id) && !premergeIds.has(e.target_node_id));
+        
+        // Also remove merged/gap/orphan concepts (will recreate)
+        const conceptIds = new Set(localNodes.filter(n => n.node_type === "concept").map(n => n.id));
+        localNodes = localNodes.filter(n => n.node_type !== "concept");
+        localEdges = localEdges.filter(e => !conceptIds.has(e.source_node_id) && !conceptIds.has(e.target_node_id));
+        
+        // Create merged concept nodes
+        for (const concept of mergedConcepts) {
+          const conceptNode: LocalGraphNode = {
+            id: localId(),
+            label: concept.mergedLabel,
+            description: concept.mergedDescription,
+            node_type: "concept",
+            source_dataset: "both",
+            source_element_ids: [...concept.d1Ids, ...concept.d2Ids],
+            color: "#a855f7",
+            size: 25,
+            metadata: { merged: true },
+          };
+          localNodes.push(conceptNode);
+          
+          for (const d1Id of concept.d1Ids) {
+            const d1Node = localNodes.find(n => n.metadata?.originalElementId === d1Id);
+            if (d1Node) localEdges.push({ id: localId(), source_node_id: d1Node.id, target_node_id: conceptNode.id, edge_type: "defines", label: "defines", weight: 1.0, metadata: {} });
+          }
+          for (const d2Id of concept.d2Ids) {
+            const d2Node = localNodes.find(n => n.metadata?.originalElementId === d2Id);
+            if (d2Node) localEdges.push({ id: localId(), source_node_id: d2Node.id, target_node_id: conceptNode.id, edge_type: "implements", label: "implements", weight: 1.0, metadata: {} });
+          }
+          addStepDetail("graph", `Merged: ${concept.mergedLabel}`);
+        }
+        
+        // Create gap nodes (D1 only)
+        for (const concept of unmergedD1Concepts) {
+          const gapNode: LocalGraphNode = { id: localId(), label: concept.label, description: concept.description, node_type: "concept", source_dataset: "dataset1", source_element_ids: concept.elementIds, color: "#ef4444", size: 22, metadata: { gap: true } };
+          localNodes.push(gapNode);
+          for (const d1Id of concept.elementIds) {
+            const d1Node = localNodes.find(n => n.metadata?.originalElementId === d1Id);
+            if (d1Node) localEdges.push({ id: localId(), source_node_id: d1Node.id, target_node_id: gapNode.id, edge_type: "defines", label: "defines", weight: 1.0, metadata: {} });
+          }
+        }
+        
+        // Create orphan nodes (D2 only)
+        for (const concept of unmergedD2Concepts) {
+          const orphanNode: LocalGraphNode = { id: localId(), label: concept.label, description: concept.description, node_type: "concept", source_dataset: "dataset2", source_element_ids: concept.elementIds, color: "#f97316", size: 22, metadata: { orphan: true } };
+          localNodes.push(orphanNode);
+          for (const d2Id of concept.elementIds) {
+            const d2Node = localNodes.find(n => n.metadata?.originalElementId === d2Id);
+            if (d2Node) localEdges.push({ id: localId(), source_node_id: d2Node.id, target_node_id: orphanNode.id, edge_type: "implements", label: "implements", weight: 1.0, metadata: {} });
+          }
+        }
+        
+        updateResults();
+        updateStep("graph", { status: "completed", message: `${localNodes.length} nodes, ${localEdges.length} edges`, progress: 100, completedAt: new Date() });
+      };
+
+      // Helper to run tesseract
+      const runTesseractStep = async () => {
+        updateStep("tesseract", { status: "running", message: "Building tesseract...", startedAt: new Date(), details: [] });
         localTesseractCells = [];
         
-        // Get concept nodes for tesseract analysis
         const conceptNodes = localNodes.filter(n => n.node_type === "concept");
-
-        // Build D1/D2 element content maps
         const d1ContentMap = new Map<string, Element>();
         const d2ContentMap = new Map<string, Element>();
         d1Elements.forEach(e => d1ContentMap.set(e.id, e));
         d2Elements.forEach(e => d2ContentMap.set(e.id, e));
-
-        // Prepare concepts for tesseract
+        
         const conceptsForTesseract = conceptNodes.map(node => {
           const d1Els: Array<{ id: string; label: string; content: string }> = [];
           const d2Els: Array<{ id: string; label: string; content: string }> = [];
-          
           for (const elId of node.source_element_ids) {
             const d1El = d1ContentMap.get(elId);
             const d2El = d2ContentMap.get(elId);
             if (d1El) d1Els.push({ id: d1El.id, label: d1El.label, content: d1El.content });
             if (d2El) d2Els.push({ id: d2El.id, label: d2El.label, content: d2El.content });
           }
-
-          return {
-            conceptId: node.id,
-            conceptLabel: node.label,
-            conceptDescription: node.description || "",
-            d1Elements: d1Els,
-            d2Elements: d2Els,
-          };
+          return { conceptId: node.id, conceptLabel: node.label, conceptDescription: node.description || "", d1Elements: d1Els, d2Elements: d2Els };
         });
-
-        const totalConcepts = conceptsForTesseract.length;
-        updateStep("tesseract", { message: `Restarting: ${totalConcepts} concepts...`, progress: 5 });
-
-        if (totalConcepts === 0) {
-          updateStep("tesseract", { status: "completed", message: "No concepts to analyze", progress: 100, completedAt: new Date() });
-        } else {
-          let completedCount = 0;
-          let errorCount = 0;
-
-          // Process concepts one at a time
-          for (let i = 0; i < conceptsForTesseract.length; i++) {
-            if (abortRef.current) throw new Error("Aborted");
-            
-            const concept = conceptsForTesseract[i];
-            const conceptName = concept.conceptLabel.slice(0, 40);
-            console.log(`[tesseract-restart] === START concept ${i + 1}/${totalConcepts}: ${conceptName} ===`);
-            
-            updateStep("tesseract", { 
-              message: `Concept ${i + 1}/${totalConcepts}: ${conceptName}...`, 
-              progress: Math.round((i / totalConcepts) * 90) + 5 
-            });
-
-            try {
-              const payload = { sessionId, projectId, shareToken, concepts: [concept] };
-              const payloadStr = JSON.stringify(payload);
-              const payloadSizeKB = Math.round(payloadStr.length / 1024);
-              const d1ContentSize = concept.d1Elements.reduce((sum, e) => sum + (e.content?.length || 0), 0);
-              const d2ContentSize = concept.d2Elements.reduce((sum, e) => sum + (e.content?.length || 0), 0);
-
-              addStepDetail("tesseract", `Starting: ${conceptName} (${payloadSizeKB}KB payload, D1: ${Math.round(d1ContentSize/1024)}KB, D2: ${Math.round(d2ContentSize/1024)}KB)`);
-
-              let response: Response;
-              try {
-                response = await fetch(`${BASE_URL}/audit-build-tesseract`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: payloadStr,
-                });
-              } catch (fetchErr: any) {
-                const errMsg = `${conceptName}: Fetch failed - ${fetchErr?.message || 'Network error'}`;
-                console.error(`[tesseract-restart] Fetch error:`, errMsg);
-                addStepDetail("tesseract", `❌ ${errMsg}`);
-                errorCount++;
-                continue;
-              }
-
-              if (!response.ok) {
-                let errorText = "Unknown error";
-                try { errorText = await response.text(); } catch {}
-                const errMsg = `${conceptName}: HTTP ${response.status} - ${errorText.slice(0, 300)}`;
-                console.error(`[tesseract-restart] HTTP error:`, errMsg);
-                addStepDetail("tesseract", `❌ ${errMsg}`);
-                errorCount++;
-                continue;
-              }
-
-              let result: any;
-              try {
-                result = await response.json();
-              } catch (jsonErr: any) {
-                const errMsg = `${conceptName}: JSON parse failed - ${jsonErr?.message}`;
-                console.error(`[tesseract-restart] JSON error:`, errMsg);
-                addStepDetail("tesseract", `❌ ${errMsg}`);
-                errorCount++;
-                continue;
-              }
-
-              if (!result.success) {
-                const errMsg = `${conceptName}: ${result.error || 'Unknown error'}`;
-                console.error(`[tesseract-restart] Edge function error:`, errMsg);
-                addStepDetail("tesseract", `❌ ${errMsg}`);
-                errorCount++;
-                continue;
-              }
-
-              if (result.cells && result.cells.length > 0) {
-                for (const c of result.cells) {
-                  const cell: LocalTesseractCell = {
-                    id: localId(),
-                    conceptLabel: c.conceptLabel,
-                    conceptDescription: concept.conceptDescription,
-                    polarity: c.polarity,
-                    rationale: c.rationale || "",
-                    d1ElementIds: concept.d1Elements.map(e => e.id),
-                    d2ElementIds: concept.d2Elements.map(e => e.id),
-                  };
-                  localTesseractCells.push(cell);
-                  
-                  const polarityStr = c.polarity >= 0 ? `+${c.polarity.toFixed(2)}` : c.polarity.toFixed(2);
-                  addStepDetail("tesseract", `✓ ${c.conceptLabel}: ${polarityStr}`);
-                  console.log(`[tesseract-restart] Added cell: ${c.conceptLabel} = ${polarityStr}`);
-                  updateResults();
-                }
-                completedCount++;
-                console.log(`[tesseract-restart] === END concept ${i + 1}: SUCCESS ===`);
-              } else {
-                if (result.errors && result.errors.length > 0) {
-                  const errMsg = `${conceptName}: ${result.errors.join(', ')}`;
-                  addStepDetail("tesseract", `❌ ${errMsg}`);
-                  errorCount++;
-                } else {
-                  addStepDetail("tesseract", `⚠ ${conceptName}: No cells returned`);
-                  errorCount++;
-                }
-                console.log(`[tesseract-restart] === END concept ${i + 1}: NO CELLS ===`);
-              }
-
-            } catch (err: any) {
-              const errMsg = `${conceptName}: ${err?.message || 'Unknown error'}`;
-              console.error(`[tesseract-restart] Uncaught error:`, err);
-              addStepDetail("tesseract", `❌ ${errMsg}`);
-              errorCount++;
-            }
-            
-            // Update progress after concept
-            updateStep("tesseract", { 
-              message: `Completed ${completedCount}/${totalConcepts} concepts (${errorCount} errors)`, 
-              progress: Math.round(((i + 1) / totalConcepts) * 90) + 5 
-            });
-          }
-
-          const finalMessage = errorCount > 0 
-            ? `${localTesseractCells.length} cells analyzed (${errorCount} errors)`
-            : `${localTesseractCells.length} cells analyzed`;
+        
+        for (let i = 0; i < conceptsForTesseract.length; i++) {
+          if (abortRef.current) throw new Error("Aborted");
+          const concept = conceptsForTesseract[i];
+          updateStep("tesseract", { message: `Concept ${i + 1}/${conceptsForTesseract.length}: ${concept.conceptLabel.slice(0, 30)}...`, progress: Math.round((i / conceptsForTesseract.length) * 90) + 5 });
           
-          updateStep("tesseract", { 
-            status: errorCount === totalConcepts ? "error" : "completed", 
-            message: finalMessage, 
-            progress: 100, 
-            completedAt: new Date(),
-          });
+          try {
+            const response = await fetch(`${BASE_URL}/audit-build-tesseract`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, projectId, shareToken, concepts: [concept] }) });
+            if (!response.ok) { addStepDetail("tesseract", `❌ ${concept.conceptLabel}: HTTP ${response.status}`); continue; }
+            const result = await response.json();
+            if (!result.success) { addStepDetail("tesseract", `❌ ${concept.conceptLabel}: ${result.error}`); continue; }
+            
+            for (const c of (result.cells || [])) {
+              localTesseractCells.push({ id: localId(), conceptLabel: c.conceptLabel, conceptDescription: concept.conceptDescription, polarity: c.polarity, rationale: c.rationale || "", d1ElementIds: concept.d1Elements.map(e => e.id), d2ElementIds: concept.d2Elements.map(e => e.id) });
+              addStepDetail("tesseract", `✓ ${c.conceptLabel}: ${c.polarity >= 0 ? '+' : ''}${c.polarity.toFixed(2)}`);
+            }
+            updateResults();
+          } catch (err: any) {
+            addStepDetail("tesseract", `❌ ${concept.conceptLabel}: ${err.message}`);
+          }
         }
         
-        updateResults();
-        setProgress({ phase: "completed", message: "Tesseract restart complete", progress: 100 });
+        updateStep("tesseract", { status: "completed", message: `${localTesseractCells.length} cells analyzed`, progress: 100, completedAt: new Date() });
+      };
 
-      } else if (stepId === "venn") {
-        // Restart Venn phase
-        setProgress({ phase: "generating_venn", message: "Restarting Venn analysis...", progress: 85 });
-        updateStep("venn", { status: "running", message: "Restarting...", startedAt: new Date(), details: [] });
-
-        const vennResponse = await fetch(`${BASE_URL}/audit-generate-venn`, {
+      // Helper to run venn
+      const runVennStep = async () => {
+        updateStep("venn", { status: "running", message: "Generating Venn analysis...", startedAt: new Date(), details: [] });
+        
+        const response = await fetch(`${BASE_URL}/audit-generate-venn`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            sessionId, 
-            projectId, 
-            shareToken, 
-            mergedConcepts, 
-            unmergedD1Concepts, 
-            unmergedD2Concepts,
-            tesseractCells: localTesseractCells,
-          }),
+          body: JSON.stringify({ sessionId, projectId, shareToken, mergedConcepts, unmergedD1Concepts, unmergedD2Concepts, tesseractCells: localTesseractCells }),
         });
-
-        if (!vennResponse.ok) {
-          const errorText = await vennResponse.text();
-          throw new Error(`Venn failed: ${vennResponse.status} - ${errorText.slice(0, 100)}`);
-        }
-
+        
+        if (!response.ok) throw new Error(`Venn failed: ${response.status}`);
+        
         await streamSSE(
-          vennResponse,
-          (data) => {
-            updateStep("venn", { message: data.message || "Generating...", progress: data.progress || 50 });
-          },
+          response,
+          (data) => updateStep("venn", { message: data.message || "Generating...", progress: data.progress || 50 }),
           () => {},
           (data) => {
-            // Handle both snake_case (from server) and camelCase field names
-            localVennResult = {
-              uniqueToD1: data.unique_to_d1 || data.uniqueToD1 || [],
-              aligned: data.aligned || [],
-              uniqueToD2: data.unique_to_d2 || data.uniqueToD2 || [],
-              summary: data.summary || "",
-            };
+            localVennResult = { uniqueToD1: data.unique_to_d1 || data.uniqueToD1 || [], aligned: data.aligned || [], uniqueToD2: data.unique_to_d2 || data.uniqueToD2 || [], summary: data.summary || "" };
             updateResults();
           },
-          (err) => { throw new Error(`Venn stream error: ${err}`); }
+          (err) => { throw new Error(err); }
         );
-
+        
         updateStep("venn", { status: "completed", message: "Venn analysis complete", progress: 100, completedAt: new Date() });
-        setProgress({ phase: "completed", message: "Venn restart complete", progress: 100 });
+      };
 
-      } else {
-        console.warn(`[restartStep] Step ${stepId} restart not implemented yet`);
-        updateStep(stepId, { status: "error", message: "Restart not implemented for this step" });
+      // Execute steps from restart point onwards
+      const stepsToRun = stepOrder.slice(restartIndex);
+      
+      for (const step of stepsToRun) {
+        if (abortRef.current) throw new Error("Aborted");
+        setProgress({ phase: step === "d1" ? "extracting_d1" : step === "d2" ? "extracting_d2" : step === "merge" ? "merging_concepts" : step === "graph" ? "building_graph" : step === "tesseract" ? "building_tesseract" : step === "venn" ? "generating_venn" : "idle", message: `Running ${step}...`, progress: 50 });
+        
+        switch (step) {
+          case "d1":
+            d1Concepts = await runExtractionStep("d1", d1Elements, "d1");
+            break;
+          case "d2":
+            d2Concepts = await runExtractionStep("d2", d2Elements, "d2");
+            break;
+          case "merge":
+            await runMergeStep();
+            break;
+          case "graph":
+            await runGraphStep();
+            break;
+          case "tesseract":
+            await runTesseractStep();
+            break;
+          case "venn":
+            await runVennStep();
+            break;
+        }
       }
+      
+      setProgress({ phase: "completed", message: "Pipeline restart complete", progress: 100 });
 
     } catch (err: any) {
       console.error("[restartStep] Error:", err);
       setError(err.message || "Restart failed");
-      updateStep(stepId, { status: "error", message: err.message || "Restart failed", errorMessage: err.message });
+      const currentStep = steps.find(s => s.status === "running");
+      if (currentStep) {
+        updateStep(currentStep.id, { status: "error", message: err.message || "Restart failed", errorMessage: err.message });
+      }
     } finally {
       setIsRunning(false);
     }
-  }, [results, updateStep, addStepDetail]);
+  }, [results, steps, updateStep, addStepDetail, runPipeline]);
 
   return {
     isRunning,
