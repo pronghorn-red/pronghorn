@@ -8,7 +8,7 @@ import { AuditBlackboard } from "@/components/audit/AuditBlackboard";
 import { VennDiagramResults } from "@/components/audit/VennDiagramResults";
 import { FitGapResults } from "@/components/audit/FitGapResults";
 import { AuditConfigurationDialog, AuditConfiguration } from "@/components/audit/AuditConfigurationDialog";
-import { KnowledgeGraph } from "@/components/audit/KnowledgeGraph";
+import { KnowledgeGraph } from "@/components/audit/KnowledgeGraphWebGL";
 import { PipelineActivityStream } from "@/components/audit/PipelineActivityStream";
 import { useRealtimeAudit } from "@/hooks/useRealtimeAudit";
 import { useAuditPipeline, PipelineProgress, PipelineResults, LocalGraphNode, LocalGraphEdge, PipelineStepId } from "@/hooks/useAuditPipeline";
