@@ -498,9 +498,17 @@ export function useAuditPipeline() {
 
     // Helper to update results state for live graph updates
     const updateResults = () => {
+      // Build a set of valid node IDs for fast lookup
+      const validNodeIds = new Set(localNodes.map(n => n.id));
+      
+      // Filter out orphan edges (edges pointing to non-existent nodes)
+      const validEdges = localEdges.filter(e => 
+        validNodeIds.has(e.source_node_id) && validNodeIds.has(e.target_node_id)
+      );
+      
       setResults({
         nodes: [...localNodes],
-        edges: [...localEdges],
+        edges: validEdges,
         tesseractCells: [...localTesseractCells],
         vennResult: localVennResult,
       });
@@ -2084,9 +2092,17 @@ export function useAuditPipeline() {
     let { d1Concepts, d2Concepts, mergedConcepts, unmergedD1Concepts, unmergedD2Concepts } = intermediateStateRef.current;
     
     const updateResults = () => {
+      // Build a set of valid node IDs for fast lookup
+      const validNodeIds = new Set(localNodes.map(n => n.id));
+      
+      // Filter out orphan edges (edges pointing to non-existent nodes)
+      const validEdges = localEdges.filter(e => 
+        validNodeIds.has(e.source_node_id) && validNodeIds.has(e.target_node_id)
+      );
+      
       setResults({
         nodes: [...localNodes],
-        edges: [...localEdges],
+        edges: validEdges,
         tesseractCells: [...localTesseractCells],
         vennResult: localVennResult,
       });
