@@ -82,11 +82,24 @@ function getModelConfig(selectedModel: string): {
   return { apiType: "gemini", modelName: "gemini-2.5-flash", apiKeyEnv: "GEMINI_API_KEY" };
 }
 
-// Call LLM based on model type
+// Taxonomy mission - used in both system prompt and user prompt for redundancy
+const TAXONOMY_MISSION = `You are an artifact categorizer building a concept taxonomy as part of a critical project audit.
+
+Your mission is to evaluate project artifacts by categorizing them into meaningful, specific concepts. These concepts will be used to understand important themes, identify gaps between requirements and implementations, and assess coverage.
+
+Critical rules:
+- Every element MUST be assigned at least one concept
+- Concepts must be SPECIFIC (e.g., "User Session Management" not "General User Items")
+- Reuse existing concepts only when there's a true semantic match
+- Create new concepts for genuinely unique themes
+- Never use catch-all or vague concepts like "General", "Miscellaneous", or "Other"`;
+
+// Call LLM based on model type - now with optional system prompt support
 async function callLLM(
   prompt: string,
   config: { apiType: "anthropic" | "gemini" | "xai"; modelName: string; apiKeyEnv: string },
-  maxTokens: number
+  maxTokens: number,
+  systemPrompt?: string
 ): Promise<string> {
   const apiKey = Deno.env.get(config.apiKeyEnv);
   if (!apiKey) throw new Error(`API key not configured: ${config.apiKeyEnv}`);
@@ -102,6 +115,7 @@ async function callLLM(
       body: JSON.stringify({
         model: config.modelName,
         max_tokens: maxTokens,
+        ...(systemPrompt ? { system: systemPrompt } : {}),
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -120,6 +134,7 @@ async function callLLM(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(systemPrompt ? { systemInstruction: { parts: [{ text: systemPrompt }] } } : {}),
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.4,
@@ -139,6 +154,12 @@ async function callLLM(
     return result.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
   } else {
     // xAI/Grok
+    const messages: Array<{ role: string; content: string }> = [];
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+    messages.push({ role: "user", content: prompt });
+    
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -147,7 +168,7 @@ async function callLLM(
       },
       body: JSON.stringify({
         model: config.modelName,
-        messages: [{ role: "user", content: prompt }],
+        messages,
         max_tokens: maxTokens,
         temperature: 0.4,
       }),
@@ -409,7 +430,11 @@ CRITICAL RULES:
       try {
         console.log(`[${dataset}] Attempt ${attempt}/${MAX_RETRIES} using ${selectedModel}...`);
         
-        const rawText = await callLLM(prompt, modelConfig, maxTokens);
+        // For context-aware mode, use mission in both system prompt AND user prompt (belt + suspenders)
+        const finalPrompt = isContextAwareMode ? `${TAXONOMY_MISSION}\n\n${prompt}` : prompt;
+        const systemPromptToUse = isContextAwareMode ? TAXONOMY_MISSION : undefined;
+        
+        const rawText = await callLLM(finalPrompt, modelConfig, maxTokens, systemPromptToUse);
         
         console.log(`[${dataset}] Response: ${rawText.length} chars`);
 
