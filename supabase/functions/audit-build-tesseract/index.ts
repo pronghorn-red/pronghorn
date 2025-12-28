@@ -324,31 +324,8 @@ Return ONLY the JSON object.`;
 
         tesseractCells.push(cell);
 
-        // Save to database
-        await supabase.rpc("upsert_audit_tesseract_cell_with_token", {
-          p_session_id: sessionId,
-          p_token: shareToken,
-          p_x_index: i,
-          p_x_element_id: concept.conceptId,
-          p_x_element_type: "concept",
-          p_x_element_label: concept.conceptLabel,
-          p_y_step: 1,
-          p_y_step_label: "D1-D2 Alignment",
-          p_z_polarity: cell.polarity,
-          p_z_criticality: cell.polarity >= 0.5 ? "info" : cell.polarity >= 0 ? "minor" : cell.polarity >= -0.5 ? "major" : "critical",
-          p_evidence_summary: cell.rationale, // Full rationale saved
-          p_evidence_refs: { 
-            gaps: cell.gaps, 
-            d1Coverage: cell.d1Coverage, 
-            d2Implementation: cell.d2Implementation,
-            d1Count: concept.d1Elements.length,
-            d2Count: concept.d2Elements.length,
-            model: selectedModel
-          },
-          p_contributing_agents: ["tesseract_analyzer"],
-        });
-
-        console.log(`[tesseract] Saved cell for ${concept.conceptLabel}: polarity=${cell.polarity.toFixed(2)}`);
+        // NOTE: No database write - cells stored locally until user saves
+        console.log(`[tesseract] Analyzed ${concept.conceptLabel}: polarity=${cell.polarity.toFixed(2)} (no DB write)`);
 
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
@@ -362,37 +339,7 @@ Return ONLY the JSON object.`;
       ? tesseractCells.reduce((sum, c) => sum + c.polarity, 0) / tesseractCells.length 
       : 0;
 
-    console.log(`[tesseract] Complete: ${tesseractCells.length} cells, avgPolarity=${avgPolarity.toFixed(2)}, model=${selectedModel}`);
-
-    // Write summary to blackboard (only if we processed cells)
-    if (tesseractCells.length > 0) {
-      await supabase.rpc("insert_audit_blackboard_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_agent_role: "tesseract_analyzer",
-        p_entry_type: "tesseract_cell",
-        p_content: `Analyzed: ${tesseractCells[0].conceptLabel} → polarity ${tesseractCells[0].polarity.toFixed(2)} (using ${selectedModel})\n${tesseractCells[0].rationale}`,
-        p_iteration: 3,
-        p_confidence: 0.9,
-        p_evidence: null,
-        p_target_agent: null,
-      });
-
-      await supabase.rpc("insert_audit_activity_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_agent_role: "tesseract_analyzer",
-        p_activity_type: "tesseract_cell",
-        p_title: `Tesseract: ${tesseractCells[0].conceptLabel}`,
-        p_content: `Polarity: ${tesseractCells[0].polarity.toFixed(2)} - ${tesseractCells[0].rationale.slice(0, 100)}...`,
-        p_metadata: { 
-          conceptLabel: tesseractCells[0].conceptLabel,
-          polarity: tesseractCells[0].polarity,
-          gapCount: tesseractCells[0].gaps.length,
-          model: selectedModel
-        },
-      });
-    }
+    console.log(`[tesseract] Complete: ${tesseractCells.length} cells, avgPolarity=${avgPolarity.toFixed(2)}, model=${selectedModel} (no DB writes)`);
 
     return new Response(JSON.stringify({ 
       success: true, 

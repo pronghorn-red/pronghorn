@@ -173,40 +173,13 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
     }
   }, [projectId, shareToken]);
 
+  // REMOVED: Realtime subscriptions disabled - all audit processing is local-only
+  // Data is only loaded when user explicitly loads a saved session
+  // Data is only saved when user clicks "Save Audit"
   useEffect(() => {
     if (!sessionId || !shareToken) return;
+    // Only load on initial mount - no realtime subscriptions
     loadSessionData(sessionId);
-    
-    const channel = supabase.channel(`audit-${sessionId}`);
-    channelRef.current = channel;
-    
-    channel
-      .on("postgres_changes", { event: "*", schema: "public", table: "audit_sessions", filter: `id=eq.${sessionId}` }, (p) => {
-        if (p.eventType === "UPDATE") setSession(p.new as AuditSession);
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "audit_blackboard", filter: `session_id=eq.${sessionId}` }, (p) => {
-        setBlackboardEntries((prev) => [...prev, p.new as AuditBlackboard]);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "audit_tesseract_cells", filter: `session_id=eq.${sessionId}` }, (p) => {
-        if (p.eventType === "INSERT") setTesseractCells((prev) => [...prev, p.new as AuditTesseractCell]);
-        else if (p.eventType === "UPDATE") setTesseractCells((prev) => prev.map((c) => c.id === (p.new as AuditTesseractCell).id ? (p.new as AuditTesseractCell) : c));
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "audit_graph_nodes", filter: `session_id=eq.${sessionId}` }, (p) => {
-        if (p.eventType === "INSERT") setGraphNodes((prev) => [...prev, p.new as AuditGraphNode]);
-        else if (p.eventType === "UPDATE") setGraphNodes((prev) => prev.map((n) => n.id === (p.new as AuditGraphNode).id ? (p.new as AuditGraphNode) : n));
-        else if (p.eventType === "DELETE") setGraphNodes((prev) => prev.filter((n) => n.id !== (p.old as AuditGraphNode).id));
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "audit_graph_edges", filter: `session_id=eq.${sessionId}` }, (p) => {
-        if (p.eventType === "INSERT") setGraphEdges((prev) => [...prev, p.new as AuditGraphEdge]);
-        else if (p.eventType === "DELETE") setGraphEdges((prev) => prev.filter((e) => e.id !== (p.old as AuditGraphEdge).id));
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "audit_activity_stream", filter: `session_id=eq.${sessionId}` }, (p) => {
-        setActivityStream((prev) => [...prev, p.new as AuditActivityEntry]);
-      })
-      .on("broadcast", { event: "audit_refresh" }, () => loadSessionData(sessionId))
-      .subscribe();
-    
-    return () => { channel.unsubscribe(); channelRef.current = null; };
   }, [sessionId, shareToken, loadSessionData]);
 
   const createSession = useCallback(async (params: CreateSessionParams): Promise<AuditSession | null> => {
@@ -227,14 +200,12 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
       p_dataset_2_content: params.dataset2Content ? JSON.parse(JSON.stringify(params.dataset2Content)) : null,
     });
     if (error) { setError(error.message); return null; }
-    channelRef.current?.send({ type: "broadcast", event: "audit_refresh", payload: {} });
     return data as AuditSession;
   }, [projectId, shareToken]);
 
   const updateSessionStatus = useCallback(async (sid: string, status: string) => {
     if (!shareToken) return;
     await supabase.rpc("update_audit_session_with_token", { p_session_id: sid, p_token: shareToken, p_status: status });
-    channelRef.current?.send({ type: "broadcast", event: "audit_refresh", payload: {} });
   }, [shareToken]);
 
   const writeToBlackboard = useCallback(async (entry: WriteBlackboardParams) => {
@@ -288,8 +259,6 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
         setGraphNodes((prev) => prev.filter((n) => n.id !== nodeId));
       }
     }
-    
-    channelRef.current?.send({ type: "broadcast", event: "audit_refresh", payload: {} });
     return deletedCount;
   }, [shareToken, graphNodes, graphEdges]);
 

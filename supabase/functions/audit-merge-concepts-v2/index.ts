@@ -315,28 +315,7 @@ Return ONLY the JSON object.`;
         }
       }
 
-      console.log(`[merge-v2] OUTPUT: ${validMerges.length} valid merges`);
-
-      await sendSSE("progress", { phase: "concept_merge", message: "Merge complete", progress: 90 });
-
-      // Write to activity stream
-      await supabase.rpc("insert_audit_activity_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_agent_role: "concept_merger_v2",
-        p_activity_type: "concept_merge",
-        p_title: `Round ${round}/${totalRounds}: ${validMerges.length} merges`,
-        p_content: validMerges.length > 0 
-          ? `Merges:\n${validMerges.map(m => `• ${m.mergedLabel} ← [${m.sourceIds.join(", ")}]`).join("\n")}`
-          : "No merges in this round",
-        p_metadata: { 
-          round,
-          totalRounds,
-          inputCount: concepts.length,
-          mergeCount: validMerges.length,
-          model: selectedModel,
-        },
-      });
+      console.log(`[merge-v2] OUTPUT: ${validMerges.length} valid merges (no DB writes)`);
 
       // Return ONLY merge instructions - client handles everything else
       const response: MergeResponse = {

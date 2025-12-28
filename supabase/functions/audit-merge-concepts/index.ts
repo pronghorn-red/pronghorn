@@ -369,42 +369,9 @@ Return ONLY the JSON object, no other text.`;
 
       console.log(`[merge] Results: ${mergeCount} merges performed, ${outputConcepts.length} total concepts out`);
 
-      await sendSSE("progress", { 
-        phase: "concept_merge", 
-        message: `${mergeCount} merges performed, ${outputConcepts.length} concepts remaining`, 
-        progress: 80 
-      });
-
-      // Write to blackboard
-      await supabase.rpc("insert_audit_blackboard_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_agent_role: "concept_merger",
-        p_entry_type: "merge_results",
-        p_content: `Round ${round}/${rounds} Merge Results (using ${selectedModel}):\n- ${mergeCount} merges performed\n- ${outputConcepts.length} concepts remaining\n\nMerges:\n${parsed.merges?.map(m => `• ${m.mergedLabel} ← [${m.sourceConcepts.join(", ")}]`).join("\n") || "(none)"}`,
-        p_iteration: round,
-        p_confidence: 0.85,
-        p_evidence: null,
-        p_target_agent: null,
-      });
-
-      // Log activity
-      await supabase.rpc("insert_audit_activity_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_agent_role: "concept_merger",
-        p_activity_type: "concept_merge",
-        p_title: `Round ${round}/${rounds}: ${mergeCount} merges`,
-        p_content: `${concepts.length} concepts in → ${outputConcepts.length} out (${mergeCount} merges) using ${selectedModel}`,
-        p_metadata: { 
-          round,
-          totalRounds: rounds,
-          inputCount: concepts.length,
-          outputCount: outputConcepts.length,
-          mergeCount,
-          model: selectedModel
-        },
-      });
+      // NOTE: No database writes during processing - all data stored locally
+      // and only saved when user clicks "Save Audit" at the end
+      console.log(`[merge] Round ${round}/${rounds}: ${mergeCount} merges, ${outputConcepts.length} concepts out (no DB writes)`);
 
       await sendSSE("progress", { phase: "concept_merge", message: "Merge complete", progress: 100 });
       

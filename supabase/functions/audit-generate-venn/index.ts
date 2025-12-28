@@ -263,51 +263,9 @@ serve(async (req) => {
         generatedAt: new Date().toISOString(),
       };
 
-      await sendSSE("progress", { phase: "venn", message: "Saving Venn results...", progress: 95 });
-
-      // Save to session
-      await supabase.rpc("update_audit_session_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_venn_result: vennResult,
-        p_status: "completed",
-        p_phase: "completed",
-      });
-
-      // Write final summary to blackboard
-      await supabase.rpc("insert_audit_blackboard_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_agent_role: "venn_generator",
-        p_entry_type: "venn_complete",
-        p_content: `VENN ANALYSIS COMPLETE\n\n` +
-          `📊 Coverage Summary:\n` +
-          `- D1 Coverage: ${d1Coverage.toFixed(1)}%\n` +
-          `- D2 Coverage: ${d2Coverage.toFixed(1)}%\n` +
-          `- Alignment Score: ${alignmentScore.toFixed(1)}\n` +
-          `- Average Polarity: ${avgPolarity.toFixed(2)}\n\n` +
-          `📈 Breakdown:\n` +
-          `- Unique to D1 (Gaps): ${uniqueToD1.length}\n` +
-          `- Aligned (Shared): ${aligned.length}\n` +
-          `- Unique to D2 (Orphans): ${uniqueToD2.length}\n\n` +
-          `🔴 Critical Gaps:\n${uniqueToD1.slice(0, 5).map(g => `  • ${g.label}`).join("\n") || "  None"}\n\n` +
-          `🟢 Best Alignments:\n${aligned.filter(a => a.polarity >= 0.7).slice(0, 5).map(a => `  • ${a.label} (${(a.polarity * 100).toFixed(0)}%)`).join("\n") || "  None"}`,
-        p_iteration: 4,
-        p_confidence: 0.95,
-        p_evidence: null,
-        p_target_agent: null,
-      });
-
-      // Log activity
-      await supabase.rpc("insert_audit_activity_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_agent_role: "venn_generator",
-        p_activity_type: "venn_complete",
-        p_title: `Audit Complete - Venn Analysis Generated`,
-        p_content: `D1 Coverage: ${d1Coverage.toFixed(1)}%, D2 Coverage: ${d2Coverage.toFixed(1)}%, Alignment: ${alignmentScore.toFixed(1)}`,
-        p_metadata: vennResult.summary,
-      });
+      // NOTE: No database writes during processing - all data stored locally
+      // Session update and saving happens when user clicks "Save Audit" at the end
+      console.log("[venn] Venn result generated (no DB writes)");
 
       await sendSSE("progress", { phase: "venn", message: "Venn analysis complete!", progress: 100 });
       await sendSSE("result", vennResult);

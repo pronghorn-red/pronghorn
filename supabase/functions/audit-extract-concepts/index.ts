@@ -367,47 +367,10 @@ CRITICAL RULES:
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    // NOTE: No database writes during processing - all data is stored locally
+    // and only saved when user clicks "Save Audit" at the end
 
-    // Log to blackboard
-    try {
-      await supabase.rpc("insert_audit_blackboard_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_agent_role: `${dataset}_extractor`,
-        p_entry_type: `${dataset}_concepts`,
-        p_content: `Extracted ${concepts.length} concepts from ${elements.length} elements using ${selectedModel}:\n${concepts.map(c => `• ${c.label} (${c.elementIds.length} elements): ${c.description.slice(0, 100)}...`).join("\n")}`,
-        p_iteration: 1,
-        p_confidence: 0.9,
-        p_evidence: null,
-        p_target_agent: null,
-      });
-    } catch (e) {
-      console.warn(`[${dataset}] Failed to log to blackboard:`, e);
-    }
-
-    // Log activity
-    try {
-      await supabase.rpc("insert_audit_activity_with_token", {
-        p_session_id: sessionId,
-        p_token: shareToken,
-        p_agent_role: `${dataset}_extractor`,
-        p_activity_type: "concept_extraction",
-        p_title: `${dataset === "d1" ? "D1" : "D2"} Concept Extraction Complete`,
-        p_content: `Extracted ${concepts.length} concepts from ${elements.length} elements using ${selectedModel}`,
-        p_metadata: { 
-          conceptCount: concepts.length, 
-          elementCount: elements.length, 
-          dataset,
-          totalContentChars,
-          totalEstimatedTokens,
-          model: selectedModel,
-        },
-      });
-    } catch (e) {
-      console.warn(`[${dataset}] Failed to log activity:`, e);
-    }
-
-    console.log(`[${dataset}] Returning ${concepts.length} concepts`);
+    console.log(`[${dataset}] Returning ${concepts.length} concepts (no DB writes)`);
 
     return new Response(JSON.stringify({
       success: true,
