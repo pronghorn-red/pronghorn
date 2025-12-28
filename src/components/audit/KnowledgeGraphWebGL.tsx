@@ -151,6 +151,25 @@ export function KnowledgeGraph({
   const { theme, resolvedTheme } = useTheme();
   const isDarkMode = (resolvedTheme ?? theme) === "dark";
 
+  // Refs to avoid callback recreation on visual-only changes
+  const isDarkModeRef = useRef(isDarkMode);
+  const highlightOrphansRef = useRef(highlightOrphans);
+  const orphanNodeIdsRef = useRef<Set<string>>(new Set());
+  const graphDataRef = useRef<{ nodes: GraphNode[]; links: GraphLink[] }>({ nodes: [], links: [] });
+
+  // Keep refs in sync
+  useEffect(() => { isDarkModeRef.current = isDarkMode; }, [isDarkMode]);
+  useEffect(() => { highlightOrphansRef.current = highlightOrphans; }, [highlightOrphans]);
+
+  // Create stable fingerprints to detect actual data changes
+  const nodesFingerprint = useMemo(() => {
+    return nodes.map(n => `${n.id}:${n.label}:${n.node_type}:${n.color || ''}`).sort().join('|');
+  }, [nodes]);
+
+  const edgesFingerprint = useMemo(() => {
+    return edges.map(e => `${e.id}:${e.source_node_id}:${e.target_node_id}:${e.edge_type}`).sort().join('|');
+  }, [edges]);
+
   // Calculate orphan nodes (nodes with no edges) and connected node IDs
   const { orphanNodes, orphanCount, orphanNodeIds, connectedNodeIds } = useMemo(() => {
     const connected = new Set<string>();
@@ -159,13 +178,15 @@ export function KnowledgeGraph({
       connected.add(e.target_node_id);
     });
     const orphans = nodes.filter(n => !connected.has(n.id));
+    const orphanIds = new Set(orphans.map(n => n.id));
+    orphanNodeIdsRef.current = orphanIds;
     return { 
       orphanNodes: orphans, 
       orphanCount: orphans.length,
-      orphanNodeIds: new Set(orphans.map(n => n.id)),
+      orphanNodeIds: orphanIds,
       connectedNodeIds: connected
     };
-  }, [nodes, edges]);
+  }, [nodesFingerprint, edgesFingerprint, nodes, edges]);
 
   // Transform data for react-force-graph-2d with position preservation
   const graphData = useMemo(() => {
@@ -185,6 +206,7 @@ export function KnowledgeGraph({
       createdByAgent: "system",
       color: "#8b5cf6",
       size: 40,
+      hasLinks: true,
       ...(existingAnchor ? {
         x: existingAnchor.x,
         y: existingAnchor.y,
@@ -252,12 +274,14 @@ export function KnowledgeGraph({
         })),
     ];
 
-    return { nodes: graphNodes, links: graphLinks };
-  }, [nodes, edges, connectedNodeIds]);
+    const result = { nodes: graphNodes, links: graphLinks };
+    graphDataRef.current = result;
+    return result;
+  }, [nodesFingerprint, edgesFingerprint, nodes, edges, connectedNodeIds]);
 
-  // Update position cache on simulation tick
+  // Update position cache on simulation tick - uses ref to avoid recreating callback
   const handleEngineTick = useCallback(() => {
-    const currentNodes = graphData.nodes;
+    const currentNodes = graphDataRef.current.nodes;
     currentNodes.forEach(node => {
       previousNodesRef.current.set(node.id, {
         x: node.x,
@@ -268,7 +292,7 @@ export function KnowledgeGraph({
         fy: node.fy,
       });
     });
-  }, [graphData.nodes]);
+  }, []);
 
   // Handle resize
   useEffect(() => {
@@ -374,11 +398,12 @@ export function KnowledgeGraph({
     }
   };
 
-  // Custom node rendering on canvas
+  // Custom node rendering on canvas - uses refs to avoid callback recreation
   const nodeCanvasObject = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const size = node.size || 15;
     const label = node.label?.slice(0, 20) + (node.label?.length > 20 ? "..." : "");
-    const isOrphan = highlightOrphans && orphanNodeIds.has(node.id);
+    const isOrphan = highlightOrphansRef.current && orphanNodeIdsRef.current.has(node.id);
+    const darkMode = isDarkModeRef.current;
     const x = node.x || 0;
     const y = node.y || 0;
 
@@ -423,20 +448,21 @@ export function KnowledgeGraph({
     // Draw label below node (only when zoomed in enough)
     if (globalScale > 0.4) {
       // Use dark text in light mode, light text in dark mode
-      ctx.fillStyle = isDarkMode 
+      ctx.fillStyle = darkMode 
         ? "rgba(255, 255, 255, 0.9)" 
         : "rgba(0, 0, 0, 0.9)";
       ctx.font = `${11 / globalScale}px Sans-Serif`;
       ctx.fillText(label, x, y + size + 12 / globalScale);
     }
-  }, [highlightOrphans, orphanNodeIds, isDarkMode]);
+  }, []);
 
-  // Custom link rendering
+  // Custom link rendering - uses refs to avoid callback recreation
   const linkCanvasObject = useCallback((link: GraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const source = link.source as unknown as GraphNode;
     const target = link.target as unknown as GraphNode;
     if (!source.x || !source.y || !target.x || !target.y) return;
 
+    const darkMode = isDarkModeRef.current;
     const style = edgeTypeStyles[link.edgeType] || { color: "#6b7280" };
     ctx.strokeStyle = style.color;
     ctx.lineWidth = link.edgeType === "anchors" ? 3 / globalScale : Math.max(1, link.weight * 2) / globalScale;
@@ -479,13 +505,13 @@ export function KnowledgeGraph({
       const midX = (source.x + target.x) / 2;
       const midY = (source.y + target.y) / 2;
       // Use darker gray in light mode for better contrast
-      ctx.fillStyle = isDarkMode ? "#9ca3af" : "#4b5563";
+      ctx.fillStyle = darkMode ? "#9ca3af" : "#4b5563";
       ctx.font = `${10 / globalScale}px Sans-Serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(link.label, midX, midY);
     }
-  }, [isDarkMode]);
+  }, []);
 
   if (nodes.length === 0) {
     return (
