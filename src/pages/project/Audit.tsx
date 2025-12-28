@@ -111,15 +111,7 @@ export default function Audit() {
     loadSessions();
   }, [projectId, shareToken]);
 
-  // Auto-select session (separate effect to avoid reload loop)
-  useEffect(() => {
-    if (sessions.length > 0 && !selectedSessionId) {
-      const activeSession = sessions.find((s: AuditSession) => 
-        s.status === "running" || s.status === "agents_active"
-      );
-      setSelectedSessionId(activeSession?.id || sessions[0].id);
-    }
-  }, [sessions, selectedSessionId]);
+  // Auto-selection removed - users must manually select and load sessions
 
   // Reconstruct pipeline steps from activity stream when loading an existing session
   useEffect(() => {

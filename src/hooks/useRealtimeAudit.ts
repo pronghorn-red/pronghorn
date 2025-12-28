@@ -137,7 +137,7 @@ export function useRealtimeAudit(projectId: string, sessionId?: string): UseReal
   const [graphNodes, setGraphNodes] = useState<AuditGraphNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<AuditGraphEdge[]>([]);
   const [activityStream, setActivityStream] = useState<AuditActivityEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadSessionData = useCallback(async (sid: string) => {
