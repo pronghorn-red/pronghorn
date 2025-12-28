@@ -5,6 +5,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Binary file extensions that should not be decoded as text
+const binaryExtensions = [
+  '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.bmp', '.svg',
+  '.pdf', '.zip', '.tar', '.gz', '.rar', '.7z',
+  '.woff', '.woff2', '.ttf', '.eot', '.otf',
+  '.mp3', '.mp4', '.wav', '.avi', '.mov', '.webm',
+  '.exe', '.dll', '.so', '.dylib',
+  '.pyc', '.class', '.o', '.obj',
+  '.lock', '.lockb'
+];
+
+function isBinaryFile(path: string): boolean {
+  const ext = path.toLowerCase().substring(path.lastIndexOf('.'));
+  return binaryExtensions.includes(ext);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -72,7 +88,7 @@ Deno.serve(async (req) => {
 
     const organization = "pronghorn-cloud";
 
-    console.log(`Cloning ${sourceOrg}/${sourceRepo} (${branch}) to ${organization}/${finalRepoName}`);
+    console.log(`[clone-public-repo] Cloning ${sourceOrg}/${sourceRepo} (${branch}) to ${organization}/${finalRepoName}`);
 
     // Create empty repository in pronghorn-cloud
     const createRepoResponse = await fetch(`https://api.github.com/orgs/${organization}/repos`, {
@@ -97,17 +113,21 @@ Deno.serve(async (req) => {
 
     const newRepoData = await createRepoResponse.json();
 
-    // Fetch file tree from source repository
+    // Fetch file tree from source repository WITH AUTHENTICATION
     const treeResponse = await fetch(
       `https://api.github.com/repos/${sourceOrg}/${sourceRepo}/git/trees/${branch}?recursive=1`,
       {
         headers: {
+          Authorization: `token ${githubPat}`,
           Accept: "application/vnd.github.v3+json",
+          "User-Agent": "Pronghorn-Clone",
         },
       },
     );
 
     if (!treeResponse.ok) {
+      const errorText = await treeResponse.text();
+      console.error(`[clone-public-repo] Tree fetch failed: ${treeResponse.status} - ${errorText}`);
       throw new Error(`Failed to fetch source repository tree. Verify the repository and branch exist.`);
     }
 
@@ -116,38 +136,89 @@ Deno.serve(async (req) => {
     // Filter only files (not directories)
     const files = treeData.tree.filter((item: any) => item.type === "blob");
 
-    console.log(`Found ${files.length} files to clone`);
+    console.log(`[clone-public-repo] Found ${files.length} files to clone`);
 
-    // Fetch content for each file
-    const fileContents: { path: string; content: string }[] = [];
+    // Fetch content for each file using Blob API in parallel batches
+    // Process in batches of 50 to avoid overwhelming the API
+    const BATCH_SIZE = 50;
+    const allFileContents: { path: string; content: string; isBinary: boolean }[] = [];
 
-    for (const file of files) {
-      const contentResponse = await fetch(
-        `https://api.github.com/repos/${sourceOrg}/${sourceRepo}/contents/${file.path}?ref=${branch}`,
-        {
-          headers: {
-            Accept: "application/vnd.github.v3+json",
-          },
-        },
+    for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      const batch = files.slice(i, i + BATCH_SIZE);
+      console.log(`[clone-public-repo] Fetching batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(files.length / BATCH_SIZE)} (${batch.length} files)`);
+
+      const batchResults = await Promise.all(
+        batch.map(async (file: any) => {
+          try {
+            // Use Blob API - handles all file sizes and types
+            const blobUrl = `https://api.github.com/repos/${sourceOrg}/${sourceRepo}/git/blobs/${file.sha}`;
+            const blobResponse = await fetch(blobUrl, {
+              headers: {
+                Authorization: `token ${githubPat}`,
+                Accept: "application/vnd.github.v3+json",
+                "User-Agent": "Pronghorn-Clone",
+              },
+            });
+
+            if (!blobResponse.ok) {
+              console.error(`[clone-public-repo] Failed to get blob for ${file.path}: ${blobResponse.status}`);
+              return null;
+            }
+
+            const blobData = await blobResponse.json();
+            const isBinary = isBinaryFile(file.path);
+
+            let content: string;
+            if (blobData.encoding === 'base64') {
+              const base64Clean = blobData.content.replace(/\n/g, '');
+              
+              if (isBinary) {
+                // Keep binary files as base64 for blob creation
+                content = base64Clean;
+              } else {
+                // Decode text files to UTF-8
+                try {
+                  const bytes = Uint8Array.from(atob(base64Clean), c => c.charCodeAt(0));
+                  content = new TextDecoder('utf-8').decode(bytes);
+                } catch (e) {
+                  // If decode fails, treat as binary
+                  console.warn(`[clone-public-repo] Failed to decode ${file.path} as text, treating as binary`);
+                  return {
+                    path: file.path,
+                    content: base64Clean,
+                    isBinary: true,
+                  };
+                }
+              }
+            } else {
+              content = blobData.content;
+            }
+
+            return {
+              path: file.path,
+              content,
+              isBinary,
+            };
+          } catch (error) {
+            console.error(`[clone-public-repo] Error fetching ${file.path}:`, error);
+            return null;
+          }
+        })
       );
 
-      if (contentResponse.ok) {
-        const contentData = await contentResponse.json();
-
-        if (contentData.content) {
-          // Decode base64 content with proper UTF-8 handling
-          const base64Clean = contentData.content.replace(/\n/g, "");
-          const bytes = Uint8Array.from(atob(base64Clean), (c) => c.charCodeAt(0));
-          const decodedContent = new TextDecoder("utf-8").decode(bytes);
-          fileContents.push({
-            path: file.path,
-            content: decodedContent,
-          });
+      // Add successful fetches to results
+      for (const result of batchResults) {
+        if (result !== null) {
+          allFileContents.push(result);
         }
       }
     }
 
-    console.log(`Fetched content for ${fileContents.length} files`);
+    console.log(`[clone-public-repo] Successfully fetched ${allFileContents.length}/${files.length} files`);
+
+    if (allFileContents.length === 0) {
+      throw new Error("No files could be fetched from source repository");
+    }
 
     // Get the initial commit SHA from new repo
     const refResponse = await fetch(
@@ -177,13 +248,78 @@ Deno.serve(async (req) => {
     const commitData = await commitResponse.json();
     const baseTreeSha = commitData.tree.sha;
 
-    // Create tree with all files
-    const tree = fileContents.map((file) => ({
-      path: file.path,
-      mode: "100644",
-      type: "blob",
-      content: file.content,
-    }));
+    // Create tree entries - for binary files, create blobs first
+    console.log(`[clone-public-repo] Creating tree entries...`);
+    const tree: any[] = [];
+
+    // Separate binary and text files
+    const binaryFiles = allFileContents.filter(f => f.isBinary);
+    const textFiles = allFileContents.filter(f => !f.isBinary);
+
+    // Create blobs for binary files in parallel batches
+    if (binaryFiles.length > 0) {
+      console.log(`[clone-public-repo] Creating ${binaryFiles.length} binary blobs...`);
+      
+      for (let i = 0; i < binaryFiles.length; i += BATCH_SIZE) {
+        const batch = binaryFiles.slice(i, i + BATCH_SIZE);
+        
+        const blobResults = await Promise.all(
+          batch.map(async (file) => {
+            try {
+              const createBlobResponse = await fetch(
+                `https://api.github.com/repos/${organization}/${finalRepoName}/git/blobs`,
+                {
+                  method: "POST",
+                  headers: {
+                    Authorization: `token ${githubPat}`,
+                    Accept: "application/vnd.github.v3+json",
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    content: file.content,
+                    encoding: "base64",
+                  }),
+                }
+              );
+
+              if (!createBlobResponse.ok) {
+                console.error(`[clone-public-repo] Failed to create blob for ${file.path}`);
+                return null;
+              }
+
+              const blobData = await createBlobResponse.json();
+              return {
+                path: file.path,
+                mode: "100644",
+                type: "blob",
+                sha: blobData.sha,
+              };
+            } catch (error) {
+              console.error(`[clone-public-repo] Error creating blob for ${file.path}:`, error);
+              return null;
+            }
+          })
+        );
+
+        for (const result of blobResults) {
+          if (result !== null) {
+            tree.push(result);
+          }
+        }
+      }
+    }
+
+    // Add text files directly to tree (content included inline)
+    for (const file of textFiles) {
+      tree.push({
+        path: file.path,
+        mode: "100644",
+        type: "blob",
+        content: file.content,
+      });
+    }
+
+    console.log(`[clone-public-repo] Creating tree with ${tree.length} entries...`);
 
     const createTreeResponse = await fetch(`https://api.github.com/repos/${organization}/${finalRepoName}/git/trees`, {
       method: "POST",
@@ -200,6 +336,7 @@ Deno.serve(async (req) => {
 
     if (!createTreeResponse.ok) {
       const errorData = await createTreeResponse.json();
+      console.error(`[clone-public-repo] Tree creation failed:`, errorData);
       throw new Error(`Failed to create tree: ${errorData.message}`);
     }
 
@@ -252,7 +389,7 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to update reference: ${errorData.message}`);
     }
 
-    console.log(`Successfully pushed ${fileContents.length} files to ${organization}/${finalRepoName}`);
+    console.log(`[clone-public-repo] Successfully pushed ${tree.length} files to ${organization}/${finalRepoName}`);
 
     // Link repository to project
     const { data: newRepo, error: repoError } = await supabase.rpc("create_project_repo_with_token", {
@@ -266,7 +403,7 @@ Deno.serve(async (req) => {
     });
 
     if (repoError) {
-      console.error("Error linking repository:", repoError);
+      console.error("[clone-public-repo] Error linking repository:", repoError);
       throw new Error("Failed to link repository to project");
     }
 
@@ -278,7 +415,7 @@ Deno.serve(async (req) => {
         payload: { projectId }
       });
     } catch (broadcastError) {
-      console.warn('Failed to broadcast repos_refresh:', broadcastError);
+      console.warn('[clone-public-repo] Failed to broadcast repos_refresh:', broadcastError);
     }
 
     // Pull files into database
@@ -291,22 +428,23 @@ Deno.serve(async (req) => {
     });
 
     if (pullError) {
-      console.error("Error pulling cloned files:", pullError);
+      console.error("[clone-public-repo] Error pulling cloned files:", pullError);
     }
 
-    console.log(`Cloned repository: ${organization}/${finalRepoName} from ${sourceOrg}/${sourceRepo}`);
+    console.log(`[clone-public-repo] Complete: ${organization}/${finalRepoName} from ${sourceOrg}/${sourceRepo} (${tree.length} files)`);
 
     return new Response(
       JSON.stringify({
         success: true,
         repo: newRepo,
         githubUrl: newRepoData.html_url,
-        filesCloned: fileContents.length,
+        filesCloned: tree.length,
+        totalFiles: files.length,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    console.error("Error in clone-public-repo:", error);
+    console.error("[clone-public-repo] Error:", error);
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
