@@ -59,11 +59,8 @@ export default function Audit() {
   const [isResuming, setIsResuming] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [usePipeline, setUsePipeline] = useState(true); // Use new pipeline by default
-  const staleCheckRef = useRef<NodeJS.Timeout | null>(null);
-  const lastResumeAttemptRef = useRef<number>(0);
   const manualStopRef = useRef(false);
-  const sessionIdRef = useRef<string | null>(null);
-  const isCheckingStaleRef = useRef(false);
+  const [loadedSessionId, setLoadedSessionId] = useState<string | undefined>();
   
   // Store D1/D2 elements for Tesseract visualization
   const [d1Elements, setD1Elements] = useState<Array<{ id: string; label: string; content: string; category: string }>>([]);
@@ -91,7 +88,7 @@ export default function Audit() {
     addGraphEdges,
     removeGraphNodes,
     saveAuditData,
-  } = useRealtimeAudit(projectId!, selectedSessionId);
+  } = useRealtimeAudit(projectId!, loadedSessionId);
 
   // Load all sessions for this project (only on mount or when project/token changes)
   useEffect(() => {
@@ -123,11 +120,6 @@ export default function Audit() {
       setSelectedSessionId(activeSession?.id || sessions[0].id);
     }
   }, [sessions, selectedSessionId]);
-
-  // Keep sessionIdRef in sync for stale monitor
-  useEffect(() => {
-    sessionIdRef.current = session?.id || null;
-  }, [session?.id]);
 
   // Reconstruct pipeline steps from activity stream when loading an existing session
   useEffect(() => {
@@ -171,14 +163,6 @@ export default function Audit() {
 
   const resumeOrchestrator = useCallback(async (sessionToResume: AuditSession) => {
     if (isResuming) return;
-    
-    // Prevent rapid re-attempts (wait at least 30s between attempts)
-    const now = Date.now();
-    if (now - lastResumeAttemptRef.current < 30000) {
-      console.log("Skipping resume - too soon since last attempt");
-      return;
-    }
-    lastResumeAttemptRef.current = now;
     
     setIsResuming(true);
     console.log("Resuming stale audit session:", sessionToResume.id);
@@ -240,68 +224,18 @@ export default function Audit() {
     }
   }, [projectId, shareToken, isResuming]);
 
-  // Monitor for stale "running" sessions and auto-resume
-  // Uses refs to avoid re-triggering on every session state change
-  useEffect(() => {
-    if (!shareToken || !projectId) return;
-
-    const checkForStaleSession = async () => {
-      const currentSessionId = sessionIdRef.current;
-      
-      // Don't check if no session, already checking, resuming, or manually stopped
-      if (!currentSessionId || isCheckingStaleRef.current || isResuming || manualStopRef.current) return;
-      
-      isCheckingStaleRef.current = true;
-      
-      try {
-        // Re-fetch session status from DB to avoid stale state
-        const { data: freshSessions, error } = await supabase.rpc("get_audit_sessions_with_token", {
-          p_project_id: projectId,
-          p_token: shareToken,
-        });
-        
-        if (error) {
-          console.error("Failed to check session status:", error);
-          return;
-        }
-        
-        const freshSession = freshSessions?.find((s: AuditSession) => s.id === currentSessionId);
-        
-        // Only resume if session is still actually running
-        if (!freshSession || (freshSession.status !== "running" && freshSession.status !== "agents_active" && freshSession.status !== "analyzing_shape")) {
-          return;
-        }
-        
-        const updatedAt = new Date(freshSession.updated_at);
-        const staleness = Date.now() - updatedAt.getTime();
-        
-        // If session hasn't been updated in 70 seconds but still "running", it's likely timed out
-        if (staleness > 70000) {
-          console.log(`Session appears stale (${Math.round(staleness/1000)}s since last update), auto-resuming...`);
-          resumeOrchestrator(freshSession);
-        }
-      } finally {
-        isCheckingStaleRef.current = false;
-      }
-    };
-
-    // Delay initial check by 5 seconds to let things stabilize
-    const initialTimeout = setTimeout(checkForStaleSession, 5000);
-    staleCheckRef.current = setInterval(checkForStaleSession, 15000);
-
-    return () => {
-      clearTimeout(initialTimeout);
-      if (staleCheckRef.current) {
-        clearInterval(staleCheckRef.current);
-        staleCheckRef.current = null;
-      }
-    };
-  }, [projectId, shareToken, isResuming, resumeOrchestrator]);
 
   // Manual resume handler
   const handleManualResume = async () => {
     if (!session) return;
     await resumeOrchestrator(session);
+  };
+
+  // Load session data when user explicitly clicks "Load"
+  const handleLoadSession = () => {
+    if (selectedSessionId) {
+      setLoadedSessionId(selectedSessionId);
+    }
   };
 
   const handleStartAudit = async (config: AuditConfiguration) => {
@@ -323,6 +257,7 @@ export default function Audit() {
       
       if (newSession) {
         setSelectedSessionId(newSession.id);
+        setLoadedSessionId(newSession.id); // Auto-load newly created sessions
         setSessions((prev) => [newSession, ...prev]);
         setConfigDialogOpen(false);
         
@@ -480,11 +415,6 @@ export default function Audit() {
     if (!session) return;
     // Set manual stop flag to prevent auto-resume
     manualStopRef.current = true;
-    // Clear stale check immediately
-    if (staleCheckRef.current) {
-      clearInterval(staleCheckRef.current);
-      staleCheckRef.current = null;
-    }
     await updateSessionStatus(session.id, "stopped");
     toast.success("Audit stopped");
   };
@@ -704,6 +634,23 @@ export default function Audit() {
                     </SelectContent>
                   </Select>
                   
+                  {/* Load Session button - show when session selected but not loaded */}
+                  {selectedSessionId && selectedSessionId !== loadedSessionId && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleLoadSession}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4 mr-2" />
+                      )}
+                      Load
+                    </Button>
+                  )}
+                  
                   {session && (
                     <>
                       <Button
@@ -770,6 +717,20 @@ export default function Audit() {
                 </div>
               }
             />
+
+            {/* Not Loaded Message */}
+            {selectedSessionId && selectedSessionId !== loadedSessionId && (
+              <Card className="mb-6 border-muted">
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-center gap-3 text-muted-foreground">
+                    <Download className="h-5 w-5" />
+                    <p className="text-sm">
+                      Select "Load" to view this session's data
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Session Status Bar */}
             {session && (
