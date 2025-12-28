@@ -274,11 +274,21 @@ ABSOLUTE REQUIREMENT: Every single element ID from the list above MUST appear in
       // CONTEXT-AWARE MODE: Pass existing concepts, return simplified response
       const maxConcepts = maxConceptsPerElement || 10;
       
-      const existingConceptsList = existingConcepts && existingConcepts.length > 0
-        ? existingConcepts.map(c => `- ${c.id}: ${c.label} - ${c.description.slice(0, 100)}...`).join("\n")
+      // Filter out any "General" or "Miscellaneous" concepts from the list to prevent lazy reuse
+      const filteredConcepts = existingConcepts?.filter(c => 
+        !c.label.toLowerCase().includes('general') && 
+        !c.label.toLowerCase().includes('miscellaneous') &&
+        !c.label.toLowerCase().includes('other items') &&
+        !c.label.toLowerCase().includes('catch-all')
+      ) || [];
+      
+      const existingConceptsList = filteredConcepts.length > 0
+        ? filteredConcepts.map(c => `- ${c.id}: ${c.label} - ${c.description.slice(0, 100)}...`).join("\n")
         : "(no existing concepts yet)";
       
-prompt = `You are analyzing ${datasetLabel} elements to identify concepts.
+      console.log(`[${dataset}] Filtered ${(existingConcepts?.length || 0) - filteredConcepts.length} generic concepts from list`);
+      
+prompt = `You are analyzing ${datasetLabel} elements to identify SPECIFIC, MEANINGFUL concepts.
 
 ## EXISTING CONCEPTS (reuse when there's a semantic match):
 ${existingConceptsList}
@@ -296,23 +306,31 @@ Identify which concepts apply to these elements (1-${maxConcepts} total concepts
 {
   "new_concepts": [
     {
-      "label": "New Concept Name (2-5 words)",
+      "label": "Specific Concept Name (2-5 words)",
       "description": "Comprehensive explanation (4-8 sentences) covering: purpose, why these elements belong, key features, sub-themes."
     }
   ],
   "existing_concepts": ["C1", "C3"]
 }
 
-CRITICAL RULES (MANDATORY - ZERO EXCEPTIONS):
-1. YOU MUST RETURN AT LEAST 1 CONCEPT. Returning 0 concepts is a FATAL ERROR that will crash the system.
-2. If the element seems uncategorizable, create a fallback concept: "Miscellaneous ${datasetLabel}" 
-3. NEVER return {"new_concepts": [], "existing_concepts": []} - this is FORBIDDEN
-4. new_concepts: Array of genuinely NEW concepts that don't match any existing concept semantically
-5. existing_concepts: Array of concept IDs (e.g., "C1", "C3") that apply to these elements
-6. Prefer existing over new - only create new if truly unique
-7. If no existing concepts match, you MUST create at least one new concept
-8. Total concepts (new + existing) should be 1-${maxConcepts}
-9. WHEN IN DOUBT: Create "General ${dataset === 'd1' ? 'Requirements' : 'Implementation'} Items" as a catch-all`;
+CRITICAL RULES:
+1. YOU MUST RETURN AT LEAST 1 CONCEPT. Returning 0 concepts is a FATAL ERROR.
+2. NEVER return {"new_concepts": [], "existing_concepts": []} - this is FORBIDDEN
+3. new_concepts: Array of genuinely NEW concepts that don't match any existing concept semantically
+4. existing_concepts: Array of concept IDs (e.g., "C1", "C3") that apply to these elements
+5. Prefer existing over new - only create new if truly unique
+6. If no existing concepts match, you MUST create at least one new concept
+7. Total concepts (new + existing) should be 1-${maxConcepts}
+
+FORBIDDEN CONCEPT NAMES (DO NOT CREATE OR USE):
+- "General [anything]" (e.g., "General Requirements Items")
+- "Miscellaneous [anything]"
+- "Other [anything]"
+- "Uncategorized [anything]"
+- Any vague catch-all or bucket concepts
+
+INSTEAD: Read the element content carefully and create a SPECIFIC concept that describes what it actually does.
+Example: Instead of "General Requirements Items", create "Error Handling and Validation" or "Data Import Processing" based on actual content.`;
 
     } else {
       // NORMAL MODE: Standard extraction prompt (1:1 or 1:many without context)
