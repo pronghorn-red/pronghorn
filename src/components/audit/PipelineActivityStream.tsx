@@ -33,7 +33,6 @@ const PHASE_ICONS: Record<PipelinePhase, React.ReactNode> = {
   extracting_d1: <Brain className="h-4 w-4" />,
   extracting_d2: <Brain className="h-4 w-4" />,
   merging_concepts: <GitMerge className="h-4 w-4" />,
-  building_graph: <Network className="h-4 w-4" />,
   enhanced_sort: <GitMerge className="h-4 w-4" />,
   building_tesseract: <Grid3X3 className="h-4 w-4" />,
   generating_venn: <CircleDot className="h-4 w-4" />,
@@ -56,7 +55,7 @@ const STATUS_BG: Record<string, string> = {
 };
 
 // All completed steps can be restarted (will re-run from that step onwards)
-const RESTARTABLE_STEPS: PipelineStepId[] = ["nodes", "d1", "d2", "merge", "graph", "tesseract", "venn"];
+const RESTARTABLE_STEPS: PipelineStepId[] = ["nodes", "d1", "d2", "merge", "tesseract", "venn"];
 
 // Generate dynamic step title based on status
 function getStepTitle(step: PipelineStep): string {
@@ -88,10 +87,7 @@ function getStepTitle(step: PipelineStep): string {
         return "Graph Nodes Created";
       }
       if (step.phase === "merging_concepts") {
-        return "Concepts Merged";
-      }
-      if (step.phase === "building_graph") {
-        return "Graph Edges Built";
+        return "Merged & Graph Built";
       }
       if (step.phase === "building_tesseract") {
         return "Tesseract Built";

@@ -9,7 +9,6 @@ export type PipelinePhase =
   | "extracting_d1" 
   | "extracting_d2" 
   | "merging_concepts" 
-  | "building_graph"
   | "enhanced_sort"
   | "building_tesseract" 
   | "generating_venn" 
@@ -268,7 +267,7 @@ async function streamSSE(
 }
 
 // Step ID type for restart functionality
-export type PipelineStepId = "nodes" | "d1" | "d2" | "merge" | "graph" | "enhanced_sort" | "tesseract" | "venn";
+export type PipelineStepId = "nodes" | "d1" | "d2" | "merge" | "enhanced_sort" | "tesseract" | "venn";
 
 // Activity entry type for reconstruction
 interface ActivityEntry {
@@ -308,7 +307,6 @@ export function useAuditPipeline() {
       d1: { status: "pending", message: "Waiting...", details: [] },
       d2: { status: "pending", message: "Waiting...", details: [] },
       merge: { status: "pending", message: "Waiting...", details: [] },
-      graph: { status: "pending", message: "Waiting...", details: [] },
       tesseract: { status: "pending", message: "Waiting...", details: [] },
       venn: { status: "pending", message: "Waiting...", details: [] },
     };
@@ -351,8 +349,6 @@ export function useAuditPipeline() {
         stepStates.merge = { status: "completed", message: activity.title, details: stepStates.merge.details };
         mergeCount++;
         stepStates.merge.details.push(activity.title);
-        // Graph is also done after merge
-        stepStates.graph = { status: "completed", message: "Graph built from merged concepts", details: [] };
       }
 
       // Tesseract analysis
@@ -389,7 +385,6 @@ export function useAuditPipeline() {
       { id: "d1", phase: "extracting_d1", title: `Extract D1 Concepts${d1ConceptCount > 0 ? ` (${d1ConceptCount} found)` : ''}`, ...stepStates.d1, progress: stepStates.d1.status === "completed" ? 100 : 0 },
       { id: "d2", phase: "extracting_d2", title: `Extract D2 Concepts${d2ConceptCount > 0 ? ` (${d2ConceptCount} found)` : ''}`, ...stepStates.d2, progress: stepStates.d2.status === "completed" ? 100 : 0 },
       { id: "merge", phase: "merging_concepts", title: `Merge Concepts${mergeCount > 0 ? ` (${mergeCount} merged)` : ''}`, ...stepStates.merge, progress: stepStates.merge.status === "completed" ? 100 : 0 },
-      { id: "graph", phase: "building_graph", title: "Build Graph Edges", ...stepStates.graph, progress: stepStates.graph.status === "completed" ? 100 : 0 },
       { id: "tesseract", phase: "building_tesseract", title: `Build Tesseract${tesseractCount > 0 ? ` (${tesseractCount} cells)` : ''}`, ...stepStates.tesseract, progress: stepStates.tesseract.status === "completed" ? 100 : 0 },
       { id: "venn", phase: "generating_venn", title: "Generate Venn Analysis", ...stepStates.venn, progress: stepStates.venn.status === "completed" ? 100 : 0 },
     ];
@@ -476,8 +471,7 @@ export function useAuditPipeline() {
       { id: "nodes", phase: "creating_nodes", title: "Create Graph Nodes", status: "pending", message: "Waiting...", progress: 0 },
       { id: "d1", phase: "extracting_d1", title: `Extract D1 Concepts (${d1Elements.length} items)`, status: "pending", message: "Waiting...", progress: 0 },
       { id: "d2", phase: "extracting_d2", title: `Extract D2 Concepts (${d2Elements.length} items)`, status: "pending", message: "Waiting...", progress: 0 },
-      { id: "merge", phase: "merging_concepts", title: "Merge Concepts", status: "pending", message: "Waiting...", progress: 0 },
-      { id: "graph", phase: "building_graph", title: "Build Graph Edges", status: "pending", message: "Waiting...", progress: 0 },
+      { id: "merge", phase: "merging_concepts", title: "Merge & Build Graph", status: "pending", message: "Waiting...", progress: 0 },
       ...(enhancedSortEnabled ? [{ id: "enhanced_sort", phase: "enhanced_sort" as PipelinePhase, title: "Enhanced Sort", status: "pending" as const, message: "Waiting...", progress: 0 }] : []),
       { id: "tesseract", phase: "building_tesseract", title: "Build Tesseract", status: "pending", message: "Waiting...", progress: 0 },
       { id: "venn", phase: "generating_venn", title: "Generate Venn Analysis", status: "pending", message: "Waiting...", progress: 0 },
@@ -1247,10 +1241,10 @@ export function useAuditPipeline() {
           }
           
           updateResults(); // Update UI after each round
-          addStepDetail("merge", `Round ${round}: graph updated with ${roundMergeInstructions.length} merges`);
+          addStepDetail("merge", `Round ${round}: ${roundMergeInstructions.flatMap(m => m.sourceConcepts).length} concepts → ${roundMergeInstructions.length} unified`);
         }
         
-        addStepDetail("merge", `Round ${round} complete: ${roundMergedCount} merges, ${currentUnifiedConcepts.length} concepts remaining`);
+        addStepDetail("merge", `Round ${round} complete: ${currentUnifiedConcepts.length} concepts total`);
       }
       
       // Log final merge history
@@ -1295,9 +1289,10 @@ export function useAuditPipeline() {
           elementIds: c.d2Ids,
         }));
 
+      const totalFinalConcepts = mergedConcepts.length + unmergedD1Concepts.length + unmergedD2Concepts.length;
       updateStep("merge", { 
         status: "completed", 
-        message: `${mergedConcepts.length} merged, ${unmergedD1Concepts.length} gaps, ${unmergedD2Concepts.length} orphans`, 
+        message: `${totalFinalConcepts} concepts: ${mergedConcepts.length} both, ${unmergedD1Concepts.length} D1-only, ${unmergedD2Concepts.length} D2-only`, 
         progress: 100, 
         completedAt: new Date() 
       });
@@ -1341,19 +1336,17 @@ export function useAuditPipeline() {
         originalLabelToFinalLabel: Object.fromEntries(originalLabelToFinalLabel),
       };
 
-      setProgress({ phase: "building_graph", message: "Rebuilding graph with merged concepts...", progress: 50, mergedCount: mergedConcepts.length });
+      setProgress({ phase: "merging_concepts", message: "Finalizing graph...", progress: 75 });
 
       if (abortRef.current) throw new Error("Aborted");
-      
-      // Step mode pause after merge
-      await pauseIfStepMode("merge");
 
       // ========================================
       // PHASE 2.5: FINALIZE GRAPH (handle remaining premerge concepts)
       // Since edges are now migrated inline after each merge round,
       // we just need to convert any remaining premerge concepts to final nodes
       // ========================================
-      updateStep("graph", { status: "running", message: "Finalizing graph...", startedAt: new Date() });
+
+      // Find any premerge concepts that survived (weren't merged)
 
       // Find any premerge concepts that survived (weren't merged)
       const remainingPremergeNodes = localNodes.filter(n => 
@@ -1361,7 +1354,7 @@ export function useAuditPipeline() {
       );
       
       if (remainingPremergeNodes.length > 0) {
-        addStepDetail("graph", `Converting ${remainingPremergeNodes.length} remaining premerge concepts to final nodes`);
+        addStepDetail("merge", `Finalizing ${remainingPremergeNodes.length} unmerged concepts`);
         
         for (const node of remainingPremergeNodes) {
           // Determine if this is a gap (D1 only) or orphan (D2 only) based on its edges
@@ -1409,7 +1402,7 @@ export function useAuditPipeline() {
       if (graphOrphans.length > 0) {
         console.warn(`[graph] ${graphOrphans.length} graph-level orphans:`,
           graphOrphans.map(n => ({ id: n.id.slice(0, 8), label: n.label?.slice(0, 30), type: n.node_type })));
-        addStepDetail("graph", `⚠️ ${graphOrphans.length} nodes have no edges`);
+        addStepDetail("merge", `⚠️ ${graphOrphans.length} graph nodes have no edges`);
         
         // Log breakdown by type
         const orphansByType: Record<string, number> = {};
@@ -1417,19 +1410,21 @@ export function useAuditPipeline() {
           orphansByType[n.node_type] = (orphansByType[n.node_type] || 0) + 1;
         });
         console.warn(`[graph] Orphan breakdown:`, orphansByType);
-      } else {
-        addStepDetail("graph", `✓ All ${localNodes.length} nodes have edges`);
       }
 
-      updateStep("graph", { status: "completed", message: `${localNodes.length} nodes, ${localEdges.length} edges`, progress: 100, completedAt: new Date() });
+      // Count final concepts for summary
+      const finalConceptNodes = localNodes.filter(n => n.node_type === "concept" && n.metadata?.premerge !== true);
+      addStepDetail("merge", `Graph: ${localNodes.length} nodes, ${localEdges.length} edges, ${finalConceptNodes.length} concepts`);
 
       if (abortRef.current) throw new Error("Aborted");
 
       // ========================================
       // PHASE 2.75: Generate SKELETON Tesseract cells (pre-analysis preview)
       // ========================================
-      // This allows inspection of concept<->element linkage before full analysis
-      const conceptNodesForSkeleton = localNodes.filter(n => n.node_type === "concept");
+      // Only use final concept nodes (not premerge), matching what tesseract will use
+      const conceptNodesForSkeleton = localNodes.filter(n => 
+        n.node_type === "concept" && n.metadata?.premerge !== true
+      );
       for (const node of conceptNodesForSkeleton) {
         // Determine which element IDs are D1 vs D2 based on original input
         const d1IdsInConcept = node.source_element_ids.filter(id => d1Elements.some(e => e.id === id));
@@ -1447,10 +1442,10 @@ export function useAuditPipeline() {
         localTesseractCells.push(skeletonCell);
       }
       updateResults(); // UI now shows skeleton tesseract with linked elements
-      addStepDetail("graph", `Created ${localTesseractCells.length} skeleton tesseract cells for preview`);
+      addStepDetail("merge", `Preview: ${localTesseractCells.length} tesseract cells prepared`);
       
-      // Step mode pause after graph (with skeleton tesseract visible)
-      await pauseIfStepMode("graph");
+      // Step mode pause after merge (with skeleton tesseract visible)
+      await pauseIfStepMode("merge");
 
       // ========================================
       // PHASE 2.8: ENHANCED SORT (optional - parallel element review)
@@ -2002,7 +1997,7 @@ export function useAuditPipeline() {
     const input = lastInputRef.current;
     
     // Determine which steps to re-run based on the restart point
-    const stepOrder: PipelineStepId[] = ["nodes", "d1", "d2", "merge", "graph", "tesseract", "venn"];
+    const stepOrder: PipelineStepId[] = ["nodes", "d1", "d2", "merge", "tesseract", "venn"];
     const restartIndex = stepOrder.indexOf(stepId);
     
     if (restartIndex === -1) {
@@ -2146,10 +2141,8 @@ export function useAuditPipeline() {
         updateStep("merge", { status: "completed", message: `${mergedConcepts.length} merged`, progress: 100, completedAt: new Date() });
       };
 
-      // Helper to rebuild graph
-      const runGraphStep = async () => {
-        updateStep("graph", { status: "running", message: "Building graph edges...", startedAt: new Date(), details: [] });
-        
+      // Helper to rebuild graph (integrated into merge step for restart)
+      const runGraphRebuild = async () => {
         // Remove premerge concepts and their edges
         const premergeIds = new Set(localNodes.filter(n => n.metadata?.premerge).map(n => n.id));
         localNodes = localNodes.filter(n => !premergeIds.has(n.id));
@@ -2183,7 +2176,6 @@ export function useAuditPipeline() {
             const d2Node = localNodes.find(n => n.metadata?.originalElementId === d2Id);
             if (d2Node) localEdges.push({ id: localId(), source_node_id: d2Node.id, target_node_id: conceptNode.id, edge_type: "implements", label: "implements", weight: 1.0, metadata: {} });
           }
-          addStepDetail("graph", `Merged: ${concept.mergedLabel}`);
         }
         
         // Create gap nodes (D1 only)
@@ -2207,7 +2199,7 @@ export function useAuditPipeline() {
         }
         
         updateResults();
-        updateStep("graph", { status: "completed", message: `${localNodes.length} nodes, ${localEdges.length} edges`, progress: 100, completedAt: new Date() });
+        addStepDetail("merge", `Graph rebuilt: ${localNodes.length} nodes, ${localEdges.length} edges`);
       };
 
       // Helper to run tesseract
@@ -2288,7 +2280,7 @@ export function useAuditPipeline() {
       
       for (const step of stepsToRun) {
         if (abortRef.current) throw new Error("Aborted");
-        setProgress({ phase: step === "d1" ? "extracting_d1" : step === "d2" ? "extracting_d2" : step === "merge" ? "merging_concepts" : step === "graph" ? "building_graph" : step === "tesseract" ? "building_tesseract" : step === "venn" ? "generating_venn" : "idle", message: `Running ${step}...`, progress: 50 });
+        setProgress({ phase: step === "d1" ? "extracting_d1" : step === "d2" ? "extracting_d2" : step === "merge" ? "merging_concepts" : step === "tesseract" ? "building_tesseract" : step === "venn" ? "generating_venn" : "idle", message: `Running ${step}...`, progress: 50 });
         
         switch (step) {
           case "d1":
@@ -2299,9 +2291,8 @@ export function useAuditPipeline() {
             break;
           case "merge":
             await runMergeStep();
-            break;
-          case "graph":
-            await runGraphStep();
+            // Graph is now part of merge step
+            await runGraphRebuild();
             break;
           case "tesseract":
             await runTesseractStep();
