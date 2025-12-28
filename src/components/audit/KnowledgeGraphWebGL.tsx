@@ -413,9 +413,9 @@ export function KnowledgeGraph({
     ctx.fillStyle = node.color;
     ctx.fill();
 
-    // Draw stroke (highlighted for orphans)
-    ctx.strokeStyle = isOrphan ? "#ef4444" : "#ffffff";
-    ctx.lineWidth = isOrphan ? 5 / globalScale : (node.nodeType === "anchor" ? 4 : node.nodeType === "concept" ? 3 : 2) / globalScale;
+    // Draw stroke (highlighted for orphans, dark gray in light mode, white in dark mode)
+    ctx.strokeStyle = isOrphan ? "#ef4444" : (darkMode ? "#ffffff" : "#4b5563");
+    ctx.lineWidth = isOrphan ? 2.5 / globalScale : (node.nodeType === "anchor" ? 2 : node.nodeType === "concept" ? 1.5 : 1) / globalScale;
     ctx.stroke();
 
     // Draw orphan glow effect
