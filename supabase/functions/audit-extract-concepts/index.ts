@@ -288,49 +288,54 @@ ABSOLUTE REQUIREMENT: Every single element ID from the list above MUST appear in
       
       console.log(`[${dataset}] Filtered ${(existingConcepts?.length || 0) - filteredConcepts.length} generic concepts from list`);
       
-prompt = `You are analyzing ${datasetLabel} elements to identify SPECIFIC, MEANINGFUL concepts.
+prompt = `You are an artifact categorizer building a concept taxonomy as part of a critical project audit.
 
-## EXISTING CONCEPTS (reuse when there's a semantic match):
-${existingConceptsList}
+## Your Mission
+We are evaluating the completeness of project artifacts by categorizing them into meaningful concepts. These concepts will be used by future LLMs to understand important themes, identify gaps, and assess coverage between different artifact sets. The quality of your categorization directly determines whether this audit can succeed.
 
-## Elements to analyze (${elements.length} total):
+## Why This Matters
+Without proper, specific categorization:
+- We cannot identify gaps between requirements and implementations
+- We cannot measure coverage or completeness
+- The entire audit becomes unreliable
+
+## Element to Analyze
 ${elementsText}
 
-## Task
-Identify which concepts apply to these elements (1-${maxConcepts} total concepts).
-- STRONGLY PREFER reusing existing concepts when there's a semantic match
-- Only create NEW concepts for genuinely unique themes not covered by existing concepts
-- A concept is "covered" if it has similar meaning, even if worded differently
+## Existing Concept Taxonomy (for context and potential reuse)
+${existingConceptsList}
 
-## Output Format (JSON only)
+The existing concepts above represent categories we've already identified. You should:
+1. **Reuse an existing concept** if this element genuinely fits its semantic meaning
+2. **Create a new concept** if this element represents a theme not yet captured
+
+Think carefully: What is this element ACTUALLY about? What specific functionality, requirement, or capability does it describe?
+
+## Your Response (JSON only)
+Return up to ${maxConcepts} concepts that accurately describe this element:
+
 {
   "new_concepts": [
     {
-      "label": "Specific Concept Name (2-5 words)",
-      "description": "Comprehensive explanation (4-8 sentences) covering: purpose, why these elements belong, key features, sub-themes."
+      "label": "Descriptive Name (2-5 words)",
+      "description": "A thorough explanation (4-8 sentences) of what this concept represents, what types of elements belong here, key characteristics, and how it differs from similar concepts."
     }
   ],
   "existing_concepts": ["C1", "C3"]
 }
 
-CRITICAL RULES:
-1. YOU MUST RETURN AT LEAST 1 CONCEPT. Returning 0 concepts is a FATAL ERROR.
-2. NEVER return {"new_concepts": [], "existing_concepts": []} - this is FORBIDDEN
-3. new_concepts: Array of genuinely NEW concepts that don't match any existing concept semantically
-4. existing_concepts: Array of concept IDs (e.g., "C1", "C3") that apply to these elements
-5. Prefer existing over new - only create new if truly unique
-6. If no existing concepts match, you MUST create at least one new concept
-7. Total concepts (new + existing) should be 1-${maxConcepts}
+## Guidelines
+- **Be specific**: "User Session Management" not "General User Items"
+- **Be accurate**: Match the element's actual content, not a vague category
+- **Reuse wisely**: Only reuse existing concepts that are a TRUE semantic match
+- **Create thoughtfully**: New concepts should be specific enough to be useful for gap analysis
+- **At least one concept required**: Every element must have at least one concept assignment
 
-FORBIDDEN CONCEPT NAMES (DO NOT CREATE OR USE):
-- "General [anything]" (e.g., "General Requirements Items")
-- "Miscellaneous [anything]"
-- "Other [anything]"
-- "Uncategorized [anything]"
-- Any vague catch-all or bucket concepts
-
-INSTEAD: Read the element content carefully and create a SPECIFIC concept that describes what it actually does.
-Example: Instead of "General Requirements Items", create "Error Handling and Validation" or "Data Import Processing" based on actual content.`;
+## Quality Check (ask yourself)
+Before responding, verify:
+- Does my concept name specifically describe what this element is about?
+- Would another analyst reading just the concept name understand what elements belong here?
+- Am I being lazy by using a catch-all, or am I truly categorizing the content?`;
 
     } else {
       // NORMAL MODE: Standard extraction prompt (1:1 or 1:many without context)
