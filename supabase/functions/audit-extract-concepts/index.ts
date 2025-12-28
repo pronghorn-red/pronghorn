@@ -273,7 +273,7 @@ ABSOLUTE REQUIREMENT: Every single element ID from the list above MUST appear in
         ? existingConcepts.map(c => `- ${c.id}: ${c.label} - ${c.description.slice(0, 100)}...`).join("\n")
         : "(no existing concepts yet)";
       
-      prompt = `You are analyzing ${datasetLabel} elements to identify concepts.
+prompt = `You are analyzing ${datasetLabel} elements to identify concepts.
 
 ## EXISTING CONCEPTS (reuse when there's a semantic match):
 ${existingConceptsList}
@@ -282,7 +282,7 @@ ${existingConceptsList}
 ${elementsText}
 
 ## Task
-Identify which concepts apply to these elements (max ${maxConcepts} total concepts).
+Identify which concepts apply to these elements (1-${maxConcepts} total concepts).
 - STRONGLY PREFER reusing existing concepts when there's a semantic match
 - Only create NEW concepts for genuinely unique themes not covered by existing concepts
 - A concept is "covered" if it has similar meaning, even if worded differently
@@ -298,12 +298,13 @@ Identify which concepts apply to these elements (max ${maxConcepts} total concep
   "existing_concepts": ["C1", "C3"]
 }
 
-RULES:
-1. new_concepts: Array of genuinely NEW concepts that don't match any existing concept semantically
-2. existing_concepts: Array of concept IDs (e.g., "C1", "C3") that apply to these elements
-3. Return empty arrays if none apply: {"new_concepts": [], "existing_concepts": []}
+CRITICAL RULES:
+1. MANDATORY: You MUST return at least 1 concept (either new OR existing). Zero concepts is NOT allowed.
+2. new_concepts: Array of genuinely NEW concepts that don't match any existing concept semantically
+3. existing_concepts: Array of concept IDs (e.g., "C1", "C3") that apply to these elements
 4. Prefer existing over new - only create new if truly unique
-5. Total concepts (new + existing) should be 1-${maxConcepts}`;
+5. If no existing concepts match, you MUST create at least one new concept
+6. Total concepts (new + existing) should be 1-${maxConcepts}`;
 
     } else {
       // NORMAL MODE: Standard extraction prompt (1:1 or 1:many without context)
