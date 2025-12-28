@@ -39,6 +39,7 @@ interface TesseractRequest {
   projectId: string;
   shareToken: string;
   concepts: ConceptForTesseract[];
+  auditMode?: "comparison" | "single"; // New: support single-dataset mode
 }
 
 interface ProjectSettings {
@@ -160,7 +161,8 @@ serve(async (req) => {
       global: { headers: authHeader ? { Authorization: authHeader } : {} },
     });
 
-    const { sessionId, projectId, shareToken, concepts }: TesseractRequest = await req.json();
+    const { sessionId, projectId, shareToken, concepts, auditMode = "comparison" }: TesseractRequest = await req.json();
+    const isSingleMode = auditMode === "single";
 
     // Get project settings for model configuration
     const { data: project } = await supabase.rpc("get_project_with_token", {
@@ -172,7 +174,8 @@ serve(async (req) => {
     const maxTokens = project?.max_tokens || 8192;
     const modelConfig = getModelConfig(selectedModel);
 
-    console.log(`[tesseract] Using model: ${selectedModel}, maxTokens: ${maxTokens}`);
+    console.log(`[tesseract] Using model: ${selectedModel}, maxTokens: ${maxTokens}, mode: ${auditMode}`);
+    
     
     const totalConcepts = concepts.length;
     console.log(`[tesseract] Received ${totalConcepts} concepts for analysis`);
@@ -208,7 +211,51 @@ serve(async (req) => {
         `### ${e.label}\nID: ${e.id}\n${e.content || "(no content)"}`
       );
 
-      const prompt = `Analyze alignment between D1 requirements and D2 implementation for this concept.
+      // Different prompts for single vs comparison mode
+      let prompt: string;
+      
+      if (isSingleMode) {
+        // Single-dataset mode: analyze coverage and implementation quality
+        prompt = `Analyze the implementation quality and coverage for this concept.
+
+## Concept: ${concept.conceptLabel}
+${concept.conceptDescription || "(no description)"}
+
+## Elements Implementing This Concept - ${linkedD1s.length} items
+
+${linkedD1s.join("\n\n---\n\n") || "(No elements linked to this concept)"}
+
+## Your Task
+
+Evaluate how effectively these elements implement this concept:
+1. Is the concept clearly defined and measurable in the elements?
+2. Are there obvious gaps in how the concept is covered?
+3. What's missing that would be expected for this concept?
+4. What are the strengths of the current implementation?
+
+Return a JSON object with this exact structure:
+{
+  "polarity": 0.7,
+  "rationale": "A thorough explanation (at least 2-3 sentences) of the implementation quality. What aspects are well covered? What is missing or incomplete? Be specific.",
+  "d1Coverage": "Summary of what elements exist and how well they cover the concept",
+  "d2Implementation": "N/A - single dataset mode",
+  "gaps": ["Specific gap 1", "Specific gap 2"],
+  "strengths": ["Strength 1", "Strength 2"]
+}
+
+POLARITY SCALE (for single-dataset coverage analysis):
+- 1.0: Excellent coverage - concept is thoroughly and clearly implemented
+- 0.5 to 0.9: Good coverage - concept is well covered with minor gaps
+- 0.0 to 0.4: Partial coverage - concept has significant gaps or is vaguely defined
+- -0.5 to -0.1: Poor coverage - concept is barely addressed
+- -1.0: No coverage - concept is not implemented at all
+
+If there are no elements, return polarity -1.0 with rationale explaining no implementation exists.
+
+Return ONLY the JSON object.`;
+      } else {
+        // Comparison mode: analyze D1 vs D2 alignment
+        prompt = `Analyze alignment between D1 requirements and D2 implementation for this concept.
 
 ## Concept: ${concept.conceptLabel}
 ${concept.conceptDescription || "(no description)"}
@@ -245,6 +292,7 @@ If there are no D1 elements, return polarity -1.0 with rationale explaining no r
 If there are no D2 elements, return polarity -1.0 with rationale explaining no implementation exists.
 
 Return ONLY the JSON object.`;
+      }
 
       try {
         const rawText = await callLLM(prompt, modelConfig, maxTokens);

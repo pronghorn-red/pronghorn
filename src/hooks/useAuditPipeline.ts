@@ -103,6 +103,7 @@ export type ConsolidationLevel = "low" | "medium" | "high";
 export type ChunkSize = "small" | "medium" | "large";
 export type BatchSize = "1" | "5" | "10" | "50" | "unlimited";
 export type MappingMode = "one_to_one" | "one_to_many";
+export type AuditMode = "comparison" | "single";
 
 export interface EnhancedSortActions {
   move: boolean;
@@ -116,6 +117,8 @@ interface PipelineInput {
   shareToken: string;
   d1Elements: Element[];
   d2Elements: Element[];
+  // Audit mode: comparison (D1 vs D2) or single (D1 only coverage audit)
+  auditMode?: AuditMode;
   // Processing settings
   consolidationLevel?: ConsolidationLevel;
   chunkSize?: ChunkSize;
@@ -457,6 +460,7 @@ export function useAuditPipeline() {
 
     const { sessionId, projectId, shareToken, d1Elements, d2Elements } = input;
     const isStepMode = input.stepMode ?? stepMode;
+    const auditMode = input.auditMode ?? (d2Elements.length === 0 ? "single" : "comparison");
     lastInputRef.current = input;
 
     // LOCAL STATE - all nodes/edges/cells stored here, NO DB writes
@@ -469,16 +473,19 @@ export function useAuditPipeline() {
     let nextConceptId = 1;
     const conceptNodeByConceptId = new Map<string, string>(); // conceptId -> nodeId
 
-    // Initialize steps - include enhanced_sort if enabled
+    // Initialize steps - conditionally include D2 and enhanced_sort based on mode
     const enhancedSortEnabled = input.enhancedSortEnabled ?? false;
+    const isSingleMode = auditMode === "single";
+    
     const initialSteps: PipelineStep[] = [
       { id: "nodes", phase: "creating_nodes", title: "Create Graph Nodes", status: "pending", message: "Waiting...", progress: 0 },
       { id: "d1", phase: "extracting_d1", title: `Extract D1 Concepts (${d1Elements.length} items)`, status: "pending", message: "Waiting...", progress: 0 },
-      { id: "d2", phase: "extracting_d2", title: `Extract D2 Concepts (${d2Elements.length} items)`, status: "pending", message: "Waiting...", progress: 0 },
+      // Only include D2 step if comparison mode
+      ...(isSingleMode ? [] : [{ id: "d2", phase: "extracting_d2" as PipelinePhase, title: `Extract D2 Concepts (${d2Elements.length} items)`, status: "pending" as const, message: "Waiting...", progress: 0 }]),
       { id: "merge", phase: "merging_concepts", title: "Merge & Build Graph", status: "pending", message: "Waiting...", progress: 0 },
       ...(enhancedSortEnabled ? [{ id: "enhanced_sort", phase: "enhanced_sort" as PipelinePhase, title: "Enhanced Sort", status: "pending" as const, message: "Waiting...", progress: 0 }] : []),
-      { id: "tesseract", phase: "building_tesseract", title: "Build Tesseract", status: "pending", message: "Waiting...", progress: 0 },
-      { id: "venn", phase: "generating_venn", title: "Generate Venn Analysis", status: "pending", message: "Waiting...", progress: 0 },
+      { id: "tesseract", phase: "building_tesseract", title: isSingleMode ? "Build Coverage Analysis" : "Build Tesseract", status: "pending", message: "Waiting...", progress: 0 },
+      { id: "venn", phase: "generating_venn", title: isSingleMode ? "Generate Fit/Gap Analysis" : "Generate Venn Analysis", status: "pending", message: "Waiting...", progress: 0 },
     ];
     setSteps(initialSteps);
 
@@ -531,25 +538,28 @@ export function useAuditPipeline() {
         localNodes.push(node);
       }
 
-      // Create D2 nodes locally with STABLE IDs (D2_0, D2_1, etc.)
-      for (let i = 0; i < d2Elements.length; i++) {
-        const element = d2Elements[i];
-        const node: LocalGraphNode = {
-          id: `D2_${i}`,  // STABLE ID
-          label: element.label,
-          description: (element.content || "").slice(0, 2000),
-          node_type: "d2_element",
-          source_dataset: "dataset2",
-          source_element_ids: [element.id],
-          color: "#22c55e",
-          size: 15,
-          metadata: { category: element.category || "unknown", originalElementId: element.id, elementIndex: i },
-        };
-        localNodes.push(node);
+      // Create D2 nodes locally with STABLE IDs (D2_0, D2_1, etc.) - skip in single mode
+      if (!isSingleMode) {
+        for (let i = 0; i < d2Elements.length; i++) {
+          const element = d2Elements[i];
+          const node: LocalGraphNode = {
+            id: `D2_${i}`,  // STABLE ID
+            label: element.label,
+            description: (element.content || "").slice(0, 2000),
+            node_type: "d2_element",
+            source_dataset: "dataset2",
+            source_element_ids: [element.id],
+            color: "#22c55e",
+            size: 15,
+            metadata: { category: element.category || "unknown", originalElementId: element.id, elementIndex: i },
+          };
+          localNodes.push(node);
+        }
       }
 
       updateResults(); // Immediate graph update
-      updateStep("nodes", { status: "completed", message: `Created ${d1Elements.length + d2Elements.length} nodes`, progress: 100, completedAt: new Date() });
+      const nodeCount = isSingleMode ? d1Elements.length : d1Elements.length + d2Elements.length;
+      updateStep("nodes", { status: "completed", message: `Created ${nodeCount} nodes`, progress: 100, completedAt: new Date() });
 
       if (abortRef.current) throw new Error("Aborted");
       
@@ -799,23 +809,30 @@ export function useAuditPipeline() {
         }
       };
 
-      // Run D1 and D2 extraction in parallel - each marks itself complete independently
-      const [d1Result, d2Result] = await Promise.allSettled([
-        processAllBatches("d1", d1Batches, "d1"),
-        processAllBatches("d2", d2Batches, "d2"),
-      ]);
-
-      // Collect results (steps already marked complete/error inside processAllBatches)
-      if (d1Result.status === "fulfilled") {
-        d1Concepts = d1Result.value.concepts;
+      // Run D1 extraction (and D2 if comparison mode) - each marks itself complete independently
+      if (isSingleMode) {
+        // Single mode: only extract D1
+        const d1Result = await processAllBatches("d1", d1Batches, "d1");
+        d1Concepts = d1Result.concepts;
       } else {
-        console.error("[d1] Extraction threw:", d1Result.reason);
-      }
+        // Comparison mode: extract D1 and D2 in parallel
+        const [d1Result, d2Result] = await Promise.allSettled([
+          processAllBatches("d1", d1Batches, "d1"),
+          processAllBatches("d2", d2Batches, "d2"),
+        ]);
 
-      if (d2Result.status === "fulfilled") {
-        d2Concepts = d2Result.value.concepts;
-      } else {
-        console.error("[d2] Extraction threw:", d2Result.reason);
+        // Collect results (steps already marked complete/error inside processAllBatches)
+        if (d1Result.status === "fulfilled") {
+          d1Concepts = d1Result.value.concepts;
+        } else {
+          console.error("[d1] Extraction threw:", d1Result.reason);
+        }
+
+        if (d2Result.status === "fulfilled") {
+          d2Concepts = d2Result.value.concepts;
+        } else {
+          console.error("[d2] Extraction threw:", d2Result.reason);
+        }
       }
 
       // ========================================
@@ -1603,7 +1620,8 @@ export function useAuditPipeline() {
               sessionId, 
               projectId, 
               shareToken, 
-              concepts: [concept]  // Full content, no truncation
+              concepts: [concept],  // Full content, no truncation
+              auditMode, // Pass audit mode to edge function
             };
             const payloadStr = JSON.stringify(payload);
             const payloadSizeKB = Math.round(payloadStr.length / 1024);

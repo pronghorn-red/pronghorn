@@ -59,9 +59,13 @@ export interface EnhancedSortActions {
   create: boolean;
 }
 
+export type AuditMode = "comparison" | "single";
+
 export interface AuditConfiguration {
   name: string;
   description: string;
+  // Audit mode - single (D1 only) or comparison (D1 vs D2)
+  auditMode: AuditMode;
   // Legacy fields for backward compatibility
   dataset1Type: string;
   dataset1Ids: string[];
@@ -189,9 +193,14 @@ export function AuditConfigurationDialog({
       ...dataset2Selection.chatSessions.map((c: any) => c.id),
     ].filter(Boolean) : [];
 
+    // Auto-detect audit mode based on D2 selection
+    const auditMode: AuditMode = d2Count === 0 ? "single" : "comparison";
+
     const config: AuditConfiguration = {
       name: name || `Audit ${new Date().toLocaleDateString()}`,
       description,
+      // Audit mode
+      auditMode,
       // Legacy fields
       dataset1Type: getPrimaryDatasetType(dataset1Selection),
       dataset1Ids: d1Ids,
@@ -292,6 +301,7 @@ export function AuditConfigurationDialog({
                     <Label className="flex items-center gap-2">
                       <Package className="h-4 w-4" />
                       Dataset 2 (Implementation)
+                      <Badge variant="outline" className="text-[10px] font-normal">Optional</Badge>
                     </Label>
                     <Button
                       variant="outline"
@@ -299,7 +309,7 @@ export function AuditConfigurationDialog({
                       onClick={() => setShowSelector2(true)}
                     >
                       {d2Count === 0 ? (
-                        <span className="text-muted-foreground">Click to select items...</span>
+                        <span className="text-muted-foreground">Leave empty for coverage audit...</span>
                       ) : (
                         <div className="flex flex-wrap gap-1">
                           {d2Badges.map((badge) => {
@@ -315,7 +325,9 @@ export function AuditConfigurationDialog({
                       )}
                     </Button>
                     <p className="text-xs text-muted-foreground">
-                      {d2Count} items selected across {d2Badges.length} categories
+                      {d2Count === 0 
+                        ? "No D2 = Coverage Audit (single dataset analysis)" 
+                        : `${d2Count} items selected across ${d2Badges.length} categories`}
                     </p>
                   </div>
                 </div>
@@ -487,7 +499,7 @@ export function AuditConfigurationDialog({
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={isLoading || (d1Count === 0 && d2Count === 0)}
+              disabled={isLoading || d1Count === 0}
               className="gap-2"
             >
               {isLoading ? (
@@ -495,7 +507,7 @@ export function AuditConfigurationDialog({
               ) : (
                 <>
                   <PlayCircle className="h-4 w-4" />
-                  Start Audit
+                  {d2Count === 0 ? "Start Coverage Audit" : "Start Comparison Audit"}
                 </>
               )}
             </Button>

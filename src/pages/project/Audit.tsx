@@ -6,6 +6,7 @@ import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
 import { TesseractVisualizer } from "@/components/audit/TesseractVisualizer";
 import { AuditBlackboard } from "@/components/audit/AuditBlackboard";
 import { VennDiagramResults } from "@/components/audit/VennDiagramResults";
+import { FitGapResults } from "@/components/audit/FitGapResults";
 import { AuditConfigurationDialog, AuditConfiguration } from "@/components/audit/AuditConfigurationDialog";
 import { KnowledgeGraph } from "@/components/audit/KnowledgeGraph";
 import { PipelineActivityStream } from "@/components/audit/PipelineActivityStream";
@@ -1098,16 +1099,30 @@ export default function Audit() {
                 </TabsContent>
 
                 <TabsContent value="results">
-                  <VennDiagramResults
-                    vennResult={pipelineResults?.vennResult ? {
-                      uniqueToD1: pipelineResults.vennResult.uniqueToD1,
-                      aligned: pipelineResults.vennResult.aligned,
-                      uniqueToD2: pipelineResults.vennResult.uniqueToD2,
-                      summary: pipelineResults.vennResult.summary,
-                    } : session.venn_result}
-                    dataset1Label={session.dataset_1_type}
-                    dataset2Label={session.dataset_2_type}
-                  />
+                  {/* Show FitGapResults for single-dataset mode, VennDiagramResults for comparison mode */}
+                  {session.dataset_2_type === "mixed" && !session.dataset_2_ids?.length ? (
+                    <FitGapResults
+                      tesseractCells={pipelineResults?.tesseractCells || tesseractCells.map(c => ({
+                        id: c.id,
+                        conceptLabel: c.x_element_label || "",
+                        conceptDescription: "",
+                        polarity: c.z_polarity,
+                        rationale: c.evidence_summary || "",
+                      }))}
+                      datasetLabel={session.dataset_1_type}
+                    />
+                  ) : (
+                    <VennDiagramResults
+                      vennResult={pipelineResults?.vennResult ? {
+                        uniqueToD1: pipelineResults.vennResult.uniqueToD1,
+                        aligned: pipelineResults.vennResult.aligned,
+                        uniqueToD2: pipelineResults.vennResult.uniqueToD2,
+                        summary: pipelineResults.vennResult.summary,
+                      } : session.venn_result}
+                      dataset1Label={session.dataset_1_type}
+                      dataset2Label={session.dataset_2_type}
+                    />
+                  )}
                 </TabsContent>
               </Tabs>
             )}
