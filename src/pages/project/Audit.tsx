@@ -268,8 +268,8 @@ export default function Audit() {
         setSessions((prev) => [newSession, ...prev]);
         setConfigDialogOpen(false);
         
-        if (usePipeline && config.dataset1Content && config.dataset2Content) {
-          // Use new pipeline
+        if (usePipeline && config.dataset1Content) {
+          // Use new pipeline - requires at least D1 content (D2 can be empty for single-mode audit)
           toast.success("Audit session created, starting pipeline...");
           
           // Extract elements from ProjectSelectionResult
@@ -341,7 +341,7 @@ export default function Audit() {
           };
           
           const extractedD1 = extractElements(config.dataset1Content);
-          const extractedD2 = extractElements(config.dataset2Content);
+          const extractedD2 = config.dataset2Content ? extractElements(config.dataset2Content) : [];
           
           // Store elements in state for Tesseract visualization
           setD1Elements(extractedD1);
