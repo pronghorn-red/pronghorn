@@ -1,5 +1,6 @@
 // Audit Pipeline Phase 1: Extract concepts from dataset elements
 // Uses project model settings instead of hardcoded model
+// Supports context-aware extraction with existing concepts
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
@@ -19,11 +20,28 @@ interface DatasetElement {
   category?: string;
 }
 
+// Existing concept passed from client for context-aware extraction
+interface ExistingConcept {
+  id: string;       // e.g., "C1", "C5"
+  label: string;
+  description: string;
+}
+
+// Legacy response format (for 1:1 mode and recovery)
 interface ExtractedConcept {
   label: string;
   description: string;
   elementIds: string[];
-  supportingEvidence?: string[]; // Direct quotes/citations from elements
+  supportingEvidence?: string[];
+}
+
+// New response format for context-aware 1:many mode
+interface ContextAwareResponse {
+  new_concepts: Array<{
+    label: string;
+    description: string;
+  }>;
+  existing_concepts: string[]; // Array of concept IDs like ["C1", "C3"]
 }
 
 interface ExtractRequest {
@@ -35,6 +53,9 @@ interface ExtractRequest {
   mappingMode?: "one_to_one" | "one_to_many";
   recoveryMode?: boolean;
   existingConceptLabels?: string[];
+  // New fields for context-aware extraction
+  existingConcepts?: ExistingConcept[];
+  maxConceptsPerElement?: number;
 }
 
 interface ProjectSettings {
@@ -156,7 +177,11 @@ serve(async (req) => {
       global: { headers: authHeader ? { Authorization: authHeader } : {} },
     });
 
-    const { sessionId, projectId, shareToken, dataset, elements, mappingMode, recoveryMode, existingConceptLabels }: ExtractRequest = await req.json();
+    const { 
+      sessionId, projectId, shareToken, dataset, elements, 
+      mappingMode, recoveryMode, existingConceptLabels,
+      existingConcepts, maxConceptsPerElement 
+    }: ExtractRequest = await req.json();
 
     // Get project settings for model configuration
     const { data: project } = await supabase.rpc("get_project_with_token", {
@@ -165,10 +190,18 @@ serve(async (req) => {
     }) as { data: ProjectSettings | null };
 
     const selectedModel = project?.selected_model || "gemini-2.5-flash";
-    const maxTokens = project?.max_tokens || 32768;
     const modelConfig = getModelConfig(selectedModel);
+    
+    // Determine if we should use context-aware mode
+    const isContextAwareMode = mappingMode === "one_to_many" && 
+                               existingConcepts && 
+                               existingConcepts.length >= 0 && 
+                               !recoveryMode;
+    
+    // Use reduced tokens for context-aware mode (faster responses)
+    const maxTokens = isContextAwareMode ? 4096 : (project?.max_tokens || 32768);
 
-    console.log(`[${dataset}] Using model: ${selectedModel}, maxTokens: ${maxTokens}, recoveryMode: ${recoveryMode || false}`);
+    console.log(`[${dataset}] Using model: ${selectedModel}, maxTokens: ${maxTokens}, contextAware: ${isContextAwareMode}, recoveryMode: ${recoveryMode || false}`);
     
     const datasetLabel = dataset === "d1" ? "requirements/specifications" : "implementation/code";
     
@@ -188,9 +221,8 @@ Content:
 ${e.content || "(empty)"}`;
     }).join("\n\n---\n\n");
 
-    // Build prompt based on mapping mode and recovery mode
+    // Build prompt based on mode
     const isOneToOne = mappingMode === "one_to_one";
-    
     let prompt: string;
     
     if (recoveryMode) {
@@ -233,8 +265,48 @@ RULES (MANDATORY):
 
 ABSOLUTE REQUIREMENT: Every single element ID from the list above MUST appear in exactly one concept. Zero orphans.`;
 
+    } else if (isContextAwareMode) {
+      // CONTEXT-AWARE MODE: Pass existing concepts, return simplified response
+      const maxConcepts = maxConceptsPerElement || 10;
+      
+      const existingConceptsList = existingConcepts && existingConcepts.length > 0
+        ? existingConcepts.map(c => `- ${c.id}: ${c.label} - ${c.description.slice(0, 100)}...`).join("\n")
+        : "(no existing concepts yet)";
+      
+      prompt = `You are analyzing ${datasetLabel} elements to identify concepts.
+
+## EXISTING CONCEPTS (reuse when there's a semantic match):
+${existingConceptsList}
+
+## Elements to analyze (${elements.length} total):
+${elementsText}
+
+## Task
+Identify which concepts apply to these elements (max ${maxConcepts} total concepts).
+- STRONGLY PREFER reusing existing concepts when there's a semantic match
+- Only create NEW concepts for genuinely unique themes not covered by existing concepts
+- A concept is "covered" if it has similar meaning, even if worded differently
+
+## Output Format (JSON only)
+{
+  "new_concepts": [
+    {
+      "label": "New Concept Name (2-5 words)",
+      "description": "Comprehensive explanation (4-8 sentences) covering: purpose, why these elements belong, key features, sub-themes."
+    }
+  ],
+  "existing_concepts": ["C1", "C3"]
+}
+
+RULES:
+1. new_concepts: Array of genuinely NEW concepts that don't match any existing concept semantically
+2. existing_concepts: Array of concept IDs (e.g., "C1", "C3") that apply to these elements
+3. Return empty arrays if none apply: {"new_concepts": [], "existing_concepts": []}
+4. Prefer existing over new - only create new if truly unique
+5. Total concepts (new + existing) should be 1-${maxConcepts}`;
+
     } else {
-      // NORMAL MODE: Standard extraction prompt
+      // NORMAL MODE: Standard extraction prompt (1:1 or 1:many without context)
       const mappingInstructions = isOneToOne
         ? `IMPORTANT GUIDELINES (1:1 MAPPING - STRICT):
 1. Each element MUST belong to EXACTLY ONE concept (its PRIMARY/best-fit theme)
@@ -299,7 +371,7 @@ CRITICAL RULES:
 
     // Retry logic with exponential backoff
     let lastError: Error | null = null;
-    let concepts: ExtractedConcept[] = [];
+    let rawResult: any = null;
     
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
@@ -310,7 +382,7 @@ CRITICAL RULES:
         console.log(`[${dataset}] Response: ${rawText.length} chars`);
 
         // Parse JSON with recovery
-        let parsed: { concepts: ExtractedConcept[] };
+        let parsed: any;
         try {
           parsed = JSON.parse(rawText);
         } catch {
@@ -324,16 +396,8 @@ CRITICAL RULES:
           }
         }
 
-        let concepts_raw = parsed.concepts || [];
-        
-        // CRITICAL: Filter out concepts with no assigned elements (LLM sometimes creates these)
-        const beforeFilter = concepts_raw.length;
-        concepts = concepts_raw.filter((c: ExtractedConcept) => c.elementIds && c.elementIds.length > 0);
-        if (concepts.length < beforeFilter) {
-          console.log(`[${dataset}] Filtered out ${beforeFilter - concepts.length} concepts with 0 elements`);
-        }
-        
-        console.log(`[${dataset}] Extracted ${concepts.length} concepts (after filtering)`);
+        rawResult = parsed;
+        console.log(`[${dataset}] Parsed response successfully`);
         break; // Success - exit retry loop
         
       } catch (err: any) {
@@ -352,7 +416,7 @@ CRITICAL RULES:
     }
 
     // If all retries failed, return error
-    if (concepts.length === 0 && lastError) {
+    if (!rawResult && lastError) {
       const errorMessage = lastError.message || String(lastError);
       console.error(`[${dataset}] All ${MAX_RETRIES} attempts failed:`, errorMessage);
       
@@ -362,27 +426,61 @@ CRITICAL RULES:
         dataset,
         elementCount: elements.length,
         concepts: [],
+        new_concepts: [],
+        existing_concepts: [],
       }), {
-        status: 200, // Return 200 so client can read error
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    // NOTE: No database writes during processing - all data is stored locally
-    // and only saved when user clicks "Save Audit" at the end
 
-    console.log(`[${dataset}] Returning ${concepts.length} concepts (no DB writes)`);
+    // Process response based on mode
+    if (isContextAwareMode) {
+      // CONTEXT-AWARE MODE: Return new simplified structure
+      const newConcepts = rawResult.new_concepts || [];
+      const existingConceptIds = rawResult.existing_concepts || [];
+      
+      console.log(`[${dataset}] Context-aware result: ${newConcepts.length} new concepts, ${existingConceptIds.length} existing refs`);
 
-    return new Response(JSON.stringify({
-      success: true,
-      concepts,
-      dataset,
-      elementCount: elements.length,
-      totalContentChars,
-      totalEstimatedTokens,
-      model: selectedModel,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+      return new Response(JSON.stringify({
+        success: true,
+        contextAware: true,
+        new_concepts: newConcepts,
+        existing_concepts: existingConceptIds,
+        dataset,
+        elementCount: elements.length,
+        totalContentChars,
+        totalEstimatedTokens,
+        model: selectedModel,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } else {
+      // LEGACY MODE: Return concepts array with elementIds
+      let concepts_raw = rawResult.concepts || [];
+      
+      // Filter out concepts with no assigned elements
+      const beforeFilter = concepts_raw.length;
+      const concepts = concepts_raw.filter((c: ExtractedConcept) => c.elementIds && c.elementIds.length > 0);
+      if (concepts.length < beforeFilter) {
+        console.log(`[${dataset}] Filtered out ${beforeFilter - concepts.length} concepts with 0 elements`);
+      }
+      
+      console.log(`[${dataset}] Extracted ${concepts.length} concepts (after filtering)`);
+
+      return new Response(JSON.stringify({
+        success: true,
+        contextAware: false,
+        concepts,
+        dataset,
+        elementCount: elements.length,
+        totalContentChars,
+        totalEstimatedTokens,
+        model: selectedModel,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : String(error);
@@ -392,8 +490,10 @@ CRITICAL RULES:
       success: false,
       error: errMsg,
       concepts: [],
+      new_concepts: [],
+      existing_concepts: [],
     }), {
-      status: 200, // Return 200 so client can read error
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

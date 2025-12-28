@@ -124,6 +124,7 @@ interface PipelineInput {
   chunkSize?: ChunkSize;
   batchSize?: BatchSize;
   mappingMode?: MappingMode;
+  maxConceptsPerElement?: number; // Default 10 for 1:many mode
   // Enhanced sort settings
   enhancedSortEnabled?: boolean;
   enhancedSortActions?: EnhancedSortActions;
@@ -579,6 +580,7 @@ export function useAuditPipeline() {
       const chunkSizeSetting = input.chunkSize || "medium";
       const batchSizeSetting = input.batchSize || "unlimited";
       const mappingMode = input.mappingMode || "one_to_one";
+      const maxConceptsPerElement = input.maxConceptsPerElement || 10;
       
       // Convert chunk size to character limit
       const CHUNK_SIZE_MAP: Record<ChunkSize, number> = {
@@ -632,7 +634,20 @@ export function useAuditPipeline() {
       updateStep("d1", { status: "running", message: `${d1TotalChars.toLocaleString()} chars in ${d1Batches.length} batch(es)`, startedAt: new Date() });
       updateStep("d2", { status: "running", message: `${d2TotalChars.toLocaleString()} chars in ${d2Batches.length} batch(es)`, startedAt: new Date() });
 
-      // Helper to extract concepts from a batch - returns JSON directly (no SSE)
+      // Accumulated concepts for context-aware extraction (1:many mode)
+      // Maps conceptId (C1, C2, etc.) to { id, label, description, nodeId }
+      const accumulatedConcepts = new Map<string, { id: string; label: string; description: string; nodeId: string }>();
+      
+      // Helper to get existing concepts payload for context-aware mode
+      const getExistingConceptsPayload = () => {
+        return Array.from(accumulatedConcepts.values()).map(c => ({
+          id: c.id,
+          label: c.label,
+          description: c.description,
+        }));
+      };
+
+      // Helper to extract concepts from a batch - supports both legacy and context-aware modes
       const extractBatch = async (
         dataset: "d1" | "d2",
         batchElements: Element[],
@@ -646,6 +661,10 @@ export function useAuditPipeline() {
           progress: Math.round((batchIndex / totalBatches) * 100)
         });
         
+        // Determine if we should use context-aware mode (1:many with accumulated concepts)
+        const isContextAwareMode = mappingMode === "one_to_many";
+        const existingConceptsPayload = isContextAwareMode ? getExistingConceptsPayload() : undefined;
+        
         const response = await fetch(`${BASE_URL}/audit-extract-concepts`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -655,7 +674,9 @@ export function useAuditPipeline() {
             shareToken, 
             dataset, 
             elements: batchElements,
-            mappingMode, // Pass mapping mode to edge function
+            mappingMode,
+            existingConcepts: existingConceptsPayload,
+            maxConceptsPerElement,
           }),
         });
         
@@ -674,33 +695,55 @@ export function useAuditPipeline() {
           throw new Error(errMsg);
         }
         
-        const concepts: Concept[] = result.concepts || [];
-        
-        // Add concept nodes to local graph with CONCEPT IDs assigned here
-        for (const concept of concepts) {
-          const conceptId = `C${nextConceptId++}`;
-          const conceptNode: LocalGraphNode = {
-            id: localId(),
-            label: concept.label,
-            description: concept.description || "",
-            node_type: "concept",
-            source_dataset: dataset === "d1" ? "dataset1" : "dataset2",
-            source_element_ids: concept.elementIds,
-            color: dataset === "d1" ? "#60a5fa" : "#4ade80",
-            size: 20,
-            metadata: { source: dataset, premerge: true, conceptId },
-          };
-          localNodes.push(conceptNode);
-          conceptNodeByConceptId.set(conceptId, conceptNode.id);
+        // Get node IDs for all elements in THIS batch for edge creation
+        const batchNodeIds = batchElements.map(el => {
+          const node = localNodes.find(n => n.metadata?.originalElementId === el.id);
+          return node?.id;
+        }).filter((id): id is string => Boolean(id));
 
-          // Create edges from element nodes to concept node
-          for (const elId of concept.elementIds) {
-            const elementNode = localNodes.find(n => n.metadata?.originalElementId === elId);
-            if (elementNode) {
+        let conceptsReturned: Concept[] = [];
+        
+        if (result.contextAware) {
+          // CONTEXT-AWARE MODE: Handle new_concepts and existing_concepts
+          const newConcepts = result.new_concepts || [];
+          const existingConceptIds = result.existing_concepts || [];
+          
+          console.log(`[${stepId}] Context-aware: ${newConcepts.length} new, ${existingConceptIds.length} existing refs`);
+          
+          // 1. Process NEW concepts - create nodes and link to batch elements
+          for (const newConcept of newConcepts) {
+            const conceptId = `C${nextConceptId++}`;
+            const nodeId = localId();
+            
+            // Add to accumulated concepts for future batches
+            accumulatedConcepts.set(conceptId, {
+              id: conceptId,
+              label: newConcept.label,
+              description: newConcept.description || "",
+              nodeId,
+            });
+            
+            // Create graph node for new concept
+            const conceptNode: LocalGraphNode = {
+              id: nodeId,
+              label: newConcept.label,
+              description: newConcept.description || "",
+              node_type: "concept",
+              source_dataset: dataset === "d1" ? "dataset1" : "dataset2",
+              source_element_ids: batchElements.map(el => el.id),
+              color: dataset === "d1" ? "#60a5fa" : "#4ade80",
+              size: 20,
+              metadata: { source: dataset, premerge: true, conceptId },
+            };
+            localNodes.push(conceptNode);
+            conceptNodeByConceptId.set(conceptId, nodeId);
+            
+            // Link ALL elements in this batch to the new concept
+            for (const elementNodeId of batchNodeIds) {
               const edge: LocalGraphEdge = {
                 id: localId(),
-                source_node_id: elementNode.id,
-                target_node_id: conceptNode.id,
+                source_node_id: elementNodeId,
+                target_node_id: nodeId,
                 edge_type: dataset === "d1" ? "defines" : "implements",
                 label: dataset === "d1" ? "defines" : "implements",
                 weight: 1.0,
@@ -708,19 +751,124 @@ export function useAuditPipeline() {
               };
               localEdges.push(edge);
             }
+            
+            addStepDetail(stepId, `NEW Concept ${conceptId}: ${newConcept.label}`);
+            
+            // Create a legacy Concept for the return value
+            conceptsReturned.push({
+              label: newConcept.label,
+              description: newConcept.description || "",
+              elementIds: batchElements.map(el => el.id),
+            });
           }
+          
+          // 2. Process EXISTING concept references - just add edges
+          for (const conceptId of existingConceptIds) {
+            const concept = accumulatedConcepts.get(conceptId);
+            if (concept) {
+              for (const elementNodeId of batchNodeIds) {
+                // Check for duplicate edge before adding
+                const edgeExists = localEdges.some(e => 
+                  e.source_node_id === elementNodeId && e.target_node_id === concept.nodeId
+                );
+                if (!edgeExists) {
+                  const edge: LocalGraphEdge = {
+                    id: localId(),
+                    source_node_id: elementNodeId,
+                    target_node_id: concept.nodeId,
+                    edge_type: dataset === "d1" ? "defines" : "implements",
+                    label: dataset === "d1" ? "defines" : "implements",
+                    weight: 1.0,
+                    metadata: { premerge: true, conceptId },
+                  };
+                  localEdges.push(edge);
+                  
+                  // Also update the concept node's source_element_ids
+                  const conceptNode = localNodes.find(n => n.id === concept.nodeId);
+                  if (conceptNode) {
+                    const elNode = localNodes.find(n => n.id === elementNodeId);
+                    if (elNode?.metadata?.originalElementId) {
+                      conceptNode.source_element_ids = [
+                        ...conceptNode.source_element_ids,
+                        elNode.metadata.originalElementId,
+                      ];
+                    }
+                  }
+                }
+              }
+              addStepDetail(stepId, `REUSED Concept ${conceptId}: ${concept.label}`);
+            } else {
+              console.warn(`[${stepId}] Referenced concept ${conceptId} not found in accumulated concepts`);
+            }
+          }
+          
+        } else {
+          // LEGACY MODE: Handle concepts array with elementIds
+          const concepts: Concept[] = result.concepts || [];
+          
+          // Add concept nodes to local graph with CONCEPT IDs assigned here
+          for (const concept of concepts) {
+            const conceptId = `C${nextConceptId++}`;
+            const nodeId = localId();
+            
+            const conceptNode: LocalGraphNode = {
+              id: nodeId,
+              label: concept.label,
+              description: concept.description || "",
+              node_type: "concept",
+              source_dataset: dataset === "d1" ? "dataset1" : "dataset2",
+              source_element_ids: concept.elementIds,
+              color: dataset === "d1" ? "#60a5fa" : "#4ade80",
+              size: 20,
+              metadata: { source: dataset, premerge: true, conceptId },
+            };
+            localNodes.push(conceptNode);
+            conceptNodeByConceptId.set(conceptId, nodeId);
+            
+            // Also add to accumulated concepts (for potential future use)
+            accumulatedConcepts.set(conceptId, {
+              id: conceptId,
+              label: concept.label,
+              description: concept.description || "",
+              nodeId,
+            });
 
-          addStepDetail(stepId, `Concept ${conceptId}: ${concept.label} (${concept.elementIds?.length || 0} elements)`);
+            // Create edges from element nodes to concept node
+            for (const elId of concept.elementIds) {
+              const elementNode = localNodes.find(n => n.metadata?.originalElementId === elId);
+              if (elementNode) {
+                const edge: LocalGraphEdge = {
+                  id: localId(),
+                  source_node_id: elementNode.id,
+                  target_node_id: nodeId,
+                  edge_type: dataset === "d1" ? "defines" : "implements",
+                  label: dataset === "d1" ? "defines" : "implements",
+                  weight: 1.0,
+                  metadata: { premerge: true, conceptId },
+                };
+                localEdges.push(edge);
+              }
+            }
+
+            addStepDetail(stepId, `Concept ${conceptId}: ${concept.label} (${concept.elementIds?.length || 0} elements)`);
+          }
+          
+          conceptsReturned = concepts;
         }
 
         updateResults(); // Update graph
-        addStepDetail(stepId, `Batch ${batchIndex + 1} complete: ${concepts.length} concepts`);
+        const newCount = result.contextAware ? (result.new_concepts?.length || 0) : conceptsReturned.length;
+        const reuseCount = result.contextAware ? (result.existing_concepts?.length || 0) : 0;
+        const msg = result.contextAware 
+          ? `${newCount} new, ${reuseCount} reused` 
+          : `${newCount} concepts`;
+        addStepDetail(stepId, `Batch ${batchIndex + 1} complete: ${msg}`);
         updateStep(stepId, { 
-          message: `Batch ${batchIndex + 1}/${totalBatches}: ${concepts.length} concepts`, 
+          message: `Batch ${batchIndex + 1}/${totalBatches}: ${msg}`, 
           progress: Math.round(((batchIndex + 1) / totalBatches) * 100)
         });
         
-        return concepts;
+        return conceptsReturned;
       };
 
       // Process all batches for a dataset - marks itself complete when done

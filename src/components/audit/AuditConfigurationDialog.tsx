@@ -79,6 +79,7 @@ export interface AuditConfiguration {
   chunkSize: ChunkSize;
   batchSize: BatchSize;
   mappingMode: MappingMode;
+  maxConceptsPerElement?: number; // Default 10 for 1:many mode
   // Enhanced sort settings
   enhancedSortEnabled?: boolean;
   enhancedSortActions?: EnhancedSortActions;
@@ -158,6 +159,7 @@ export function AuditConfigurationDialog({
   const [chunkSize, setChunkSize] = useState<ChunkSize>("medium");
   const [batchSize, setBatchSize] = useState<BatchSize>("unlimited");
   const [mappingMode, setMappingMode] = useState<MappingMode>("one_to_one");
+  const [maxConceptsPerElement, setMaxConceptsPerElement] = useState<number>(10);
   
   // Enhanced Sort settings
   const [enhancedSortEnabled, setEnhancedSortEnabled] = useState(false);
@@ -214,6 +216,7 @@ export function AuditConfigurationDialog({
       chunkSize,
       batchSize,
       mappingMode,
+      maxConceptsPerElement: mappingMode === "one_to_many" ? maxConceptsPerElement : undefined,
       // Enhanced sort
       enhancedSortEnabled,
       enhancedSortActions: enhancedSortEnabled ? enhancedSortActions : undefined,
@@ -371,6 +374,23 @@ export function AuditConfigurationDialog({
                           <SelectItem value="one_to_many">1:Many (flexible, multi-concept)</SelectItem>
                         </SelectContent>
                       </Select>
+                      
+                      {mappingMode === "one_to_many" && (
+                        <div className="mt-2 space-y-1">
+                          <Label htmlFor="maxConcepts" className="text-xs text-muted-foreground">
+                            Max concepts per element
+                          </Label>
+                          <Input
+                            id="maxConcepts"
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={maxConceptsPerElement}
+                            onChange={(e) => setMaxConceptsPerElement(Math.min(20, Math.max(1, parseInt(e.target.value) || 10)))}
+                            className="h-8 w-24"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* Chunk Size */}
