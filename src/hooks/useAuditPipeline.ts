@@ -872,7 +872,9 @@ export function useAuditPipeline() {
       };
 
       // Process all batches for a dataset - marks itself complete when done
-      const PARALLEL_BATCH = 5; // Process 5 batches in parallel (same as Enhanced Sort)
+      // For 1:many mode, process sequentially (1 at a time) so each batch sees accumulated concepts
+      // For 1:1 mode, process in parallel for speed
+      const PARALLEL_BATCH = mappingMode === "one_to_many" ? 1 : 5;
       
       const processAllBatches = async (
         dataset: "d1" | "d2",
