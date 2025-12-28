@@ -1120,19 +1120,7 @@ export function useAuditPipeline() {
               mergedLabel: m.mergedLabel || "",
             }));
             
-            // Update merge history: for each source label, update its final destination
-            for (const mi of roundMergeInstructions) {
-              for (const sourceLabel of mi.sourceConcepts) {
-                // Find all ORIGINAL labels that pointed to this source
-                for (const [origLabel, currentTarget] of originalLabelToFinalLabel.entries()) {
-                  if (currentTarget.toLowerCase() === sourceLabel.toLowerCase()) {
-                    originalLabelToFinalLabel.set(origLabel, mi.mergedLabel);
-                  }
-                }
-              }
-            }
-            
-            console.log(`[merge-history] Round ${round}: ${roundMergeInstructions.length} merge instructions from edge function`);
+            console.log(`[merge-round-${round}] ${roundMergeInstructions.length} merge instructions from edge function`);
             roundMergeInstructions.forEach(mi => {
               console.log(`  "${mi.mergedLabel}" ← [${mi.sourceConcepts.join(", ")}]`);
             });
@@ -1152,7 +1140,117 @@ export function useAuditPipeline() {
           (err) => { throw new Error(`Merge stream error: ${err}`); }
         );
         
-        addStepDetail("merge", `Round ${round} complete: ${roundMergedCount} merges performed, ${currentUnifiedConcepts.length} concepts remaining`);
+        // ========================================
+        // INLINE GRAPH UPDATE: Migrate edges immediately after this merge round
+        // ========================================
+        if (roundMergeInstructions.length > 0) {
+          console.log(`[merge-round-${round}] Migrating graph edges for ${roundMergeInstructions.length} merges...`);
+          
+          for (const mi of roundMergeInstructions) {
+            // 1. Create new concept node for the merged label
+            const isBoth = currentUnifiedConcepts.find(c => c.label === mi.mergedLabel);
+            const hasD1 = isBoth?.d1Ids?.length > 0;
+            const hasD2 = isBoth?.d2Ids?.length > 0;
+            
+            const newConceptNode: LocalGraphNode = {
+              id: localId(),
+              label: mi.mergedLabel,
+              description: isBoth?.description || "",
+              node_type: "concept",
+              source_dataset: hasD1 && hasD2 ? "both" : (hasD1 ? "dataset1" : "dataset2"),
+              source_element_ids: [...(isBoth?.d1Ids || []), ...(isBoth?.d2Ids || [])],
+              color: hasD1 && hasD2 ? "#a855f7" : (hasD1 ? "#60a5fa" : "#4ade80"),
+              size: hasD1 && hasD2 ? 25 : 20,
+              metadata: { merged: true, round },
+            };
+            localNodes.push(newConceptNode);
+            
+            // 2. For each source concept being merged, find and migrate its edges
+            for (const sourceLabel of mi.sourceConcepts) {
+              // Find the old premerge concept node with this label
+              const oldConceptNode = localNodes.find(n => 
+                n.node_type === "concept" && 
+                n.label.toLowerCase() === sourceLabel.toLowerCase() &&
+                n.metadata?.premerge === true
+              );
+              
+              if (oldConceptNode) {
+                // Find all edges pointing TO the old concept
+                const edgesToOldConcept = localEdges.filter(e => e.target_node_id === oldConceptNode.id);
+                
+                // 3. Create new edges: same source element → new merged concept
+                for (const oldEdge of edgesToOldConcept) {
+                  localEdges.push({
+                    id: localId(),
+                    source_node_id: oldEdge.source_node_id,
+                    target_node_id: newConceptNode.id,
+                    edge_type: oldEdge.edge_type,
+                    label: oldEdge.label,
+                    weight: oldEdge.weight || 1.0,
+                    metadata: { merged: true, round },
+                  });
+                }
+                
+                // 4. Remove old edges pointing to the old concept
+                for (let i = localEdges.length - 1; i >= 0; i--) {
+                  if (localEdges[i].target_node_id === oldConceptNode.id) {
+                    localEdges.splice(i, 1);
+                  }
+                }
+                
+                // 5. Remove the old concept node (now has 0 edges)
+                const nodeIdx = localNodes.findIndex(n => n.id === oldConceptNode.id);
+                if (nodeIdx !== -1) {
+                  localNodes.splice(nodeIdx, 1);
+                }
+              } else {
+                // Source concept might have been merged in a previous iteration of this round
+                // Try to find by looking at already-merged nodes from THIS round
+                const alreadyMergedNode = localNodes.find(n =>
+                  n.node_type === "concept" &&
+                  n.label.toLowerCase() === sourceLabel.toLowerCase() &&
+                  n.metadata?.merged === true &&
+                  n.metadata?.round === round
+                );
+                
+                if (alreadyMergedNode && alreadyMergedNode.id !== newConceptNode.id) {
+                  // This merged node needs to be re-merged into the new one
+                  const edgesToMergedNode = localEdges.filter(e => e.target_node_id === alreadyMergedNode.id);
+                  
+                  for (const oldEdge of edgesToMergedNode) {
+                    localEdges.push({
+                      id: localId(),
+                      source_node_id: oldEdge.source_node_id,
+                      target_node_id: newConceptNode.id,
+                      edge_type: oldEdge.edge_type,
+                      label: oldEdge.label,
+                      weight: oldEdge.weight || 1.0,
+                      metadata: { merged: true, round },
+                    });
+                  }
+                  
+                  // Remove edges to old merged node
+                  for (let i = localEdges.length - 1; i >= 0; i--) {
+                    if (localEdges[i].target_node_id === alreadyMergedNode.id) {
+                      localEdges.splice(i, 1);
+                    }
+                  }
+                  
+                  // Remove the old merged node
+                  const nodeIdx = localNodes.findIndex(n => n.id === alreadyMergedNode.id);
+                  if (nodeIdx !== -1) {
+                    localNodes.splice(nodeIdx, 1);
+                  }
+                }
+              }
+            }
+          }
+          
+          updateResults(); // Update UI after each round
+          addStepDetail("merge", `Round ${round}: graph updated with ${roundMergeInstructions.length} merges`);
+        }
+        
+        addStepDetail("merge", `Round ${round} complete: ${roundMergedCount} merges, ${currentUnifiedConcepts.length} concepts remaining`);
       }
       
       // Log final merge history
@@ -1251,168 +1349,55 @@ export function useAuditPipeline() {
       await pauseIfStepMode("merge");
 
       // ========================================
-      // PHASE 2.5: GRAPH-EDGE-BASED MIGRATION
-      // Uses the local graph edges as the source of truth
-      // The merge history maps old concept labels → final concept labels
+      // PHASE 2.5: FINALIZE GRAPH (handle remaining premerge concepts)
+      // Since edges are now migrated inline after each merge round,
+      // we just need to convert any remaining premerge concepts to final nodes
       // ========================================
-      updateStep("graph", { status: "running", message: "Migrating concepts via graph edges...", startedAt: new Date() });
+      updateStep("graph", { status: "running", message: "Finalizing graph...", startedAt: new Date() });
 
-      // Handle fallback if merge returned empty
-      const hasMergeResults = mergedConcepts.length > 0 || unmergedD1Concepts.length > 0 || unmergedD2Concepts.length > 0;
-      if (!hasMergeResults && (d1Concepts.length > 0 || d2Concepts.length > 0)) {
-        addStepDetail("graph", "Merge returned empty, using raw extracted concepts");
-        // If merge returned nothing, initialize merge history to identity mapping
-        for (const c of d1Concepts) {
-          originalLabelToFinalLabel.set(c.label.toLowerCase(), c.label);
-        }
-        for (const c of d2Concepts) {
-          originalLabelToFinalLabel.set(c.label.toLowerCase(), c.label);
-        }
-      }
-
-      // ========================================
-      // STEP 1: Build lookup maps from premerge graph
-      // ========================================
+      // Find any premerge concepts that survived (weren't merged)
+      const remainingPremergeNodes = localNodes.filter(n => 
+        n.node_type === "concept" && n.metadata?.premerge === true
+      );
       
-      // Map: premerge concept label (lowercase) → { nodeId, label, dataset }
-      const premergeConceptLabelToNode = new Map<string, { nodeId: string; label: string; dataset: string }>();
-      const premergeConceptNodes = localNodes.filter(n => n.node_type === "concept" && n.metadata?.premerge === true);
-      
-      for (const node of premergeConceptNodes) {
-        premergeConceptLabelToNode.set(node.label.toLowerCase(), {
-          nodeId: node.id,
-          label: node.label,
-          dataset: node.source_dataset,
-        });
-      }
-      addStepDetail("graph", `Found ${premergeConceptNodes.length} premerge concept nodes to migrate`);
-      
-      // Map: final concept label (lowercase) → new concept node (to be created)
-      const finalLabelToNewNode = new Map<string, LocalGraphNode>();
-      
-      // ========================================
-      // STEP 2: Create new concept nodes for each FINAL concept
-      // ========================================
-      const allFinalConcepts = [
-        ...mergedConcepts.map(c => ({ label: c.mergedLabel, description: c.mergedDescription, type: "merged" as const, d1Ids: c.d1Ids, d2Ids: c.d2Ids })),
-        ...unmergedD1Concepts.map(c => ({ label: c.label, description: c.description, type: "gap" as const, d1Ids: c.elementIds, d2Ids: [] as string[] })),
-        ...unmergedD2Concepts.map(c => ({ label: c.label, description: c.description, type: "orphan" as const, d1Ids: [] as string[], d2Ids: c.elementIds })),
-      ];
-      
-      for (const concept of allFinalConcepts) {
-        const isBoth = concept.d1Ids.length > 0 && concept.d2Ids.length > 0;
-        const isD1Only = concept.d1Ids.length > 0 && concept.d2Ids.length === 0;
+      if (remainingPremergeNodes.length > 0) {
+        addStepDetail("graph", `Converting ${remainingPremergeNodes.length} remaining premerge concepts to final nodes`);
         
-        const newNode: LocalGraphNode = {
-          id: localId(),
-          label: concept.label,
-          description: concept.description,
-          node_type: "concept",
-          source_dataset: isBoth ? "both" : (isD1Only ? "dataset1" : "dataset2"),
-          source_element_ids: [...concept.d1Ids, ...concept.d2Ids],
-          color: concept.type === "merged" ? "#a855f7" : (concept.type === "gap" ? "#ef4444" : "#f97316"),
-          size: concept.type === "merged" ? 25 : 22,
-          metadata: concept.type === "merged" ? { merged: true } : (concept.type === "gap" ? { gap: true } : { orphan: true }),
-        };
-        
-        localNodes.push(newNode);
-        finalLabelToNewNode.set(concept.label.toLowerCase(), newNode);
-        addStepDetail("graph", `Created ${concept.type}: ${concept.label}`);
-      }
-      
-      addStepDetail("graph", `Created ${finalLabelToNewNode.size} new concept nodes`);
-      
-      // ========================================
-      // STEP 3: Migrate edges using merge history
-      // For each premerge edge: element → old concept
-      // Create new edge: element → new concept (using merge history)
-      // ========================================
-      let edgesMigrated = 0;
-      let edgesNotMigrated = 0;
-      const premergeEdges = localEdges.filter(e => e.metadata?.premerge === true);
-      
-      for (const oldEdge of premergeEdges) {
-        // Find the old concept node this edge points to
-        const oldConceptNode = localNodes.find(n => n.id === oldEdge.target_node_id);
-        if (!oldConceptNode || oldConceptNode.node_type !== "concept") {
-          // Edge doesn't point to a concept - skip
-          continue;
-        }
-        
-        // Look up what this old concept label maps to in the merge history
-        const oldLabelLower = oldConceptNode.label.toLowerCase();
-        const finalLabel = originalLabelToFinalLabel.get(oldLabelLower);
-        
-        if (!finalLabel) {
-          console.warn(`[graph] No merge history for concept "${oldConceptNode.label}"`);
-          edgesNotMigrated++;
-          continue;
-        }
-        
-        // Find the new concept node
-        const newConceptNode = finalLabelToNewNode.get(finalLabel.toLowerCase());
-        if (!newConceptNode) {
-          console.warn(`[graph] No new concept node for final label "${finalLabel}"`);
-          edgesNotMigrated++;
-          continue;
-        }
-        
-        // Create migrated edge: same source element → new concept target
-        localEdges.push({
-          id: localId(),
-          source_node_id: oldEdge.source_node_id,
-          target_node_id: newConceptNode.id,
-          edge_type: oldEdge.edge_type,
-          label: oldEdge.label,
-          weight: oldEdge.weight || 1.0,
-          metadata: { merged: true },
-        });
-        edgesMigrated++;
-      }
-      
-      addStepDetail("graph", `Migrated ${edgesMigrated} edges${edgesNotMigrated > 0 ? `, ${edgesNotMigrated} failed` : ''}`);
-      
-      // ========================================
-      // STEP 4: Remove old premerge edges
-      // ========================================
-      const oldEdgeCount = localEdges.length;
-      for (let i = localEdges.length - 1; i >= 0; i--) {
-        if (localEdges[i].metadata?.premerge) {
-          localEdges.splice(i, 1);
-        }
-      }
-      const removedEdges = oldEdgeCount - localEdges.length;
-      addStepDetail("graph", `Removed ${removedEdges} old premerge edges`);
-
-      // ========================================
-      // STEP 5: Remove old concept nodes ONLY if they have zero edges remaining
-      // ========================================
-      let deletedCount = 0;
-      let keptCount = 0;
-      for (let i = localNodes.length - 1; i >= 0; i--) {
-        const node = localNodes[i];
-        if (node.metadata?.premerge === true) {
-          // Check if any edges still point to/from this node
-          const remainingEdges = localEdges.filter(e =>
-            e.source_node_id === node.id || e.target_node_id === node.id
-          );
-
-          if (remainingEdges.length === 0) {
-            localNodes.splice(i, 1);
-            deletedCount++;
-          } else {
-            keptCount++;
-            console.warn(`[graph] Keeping old concept "${node.label}" - still has ${remainingEdges.length} edges`);
+        for (const node of remainingPremergeNodes) {
+          // Determine if this is a gap (D1 only) or orphan (D2 only) based on its edges
+          const incomingEdges = localEdges.filter(e => e.target_node_id === node.id);
+          const sourceElements = incomingEdges.map(e => {
+            const sourceNode = localNodes.find(n => n.id === e.source_node_id);
+            return sourceNode?.source_dataset;
+          });
+          
+          const hasD1 = sourceElements.includes("dataset1");
+          const hasD2 = sourceElements.includes("dataset2");
+          const isD1Only = hasD1 && !hasD2;
+          
+          // Update the node's metadata to mark it as final
+          node.metadata = { 
+            ...node.metadata,
+            premerge: false, // Remove premerge flag
+            gap: isD1Only,
+            orphan: !isD1Only && hasD2,
+            merged: hasD1 && hasD2,
+          };
+          node.source_dataset = (hasD1 && hasD2) ? "both" : (hasD1 ? "dataset1" : "dataset2");
+          node.color = (hasD1 && hasD2) ? "#a855f7" : (isD1Only ? "#ef4444" : "#f97316");
+          node.size = (hasD1 && hasD2) ? 25 : 22;
+          
+          // Update edges to remove premerge flag
+          for (const edge of incomingEdges) {
+            edge.metadata = { ...edge.metadata, premerge: false, finalized: true };
           }
         }
       }
-
-      addStepDetail("graph", `Cleaned up ${deletedCount} old concept nodes${keptCount > 0 ? `, kept ${keptCount} with remaining edges` : ''}`);
-
+      
       updateResults();
 
       // ========================================
-      // STEP 6: Verification - check for graph-level orphans
+      // GRAPH VERIFICATION: Check for orphan nodes
       // ========================================
       const connectedNodeIds = new Set<string>();
       localEdges.forEach(e => {
@@ -1420,11 +1405,13 @@ export function useAuditPipeline() {
         connectedNodeIds.add(e.target_node_id);
       });
       const graphOrphans = localNodes.filter(n => !connectedNodeIds.has(n.id));
+      
       if (graphOrphans.length > 0) {
-        console.warn(`[graph] ${graphOrphans.length} graph-level orphans after migration:`,
-          graphOrphans.map(n => ({ id: n.id.slice(0, 8), label: n.label?.slice(0, 30), type: n.node_type, dataset: n.source_dataset })));
+        console.warn(`[graph] ${graphOrphans.length} graph-level orphans:`,
+          graphOrphans.map(n => ({ id: n.id.slice(0, 8), label: n.label?.slice(0, 30), type: n.node_type })));
         addStepDetail("graph", `⚠️ ${graphOrphans.length} nodes have no edges`);
-
+        
+        // Log breakdown by type
         const orphansByType: Record<string, number> = {};
         graphOrphans.forEach(n => {
           orphansByType[n.node_type] = (orphansByType[n.node_type] || 0) + 1;
