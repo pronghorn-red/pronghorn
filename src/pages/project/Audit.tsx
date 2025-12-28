@@ -62,6 +62,8 @@ export default function Audit() {
   const staleCheckRef = useRef<NodeJS.Timeout | null>(null);
   const lastResumeAttemptRef = useRef<number>(0);
   const manualStopRef = useRef(false);
+  const sessionIdRef = useRef<string | null>(null);
+  const isCheckingStaleRef = useRef(false);
   
   // Store D1/D2 elements for Tesseract visualization
   const [d1Elements, setD1Elements] = useState<Array<{ id: string; label: string; content: string; category: string }>>([]);
@@ -91,7 +93,7 @@ export default function Audit() {
     saveAuditData,
   } = useRealtimeAudit(projectId!, selectedSessionId);
 
-  // Load all sessions for this project
+  // Load all sessions for this project (only on mount or when project/token changes)
   useEffect(() => {
     if (!projectId || !shareToken) return;
     
@@ -107,18 +109,25 @@ export default function Audit() {
       }
       
       setSessions(data || []);
-      
-      // Auto-select the most recent active session
-      if (data && data.length > 0 && !selectedSessionId) {
-        const activeSession = data.find((s: AuditSession) => 
-          s.status === "running" || s.status === "agents_active"
-        );
-        setSelectedSessionId(activeSession?.id || data[0].id);
-      }
     };
     
     loadSessions();
-  }, [projectId, shareToken, selectedSessionId]);
+  }, [projectId, shareToken]);
+
+  // Auto-select session (separate effect to avoid reload loop)
+  useEffect(() => {
+    if (sessions.length > 0 && !selectedSessionId) {
+      const activeSession = sessions.find((s: AuditSession) => 
+        s.status === "running" || s.status === "agents_active"
+      );
+      setSelectedSessionId(activeSession?.id || sessions[0].id);
+    }
+  }, [sessions, selectedSessionId]);
+
+  // Keep sessionIdRef in sync for stale monitor
+  useEffect(() => {
+    sessionIdRef.current = session?.id || null;
+  }, [session?.id]);
 
   // Reconstruct pipeline steps from activity stream when loading an existing session
   useEffect(() => {
@@ -232,57 +241,62 @@ export default function Audit() {
   }, [projectId, shareToken, isResuming]);
 
   // Monitor for stale "running" sessions and auto-resume
+  // Uses refs to avoid re-triggering on every session state change
   useEffect(() => {
-    if (!session || !shareToken || !projectId) return;
-    
-    // Only monitor running sessions
-    const isActiveSession = session.status === "running" || session.status === "agents_active" || session.status === "analyzing_shape";
-    if (!isActiveSession) {
-      if (staleCheckRef.current) {
-        clearInterval(staleCheckRef.current);
-        staleCheckRef.current = null;
-      }
-      return;
-    }
+    if (!shareToken || !projectId) return;
 
     const checkForStaleSession = async () => {
-      // Don't auto-resume if manually stopped or already resuming
-      if (isResuming || manualStopRef.current) return;
+      const currentSessionId = sessionIdRef.current;
       
-      // Re-fetch session status from DB to avoid stale state
-      const { data: freshSessions } = await supabase.rpc("get_audit_sessions_with_token", {
-        p_project_id: projectId,
-        p_token: shareToken,
-      });
-      const freshSession = freshSessions?.find((s: AuditSession) => s.id === session.id);
+      // Don't check if no session, already checking, resuming, or manually stopped
+      if (!currentSessionId || isCheckingStaleRef.current || isResuming || manualStopRef.current) return;
       
-      // Only resume if session is still actually running
-      if (!freshSession || freshSession.status !== "running") {
-        console.log("Session no longer running, skipping auto-resume");
-        return;
-      }
+      isCheckingStaleRef.current = true;
       
-      const updatedAt = new Date(freshSession.updated_at);
-      const staleness = Date.now() - updatedAt.getTime();
-      
-      // If session hasn't been updated in 70 seconds but still "running", it's likely timed out
-      if (staleness > 70000) {
-        console.log(`Session appears stale (${Math.round(staleness/1000)}s since last update), auto-resuming...`);
-        resumeOrchestrator(freshSession);
+      try {
+        // Re-fetch session status from DB to avoid stale state
+        const { data: freshSessions, error } = await supabase.rpc("get_audit_sessions_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken,
+        });
+        
+        if (error) {
+          console.error("Failed to check session status:", error);
+          return;
+        }
+        
+        const freshSession = freshSessions?.find((s: AuditSession) => s.id === currentSessionId);
+        
+        // Only resume if session is still actually running
+        if (!freshSession || (freshSession.status !== "running" && freshSession.status !== "agents_active" && freshSession.status !== "analyzing_shape")) {
+          return;
+        }
+        
+        const updatedAt = new Date(freshSession.updated_at);
+        const staleness = Date.now() - updatedAt.getTime();
+        
+        // If session hasn't been updated in 70 seconds but still "running", it's likely timed out
+        if (staleness > 70000) {
+          console.log(`Session appears stale (${Math.round(staleness/1000)}s since last update), auto-resuming...`);
+          resumeOrchestrator(freshSession);
+        }
+      } finally {
+        isCheckingStaleRef.current = false;
       }
     };
 
-    // Check immediately and then every 15 seconds
-    checkForStaleSession();
+    // Delay initial check by 5 seconds to let things stabilize
+    const initialTimeout = setTimeout(checkForStaleSession, 5000);
     staleCheckRef.current = setInterval(checkForStaleSession, 15000);
 
     return () => {
+      clearTimeout(initialTimeout);
       if (staleCheckRef.current) {
         clearInterval(staleCheckRef.current);
         staleCheckRef.current = null;
       }
     };
-  }, [session, projectId, shareToken, isResuming, resumeOrchestrator]);
+  }, [projectId, shareToken, isResuming, resumeOrchestrator]);
 
   // Manual resume handler
   const handleManualResume = async () => {
