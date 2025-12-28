@@ -203,6 +203,11 @@ serve(async (req) => {
 
     console.log(`[${dataset}] Using model: ${selectedModel}, maxTokens: ${maxTokens}, contextAware: ${isContextAwareMode}, recoveryMode: ${recoveryMode || false}`);
     
+    // Debug: Confirm context-aware mode entry
+    if (isContextAwareMode) {
+      console.log(`[${dataset}] CONTEXT-AWARE MODE ACTIVE - ${existingConcepts?.length || 0} existing concepts passed`);
+    }
+    
     const datasetLabel = dataset === "d1" ? "requirements/specifications" : "implementation/code";
     
     // Calculate total content size
@@ -298,13 +303,16 @@ Identify which concepts apply to these elements (1-${maxConcepts} total concepts
   "existing_concepts": ["C1", "C3"]
 }
 
-CRITICAL RULES:
-1. MANDATORY: You MUST return at least 1 concept (either new OR existing). Zero concepts is NOT allowed.
-2. new_concepts: Array of genuinely NEW concepts that don't match any existing concept semantically
-3. existing_concepts: Array of concept IDs (e.g., "C1", "C3") that apply to these elements
-4. Prefer existing over new - only create new if truly unique
-5. If no existing concepts match, you MUST create at least one new concept
-6. Total concepts (new + existing) should be 1-${maxConcepts}`;
+CRITICAL RULES (MANDATORY - ZERO EXCEPTIONS):
+1. YOU MUST RETURN AT LEAST 1 CONCEPT. Returning 0 concepts is a FATAL ERROR that will crash the system.
+2. If the element seems uncategorizable, create a fallback concept: "Miscellaneous ${datasetLabel}" 
+3. NEVER return {"new_concepts": [], "existing_concepts": []} - this is FORBIDDEN
+4. new_concepts: Array of genuinely NEW concepts that don't match any existing concept semantically
+5. existing_concepts: Array of concept IDs (e.g., "C1", "C3") that apply to these elements
+6. Prefer existing over new - only create new if truly unique
+7. If no existing concepts match, you MUST create at least one new concept
+8. Total concepts (new + existing) should be 1-${maxConcepts}
+9. WHEN IN DOUBT: Create "General ${dataset === 'd1' ? 'Requirements' : 'Implementation'} Items" as a catch-all`;
 
     } else {
       // NORMAL MODE: Standard extraction prompt (1:1 or 1:many without context)
@@ -426,7 +434,27 @@ CRITICAL RULES:
       }
     }
 
-    // If all retries failed, return error
+    // If all retries failed in context-aware mode due to 0 concepts, create fallback
+    if (!rawResult && lastError && isContextAwareMode && 
+        lastError.message?.includes("0 concepts")) {
+      console.log(`[${dataset}] Creating FALLBACK concept for ${elements.length} element(s) after all retries failed`);
+      
+      const fallbackLabel = dataset === "d1" 
+        ? "General Requirements Items" 
+        : "General Implementation Items";
+      
+      rawResult = {
+        new_concepts: [{
+          label: fallbackLabel,
+          description: `This is a fallback concept for elements that could not be categorized by the LLM after ${MAX_RETRIES} attempts. These elements may require manual review or represent edge cases in the ${datasetLabel} dataset. Elements: ${elements.map(e => e.label).join(', ')}`
+        }],
+        existing_concepts: []
+      };
+      
+      console.log(`[${dataset}] Fallback concept created: "${fallbackLabel}"`);
+    }
+    
+    // If all retries failed for other reasons, return error
     if (!rawResult && lastError) {
       const errorMessage = lastError.message || String(lastError);
       console.error(`[${dataset}] All ${MAX_RETRIES} attempts failed:`, errorMessage);
