@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
+import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,8 @@ interface GraphNode {
   createdByAgent: string;
   x?: number;
   y?: number;
+  vx?: number;
+  vy?: number;
   fx?: number | null;
   fy?: number | null;
   color: string;
@@ -137,9 +140,14 @@ export function KnowledgeGraph({
 }: KnowledgeGraphProps) {
   const graphRef = useRef<ForceGraphMethods<GraphNode, GraphLink>>();
   const containerRef = useRef<HTMLDivElement>(null);
+  const previousNodesRef = useRef<Map<string, { x?: number; y?: number; vx?: number; vy?: number; fx?: number | null; fy?: number | null }>>(new Map());
   const [graphDensity, setGraphDensity] = useState<GraphDensity>("medium");
   const [highlightOrphans, setHighlightOrphans] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
+  
+  // Theme detection for label colors
+  const { theme, resolvedTheme } = useTheme();
+  const isDarkMode = (resolvedTheme ?? theme) === "dark";
 
   // Calculate orphan nodes (nodes with no edges)
   const { orphanNodes, orphanCount, orphanNodeIds } = useMemo(() => {
@@ -156,11 +164,15 @@ export function KnowledgeGraph({
     };
   }, [nodes, edges]);
 
-  // Transform data for react-force-graph-2d
+  // Transform data for react-force-graph-2d with position preservation
   const graphData = useMemo(() => {
     const nodeMap = new Set<string>();
+    const prevNodes = previousNodesRef.current;
     
-    // Add anchor node
+    // Get existing anchor position if available
+    const existingAnchor = prevNodes.get("__project_anchor__");
+    
+    // Add anchor node - preserve position if it exists
     const anchorNode: GraphNode = {
       id: "__project_anchor__",
       label: "Project",
@@ -170,6 +182,14 @@ export function KnowledgeGraph({
       createdByAgent: "system",
       color: "#8b5cf6",
       size: 40,
+      ...(existingAnchor ? {
+        x: existingAnchor.x,
+        y: existingAnchor.y,
+        vx: existingAnchor.vx,
+        vy: existingAnchor.vy,
+        fx: existingAnchor.fx,
+        fy: existingAnchor.fy,
+      } : {}),
     };
     nodeMap.add(anchorNode.id);
 
@@ -177,6 +197,7 @@ export function KnowledgeGraph({
       anchorNode,
       ...nodes.map((n) => {
         nodeMap.add(n.id);
+        const existing = prevNodes.get(n.id);
         return {
           id: n.id,
           label: n.label,
@@ -186,6 +207,15 @@ export function KnowledgeGraph({
           createdByAgent: n.created_by_agent,
           color: n.color || nodeTypeColors[n.node_type] || "#6b7280",
           size: nodeTypeSizes[n.node_type] || 15,
+          // Preserve positions if node existed before
+          ...(existing ? {
+            x: existing.x,
+            y: existing.y,
+            vx: existing.vx,
+            vy: existing.vy,
+            fx: existing.fx,
+            fy: existing.fy,
+          } : {}),
         };
       }),
     ];
@@ -219,6 +249,21 @@ export function KnowledgeGraph({
 
     return { nodes: graphNodes, links: graphLinks };
   }, [nodes, edges]);
+
+  // Update position cache on simulation tick
+  const handleEngineTick = useCallback(() => {
+    const currentNodes = graphData.nodes;
+    currentNodes.forEach(node => {
+      previousNodesRef.current.set(node.id, {
+        x: node.x,
+        y: node.y,
+        vx: node.vx,
+        vy: node.vy,
+        fx: node.fx,
+        fy: node.fy,
+      });
+    });
+  }, [graphData.nodes]);
 
   // Handle resize
   useEffect(() => {
@@ -359,11 +404,14 @@ export function KnowledgeGraph({
 
     // Draw label below node (only when zoomed in enough)
     if (globalScale > 0.4) {
-      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      // Use dark text in light mode, light text in dark mode
+      ctx.fillStyle = isDarkMode 
+        ? "rgba(255, 255, 255, 0.9)" 
+        : "rgba(0, 0, 0, 0.9)";
       ctx.font = `${11 / globalScale}px Sans-Serif`;
       ctx.fillText(label, x, y + size + 12 / globalScale);
     }
-  }, [highlightOrphans, orphanNodeIds]);
+  }, [highlightOrphans, orphanNodeIds, isDarkMode]);
 
   // Custom link rendering
   const linkCanvasObject = useCallback((link: GraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -412,13 +460,14 @@ export function KnowledgeGraph({
     if (link.label && globalScale > 0.6) {
       const midX = (source.x + target.x) / 2;
       const midY = (source.y + target.y) / 2;
-      ctx.fillStyle = "#9ca3af";
+      // Use darker gray in light mode for better contrast
+      ctx.fillStyle = isDarkMode ? "#9ca3af" : "#4b5563";
       ctx.font = `${10 / globalScale}px Sans-Serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(link.label, midX, midY);
     }
-  }, []);
+  }, [isDarkMode]);
 
   if (nodes.length === 0) {
     return (
@@ -636,9 +685,11 @@ export function KnowledgeGraph({
             (node as GraphNode).fx = node.x;
             (node as GraphNode).fy = node.y;
           }}
-          cooldownTicks={100}
+          warmupTicks={0}
+          cooldownTicks={50}
           d3AlphaDecay={0.02}
           d3VelocityDecay={0.3}
+          onEngineTick={handleEngineTick}
           enableNodeDrag={true}
           enableZoomInteraction={true}
           enablePanInteraction={true}
