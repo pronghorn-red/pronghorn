@@ -414,6 +414,7 @@ export default function ProjectSettings() {
                           <SelectItem value="claude-opus-4-5">Claude Opus 4.5</SelectItem>
                           <SelectItem value="grok-4-1-fast-reasoning">Grok 4.1 Fast Reasoning</SelectItem>
                           <SelectItem value="grok-4-1-fast-non-reasoning">Grok 4.1 Fast Non-Reasoning</SelectItem>
+                          <SelectItem value="grok-code-fast">Grok Code Fast (Coding)</SelectItem>
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
