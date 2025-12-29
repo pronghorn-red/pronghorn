@@ -25,7 +25,16 @@ function bytesToHex(bytes: Uint8Array): string {
 // Encrypt using AES-GCM
 async function encrypt(plaintext: string): Promise<string> {
   if (!ENCRYPTION_KEY) {
-    throw new Error('SECRETS_ENCRYPTION_KEY not configured');
+    throw new Error('SECRETS_ENCRYPTION_KEY not configured. Please add it in Edge Functions secrets.');
+  }
+  
+  // Validate key format: must be 64 hex characters (32 bytes for AES-256)
+  if (ENCRYPTION_KEY.length !== 64 || !/^[0-9a-fA-F]+$/.test(ENCRYPTION_KEY)) {
+    throw new Error(
+      `SECRETS_ENCRYPTION_KEY must be exactly 64 hexadecimal characters (32 bytes). ` +
+      `Current length: ${ENCRYPTION_KEY.length}. ` +
+      `Generate a valid key with: openssl rand -hex 32`
+    );
   }
   
   const keyBytes = hexToBytes(ENCRYPTION_KEY);
@@ -54,7 +63,16 @@ async function encrypt(plaintext: string): Promise<string> {
 // Decrypt using AES-GCM
 async function decrypt(ciphertext: string): Promise<string> {
   if (!ENCRYPTION_KEY) {
-    throw new Error('SECRETS_ENCRYPTION_KEY not configured');
+    throw new Error('SECRETS_ENCRYPTION_KEY not configured. Please add it in Edge Functions secrets.');
+  }
+  
+  // Validate key format: must be 64 hex characters (32 bytes for AES-256)
+  if (ENCRYPTION_KEY.length !== 64 || !/^[0-9a-fA-F]+$/.test(ENCRYPTION_KEY)) {
+    throw new Error(
+      `SECRETS_ENCRYPTION_KEY must be exactly 64 hexadecimal characters (32 bytes). ` +
+      `Current length: ${ENCRYPTION_KEY.length}. ` +
+      `Generate a valid key with: openssl rand -hex 32`
+    );
   }
   
   const [ivHex, encryptedHex] = ciphertext.split(':');

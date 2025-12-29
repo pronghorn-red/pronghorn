@@ -20,6 +20,7 @@ import { DatabaseExplorer } from "@/components/deploy/DatabaseExplorer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAdmin } from "@/contexts/AdminContext";
 import { SuperadminRenderManager } from "@/components/superadmin/SuperadminRenderManager";
+import { toast } from "sonner";
 
 const Database = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -81,6 +82,64 @@ const Database = () => {
   };
 
   const handleExternalUpdate = () => {
+    refreshExternal();
+    broadcastRefreshExternal();
+  };
+
+  // Sync status for all Render databases from the Render API
+  const syncAllDatabaseStatuses = async () => {
+    const databasesToSync = databases.filter(
+      (db) => db.render_postgres_id && db.status !== "pending" && db.status !== "deleted"
+    );
+
+    if (databasesToSync.length === 0) {
+      toast.info("No databases to sync");
+      return;
+    }
+
+    toast.info(`Syncing ${databasesToSync.length} database(s)...`);
+    
+    let successCount = 0;
+    let errorCount = 0;
+
+    await Promise.all(
+      databasesToSync.map(async (database) => {
+        try {
+          const { error } = await supabase.functions.invoke("render-database", {
+            body: {
+              action: "status",
+              databaseId: database.id,
+              shareToken: shareToken,
+            },
+          });
+          if (error) {
+            console.error(`[Database] Status sync failed for ${database.name}:`, error);
+            errorCount++;
+          } else {
+            successCount++;
+          }
+        } catch (err) {
+          console.error(`[Database] Status sync error for ${database.name}:`, err);
+          errorCount++;
+        }
+      })
+    );
+
+    // Refresh local data after syncing
+    refresh();
+    broadcastRefresh();
+
+    if (errorCount === 0) {
+      toast.success(`Synced ${successCount} database(s)`);
+    } else {
+      toast.warning(`Synced ${successCount}, failed ${errorCount}`);
+    }
+  };
+
+  const handleRefreshAll = async () => {
+    // Sync Render database statuses from the API
+    await syncAllDatabaseStatuses();
+    // Also refresh external connections
     refreshExternal();
     broadcastRefreshExternal();
   };
@@ -186,7 +245,7 @@ const Database = () => {
               </TabsList>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                <Button variant="outline" size="sm" onClick={() => { refresh(); refreshExternal(); }} className="flex-1 sm:flex-none">
+                <Button variant="outline" size="sm" onClick={handleRefreshAll} className="flex-1 sm:flex-none">
                   <RefreshCw className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Refresh</span>
                 </Button>
