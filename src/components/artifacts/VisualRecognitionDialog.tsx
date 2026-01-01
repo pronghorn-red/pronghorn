@@ -471,8 +471,8 @@ export function VisualRecognitionDialog({
                             </span>
                           </div>
                           {result.success && result.content ? (
-                            <pre className="text-xs bg-muted p-2 rounded max-h-[150px] overflow-y-auto whitespace-pre-wrap">
-                              {result.content.slice(0, 500)}{result.content.length > 500 ? '...' : ''}
+                            <pre className="text-xs bg-muted p-2 rounded whitespace-pre-wrap">
+                              {result.content}
                             </pre>
                           ) : result.error ? (
                             <p className="text-xs text-destructive">{result.error}</p>

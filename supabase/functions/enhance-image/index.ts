@@ -12,9 +12,8 @@ interface ImageInput {
 
 // Available Gemini image models
 const AVAILABLE_MODELS = [
-  'gemini-2.5-flash-preview-05-20',
-  'gemini-2.0-flash-exp-image-generation',
-  'gemini-2.0-flash-preview-image-generation',
+  'gemini-2.5-flash-image',
+  'gemini-3-pro-image-preview',
 ];
 
 serve(async (req) => {
@@ -36,10 +35,10 @@ serve(async (req) => {
       );
     }
 
-    // Use provided model or default to gemini-2.0-flash-exp-image-generation
+    // Use provided model or default to gemini-2.5-flash-image
     const selectedModel = model && AVAILABLE_MODELS.includes(model) 
       ? model 
-      : 'gemini-2.0-flash-exp-image-generation';
+      : 'gemini-2.5-flash-image';
 
     const imageCount = images?.length || 0;
     console.log(`🎨 ${imageCount > 0 ? 'Enhancing' : 'Creating'} image with ${imageCount} source image(s)`);

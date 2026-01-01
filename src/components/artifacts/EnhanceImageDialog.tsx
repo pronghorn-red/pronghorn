@@ -51,9 +51,8 @@ type AspectRatio = '1:1' | '16:9' | '9:16' | '4:5';
 
 // Available Gemini image models
 const IMAGE_MODELS = [
-  { id: 'gemini-2.0-flash-exp-image-generation', label: 'Gemini 2.0 Flash (Experimental)', description: 'Fast, good quality' },
-  { id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash Preview', description: 'Latest preview model' },
-  { id: 'gemini-2.0-flash-preview-image-generation', label: 'Gemini 2.0 Flash Preview', description: 'Preview image gen' },
+  { id: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image (Recommended)', description: 'Fast image generation' },
+  { id: 'gemini-3-pro-image-preview', label: 'Gemini 3 Pro Image Preview', description: 'Next-gen image generation' },
 ];
 
 const ASPECT_RATIO_DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
@@ -467,28 +466,6 @@ export function EnhanceImageDialog({
               </div>
 
 
-              {/* Model Selection */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Bot className="h-4 w-4" />
-                  AI Model
-                </Label>
-                <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isProcessing}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {IMAGE_MODELS.map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        <div className="flex flex-col">
-                          <span>{model.label}</span>
-                          <span className="text-xs text-muted-foreground">{model.description}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
 
               {/* Prompt Input */}
               <div className="space-y-2">
@@ -567,7 +544,19 @@ export function EnhanceImageDialog({
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
-          <div className="flex-1 flex items-center">
+          <div className="flex-1 flex items-center gap-3">
+            <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isProcessing || isSaving}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                {IMAGE_MODELS.map((model) => (
+                  <SelectItem key={model.id} value={model.id}>
+                    {model.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <ToggleGroup
               type="single"
               value={aspectRatio}
