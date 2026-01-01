@@ -3,6 +3,9 @@ import { PrimaryNav } from "@/components/layout/PrimaryNav";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { CanvasPalette } from "@/components/canvas/CanvasPalette";
 import { CanvasNode } from "@/components/canvas/CanvasNode";
+import { NotesNode } from "@/components/canvas/NotesNode";
+import { ZoneNode } from "@/components/canvas/ZoneNode";
+import { LabelNode } from "@/components/canvas/LabelNode";
 import { NodePropertiesPanel } from "@/components/canvas/NodePropertiesPanel";
 import { EdgePropertiesPanel } from "@/components/canvas/EdgePropertiesPanel";
 import { useParams } from "react-router-dom";
@@ -20,6 +23,7 @@ import ReactFlow, {
   Connection,
   Edge,
   Node,
+  NodeChange,
   ReactFlowProvider,
   getNodesBounds,
   getViewportForBounds,
@@ -38,6 +42,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 const nodeTypes = {
   custom: CanvasNode,
+  notes: NotesNode,
+  zone: ZoneNode,
+  label: LabelNode,
 };
 
 const initialNodes: Node[] = [];
@@ -84,12 +91,37 @@ function CanvasFlow() {
     edges,
     setNodes,
     setEdges,
-    onNodesChange,
+    onNodesChange: baseOnNodesChange,
     onEdgesChange,
     saveNode,
     saveEdge,
     loadCanvasData,
   } = useRealtimeCanvas(projectId!, token, isTokenSet, initialNodes, initialEdges);
+
+  // Wrap onNodesChange to handle resize events
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    baseOnNodesChange(changes);
+    
+    // Check for dimension changes (from NodeResizer)
+    changes.forEach((change) => {
+      if (change.type === 'dimensions' && 'dimensions' in change && change.dimensions) {
+        // Find the node and save its new dimensions
+        const node = nodes.find(n => n.id === change.id);
+        if (node) {
+          const updatedNode = {
+            ...node,
+            style: {
+              ...node.style,
+              width: change.dimensions.width,
+              height: change.dimensions.height,
+            },
+          };
+          // Debounce the save slightly to avoid excessive saves during resize
+          saveNode(updatedNode, false, true);
+        }
+      }
+    });
+  }, [baseOnNodesChange, nodes, saveNode]);
 
   // Filter nodes and edges based on visibility
   const visibleNodes = useMemo(() => {
@@ -455,13 +487,30 @@ function CanvasFlow() {
         y: event.clientY,
       });
 
+      // Determine React Flow node type and default style based on dropped type
+      let nodeType = "custom";
+      let defaultStyle: { width?: number; height?: number } = {};
+      
+      if (type === "NOTES") {
+        nodeType = "notes";
+        defaultStyle = { width: 250, height: 200 };
+      } else if (type === "ZONE") {
+        nodeType = "zone";
+        defaultStyle = { width: 400, height: 300 };
+      } else if (type === "LABEL") {
+        nodeType = "label";
+        defaultStyle = { width: 150, height: 40 };
+      }
+
       const newNode: Node = {
         id: crypto.randomUUID(),
-        type: "custom",
+        type: nodeType,
         position,
+        style: Object.keys(defaultStyle).length > 0 ? defaultStyle : undefined,
         data: {
           label: `New ${type}`,
           type,
+          nodeType, // Store the React Flow node type for persistence
         },
       };
 
@@ -499,13 +548,30 @@ function CanvasFlow() {
         y: centerY,
       });
 
+      // Determine React Flow node type and default style based on type
+      let nodeType = "custom";
+      let defaultStyle: { width?: number; height?: number } = {};
+      
+      if (type === "NOTES") {
+        nodeType = "notes";
+        defaultStyle = { width: 250, height: 200 };
+      } else if (type === "ZONE") {
+        nodeType = "zone";
+        defaultStyle = { width: 400, height: 300 };
+      } else if (type === "LABEL") {
+        nodeType = "label";
+        defaultStyle = { width: 150, height: 40 };
+      }
+
       const newNode: Node = {
         id: crypto.randomUUID(),
-        type: "custom",
+        type: nodeType,
         position,
+        style: Object.keys(defaultStyle).length > 0 ? defaultStyle : undefined,
         data: {
           label: `New ${type}`,
           type,
+          nodeType, // Store the React Flow node type for persistence
         },
       };
 

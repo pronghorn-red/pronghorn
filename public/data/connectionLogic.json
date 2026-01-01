@@ -70,9 +70,10 @@
     "TABLE": 3100
   },
 
-  "categoryOrder": ["meta", "frontend", "backend", "infrastructure", "database", "agent", "general"],
+  "categoryOrder": ["annotation", "meta", "frontend", "backend", "infrastructure", "database", "agent", "general"],
   
   "categoryLabels": {
+    "annotation": "Annotations",
     "meta": "Project & Standards",
     "frontend": "Frontend",
     "backend": "Backend / API",

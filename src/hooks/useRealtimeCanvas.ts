@@ -34,8 +34,9 @@ export function useRealtimeCanvas(
 
       const loadedNodes: Node[] = (nodesResult.data || []).map((node: any) => ({
         id: node.id,
-        type: "custom",
+        type: (node.data as any)?.nodeType || "custom", // Use stored nodeType for React Flow
         position: node.position as { x: number; y: number },
+        style: (node.data as any)?.style || undefined, // Load saved dimensions
         data: {
           ...(node.data || {}),
           type: (node.data as any)?.type || node.type,
@@ -120,8 +121,9 @@ export function useRealtimeCanvas(
               }
               const newNode: Node = {
                 id: payload.new.id,
-                type: "custom",
+                type: (payload.new.data as any)?.nodeType || "custom", // Use stored nodeType
                 position: payload.new.position as { x: number; y: number },
+                style: (payload.new.data as any)?.style || undefined, // Load dimensions
                 data: {
                   ...(payload.new.data || {}),
                   type: (payload.new.data as any)?.type || payload.new.type,
@@ -250,7 +252,11 @@ export function useRealtimeCanvas(
           p_token: shareToken,
           p_type: node.data.type,
           p_position: node.position as any,
-          p_data: node.data as any
+          p_data: {
+            ...node.data,
+            style: node.style, // Save dimensions
+            nodeType: node.type, // Save React Flow node type
+          } as any
         });
         if (error) throw error;
         
