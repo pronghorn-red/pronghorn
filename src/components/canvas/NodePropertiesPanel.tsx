@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { X, Trash2, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { X, Trash2, ChevronRight, Image } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Node } from "reactflow";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useShareToken } from "@/hooks/useShareToken";
+import { zoneColorClasses } from "@/components/canvas/ZoneNode";
+
+interface Artifact {
+  id: string;
+  ai_title: string | null;
+  content: string;
+  image_url: string | null;
+}
 
 interface NodePropertiesPanelProps {
   node: Node | null;
@@ -20,6 +29,7 @@ interface NodePropertiesPanelProps {
   projectId: string;
   isOpen: boolean;
   onToggle: () => void;
+  onCreateMultipleNotesFromArtifacts?: (artifactIds: Set<string>) => void;
 }
 
 export function NodePropertiesPanel({
@@ -30,19 +40,24 @@ export function NodePropertiesPanel({
   projectId,
   isOpen,
   onToggle,
+  onCreateMultipleNotesFromArtifacts,
 }: NodePropertiesPanelProps) {
+  const { token } = useShareToken(projectId);
   const [label, setLabel] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [description, setDescription] = useState("");
   const [requirements, setRequirements] = useState<any[]>([]);
   const [standards, setStandards] = useState<any[]>([]);
   const [techStacks, setTechStacks] = useState<any[]>([]);
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [backgroundColor, setBackgroundColor] = useState<string>("gray");
 
   useEffect(() => {
     if (node) {
       setLabel(node.data.label || "");
       setSubtitle(node.data.subtitle || "");
       setDescription(node.data.description || "");
+      setBackgroundColor(node.data.backgroundColor || "gray");
       loadDropdownData();
     }
   }, [node?.id]);
@@ -52,14 +67,10 @@ export function NodePropertiesPanel({
 
     // CRITICAL: Load requirements via RPC with token for project data
     if (node.data.type === "REQUIREMENT") {
-      // Get share token from URL
-      const urlParams = new URLSearchParams(window.location.search);
-      const shareToken = urlParams.get("token");
-
-      if (shareToken) {
+      if (token) {
         const { data } = await supabase.rpc("get_requirements_with_token", {
           p_project_id: projectId,
-          p_token: shareToken,
+          p_token: token,
         });
         setRequirements(data || []);
       }
@@ -76,7 +87,50 @@ export function NodePropertiesPanel({
       const { data } = await supabase.from("tech_stacks").select("id, name").order("name");
       setTechStacks(data || []);
     }
+    
+    // Load artifacts for NOTES nodes
+    if (node.data.type === "NOTES") {
+      if (token) {
+        const { data } = await supabase.rpc("get_artifacts_with_token", {
+          p_project_id: projectId,
+          p_token: token,
+        });
+        setArtifacts(data || []);
+      }
+    }
   };
+
+  const handleArtifactSelect = useCallback((artifactId: string) => {
+    if (!node) return;
+    
+    const artifact = artifacts.find(a => a.id === artifactId);
+    if (!artifact) return;
+    
+    onUpdate(node.id, {
+      data: {
+        ...node.data,
+        artifactId,
+        content: artifact.content,
+        imageUrl: artifact.image_url,
+        label: artifact.ai_title || node.data.label,
+      },
+    });
+    
+    toast.success("Artifact linked to Notes");
+  }, [node, artifacts, onUpdate]);
+
+  const handleZoneColorChange = useCallback((color: string) => {
+    if (!node) return;
+    setBackgroundColor(color);
+    
+    onUpdate(node.id, {
+      data: {
+        ...node.data,
+        backgroundColor: color,
+      },
+    });
+    toast.success("Zone color updated");
+  }, [node, onUpdate]);
 
   const handleSave = () => {
     if (!node) return;
@@ -277,6 +331,61 @@ export function NodePropertiesPanel({
                         {techStacks.map((stack) => (
                           <SelectItem key={stack.id} value={stack.id}>
                             {stack.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Separator />
+                </>
+              )}
+
+              {/* Link Artifact - Only for NOTES nodes */}
+              {node.data.type === "NOTES" && (
+                <>
+                  <div className="space-y-3">
+                    <Label>Link Artifact Content</Label>
+                    <Select value={node.data.artifactId || ""} onValueChange={handleArtifactSelect}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select an artifact..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover z-50 max-h-60">
+                        {artifacts.map((artifact) => (
+                          <SelectItem key={artifact.id} value={artifact.id}>
+                            <div className="flex items-center gap-2">
+                              {artifact.image_url && <Image className="h-3 w-3" />}
+                              <span className="truncate max-w-[180px]">
+                                {artifact.ai_title || "Untitled Artifact"}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {artifacts.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No artifacts in this project.</p>
+                    )}
+                  </div>
+                  <Separator />
+                </>
+              )}
+
+              {/* Zone Color - Only for ZONE nodes */}
+              {node.data.type === "ZONE" && (
+                <>
+                  <div className="space-y-3">
+                    <Label>Zone Color</Label>
+                    <Select value={backgroundColor} onValueChange={handleZoneColorChange}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a color..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover z-50">
+                        {Object.keys(zoneColorClasses).map((color) => (
+                          <SelectItem key={color} value={color}>
+                            <div className="flex items-center gap-2">
+                              <div className={`w-4 h-4 rounded ${zoneColorClasses[color].split(' ')[0]}`} />
+                              <span className="capitalize">{color}</span>
+                            </div>
                           </SelectItem>
                         ))}
                       </SelectContent>

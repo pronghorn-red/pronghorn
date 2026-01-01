@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 interface ZoneNodeData {
   label?: string;
   title?: string;
+  subtitle?: string;
+  description?: string;
   backgroundColor?: string;
   type?: string;
   nodeType?: string;
@@ -111,9 +113,16 @@ export const ZoneNode = memo(({ data, selected, id }: NodeProps<ZoneNodeData>) =
               className="h-6 px-1 text-sm font-semibold bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0"
             />
           ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-sm">🔲</span>
-              <span className="text-sm font-semibold">{title}</span>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">🔲</span>
+                <span className="text-sm font-semibold">{title}</span>
+              </div>
+              {data.subtitle && (
+                <div className="text-xs opacity-70 pl-6 truncate">
+                  {data.subtitle}
+                </div>
+              )}
             </div>
           )}
         </div>

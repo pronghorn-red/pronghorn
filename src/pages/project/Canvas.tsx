@@ -6,6 +6,7 @@ import { CanvasNode } from "@/components/canvas/CanvasNode";
 import { NotesNode } from "@/components/canvas/NotesNode";
 import { ZoneNode } from "@/components/canvas/ZoneNode";
 import { LabelNode } from "@/components/canvas/LabelNode";
+import { CustomEdge } from "@/components/canvas/CustomEdge";
 import { NodePropertiesPanel } from "@/components/canvas/NodePropertiesPanel";
 import { EdgePropertiesPanel } from "@/components/canvas/EdgePropertiesPanel";
 import { useParams } from "react-router-dom";
@@ -45,6 +46,10 @@ const nodeTypes = {
   notes: NotesNode,
   zone: ZoneNode,
   label: LabelNode,
+};
+
+const edgeTypes = {
+  default: CustomEdge,
 };
 
 const initialNodes: Node[] = [];
@@ -1318,6 +1323,7 @@ function CanvasFlow() {
                 onDrop={onDrop}
                 onDragOver={onDragOver}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
                 deleteKeyCode={null}
                 minZoom={0.05}
                 maxZoom={4}

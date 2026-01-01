@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 interface LabelNodeData {
   label?: string;
   text?: string;
+  subtitle?: string;
+  description?: string;
   type?: string;
   nodeType?: string;
   style?: { width?: number; height?: number };
@@ -67,7 +69,7 @@ export const LabelNode = memo(({ data, selected, id }: NodeProps<LabelNodeData>)
       <Handle type="source" position={Position.Right} className="!w-2 !h-2 !bg-primary" />
       
       <div 
-        className="h-full w-full flex items-center justify-center px-2"
+        className="h-full w-full flex flex-col items-center justify-center px-2"
         onDoubleClick={handleDoubleClick}
       >
         {isEditing ? (
@@ -80,9 +82,16 @@ export const LabelNode = memo(({ data, selected, id }: NodeProps<LabelNodeData>)
             className="h-full w-full text-center bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 text-base font-medium"
           />
         ) : (
-          <span className="text-base font-medium text-foreground truncate select-none">
-            {text}
-          </span>
+          <>
+            <span className="text-base font-medium text-foreground truncate select-none">
+              {text}
+            </span>
+            {data.subtitle && (
+              <span className="text-xs text-muted-foreground truncate select-none">
+                {data.subtitle}
+              </span>
+            )}
+          </>
         )}
       </div>
     </>
