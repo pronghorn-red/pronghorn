@@ -20,8 +20,32 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { ScanEye, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
+import { ScanEye, CheckCircle2, XCircle, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+
+const DEFAULT_PROMPT = `You are an expert document OCR and analysis system. Analyze this image and extract ALL visible text content.
+
+## Text Extraction Instructions:
+1. Extract ALL visible text exactly as it appears
+2. Maintain the original reading order (top-to-bottom, left-to-right for Western documents)
+3. Preserve paragraph breaks and logical groupings
+4. For tables, format as Markdown tables when possible
+5. For lists, use appropriate Markdown list formatting (- or 1. 2. 3.)
+6. For headings/titles, use Markdown heading levels (# ## ###)
+
+## Non-Text Elements:
+For diagrams, charts, images, or other non-text elements, provide brief descriptions:
+[IMAGE: Description of what the image shows]
+[CHART: Type of chart and what data it represents]
+[DIAGRAM: What the diagram illustrates]
+
+## Output Format:
+- Return clean, well-formatted Markdown
+- Do not add commentary or explanations about the extraction process
+- Do not wrap the entire output in code blocks
+- Just return the extracted content directly`;
 
 interface Artifact {
   id: string;
@@ -66,6 +90,8 @@ export function VisualRecognitionDialog({
   const [totalToProcess, setTotalToProcess] = useState(0);
   const [results, setResults] = useState<ProcessingResult[]>([]);
   const [currentBatch, setCurrentBatch] = useState<string[]>([]);
+  const [mode, setMode] = useState<"replace" | "augment">("replace");
+  const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
 
   // Filter only artifacts with images
   const imageArtifacts = artifacts.filter(a => !!a.image_url);
@@ -77,6 +103,8 @@ export function VisualRecognitionDialog({
       setProgress(0);
       setResults([]);
       setCurrentBatch([]);
+      setMode("replace");
+      setPrompt(DEFAULT_PROMPT);
       // Pre-select all image artifacts
       setSelectedArtifacts(new Set(imageArtifacts.map(a => a.id)));
     }
@@ -98,6 +126,10 @@ export function VisualRecognitionDialog({
       newSelected.add(id);
     }
     setSelectedArtifacts(newSelected);
+  };
+
+  const resetPrompt = () => {
+    setPrompt(DEFAULT_PROMPT);
   };
 
   const handleProcess = async () => {
@@ -125,6 +157,8 @@ export function VisualRecognitionDialog({
             projectId,
             shareToken,
             model: selectedModel,
+            prompt,
+            mode,
           }),
         }
       );
@@ -183,13 +217,23 @@ export function VisualRecognitionDialog({
           }
         }
       }
-
-      onComplete();
     } catch (error) {
       console.error("Visual recognition error:", error);
       setStatus('error');
       toast.error(error instanceof Error ? error.message : "Processing failed");
     }
+  };
+
+  const handleConfirm = () => {
+    onComplete();
+    onOpenChange(false);
+  };
+
+  const handleReprocess = () => {
+    setStatus('idle');
+    setProgress(0);
+    setResults([]);
+    setCurrentBatch([]);
   };
 
   const getArtifactTitle = (artifact: Artifact) => {
@@ -217,7 +261,7 @@ export function VisualRecognitionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="w-[calc(100%-50px)] h-[calc(100vh-50px)] max-w-none flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ScanEye className="h-5 w-5" />
@@ -228,145 +272,226 @@ export function VisualRecognitionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 space-y-4 overflow-hidden">
-          {/* Model Selection */}
-          <div className="space-y-2">
-            <Label>AI Model</Label>
-            <Select
-              value={selectedModel}
-              onValueChange={setSelectedModel}
-              disabled={status === 'processing'}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gemini-2.5-flash">
-                  Gemini 2.5 Flash (Recommended)
-                </SelectItem>
-                <SelectItem value="gemini-2.5-pro">
-                  Gemini 2.5 Pro
-                </SelectItem>
-                <SelectItem value="gemini-3-flash-preview">
-                  Gemini 3 Flash Preview
-                </SelectItem>
-                <SelectItem value="gemini-3-pro-preview">
-                  Gemini 3 Pro Preview
-                </SelectItem>
-                <SelectItem value="gemini-3-pro-image-preview">
-                  Gemini 3 Pro Image Preview
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Artifact Selection */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Select Artifacts</Label>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleSelectAll}
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
+          {/* Left Column: Configuration */}
+          <div className="space-y-4 overflow-y-auto pr-2">
+            {/* Model Selection */}
+            <div className="space-y-2">
+              <Label>AI Model</Label>
+              <Select
+                value={selectedModel}
+                onValueChange={setSelectedModel}
                 disabled={status === 'processing'}
               >
-                {selectedArtifacts.size === imageArtifacts.length ? "Deselect All" : "Select All"}
-              </Button>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gemini-2.5-flash">
+                    Gemini 2.5 Flash (Recommended)
+                  </SelectItem>
+                  <SelectItem value="gemini-2.5-pro">
+                    Gemini 2.5 Pro
+                  </SelectItem>
+                  <SelectItem value="gemini-3-flash-preview">
+                    Gemini 3 Flash Preview
+                  </SelectItem>
+                  <SelectItem value="gemini-3-pro-preview">
+                    Gemini 3 Pro Preview
+                  </SelectItem>
+                  <SelectItem value="gemini-3-pro-image-preview">
+                    Gemini 3 Pro Image Preview
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            
-            {imageArtifacts.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground border rounded-md">
-                No artifacts with images found
-              </div>
-            ) : (
-              <ScrollArea className="h-[250px] border rounded-md p-3">
-                <div className="space-y-2">
-                  {imageArtifacts.map((artifact) => (
-                    <div
-                      key={artifact.id}
-                      className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50"
-                    >
-                      <Checkbox
-                        id={artifact.id}
-                        checked={selectedArtifacts.has(artifact.id)}
-                        onCheckedChange={() => handleToggleArtifact(artifact.id)}
-                        disabled={status === 'processing'}
-                      />
-                      <img
-                        src={artifact.image_url!}
-                        alt={getArtifactTitle(artifact)}
-                        className="w-12 h-12 object-cover rounded border"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {getArtifactTitle(artifact)}
-                        </p>
-                        {artifact.provenance_page && artifact.provenance_total_pages && (
-                          <Badge variant="secondary" className="text-xs">
-                            Page {artifact.provenance_page}/{artifact.provenance_total_pages}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="shrink-0">
-                        {getResultIcon(artifact.id)}
-                      </div>
-                    </div>
-                  ))}
+
+            {/* Content Mode */}
+            <div className="space-y-2">
+              <Label>Content Mode</Label>
+              <RadioGroup
+                value={mode}
+                onValueChange={(v) => setMode(v as "replace" | "augment")}
+                disabled={status === 'processing'}
+                className="flex gap-4"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="replace" id="mode-replace" />
+                  <Label htmlFor="mode-replace" className="font-normal cursor-pointer">
+                    Replace existing text
+                  </Label>
                 </div>
-              </ScrollArea>
-            )}
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="augment" id="mode-augment" />
+                  <Label htmlFor="mode-augment" className="font-normal cursor-pointer">
+                    Augment existing text
+                  </Label>
+                </div>
+              </RadioGroup>
+              <p className="text-xs text-muted-foreground">
+                {mode === "replace" 
+                  ? "The extracted text will replace any existing content in the artifact."
+                  : "The extracted text will be appended to the existing content."}
+              </p>
+            </div>
+
+            {/* OCR Prompt */}
+            <div className="space-y-2 flex-1">
+              <div className="flex items-center justify-between">
+                <Label>OCR Prompt</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetPrompt}
+                  disabled={status === 'processing' || prompt === DEFAULT_PROMPT}
+                  className="h-7 text-xs"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Reset to Default
+                </Button>
+              </div>
+              <Textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                disabled={status === 'processing'}
+                className="h-[200px] text-sm font-mono resize-none"
+                placeholder="Enter custom OCR instructions..."
+              />
+            </div>
           </div>
 
-          {/* Progress */}
-          {status === 'processing' && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span>Processing...</span>
-                <span>{progress} / {totalToProcess}</span>
+          {/* Right Column: Artifact Selection & Progress */}
+          <div className="space-y-4 overflow-hidden flex flex-col">
+            {/* Artifact Selection */}
+            <div className="space-y-2 flex-1 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between">
+                <Label>Select Artifacts ({selectedArtifacts.size} of {imageArtifacts.length})</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSelectAll}
+                  disabled={status === 'processing'}
+                >
+                  {selectedArtifacts.size === imageArtifacts.length ? "Deselect All" : "Select All"}
+                </Button>
               </div>
-              <Progress value={(progress / totalToProcess) * 100} />
+              
+              {imageArtifacts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground border rounded-md">
+                  No artifacts with images found
+                </div>
+              ) : (
+                <ScrollArea className="flex-1 border rounded-md p-3">
+                  <div className="space-y-2">
+                    {imageArtifacts.map((artifact) => (
+                      <div
+                        key={artifact.id}
+                        className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50"
+                      >
+                        <Checkbox
+                          id={artifact.id}
+                          checked={selectedArtifacts.has(artifact.id)}
+                          onCheckedChange={() => handleToggleArtifact(artifact.id)}
+                          disabled={status === 'processing'}
+                        />
+                        <img
+                          src={artifact.image_url!}
+                          alt={getArtifactTitle(artifact)}
+                          className="w-12 h-12 object-cover rounded border"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {getArtifactTitle(artifact)}
+                          </p>
+                          {artifact.provenance_page && artifact.provenance_total_pages && (
+                            <Badge variant="secondary" className="text-xs">
+                              Page {artifact.provenance_page}/{artifact.provenance_total_pages}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="shrink-0">
+                          {getResultIcon(artifact.id)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
             </div>
-          )}
 
-          {/* Results Summary */}
-          {status === 'complete' && results.length > 0 && (
-            <div className="p-3 bg-muted rounded-md">
-              <p className="text-sm font-medium">
-                Processing Complete
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {results.filter(r => r.success).length} successful,{" "}
-                {results.filter(r => !r.success).length} failed
-              </p>
-            </div>
-          )}
+            {/* Progress */}
+            {status === 'processing' && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span>Processing...</span>
+                  <span>{progress} / {totalToProcess}</span>
+                </div>
+                <Progress value={(progress / totalToProcess) * 100} />
+              </div>
+            )}
+
+            {/* Results Summary */}
+            {status === 'complete' && results.length > 0 && (
+              <div className="p-3 bg-muted rounded-md">
+                <p className="text-sm font-medium">
+                  Processing Complete
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {results.filter(r => r.success).length} successful,{" "}
+                  {results.filter(r => !r.success).length} failed
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={status === 'processing'}
-          >
-            {status === 'complete' ? 'Close' : 'Cancel'}
-          </Button>
-          {status !== 'complete' && (
-            <Button
-              onClick={handleProcess}
-              disabled={status === 'processing' || selectedArtifacts.size === 0}
-            >
-              {status === 'processing' ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <ScanEye className="h-4 w-4 mr-2" />
-                  Extract Text ({selectedArtifacts.size})
-                </>
-              )}
-            </Button>
+        <DialogFooter className="flex-shrink-0">
+          {status === 'complete' ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleReprocess}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reprocess
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                Close
+              </Button>
+              <Button onClick={handleConfirm}>
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Confirm
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={status === 'processing'}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleProcess}
+                disabled={status === 'processing' || selectedArtifacts.size === 0}
+              >
+                {status === 'processing' ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <ScanEye className="h-4 w-4 mr-2" />
+                    Extract Text ({selectedArtifacts.size})
+                  </>
+                )}
+              </Button>
+            </>
           )}
         </DialogFooter>
       </DialogContent>
