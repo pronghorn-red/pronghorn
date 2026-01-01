@@ -102,11 +102,8 @@ export function NodePropertiesPanel({
       return;
     }
     
-    if (selectedArtifacts.length === 1) {
-      // Single artifact: update current node with image embedded as markdown
-      const artifact = selectedArtifacts[0];
-      
-      // Build content with image embedded as markdown (like paste behavior)
+    // Helper to build content with image as markdown
+    const buildArtifactContent = (artifact: Artifact) => {
       let nodeContent = artifact.content || '';
       if (artifact.image_url) {
         const imageMarkdown = `![${artifact.ai_title || 'Artifact Image'}](${artifact.image_url})`;
@@ -114,22 +111,27 @@ export function NodePropertiesPanel({
           ? `${nodeContent}\n\n${imageMarkdown}` 
           : imageMarkdown;
       }
-      
-      onUpdate(node.id, {
-        data: {
-          ...node.data,
-          artifactId: artifact.id,
-          content: nodeContent,  // Image embedded in content as markdown
-          label: artifact.ai_title || node.data.label,
-        },
-      });
-      toast.success("Artifact imported to Notes");
+      return nodeContent;
+    };
+    
+    // First artifact ALWAYS populates the current node
+    const firstArtifact = selectedArtifacts[0];
+    onUpdate(node.id, {
+      data: {
+        ...node.data,
+        artifactId: firstArtifact.id,
+        content: buildArtifactContent(firstArtifact),
+        label: firstArtifact.ai_title || node.data.label,
+      },
+    });
+    
+    // If more than one artifact, create additional cascaded nodes for the rest
+    if (selectedArtifacts.length > 1 && onCreateMultipleNotesFromArtifacts) {
+      const remainingArtifacts = selectedArtifacts.slice(1);  // Skip first (already used)
+      onCreateMultipleNotesFromArtifacts(remainingArtifacts, node);
+      toast.success(`Imported ${selectedArtifacts.length} artifacts (1 to current, ${remainingArtifacts.length} new nodes)`);
     } else {
-      // Multiple artifacts: create multiple Notes nodes with cascading layout
-      if (onCreateMultipleNotesFromArtifacts) {
-        onCreateMultipleNotesFromArtifacts(selectedArtifacts, node);  // Pass source node for cascading
-        toast.success(`Creating ${selectedArtifacts.length} Notes nodes from artifacts`);
-      }
+      toast.success("Artifact imported to Notes");
     }
     
     setIsProjectSelectorOpen(false);

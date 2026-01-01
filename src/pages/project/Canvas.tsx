@@ -723,10 +723,10 @@ function CanvasFlow() {
         const newNode: Node = {
           id: crypto.randomUUID(),
           type: "notes",
-          // Cascade: +100px for each subsequent node
+          // Cascade: +50px for each subsequent node
           position: {
-            x: startPosition.x + (i + 1) * 100,
-            y: startPosition.y + (i + 1) * 100,
+            x: startPosition.x + (i + 1) * 50,
+            y: startPosition.y + (i + 1) * 50,
           },
           style: { width: nodeWidth, height: nodeHeight },
           data: {

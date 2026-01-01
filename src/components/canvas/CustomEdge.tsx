@@ -14,7 +14,7 @@ interface CustomEdgeProps {
   labelStyle?: React.CSSProperties;
   labelBgStyle?: React.CSSProperties;
   selected?: boolean;
-  // React Flow passes the edge's type here when using custom edge components
+  type?: string;  // React Flow passes the edge's type here
   data?: {
     edgeType?: string;
   };
@@ -33,10 +33,11 @@ export const CustomEdge = memo(({
   labelStyle,
   labelBgStyle,
   selected,
+  type,
   data,
 }: CustomEdgeProps) => {
-  // Get edge type from data (set by EdgePropertiesPanel)
-  const edgeType = data?.edgeType || 'default';
+  // Get edge type from type prop (React Flow native), fallback to data.edgeType for legacy
+  const edgeType = type || data?.edgeType || 'default';
   
   let edgePath: string;
   let labelX: number;

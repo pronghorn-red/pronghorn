@@ -35,8 +35,8 @@ export function EdgePropertiesPanel({
   useEffect(() => {
     if (edge) {
       setLabel((edge.label as string) || "");
-      // Get edge type from data.edgeType (stored for CustomEdge to use)
-      setLineType((edge.data?.edgeType as string) || "default");
+      // Get edge type from edge.type (React Flow's native property, persisted to DB)
+      setLineType(edge.type || "default");
       setColor((edge.style?.stroke as string) || "#64748b");
       setThickness((edge.style?.strokeWidth as number) || 2);
     }
@@ -49,8 +49,8 @@ export function EdgePropertiesPanel({
 
   const handleLineTypeChange = (newType: string) => {
     setLineType(newType);
-    // Store edge type in data.edgeType for CustomEdge to read
-    onVisualUpdate(edge.id, { data: { ...edge.data, edgeType: newType } });
+    // Update edge.type directly (React Flow's native property)
+    onVisualUpdate(edge.id, { type: newType });
   };
 
   const handleColorChange = (newColor: string) => {
@@ -78,7 +78,7 @@ export function EdgePropertiesPanel({
   const handleSave = () => {
     onUpdate(edge.id, {
       label,
-      data: { ...edge.data, edgeType: lineType },
+      type: lineType,  // Use edge.type directly (persisted to DB as edge_type)
       style: {
         ...edge.style,
         stroke: color,
