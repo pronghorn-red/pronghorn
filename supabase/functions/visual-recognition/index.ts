@@ -402,7 +402,7 @@ serve(async (req) => {
           for (const result of allResults) {
             if (result && result.success && result.content) {
               const { error: updateError } = await supabase.rpc('update_artifact_with_token', {
-                p_artifact_id: result.id,
+                p_id: result.id,
                 p_token: shareToken || null,
                 p_content: result.content
               });

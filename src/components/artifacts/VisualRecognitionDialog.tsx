@@ -272,7 +272,7 @@ export function VisualRecognitionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden">
           {/* Left Column: Configuration */}
           <div className="space-y-4 overflow-y-auto pr-2">
             {/* Model Selection */}
@@ -360,9 +360,8 @@ export function VisualRecognitionDialog({
             </div>
           </div>
 
-          {/* Right Column: Artifact Selection & Progress */}
+          {/* Middle Column: Artifact Selection */}
           <div className="space-y-4 overflow-hidden flex flex-col">
-            {/* Artifact Selection */}
             <div className="space-y-2 flex-1 overflow-hidden flex flex-col">
               <div className="flex items-center justify-between">
                 <Label>Select Artifacts ({selectedArtifacts.size} of {imageArtifacts.length})</Label>
@@ -429,10 +428,66 @@ export function VisualRecognitionDialog({
                 <Progress value={(progress / totalToProcess) * 100} />
               </div>
             )}
+          </div>
 
+          {/* Right Column: Results Preview */}
+          <div className="space-y-4 overflow-hidden flex flex-col">
+            <Label>Extracted Text Preview</Label>
+            {status === 'idle' && (
+              <div className="flex-1 flex items-center justify-center text-muted-foreground border rounded-md p-4">
+                <p className="text-sm text-center">
+                  Select artifacts and click "Process" to extract text
+                </p>
+              </div>
+            )}
+            {status === 'processing' && (
+              <div className="flex-1 flex items-center justify-center text-muted-foreground border rounded-md p-4">
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                  <p className="text-sm">Processing artifacts...</p>
+                </div>
+              </div>
+            )}
+            {(status === 'complete' || status === 'error') && (
+              <ScrollArea className="flex-1 border rounded-md">
+                <div className="p-3 space-y-4">
+                  {results.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No results yet
+                    </p>
+                  ) : (
+                    results.map((result) => {
+                      const artifact = imageArtifacts.find(a => a.id === result.id);
+                      return (
+                        <div key={result.id} className="border rounded-md p-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            {result.success ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-destructive shrink-0" />
+                            )}
+                            <span className="text-sm font-medium truncate">
+                              {artifact ? getArtifactTitle(artifact) : result.id}
+                            </span>
+                          </div>
+                          {result.success && result.content ? (
+                            <pre className="text-xs bg-muted p-2 rounded max-h-[150px] overflow-y-auto whitespace-pre-wrap">
+                              {result.content.slice(0, 500)}{result.content.length > 500 ? '...' : ''}
+                            </pre>
+                          ) : result.error ? (
+                            <p className="text-xs text-destructive">{result.error}</p>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </ScrollArea>
+            )}
+            
             {/* Results Summary */}
             {status === 'complete' && results.length > 0 && (
-              <div className="p-3 bg-muted rounded-md">
+              <div className="p-3 bg-muted rounded-md shrink-0">
                 <p className="text-sm font-medium">
                   Processing Complete
                 </p>
