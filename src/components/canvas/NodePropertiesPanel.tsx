@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { X, Trash2, ChevronRight, Image } from "lucide-react";
+import { Trash2, ChevronRight, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useShareToken } from "@/hooks/useShareToken";
 import { zoneColorClasses } from "@/components/canvas/ZoneNode";
+import { ProjectSelector, ProjectSelectionResult } from "@/components/project/ProjectSelector";
 
 interface Artifact {
   id: string;
@@ -29,7 +30,7 @@ interface NodePropertiesPanelProps {
   projectId: string;
   isOpen: boolean;
   onToggle: () => void;
-  onCreateMultipleNotesFromArtifacts?: (artifactIds: Set<string>) => void;
+  onCreateMultipleNotesFromArtifacts?: (artifacts: Artifact[]) => void;
 }
 
 export function NodePropertiesPanel({
@@ -49,8 +50,8 @@ export function NodePropertiesPanel({
   const [requirements, setRequirements] = useState<any[]>([]);
   const [standards, setStandards] = useState<any[]>([]);
   const [techStacks, setTechStacks] = useState<any[]>([]);
-  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [backgroundColor, setBackgroundColor] = useState<string>("gray");
+  const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
 
   useEffect(() => {
     if (node) {
@@ -87,37 +88,43 @@ export function NodePropertiesPanel({
       const { data } = await supabase.from("tech_stacks").select("id, name").order("name");
       setTechStacks(data || []);
     }
-    
-    // Load artifacts for NOTES nodes
-    if (node.data.type === "NOTES") {
-      if (token) {
-        const { data } = await supabase.rpc("get_artifacts_with_token", {
-          p_project_id: projectId,
-          p_token: token,
-        });
-        setArtifacts(data || []);
-      }
-    }
   };
 
-  const handleArtifactSelect = useCallback((artifactId: string) => {
+  // Handle ProjectSelector confirmation for NOTES nodes
+  const handleProjectSelectorConfirm = useCallback((selection: ProjectSelectionResult) => {
     if (!node) return;
     
-    const artifact = artifacts.find(a => a.id === artifactId);
-    if (!artifact) return;
+    const selectedArtifacts = selection.artifacts;
     
-    onUpdate(node.id, {
-      data: {
-        ...node.data,
-        artifactId,
-        content: artifact.content,
-        imageUrl: artifact.image_url,
-        label: artifact.ai_title || node.data.label,
-      },
-    });
+    if (selectedArtifacts.length === 0) {
+      toast.info("No artifacts selected");
+      setIsProjectSelectorOpen(false);
+      return;
+    }
     
-    toast.success("Artifact linked to Notes");
-  }, [node, artifacts, onUpdate]);
+    if (selectedArtifacts.length === 1) {
+      // Single artifact: update current node
+      const artifact = selectedArtifacts[0];
+      onUpdate(node.id, {
+        data: {
+          ...node.data,
+          artifactId: artifact.id,
+          content: artifact.content,
+          imageUrl: artifact.image_url,
+          label: artifact.ai_title || node.data.label,
+        },
+      });
+      toast.success("Artifact linked to Notes");
+    } else {
+      // Multiple artifacts: create multiple Notes nodes
+      if (onCreateMultipleNotesFromArtifacts) {
+        onCreateMultipleNotesFromArtifacts(selectedArtifacts);
+        toast.success(`Creating ${selectedArtifacts.length} Notes nodes from artifacts`);
+      }
+    }
+    
+    setIsProjectSelectorOpen(false);
+  }, [node, onUpdate, onCreateMultipleNotesFromArtifacts]);
 
   const handleZoneColorChange = useCallback((color: string) => {
     if (!node) return;
@@ -340,31 +347,22 @@ export function NodePropertiesPanel({
                 </>
               )}
 
-              {/* Link Artifact - Only for NOTES nodes */}
+              {/* Import from Project - Only for NOTES nodes */}
               {node.data.type === "NOTES" && (
                 <>
                   <div className="space-y-3">
-                    <Label>Link Artifact Content</Label>
-                    <Select value={node.data.artifactId || ""} onValueChange={handleArtifactSelect}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select an artifact..." />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover z-50 max-h-60">
-                        {artifacts.map((artifact) => (
-                          <SelectItem key={artifact.id} value={artifact.id}>
-                            <div className="flex items-center gap-2">
-                              {artifact.image_url && <Image className="h-3 w-3" />}
-                              <span className="truncate max-w-[180px]">
-                                {artifact.ai_title || "Untitled Artifact"}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {artifacts.length === 0 && (
-                      <p className="text-xs text-muted-foreground">No artifacts in this project.</p>
-                    )}
+                    <Label>Import Content</Label>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => setIsProjectSelectorOpen(true)}
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      Import from Project...
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Select artifacts to import. Single selection updates this node; multiple creates new nodes.
+                    </p>
                   </div>
                   <Separator />
                 </>
@@ -421,6 +419,15 @@ export function NodePropertiesPanel({
           </div>
         </>
       )}
+      
+      {/* ProjectSelector Dialog for NOTES nodes */}
+      <ProjectSelector
+        projectId={projectId}
+        shareToken={token}
+        open={isProjectSelectorOpen}
+        onClose={() => setIsProjectSelectorOpen(false)}
+        onConfirm={handleProjectSelectorConfirm}
+      />
     </div>
   );
 }

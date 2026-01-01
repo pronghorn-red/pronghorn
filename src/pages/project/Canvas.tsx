@@ -697,6 +697,49 @@ function CanvasFlow() {
     loadCanvasData();
   }, [setNodes, setEdges, loadCanvasData]);
 
+  // Create multiple Notes nodes from selected artifacts
+  const handleCreateMultipleNotesFromArtifacts = useCallback(
+    async (artifacts: any[]) => {
+      if (!reactFlowInstance) return;
+      
+      const startPosition = selectedNode?.position || { x: 100, y: 100 };
+      
+      // Create a Notes node for each artifact in a grid layout
+      for (let i = 0; i < artifacts.length; i++) {
+        const artifact = artifacts[i];
+        const col = i % 3;
+        const row = Math.floor(i / 3);
+        
+        const newNode: Node = {
+          id: crypto.randomUUID(),
+          type: "notes",
+          position: {
+            x: startPosition.x + col * 280,
+            y: startPosition.y + row * 230,
+          },
+          style: { width: 250, height: 200 },
+          data: {
+            type: "NOTES",
+            nodeType: "notes",
+            label: artifact.ai_title || "Artifact",
+            content: artifact.content,
+            imageUrl: artifact.image_url,
+            artifactId: artifact.id,
+          },
+        };
+        
+        setNodes((nds) => [...nds, newNode]);
+        await saveNode(newNode, true, false);
+      }
+      
+      toast({
+        title: `Created ${artifacts.length} Notes nodes`,
+        description: "Notes imported from artifacts",
+      });
+    },
+    [reactFlowInstance, selectedNode, setNodes, saveNode, toast]
+  );
+
   const handleDownloadSnapshot = useCallback(
     async (format: 'png' | 'svg') => {
       const viewport = document.querySelector('.react-flow__viewport') as HTMLElement;
@@ -1370,6 +1413,7 @@ function CanvasFlow() {
                 projectId={projectId!}
                 isOpen={isPanelOpen}
                 onToggle={handleTogglePanel}
+                onCreateMultipleNotesFromArtifacts={handleCreateMultipleNotesFromArtifacts}
               />
             ) : selectedEdge ? (
               <EdgePropertiesPanel

@@ -42,32 +42,28 @@ export const NotesNode = memo(({ data, selected, id }: NodeProps<NotesNodeData>)
     setIsEditing(true);
   }, []);
 
-  const handleBlur = useCallback(() => {
-    setIsEditing(false);
-    // Update node data when done editing
+  const updateNodeData = useCallback((newContent: string) => {
     setNodes((nds) =>
       nds.map((node) =>
         node.id === id
-          ? { ...node, data: { ...node.data, content } }
+          ? { ...node, data: { ...node.data, content: newContent } }
           : node
       )
     );
-  }, [id, content, setNodes]);
+  }, [id, setNodes]);
+
+  const handleBlur = useCallback(() => {
+    setIsEditing(false);
+    updateNodeData(content);
+  }, [content, updateNodeData]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     // Allow Escape to exit editing
     if (e.key === 'Escape') {
       setIsEditing(false);
-      // Update node data when exiting
-      setNodes((nds) =>
-        nds.map((node) =>
-          node.id === id
-            ? { ...node, data: { ...node.data, content } }
-            : node
-        )
-      );
+      updateNodeData(content);
     }
-  }, [id, content, setNodes]);
+  }, [content, updateNodeData]);
 
   // Handle image paste
   const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
@@ -78,6 +74,8 @@ export const NotesNode = memo(({ data, selected, id }: NodeProps<NotesNodeData>)
         e.preventDefault();
         const blob = item.getAsFile();
         if (!blob) continue;
+        
+        toast.info('Uploading image...');
         
         // Read as base64
         const reader = new FileReader();
@@ -98,23 +96,21 @@ export const NotesNode = memo(({ data, selected, id }: NodeProps<NotesNodeData>)
             
             if (error) throw error;
             
-            if (uploadData?.imageUrl) {
+            // The edge function returns 'url' not 'imageUrl'
+            const imageUrl = uploadData?.url || uploadData?.imageUrl;
+            
+            if (imageUrl) {
               // Insert markdown image into content
-              const imageMarkdown = `\n![Pasted Image](${uploadData.imageUrl})\n`;
-              setContent(prev => prev + imageMarkdown);
+              const imageMarkdown = `![Pasted Image](${imageUrl})`;
+              const newContent = content + (content ? '\n\n' : '') + imageMarkdown;
+              setContent(newContent);
               
-              // Update node with artifact reference
-              if (uploadData?.artifactId) {
-                setNodes((nds) =>
-                  nds.map((node) =>
-                    node.id === id
-                      ? { ...node, data: { ...node.data, artifactId: uploadData.artifactId } }
-                      : node
-                  )
-                );
-              }
+              // Immediately update node data so it persists
+              updateNodeData(newContent);
               
               toast.success('Image uploaded and embedded');
+            } else {
+              throw new Error('No URL returned from upload');
             }
           } catch (err) {
             console.error('Error uploading image:', err);
@@ -125,7 +121,18 @@ export const NotesNode = memo(({ data, selected, id }: NodeProps<NotesNodeData>)
         break;
       }
     }
-  }, [projectId, token, id, setNodes]);
+  }, [projectId, token, content, updateNodeData]);
+
+  // Custom components for ReactMarkdown to make images full-width
+  const markdownComponents = {
+    img: ({ src, alt }: { src?: string; alt?: string }) => (
+      <img 
+        src={src} 
+        alt={alt || 'Image'} 
+        className="w-full h-auto rounded my-2 object-contain"
+      />
+    ),
+  };
 
   return (
     <>
@@ -159,16 +166,6 @@ export const NotesNode = memo(({ data, selected, id }: NodeProps<NotesNodeData>)
           )}
         </div>
         <div className="flex-1 p-2 overflow-auto min-h-0">
-          {/* Show linked artifact image if present and not editing */}
-          {data.imageUrl && !isEditing && (
-            <img 
-              src={data.imageUrl} 
-              alt="Artifact" 
-              className="max-w-full h-auto rounded mb-2 object-contain"
-              style={{ maxHeight: '60%' }}
-            />
-          )}
-          
           {isEditing ? (
             <Textarea
               autoFocus
@@ -181,9 +178,12 @@ export const NotesNode = memo(({ data, selected, id }: NodeProps<NotesNodeData>)
               placeholder="Enter markdown content... (Paste images with Ctrl+V)"
             />
           ) : (
-            <div className="prose prose-sm dark:prose-invert max-w-none text-xs h-full whitespace-pre-wrap">
+            <div className="prose prose-sm dark:prose-invert max-w-none text-xs h-full">
               {content ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}
+                  components={markdownComponents}
+                >
                   {preprocessMarkdown(content)}
                 </ReactMarkdown>
               ) : (

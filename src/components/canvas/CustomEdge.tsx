@@ -24,7 +24,8 @@ export const CustomEdge = memo(({
     targetPosition,
   });
 
-  const strokeColor = style?.stroke as string || 'hsl(var(--primary))';
+  // Extract stroke color and width from style prop, with defaults
+  const strokeColor = (style?.stroke as string) || 'hsl(var(--primary))';
   const strokeWidth = (style?.strokeWidth as number) || 2;
 
   return (
@@ -35,7 +36,7 @@ export const CustomEdge = memo(({
           d={edgePath}
           fill="none"
           strokeWidth={strokeWidth + 8}
-          stroke="rgba(249, 115, 22, 0.4)"
+          stroke="rgba(249, 115, 22, 0.5)"
           className="react-flow__edge-path"
           style={{ filter: 'blur(4px)' }}
         />
@@ -50,7 +51,8 @@ export const CustomEdge = memo(({
         stroke={selected ? '#f97316' : strokeColor}
         className="react-flow__edge-path"
         style={{
-          transition: 'stroke 0.2s, stroke-width 0.2s',
+          filter: selected ? 'drop-shadow(0 0 6px rgba(249, 115, 22, 0.8))' : undefined,
+          transition: 'stroke 0.2s, stroke-width 0.2s, filter 0.2s',
         }}
       />
       

@@ -32,16 +32,23 @@ export function useRealtimeCanvas(
       if (nodesResult.error) throw nodesResult.error;
       if (edgesResult.error) throw edgesResult.error;
 
-      const loadedNodes: Node[] = (nodesResult.data || []).map((node: any) => ({
-        id: node.id,
-        type: (node.data as any)?.nodeType || "custom", // Use stored nodeType for React Flow
-        position: node.position as { x: number; y: number },
-        style: (node.data as any)?.style || undefined, // Load saved dimensions
-        data: {
-          ...(node.data || {}),
-          type: (node.data as any)?.type || node.type,
-        },
-      }));
+      const loadedNodes: Node[] = (nodesResult.data || []).map((node: any) => {
+        const nodeType = (node.data as any)?.nodeType || "custom";
+        const dataType = (node.data as any)?.type || node.type;
+        
+        return {
+          id: node.id,
+          type: nodeType, // Use stored nodeType for React Flow
+          position: node.position as { x: number; y: number },
+          style: (node.data as any)?.style || undefined, // Load saved dimensions
+          // Set zIndex: -1 for ZONE nodes so they render behind other nodes
+          zIndex: dataType === "ZONE" ? -1 : undefined,
+          data: {
+            ...(node.data || {}),
+            type: dataType,
+          },
+        };
+      });
 
       const loadedEdges: Edge[] = (edgesResult.data || []).map((edge: any) => ({
         id: edge.id,
