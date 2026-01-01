@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Database as DatabaseIcon, Plus, RefreshCw, Settings, ChevronLeft, Link, Shield } from "lucide-react";
+import { Database as DatabaseIcon, Plus, RefreshCw, ChevronLeft, Link, Shield } from "lucide-react";
 import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeDatabases } from "@/hooks/useRealtimeDatabases";
@@ -227,22 +227,18 @@ const Database = () => {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4 space-y-4">
             {/* Header with tabs and buttons */}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <TabsList className="w-full lg:w-auto flex-shrink-0">
-                <TabsTrigger value="deploy" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                  <DatabaseIcon className="h-4 w-4" />
-                  <span className="hidden sm:inline">Deploy</span>
-                </TabsTrigger>
-                <TabsTrigger value="manage" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                  <Settings className="h-4 w-4" />
-                  <span className="hidden sm:inline">Manage</span>
-                </TabsTrigger>
-                {isSuperAdmin && (
+              {isSuperAdmin && (
+                <TabsList className="w-full lg:w-auto flex-shrink-0">
+                  <TabsTrigger value="deploy" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                    <DatabaseIcon className="h-4 w-4" />
+                    <span className="hidden sm:inline">Databases</span>
+                  </TabsTrigger>
                   <TabsTrigger value="superadmin" className="flex items-center gap-1.5 text-xs sm:text-sm">
                     <Shield className="h-4 w-4" />
                     <span className="hidden sm:inline">Admin</span>
                   </TabsTrigger>
-                )}
-              </TabsList>
+                </TabsList>
+              )}
 
               <div className="flex items-center gap-2 flex-shrink-0">
                 <Button variant="outline" size="sm" onClick={handleRefreshAll} className="flex-1 sm:flex-none">
@@ -349,82 +345,6 @@ const Database = () => {
               </Card>
             </TabsContent>
 
-            {/* Manage Tab - Database Explorer */}
-            <TabsContent value="manage" className="space-y-6 mt-4">
-              {/* Project Databases */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                    <DatabaseIcon className="h-5 w-5 text-primary" />
-                    Project Databases
-                  </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">
-                    Browse schemas, execute SQL, and manage your database structure.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : databases.length > 0 ? (
-                    <div className="grid gap-4">
-                      {databases.map((database) => (
-                        <DatabaseCard
-                          key={database.id}
-                          database={database}
-                          shareToken={shareToken}
-                          onRefresh={handleUpdate}
-                          onExplore={() => handleExploreDatabase(database)}
-                          showExploreOnly
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <DatabaseIcon className="h-10 w-10 mx-auto mb-3 opacity-50" />
-                      <p className="mb-3 text-sm">No databases to manage</p>
-                      <p className="text-xs">Create a database in the Deploy tab first.</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Connected Databases */}
-              {externalConnections.length > 0 && (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                      <Link className="h-5 w-5 text-primary" />
-                      Connected Databases
-                    </CardTitle>
-                    <CardDescription className="text-xs sm:text-sm">
-                      Explore and query your external database connections.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {isLoadingExternal ? (
-                      <div className="flex items-center justify-center py-12">
-                        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : (
-                      <div className="grid gap-4">
-                        {externalConnections.map((connection) => (
-                          <ExternalDatabaseCard
-                            key={connection.id}
-                            connection={connection}
-                            shareToken={shareToken}
-                            onRefresh={handleExternalUpdate}
-                            onExplore={() => handleExploreExternalConnection(connection)}
-                            showExploreOnly
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
 
             {isSuperAdmin && (
               <TabsContent value="superadmin" className="space-y-6 mt-4">
