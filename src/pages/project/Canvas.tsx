@@ -212,6 +212,8 @@ function CanvasFlow() {
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     baseOnNodesChange(changes);
     
+    let needsZIndexRecalc = false;
+    
     // Check for dimension changes (from NodeResizer)
     changes.forEach((change) => {
       if (change.type === 'dimensions' && 'dimensions' in change && change.dimensions) {
@@ -228,10 +230,23 @@ function CanvasFlow() {
           };
           // Debounce the save slightly to avoid excessive saves during resize
           saveNode(updatedNode, false, true);
+          
+          // If a zone was resized, we need to recalculate z-indexes
+          if (node.type === 'zone') {
+            needsZIndexRecalc = true;
+          }
         }
       }
     });
-  }, [baseOnNodesChange, nodes, saveNode]);
+    
+    // Recalculate zone z-indexes if any zone was resized
+    if (needsZIndexRecalc) {
+      // Use setTimeout to ensure state has been updated
+      setTimeout(() => {
+        setNodes(nds => applyZoneZIndexes(nds));
+      }, 0);
+    }
+  }, [baseOnNodesChange, nodes, saveNode, setNodes]);
 
   // Filter nodes and edges based on visibility
   const visibleNodes = useMemo(() => {
@@ -392,7 +407,13 @@ function CanvasFlow() {
       }
       
       // Recalculate z-index for all zones after any node movement (nesting may have changed)
-      setNodes(nds => applyZoneZIndexes(nds));
+      // Update the dragged node's position first, then recalculate z-indexes
+      setNodes(nds => {
+        const updatedNodes = nds.map(n => 
+          n.id === node.id ? { ...n, position: node.position } : n
+        );
+        return applyZoneZIndexes(updatedNodes);
+      });
       
       // Clear start positions
       dragStartPositionsRef.current.clear();
