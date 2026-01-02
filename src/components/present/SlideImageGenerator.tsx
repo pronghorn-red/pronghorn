@@ -65,12 +65,18 @@ export function SlideImageGenerator({
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Update prompt when dialog opens with new initial prompt
+  // Reset state when dialog opens
   useEffect(() => {
-    if (open && initialPrompt) {
-      setPrompt(initialPrompt);
+    if (open) {
+      if (initialPrompt) {
+        setPrompt(initialPrompt);
+      }
+      // Always reset style and model when dialog opens so they're interactive
+      setSelectedStyle(imageStyle);
+      setSelectedModel(imageModel);
+      setGeneratedImage(null);
     }
-  }, [open, initialPrompt]);
+  }, [open, initialPrompt, imageStyle, imageModel]);
 
   // Get the style prompt suffix
   const getStylePrompt = () => {

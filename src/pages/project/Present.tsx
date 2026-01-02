@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, RefreshCw, Trash2, Download, Loader2, Sparkles, Maximize2, Minimize2, FileDown, Bot, Palette, Pencil, ChevronLeft, ChevronRight, StickyNote, Save, PanelRightClose, PanelRight, Code, ImageIcon } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Download, Loader2, Sparkles, Maximize2, Minimize2, FileDown, Bot, Palette, Pencil, ChevronLeft, ChevronRight, StickyNote, Save, PanelRightClose, PanelRight, Code, ImageIcon, ChevronDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
 import { SlideThumbnails } from "@/components/present/SlideThumbnails";
@@ -149,6 +150,7 @@ export default function Present() {
   
   // PDF export state
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [pdfResolution, setPdfResolution] = useState<"low" | "high">("low");
   const [isSaving, setIsSaving] = useState(false);
   const pdfExportRef = useRef<PdfExportRendererRef>(null);
   const [thumbnailCache, setThumbnailCache] = useState<Record<string, string>>({});
@@ -408,14 +410,15 @@ export default function Present() {
     URL.revokeObjectURL(url);
   };
 
-  // Export as PDF
-  const handleExportPDF = () => {
+  // Export as PDF with resolution option
+  const handleExportPDF = (resolution: "low" | "high") => {
     if (!selectedPresentation || !workingSlides) return;
     if (workingSlides.length === 0) {
       toast.error("No slides to export");
       return;
     }
 
+    setPdfResolution(resolution);
     setIsExportingPdf(true);
   };
   
@@ -659,12 +662,13 @@ export default function Present() {
           </div>
         )}
         
-        {/* Main content area */}
-        <div className="flex-1 min-h-0 flex">
-          {/* Slide - 16:9 container with transform scaling */}
-          <div className="flex-1 min-h-0 flex items-center justify-center p-4">
+        {/* Main content area - notes shrinks slide area, not overlays */}
+        <div className="flex-1 min-h-0 flex overflow-hidden">
+          {/* Slide container - shrinks when notes open */}
+          <div className={`flex-1 min-h-0 flex items-center justify-center p-4 ${showNotes ? 'pr-0' : ''}`}>
             <SlideCanvas className="w-full h-full max-w-full max-h-full">
               <SlideRenderer
+                key={`${currentSlide.id}-${currentSlide.imageUrl || 'no-img'}`}
                 slide={currentSlide}
                 layouts={layouts}
                 theme={currentTheme}
@@ -674,9 +678,9 @@ export default function Present() {
             </SlideCanvas>
           </div>
           
-          {/* Notes panel - wider for better readability */}
+          {/* Notes panel - shrinks slide area, doesn't overlay */}
           {showNotes && (
-            <div className="w-96 border-l bg-background p-4 flex flex-col overflow-hidden">
+            <div className="w-96 shrink-0 border-l bg-background p-4 flex flex-col overflow-hidden">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 shrink-0">
                 <StickyNote className="h-4 w-4" />
                 Speaker Notes
@@ -990,9 +994,22 @@ export default function Present() {
                         <Button variant="outline" size="sm" onClick={handleExportJSON} title="Export JSON">
                           <Download className="h-4 w-4" />
                         </Button>
-                        <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={isExportingPdf} title="Export PDF">
-                          {isExportingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" disabled={isExportingPdf} title="Export PDF">
+                              {isExportingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                              <ChevronDown className="h-3 w-3 ml-1" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleExportPDF("low")}>
+                              Low Resolution (960×540) - Fast
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleExportPDF("high")}>
+                              High Resolution (1920×1080)
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         <Button variant="outline" size="sm" onClick={() => generatePresentation(selectedPresentation)} title="Regenerate">
                           <RefreshCw className="h-4 w-4" />
                         </Button>
@@ -1073,6 +1090,7 @@ export default function Present() {
                           {currentSlide && (
                             <SlideCanvas className="w-full h-full">
                               <SlideRenderer
+                                key={`${currentSlide.id}-${currentSlide.imageUrl || 'no-img'}`}
                                 slide={currentSlide}
                                 layouts={layouts}
                                 theme={currentTheme}
@@ -1209,6 +1227,7 @@ export default function Present() {
           presentationName={selectedPresentation.name}
           theme={currentTheme}
           thumbnailCache={thumbnailCache}
+          resolution={pdfResolution}
           onComplete={handlePdfExportComplete}
           onError={handlePdfExportError}
         />
