@@ -141,12 +141,12 @@ export function SlidePreview({
         <div className={cn("flex-1 overflow-hidden", showNotes && currentSlide.notes && "w-2/3")}>
           <Card className="h-full overflow-hidden">
             <CardContent className={cn(
-              "p-0 h-full flex items-center justify-center bg-muted/20",
-              isFullscreen && "p-4"
+              "p-0 h-full flex items-stretch bg-muted/20",
+              isFullscreen ? "p-0" : "items-center justify-center"
             )}>
               <div className={cn(
-                "w-full h-full",
-                !isFullscreen && "max-w-4xl"
+                "w-full",
+                isFullscreen ? "h-full" : "max-w-4xl"
               )}>
                 <SlideRenderer
                   slide={currentSlide}

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { RegionRenderer } from "./RegionRenderer";
+import { ResponsiveSlideLayout } from "./ResponsiveSlideLayout";
 
 interface SlideContent {
   regionId: string;
@@ -130,17 +131,29 @@ export function SlideRenderer({ slide, layouts, theme = "default", className = "
   const isFullBleed = ["title-cover", "section-divider"].includes(slide.layoutId);
   const isSectionDivider = slide.layoutId === "section-divider";
 
-  // For fullscreen on mobile/portrait, use flex layout instead of fixed aspect ratio
-  const useFlexLayout = isFullscreen;
+  // For fullscreen mode, use responsive flex layout
+  if (isFullscreen) {
+    return (
+      <div 
+        className={`relative font-raleway h-full w-full ${className}`}
+        style={{
+          background: isSectionDivider 
+            ? `linear-gradient(135deg, ${themeColors.primary}, hsl(217 80% 45%))` 
+            : themeColors.background,
+          color: themeColors.foreground,
+        }}
+      >
+        <ResponsiveSlideLayout slide={slide} themeColors={themeColors} />
+      </div>
+    );
+  }
 
+  // Standard 16:9 layout with absolute positioning for preview/non-fullscreen
   return (
     <div 
       className={`relative font-raleway overflow-hidden ${className}`}
       style={{
-        ...(useFlexLayout 
-          ? { minHeight: "100%", width: "100%" }
-          : { aspectRatio: "16/9" }
-        ),
+        aspectRatio: "16/9",
         background: isSectionDivider 
           ? `linear-gradient(135deg, ${themeColors.primary}, hsl(217 80% 45%))` 
           : themeColors.background,
