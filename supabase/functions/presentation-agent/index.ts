@@ -1020,14 +1020,20 @@ For "title-content" layout: { regionId: "content", type: "richtext", data: {...}
 For "timeline" layout: { regionId: "timeline", type: "timeline", data: {...} }
 For "icon-grid" layout: { regionId: "grid", type: "icon-grid", data: {...} }
 
-### Content Block Types
-- "heading": { text: string, level: 1|2|3 }
-- "text": { text: string }
+### Content Block Types (ALL text MUST use MARKDOWN, NEVER HTML tags)
+CRITICAL: NEVER use HTML tags like <b>, <ul>, <li>, </b>, <strong>, <p>, <br>, etc.
+Use ONLY markdown: **bold**, *italic*. For lists use "bullets" type.
+
+- "heading": { text: string (markdown OK), level: 1|2|3 }
+- "text": { text: string (use **bold** and *italic*) }
+- "richtext": { text: string (full markdown) }
 - "bullets": { items: [{ title: string, description: string, icon?: string }] }
 - "stat": { value: string, label: string, change?: string }
 - "image": { url: string, alt: string }
 - "timeline": { steps: [{ title: string, description: string }] }
 - "icon-grid": { items: [{ icon: string, title: string, description: string }] }
+
+FORBIDDEN: <b>, </b>, <i>, <ul>, <li>, <p>, <br>, <strong>, <em>, <div>, <span>
 
 ### Required Slide Sequence
 1. COVER: Title slide with project name, tagline, date

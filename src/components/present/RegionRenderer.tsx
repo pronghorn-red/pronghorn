@@ -1,4 +1,31 @@
 import { CheckCircle2, Circle, ArrowRight } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+
+// Markdown renderer component for consistent styling
+const MarkdownContent = ({ 
+  content, 
+  className = "",
+  style 
+}: { 
+  content: string; 
+  className?: string; 
+  style?: React.CSSProperties;
+}) => (
+  <div className={className}>
+    <ReactMarkdown
+      components={{
+        p: ({ children }) => <span style={style}>{children}</span>,
+        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+        em: ({ children }) => <em className="italic">{children}</em>,
+        ul: ({ children }) => <ul className="list-disc list-inside space-y-1">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal list-inside space-y-1">{children}</ol>,
+        li: ({ children }) => <li style={style}>{children}</li>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  </div>
+);
 
 interface LayoutRegion {
   id: string;
@@ -98,15 +125,15 @@ export function RegionRenderer({
 
         case "text":
           return (
-            <p 
-              className={`${getAlignClass()} ${region.italic ? "italic" : ""}`}
-              style={{ 
-                fontSize: getFontSize(isPreview ? "0.625rem" : "1rem"),
-                color: region.muted ? themeColors.muted : themeColors.foreground,
-              }}
-            >
-              {content.data?.text || ""}
-            </p>
+            <div className={`${getAlignClass()} ${region.italic ? "italic" : ""}`}>
+              <MarkdownContent 
+                content={content.data?.text || ""}
+                style={{ 
+                  fontSize: getFontSize(isPreview ? "0.625rem" : "1rem"),
+                  color: region.muted ? themeColors.muted : themeColors.foreground,
+                }}
+              />
+            </div>
           );
 
         case "bullets":
@@ -133,20 +160,27 @@ export function RegionRenderer({
                   />
                   <div>
                     {typeof item === "string" ? (
-                      <span>{item}</span>
+                      <MarkdownContent 
+                        content={item} 
+                        style={{ color: themeColors.foreground }}
+                      />
                     ) : (
                       <>
-                        <span className="font-semibold">{item.title}</span>
+                        <MarkdownContent 
+                          content={item.title || ""} 
+                          className="font-semibold"
+                          style={{ color: themeColors.foreground }}
+                        />
                         {item.description && (
-                          <p 
-                            className="mt-0.5"
-                            style={{ 
-                              color: themeColors.muted,
-                              fontSize: isPreview ? "0.45rem" : "0.8rem",
-                            }}
-                          >
-                            {item.description}
-                          </p>
+                          <div className="mt-0.5">
+                            <MarkdownContent
+                              content={item.description}
+                              style={{ 
+                                color: themeColors.muted,
+                                fontSize: isPreview ? "0.45rem" : "0.8rem",
+                              }}
+                            />
+                          </div>
                         )}
                       </>
                     )}
@@ -309,15 +343,21 @@ export function RegionRenderer({
           );
 
         case "richtext":
+          // Strip any HTML tags and render as markdown
+          const rawText = content.data?.text || content.data?.html || "";
+          const cleanText = rawText.replace(/<[^>]*>/g, ''); // Remove HTML tags
           return (
             <div 
+              className="overflow-y-auto max-h-full"
               style={{ 
                 fontSize: getFontSize(isPreview ? "0.5rem" : "0.9rem"),
-                color: themeColors.foreground,
                 lineHeight: 1.6,
               }}
             >
-              {content.data?.text || content.data?.html || ""}
+              <MarkdownContent 
+                content={cleanText}
+                style={{ color: themeColors.foreground }}
+              />
             </div>
           );
 
@@ -380,7 +420,7 @@ export function RegionRenderer({
   };
 
   return (
-    <div className="w-full h-full overflow-hidden">
+    <div className="w-full h-full overflow-hidden overflow-y-auto">
       {renderContent()}
     </div>
   );
