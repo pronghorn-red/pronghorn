@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import { toPng } from "html-to-image";
+import { toPng, toJpeg } from "html-to-image";
 import jsPDF from "jspdf";
 import { SlideRenderer } from "./SlideRenderer";
 import { toast } from "sonner";
@@ -35,6 +35,8 @@ interface PdfExportRendererProps {
   layouts: Layout[];
   presentationName: string;
   theme?: "default" | "light" | "vibrant";
+  /** Optional pre-generated thumbnail cache - key is slide hash, value is dataUrl */
+  thumbnailCache?: Record<string, string>;
   onComplete: () => void;
   onError: (error: Error) => void;
 }
@@ -43,22 +45,19 @@ export interface PdfExportRendererRef {
   startExport: () => void;
 }
 
-// PDF export at full HD resolution
+// Use same design size as thumbnails for consistency
+const DESIGN_WIDTH = 960;
+const DESIGN_HEIGHT = 540;
+// PDF output size (2x design for quality)
 const PDF_WIDTH = 1920;
 const PDF_HEIGHT = 1080;
 
 export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRendererProps>(
-  ({ slides, layouts, presentationName, theme = "default", onComplete, onError }, ref) => {
+  ({ slides, layouts, presentationName, theme = "default", thumbnailCache, onComplete, onError }, ref) => {
     const [isExporting, setIsExporting] = useState(false);
     const [currentSlideIndex, setCurrentSlideIndex] = useState(-1);
     const renderRef = useRef<HTMLDivElement>(null);
     const capturedImagesRef = useRef<string[]>([]);
-    const isMountedRef = useRef(false);
-
-    useEffect(() => {
-      isMountedRef.current = true;
-      return () => { isMountedRef.current = false; };
-    }, []);
 
     useImperativeHandle(ref, () => ({
       startExport: () => {
@@ -73,13 +72,57 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
       },
     }));
 
+    // Get background color based on theme
+    const getBgColor = () => {
+      return theme === "light" ? "#ffffff" : theme === "vibrant" ? "#1a0d26" : "#1e293b";
+    };
+
+    // Generate content hash for cache lookup (same logic as SlideThumbnails)
+    const getContentHash = (slide: Slide): string => {
+      const contentStr = JSON.stringify({
+        layoutId: slide.layoutId,
+        title: slide.title,
+        subtitle: slide.subtitle,
+        content: slide.content,
+        imageUrl: slide.imageUrl,
+        fontScale: slide.fontScale,
+        theme: theme,
+      });
+      let hash = 0;
+      for (let i = 0; i < contentStr.length; i++) {
+        const char = contentStr.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      return `${slide.id}-${hash}`;
+    };
+
     // Capture current slide when index changes
     useEffect(() => {
       if (!isExporting || currentSlideIndex < 0 || currentSlideIndex >= slides.length) return;
 
       const captureSlide = async () => {
-        // Wait for render to complete
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const currentSlide = slides[currentSlideIndex];
+        const hash = getContentHash(currentSlide);
+        
+        toast.info(`Capturing slide ${currentSlideIndex + 1}/${slides.length}...`, { id: "pdf-progress" });
+
+        // Check if we have a cached thumbnail
+        if (thumbnailCache && thumbnailCache[hash]) {
+          console.log(`Using cached thumbnail for slide ${currentSlideIndex + 1}`);
+          capturedImagesRef.current.push(thumbnailCache[hash]);
+          
+          // Move to next slide or finish
+          if (currentSlideIndex < slides.length - 1) {
+            setCurrentSlideIndex((prev) => prev + 1);
+          } else {
+            generatePdf(capturedImagesRef.current);
+          }
+          return;
+        }
+
+        // Wait for render to complete (same delay as thumbnail generator)
+        await new Promise((resolve) => setTimeout(resolve, 800));
 
         if (!renderRef.current) {
           console.error("Render ref not available at slide", currentSlideIndex);
@@ -93,16 +136,14 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
         }
 
         try {
-          toast.info(`Capturing slide ${currentSlideIndex + 1}/${slides.length}...`, { id: "pdf-progress" });
-
-          const bgColor = theme === "light" ? "#ffffff" : theme === "vibrant" ? "#1a0d26" : "#1e293b";
-          
-          const dataUrl = await toPng(renderRef.current, {
+          // Use JPEG for smaller file size (same approach as thumbnails but with JPEG)
+          const dataUrl = await toJpeg(renderRef.current, {
             cacheBust: true,
             pixelRatio: 1,
-            width: PDF_WIDTH,
-            height: PDF_HEIGHT,
-            backgroundColor: bgColor,
+            width: DESIGN_WIDTH,
+            height: DESIGN_HEIGHT,
+            backgroundColor: getBgColor(),
+            quality: 0.92,
           });
 
           capturedImagesRef.current.push(dataUrl);
@@ -122,12 +163,13 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
       };
 
       captureSlide();
-    }, [currentSlideIndex, isExporting, slides.length, theme]);
+    }, [currentSlideIndex, isExporting, slides.length, theme, thumbnailCache]);
 
     const generatePdf = async (images: string[]) => {
       try {
         toast.info("Generating PDF...", { id: "pdf-progress" });
 
+        // Create PDF at output resolution
         const pdf = new jsPDF({
           orientation: "landscape",
           unit: "px",
@@ -138,7 +180,8 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
           if (i > 0) {
             pdf.addPage([PDF_WIDTH, PDF_HEIGHT], "landscape");
           }
-          pdf.addImage(images[i], "PNG", 0, 0, PDF_WIDTH, PDF_HEIGHT);
+          // Scale the captured image to fill PDF page
+          pdf.addImage(images[i], "JPEG", 0, 0, PDF_WIDTH, PDF_HEIGHT);
         }
 
         const fileName = `${presentationName.replace(/\s+/g, "_")}.pdf`;
@@ -156,11 +199,14 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
       }
     };
 
-    const bgColor = theme === "light" ? "#ffffff" : theme === "vibrant" ? "#1a0d26" : "#1e293b";
+    const bgColor = getBgColor();
     const shouldRenderSlide = isExporting && currentSlideIndex >= 0 && currentSlideIndex < slides.length;
     const currentSlide = shouldRenderSlide ? slides[currentSlideIndex] : null;
+    
+    // Check if we need to render (skip if using cached thumbnail)
+    const needsRender = currentSlide && (!thumbnailCache || !thumbnailCache[getContentHash(currentSlide)]);
 
-    // Always render container (for ref), but only show content when exporting
+    // Always render container (for ref), but only show content when needed
     return (
       <div
         ref={renderRef}
@@ -168,23 +214,23 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
           position: "fixed",
           left: 0,
           top: 0,
-          width: PDF_WIDTH,
-          height: PDF_HEIGHT,
+          width: DESIGN_WIDTH,
+          height: DESIGN_HEIGHT,
           zIndex: -9999,
-          visibility: shouldRenderSlide ? "visible" : "hidden",
+          visibility: needsRender ? "visible" : "hidden",
           pointerEvents: "none",
           overflow: "hidden",
           backgroundColor: bgColor,
         }}
       >
-        {currentSlide && (
+        {currentSlide && needsRender && (
           <SlideRenderer
             slide={currentSlide}
             layouts={layouts}
             theme={theme}
             fontScale={currentSlide.fontScale || 1}
-            designWidth={PDF_WIDTH}
-            designHeight={PDF_HEIGHT}
+            designWidth={DESIGN_WIDTH}
+            designHeight={DESIGN_HEIGHT}
           />
         )}
       </div>

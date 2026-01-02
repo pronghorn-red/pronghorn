@@ -151,6 +151,7 @@ export default function Present() {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const pdfExportRef = useRef<PdfExportRendererRef>(null);
+  const [thumbnailCache, setThumbnailCache] = useState<Record<string, string>>({});
   
   // Fullscreen edit mode
   const [showEditControls, setShowEditControls] = useState(false);
@@ -1016,6 +1017,7 @@ export default function Present() {
                           selectedSlideIndex={selectedSlideIndex}
                           onSlideChange={setSelectedSlideIndex}
                           theme={currentTheme}
+                          onThumbnailCacheUpdate={setThumbnailCache}
                         />
                       </div>
                       
@@ -1206,6 +1208,7 @@ export default function Present() {
           layouts={layouts}
           presentationName={selectedPresentation.name}
           theme={currentTheme}
+          thumbnailCache={thumbnailCache}
           onComplete={handlePdfExportComplete}
           onError={handlePdfExportError}
         />

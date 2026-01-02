@@ -38,6 +38,8 @@ interface SlideThumbnailsProps {
   selectedSlideIndex: number;
   onSlideChange: (index: number) => void;
   theme?: "default" | "light" | "vibrant";
+  /** Callback to expose the thumbnail cache for PDF export */
+  onThumbnailCacheUpdate?: (cache: Record<string, string>) => void;
 }
 
 // Thumbnail dimensions - render at 2x for quality
@@ -121,7 +123,8 @@ export function SlideThumbnails({
   layouts, 
   selectedSlideIndex, 
   onSlideChange, 
-  theme = "default" 
+  theme = "default",
+  onThumbnailCacheUpdate 
 }: SlideThumbnailsProps) {
   const thumbnailCacheRef = useRef<Record<string, string>>({});
   const contentHashRef = useRef<Record<string, string>>({});
@@ -178,6 +181,8 @@ export function SlideThumbnails({
       next.delete(hash);
       return next;
     });
+    // Notify parent of cache update for PDF export
+    onThumbnailCacheUpdate?.(thumbnailCacheRef.current);
   };
 
   return (
