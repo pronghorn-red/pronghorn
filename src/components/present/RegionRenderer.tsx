@@ -430,7 +430,7 @@ export function RegionRenderer({
   };
 
   return (
-    <div className="w-full h-full overflow-hidden overflow-y-auto">
+    <div className="w-full h-full overflow-hidden">
       {renderContent()}
     </div>
   );
