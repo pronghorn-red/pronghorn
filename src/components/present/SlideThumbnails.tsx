@@ -107,20 +107,29 @@ export function SlideThumbnails({
   const [generating, setGenerating] = useState<Set<string>>(new Set());
 
   // Generate thumbnails for slides that don't have them
-  const getSlideKey = (slide: Slide) => 
-    `${slide.id}-${slide.layoutId}-${JSON.stringify(slide.content || []).slice(0, 100)}`;
+  const getSlideKey = (slide: Slide | null | undefined) => {
+    if (!slide) return 'invalid-slide';
+    const id = slide.id || 'no-id';
+    const layoutId = slide.layoutId || 'no-layout';
+    const contentStr = JSON.stringify(slide.content || []);
+    return `${id}-${layoutId}-${contentStr.slice(0, 100)}`;
+  };
 
   useEffect(() => {
+    if (!slides || slides.length === 0) return;
+    
     slides.forEach((slide) => {
+      if (!slide) return;
       const key = getSlideKey(slide);
-      if (!thumbnails[key] && !generating.has(key)) {
+      if (key !== 'invalid-slide' && !thumbnails[key] && !generating.has(key)) {
         setGenerating(prev => new Set(prev).add(key));
       }
     });
   }, [slides, thumbnails, generating]);
 
   const handleCapture = (slideId: string, layoutId: string, content: any[], dataUrl: string) => {
-    const key = `${slideId}-${layoutId}-${JSON.stringify(content || []).slice(0, 100)}`;
+    const contentStr = JSON.stringify(content || []);
+    const key = `${slideId || 'no-id'}-${layoutId || 'no-layout'}-${contentStr.slice(0, 100)}`;
     setThumbnails(prev => ({ ...prev, [key]: dataUrl }));
     setGenerating(prev => {
       const next = new Set(prev);

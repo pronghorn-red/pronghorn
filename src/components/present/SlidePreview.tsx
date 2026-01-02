@@ -153,45 +153,69 @@ export function SlidePreview({
     );
   }
 
-  // External fullscreen mode - render with controls overlay
+  // External fullscreen mode - render with controls overlay and notes panel
   if (externalFullscreen) {
     return (
       <div 
-        className="h-full w-full relative"
+        className="h-full w-full relative flex"
         onMouseEnter={() => setShowControls(true)}
         onMouseLeave={() => setShowControls(false)}
       >
-        <SlideRenderer
-          slide={currentSlide}
-          layouts={layouts}
-          theme={theme}
-          isPreview={false}
-          isFullscreen={true}
-          fontScale={currentSlide.fontScale || fontScale}
-          className="h-full w-full"
-        />
-        
-        {/* Floating controls overlay in fullscreen */}
-        {showControls && onUpdateSlide && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 p-3 bg-background/90 backdrop-blur-sm rounded-lg border shadow-lg z-20">
-            <LayoutSelector 
-              value={currentSlide.layoutId} 
-              onChange={handleLayoutChange} 
-            />
-            <FontScaleControl 
-              value={currentSlide.fontScale || 1} 
-              onChange={handleFontScaleChange} 
-            />
-            {layoutSupportsImage && (
-              <Button 
-                variant="outline" 
+        {/* Main slide area */}
+        <div className={cn(
+          "flex-1 relative transition-all",
+          showNotes && "w-2/3"
+        )}>
+          <SlideRenderer
+            slide={currentSlide}
+            layouts={layouts}
+            theme={theme}
+            isPreview={false}
+            isFullscreen={true}
+            fontScale={currentSlide.fontScale || fontScale}
+            className="h-full w-full"
+          />
+          
+          {/* Floating controls overlay in fullscreen */}
+          {showControls && onUpdateSlide && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 p-3 bg-background/90 backdrop-blur-sm rounded-lg border shadow-lg z-20">
+              <LayoutSelector 
+                value={currentSlide.layoutId} 
+                onChange={handleLayoutChange} 
+              />
+              <FontScaleControl 
+                value={currentSlide.fontScale || 1} 
+                onChange={handleFontScaleChange} 
+              />
+              {layoutSupportsImage && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setIsImageGeneratorOpen(true)}
+                >
+                  <ImageIcon className="h-3.5 w-3.5 mr-1" />
+                  Image
+                </Button>
+              )}
+              <Button
+                variant={showNotes ? "secondary" : "outline"}
                 size="sm"
-                onClick={() => setIsImageGeneratorOpen(true)}
+                onClick={() => setShowNotes(!showNotes)}
               >
-                <ImageIcon className="h-3.5 w-3.5 mr-1" />
-                Image
+                <StickyNote className="h-3.5 w-3.5 mr-1" />
+                Notes
               </Button>
-            )}
+            </div>
+          )}
+        </div>
+
+        {/* Notes panel in fullscreen */}
+        {showNotes && onUpdateSlide && (
+          <div className="w-1/3 border-l bg-background/95 backdrop-blur-sm p-4 overflow-y-auto">
+            <SlideNotesEditor
+              notes={currentSlide.notes || ""}
+              onSave={handleSaveNotes}
+            />
           </div>
         )}
         
@@ -256,16 +280,14 @@ export function SlidePreview({
             </Button>
           )}
           
-          {currentSlide.notes && (
-            <Button
-              variant={showNotes ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setShowNotes(!showNotes)}
-            >
-              <StickyNote className="h-4 w-4 mr-1" />
-              Notes
-            </Button>
-          )}
+          <Button
+            variant={showNotes ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => setShowNotes(!showNotes)}
+          >
+            <StickyNote className="h-4 w-4 mr-1" />
+            Notes
+          </Button>
           
           <Button
             variant="outline"
@@ -319,9 +341,9 @@ export function SlidePreview({
           )}
         </div>
 
-        {/* Speaker notes panel */}
-        {showNotes && currentSlide.notes && onUpdateSlide && (
-          <Card className="w-1/3">
+        {/* Speaker notes panel - always show when toggled, even if no notes yet */}
+        {showNotes && onUpdateSlide && (
+          <Card className="w-1/3 shrink-0">
             <CardContent className="p-4">
               <SlideNotesEditor
                 notes={currentSlide.notes || ""}
@@ -332,14 +354,14 @@ export function SlidePreview({
         )}
         
         {/* Readonly notes when no update handler */}
-        {showNotes && currentSlide.notes && !onUpdateSlide && (
-          <Card className="w-1/3">
+        {showNotes && !onUpdateSlide && (
+          <Card className="w-1/3 shrink-0">
             <CardContent className="p-4">
               <h4 className="text-sm font-semibold mb-2 text-muted-foreground">
                 Speaker Notes
               </h4>
               <p className="text-sm leading-relaxed">
-                {currentSlide.notes}
+                {currentSlide.notes || "No notes for this slide."}
               </p>
             </CardContent>
           </Card>
