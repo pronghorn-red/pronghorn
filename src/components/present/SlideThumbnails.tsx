@@ -30,28 +30,28 @@ interface Layout {
 interface SlideThumbnailsProps {
   slides: Slide[];
   layouts: Layout[];
-  selectedSlideId: string | null;
-  onSelectSlide: (slideId: string) => void;
+  selectedSlideIndex: number;
+  onSlideChange: (index: number) => void;
   theme?: "default" | "light" | "vibrant";
 }
 
 export function SlideThumbnails({ 
   slides, 
   layouts, 
-  selectedSlideId, 
-  onSelectSlide, 
+  selectedSlideIndex, 
+  onSlideChange, 
   theme = "default" 
 }: SlideThumbnailsProps) {
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="h-[calc(100vh-400px)]">
       <div className="space-y-3 p-2">
         {slides.map((slide, index) => (
           <button
-            key={slide.id}
-            onClick={() => onSelectSlide(slide.id)}
+            key={slide.id || index}
+            onClick={() => onSlideChange(index)}
             className={cn(
               "w-full rounded-lg overflow-hidden border-2 transition-all",
-              selectedSlideId === slide.id 
+              selectedSlideIndex === index 
                 ? "border-primary ring-2 ring-primary/20" 
                 : "border-border hover:border-muted-foreground/50"
             )}
@@ -76,7 +76,7 @@ export function SlideThumbnails({
             {/* Slide title */}
             <div className="p-1.5 bg-muted/50 border-t">
               <p className="text-xs font-medium truncate text-left">
-                {slide.title}
+                {slide.title || "Untitled Slide"}
               </p>
             </div>
           </button>
