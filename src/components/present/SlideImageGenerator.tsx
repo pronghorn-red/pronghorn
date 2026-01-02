@@ -154,8 +154,8 @@ export function SlideImageGenerator({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="w-[calc(100%-50px)] h-[calc(100vh-50px)] max-w-none max-h-none flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Wand2 className="h-5 w-5" />
             Generate Slide Image
@@ -171,85 +171,87 @@ export function SlideImageGenerator({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Current image preview */}
-          {currentImageUrl && !generatedImage && (
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Current Image</Label>
-              <div className="aspect-video bg-muted rounded-lg overflow-hidden">
-                <img
-                  src={currentImageUrl}
-                  alt="Current slide image"
-                  className="w-full h-full object-cover opacity-50"
-                />
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="space-y-4 max-w-2xl mx-auto">
+            {/* Current image preview */}
+            {currentImageUrl && !generatedImage && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Current Image</Label>
+                <div className="aspect-video bg-muted rounded-lg overflow-hidden">
+                  <img
+                    src={currentImageUrl}
+                    alt="Current slide image"
+                    className="w-full h-full object-cover opacity-50"
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Generated image preview */}
-          {generatedImage && (
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Generated Image</Label>
-              <div className="aspect-video bg-muted rounded-lg overflow-hidden border-2 border-primary">
-                <img
-                  src={generatedImage}
-                  alt="Generated slide image"
-                  className="w-full h-full object-cover"
-                />
+            {/* Generated image preview */}
+            {generatedImage && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Generated Image</Label>
+                <div className="aspect-video bg-muted rounded-lg overflow-hidden border-2 border-primary">
+                  <img
+                    src={generatedImage}
+                    alt="Generated slide image"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Prompt input */}
-          <div className="space-y-2">
-            <Label>Image Prompt</Label>
-            <Textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe the image you want to generate..."
-              className="min-h-[100px]"
-            />
-          </div>
-
-          {/* Model and Style selectors in a row */}
-          <div className="grid grid-cols-2 gap-4">
+            {/* Prompt input */}
             <div className="space-y-2">
-              <Label>Style</Label>
-              <Select value={selectedStyle} onValueChange={setSelectedStyle}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {IMAGE_STYLES.map((style) => (
-                    <SelectItem key={style.id} value={style.id}>
-                      {style.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Image Prompt</Label>
+              <Textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Describe the image you want to generate..."
+                className="min-h-[100px]"
+              />
             </div>
-            
-            <div className="space-y-2">
-              <Label>Model</Label>
-              <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {IMAGE_MODELS.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <div className="flex flex-col">
-                        <span>{model.label}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+            {/* Model and Style selectors in a row */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Style</Label>
+                <Select value={selectedStyle} onValueChange={setSelectedStyle}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {IMAGE_STYLES.map((style) => (
+                      <SelectItem key={style.id} value={style.id}>
+                        {style.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Model</Label>
+                <Select value={selectedModel} onValueChange={setSelectedModel}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {IMAGE_MODELS.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex flex-col">
+                          <span>{model.label}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </div>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2">
+        <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background">
           {generatedImage ? (
             <>
               <Button variant="outline" onClick={handleDownload}>
