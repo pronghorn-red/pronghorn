@@ -78,8 +78,8 @@ export function SlidePreview({
   return (
     <div 
       className={cn(
-        "flex flex-col h-full",
-        isFullscreen && "fixed inset-0 z-50 bg-background p-4"
+        "flex flex-col",
+        isFullscreen ? "fixed inset-0 z-50 bg-background" : "h-full"
       )}
       tabIndex={0}
       onKeyDown={handleKeyDown}
@@ -138,20 +138,23 @@ export function SlidePreview({
 
       {/* Main slide area */}
       <div className={cn(
-        "flex-1 flex gap-4 min-h-0",
-        isFullscreen ? "h-[calc(100vh-80px)]" : "overflow-hidden"
+        "flex-1 flex gap-4",
+        isFullscreen ? "h-[calc(100dvh-60px)] overflow-hidden" : "min-h-0 overflow-hidden"
       )}>
-        <div className={cn("flex-1", showNotes && currentSlide.notes && "w-2/3", !isFullscreen && "overflow-hidden")}>
+        <div className={cn(
+          "flex-1",
+          showNotes && currentSlide.notes && "w-2/3",
+          isFullscreen && "h-full"
+        )}>
           {isFullscreen ? (
-            <div className="w-full h-full">
-              <SlideRenderer
-                slide={currentSlide}
-                layouts={layouts}
-                theme={theme}
-                isPreview={false}
-                isFullscreen={true}
-              />
-            </div>
+            <SlideRenderer
+              slide={currentSlide}
+              layouts={layouts}
+              theme={theme}
+              isPreview={false}
+              isFullscreen={true}
+              className="h-full w-full"
+            />
           ) : (
             <Card className="h-full overflow-hidden">
               <CardContent className="p-0 h-full flex items-center justify-center bg-muted/20">

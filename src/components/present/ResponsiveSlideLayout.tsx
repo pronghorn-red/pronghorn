@@ -28,6 +28,7 @@ interface ThemeColors {
 interface ResponsiveSlideLayoutProps {
   slide: Slide;
   themeColors: ThemeColors;
+  className?: string;
 }
 
 // Markdown renderer for consistent styling
@@ -46,7 +47,7 @@ const MarkdownText = ({ content, className = "", style }: { content: string; cla
   </ReactMarkdown>
 );
 
-export function ResponsiveSlideLayout({ slide, themeColors }: ResponsiveSlideLayoutProps) {
+export function ResponsiveSlideLayout({ slide, themeColors, className = "" }: ResponsiveSlideLayoutProps) {
   const { layoutId, title, subtitle, content, imageUrl } = slide;
 
   // Get content by type
@@ -211,12 +212,12 @@ export function ResponsiveSlideLayout({ slide, themeColors }: ResponsiveSlideLay
     </div>
   );
 
-  // Layout-specific rendering - all use min-h-full for proper height
+  // Layout-specific rendering - all use h-full with className for proper height
   switch (layoutId) {
     case "title-cover":
     case "section-divider":
       return (
-        <div className="flex flex-col items-center justify-center h-full min-h-full p-6 sm:p-8 text-center relative">
+        <div className={`flex flex-col items-center justify-center h-full p-6 sm:p-8 text-center relative ${className}`}>
           {imageUrl && (
             <div className="absolute inset-0">
               <img 
@@ -250,7 +251,7 @@ export function ResponsiveSlideLayout({ slide, themeColors }: ResponsiveSlideLay
     case "image-left":
       const imgUrlLeft = imageContent?.data?.url || imageContent?.data?.imageUrl || imageUrl;
       return (
-        <div className="flex flex-col h-full min-h-full">
+        <div className={`flex flex-col h-full ${className}`}>
           {imgUrlLeft && (
             <div className="h-[30%] shrink-0">
               {renderImage(imgUrlLeft, imageContent?.data?.alt)}
@@ -258,7 +259,7 @@ export function ResponsiveSlideLayout({ slide, themeColors }: ResponsiveSlideLay
           )}
           <div className="flex-1 flex flex-col min-h-0">
             {renderTitle()}
-            <div className="flex-1 px-4 sm:px-6 pb-4 overflow-y-auto">
+            <div className="flex-1 px-4 sm:px-6 pb-4 overflow-y-auto min-h-0">
               {bulletsContent?.data?.items && renderBullets(bulletsContent.data.items)}
             </div>
           </div>
@@ -268,10 +269,10 @@ export function ResponsiveSlideLayout({ slide, themeColors }: ResponsiveSlideLay
     case "image-right":
       const imgUrlRight = imageContent?.data?.url || imageContent?.data?.imageUrl || imageUrl;
       return (
-        <div className="flex flex-col h-full min-h-full">
+        <div className={`flex flex-col h-full ${className}`}>
           <div className="flex-1 flex flex-col min-h-0">
             {renderTitle()}
-            <div className="flex-1 px-4 sm:px-6 pb-4 overflow-y-auto">
+            <div className="flex-1 px-4 sm:px-6 pb-4 overflow-y-auto min-h-0">
               {bulletsContent?.data?.items && renderBullets(bulletsContent.data.items)}
             </div>
           </div>
@@ -285,9 +286,9 @@ export function ResponsiveSlideLayout({ slide, themeColors }: ResponsiveSlideLay
 
     case "stats-grid":
       return (
-        <div className="flex flex-col h-full min-h-full">
+        <div className={`flex flex-col h-full ${className}`}>
           {renderTitle()}
-          <div className="flex-1 px-4 sm:px-6 pb-4 flex items-center">
+          <div className="flex-1 px-4 sm:px-6 pb-4 flex items-center min-h-0">
             {statsContent && statsContent.length > 0 && renderStats(statsContent)}
           </div>
         </div>
@@ -295,9 +296,9 @@ export function ResponsiveSlideLayout({ slide, themeColors }: ResponsiveSlideLay
 
     case "timeline":
       return (
-        <div className="flex flex-col h-full min-h-full">
+        <div className={`flex flex-col h-full ${className}`}>
           {renderTitle()}
-          <div className="flex-1 px-4 sm:px-6 pb-4 overflow-y-auto">
+          <div className="flex-1 px-4 sm:px-6 pb-4 overflow-y-auto min-h-0">
             {timelineContent?.data?.steps && renderTimeline(timelineContent.data.steps)}
           </div>
         </div>
@@ -305,9 +306,9 @@ export function ResponsiveSlideLayout({ slide, themeColors }: ResponsiveSlideLay
 
     case "icon-grid":
       return (
-        <div className="flex flex-col h-full min-h-full">
+        <div className={`flex flex-col h-full ${className}`}>
           {renderTitle()}
-          <div className="flex-1 px-4 sm:px-6 pb-4 flex items-center">
+          <div className="flex-1 px-4 sm:px-6 pb-4 flex items-center min-h-0">
             <div className="w-full">
               {gridContent?.data?.items && renderIconGrid(gridContent.data.items)}
             </div>
@@ -320,9 +321,9 @@ export function ResponsiveSlideLayout({ slide, themeColors }: ResponsiveSlideLay
       const leftContent = getContentByRegion("left-content") || getContentByRegion("left");
       const rightContent = getContentByRegion("right-content") || getContentByRegion("right");
       return (
-        <div className="flex flex-col h-full min-h-full">
+        <div className={`flex flex-col h-full ${className}`}>
           {renderTitle()}
-          <div className="flex-1 px-4 sm:px-6 pb-4 flex flex-col gap-4 overflow-y-auto">
+          <div className="flex-1 px-4 sm:px-6 pb-4 flex flex-col gap-4 overflow-y-auto min-h-0">
             {leftContent?.data?.items && (
               <div>
                 <h3 className="font-semibold text-sm mb-2" style={{ color: themeColors.primary }}>
@@ -346,9 +347,9 @@ export function ResponsiveSlideLayout({ slide, themeColors }: ResponsiveSlideLay
     case "architecture":
       const diagramUrl = getContentByRegion("diagram")?.data?.url || imageUrl;
       return (
-        <div className="flex flex-col h-full min-h-full">
+        <div className={`flex flex-col h-full ${className}`}>
           {renderTitle()}
-          <div className="flex-1 px-4 sm:px-6 pb-4 flex items-center justify-center">
+          <div className="flex-1 px-4 sm:px-6 pb-4 flex items-center justify-center min-h-0">
             {diagramUrl ? (
               renderImage(diagramUrl, "Architecture diagram")
             ) : (
@@ -366,9 +367,9 @@ export function ResponsiveSlideLayout({ slide, themeColors }: ResponsiveSlideLay
     case "bullets":
     default:
       return (
-        <div className="flex flex-col h-full min-h-full">
+        <div className={`flex flex-col h-full ${className}`}>
           {renderTitle()}
-          <div className="flex-1 px-4 sm:px-6 pb-4 overflow-y-auto">
+          <div className="flex-1 px-4 sm:px-6 pb-4 overflow-y-auto min-h-0">
             {bulletsContent?.data?.items ? (
               renderBullets(bulletsContent.data.items)
             ) : bulletsContent?.data?.text ? (
