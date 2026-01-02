@@ -649,9 +649,16 @@ export default function Present() {
         
         {/* Main content area */}
         <div className="flex-1 min-h-0 flex">
-          {/* Slide - 16:9 container */}
+          {/* Slide - 16:9 container with strict aspect ratio */}
           <div className="flex-1 min-h-0 flex items-center justify-center p-4">
-            <div className="w-full h-full max-w-[calc((100vh-120px)*16/9)] aspect-video">
+            <div 
+              className="relative"
+              style={{
+                width: '100%',
+                maxWidth: 'calc((100vh - 140px) * 16 / 9)',
+                aspectRatio: '16 / 9',
+              }}
+            >
               <SlideRenderer
                 slide={currentSlide}
                 layouts={layouts}
@@ -660,6 +667,7 @@ export default function Present() {
                 isFullscreen={true}
                 fontScale={currentSlide.fontScale || 1}
                 className="w-full h-full"
+                onAddImageClick={() => setIsImageGeneratorOpen(true)}
               />
             </div>
           </div>
@@ -680,6 +688,23 @@ export default function Present() {
             </div>
           )}
         </div>
+
+        {/* Image Generator Dialog - inside fullscreen for proper z-index */}
+        <SlideImageGenerator
+          open={isImageGeneratorOpen}
+          onOpenChange={setIsImageGeneratorOpen}
+          onImageGenerated={(url) => {
+            handleUpdateSlide(selectedSlideIndex, { imageUrl: url });
+            setIsImageGeneratorOpen(false);
+          }}
+          onImageDeleted={() => {
+            handleUpdateSlide(selectedSlideIndex, { imageUrl: undefined });
+            setIsImageGeneratorOpen(false);
+          }}
+          currentImageUrl={currentSlide.imageUrl}
+          initialPrompt={currentSlide.imagePrompt || `Image for: ${currentSlide.title}`}
+          projectContext={getProjectContext()}
+        />
       </div>
     );
   }
@@ -1039,7 +1064,15 @@ export default function Present() {
                         {/* Slide renderer - 16:9 aspect ratio container */}
                         <div className="flex-1 min-h-0 flex items-center justify-center border rounded-lg overflow-hidden bg-muted/10 p-4">
                           {currentSlide && (
-                            <div className="w-full h-full max-h-full" style={{ maxWidth: 'calc((100%) * 16 / 9)', aspectRatio: '16/9' }}>
+                            <div 
+                              className="relative"
+                              style={{ 
+                                width: '100%',
+                                maxWidth: 'min(100%, calc((100% - 2rem) * 1))',
+                                maxHeight: '100%',
+                                aspectRatio: '16 / 9',
+                              }}
+                            >
                               <SlideRenderer
                                 slide={currentSlide}
                                 layouts={layouts}

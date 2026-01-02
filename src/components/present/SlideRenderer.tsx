@@ -143,7 +143,7 @@ export function SlideRenderer({
           foreground: "hsl(222 47% 11%)",
           primary: "hsl(217 91% 50%)",
           muted: "hsl(215 16% 47%)",
-          sectionGradient: "linear-gradient(135deg, hsl(217 91% 50%), hsl(217 80% 60%))",
+          sectionGradient: "linear-gradient(135deg, hsl(210 80% 85%), hsl(205 70% 75%))",
           titleOverlay: "rgba(255, 255, 255, 0.85)",
           titleGradient: "linear-gradient(135deg, hsl(210 40% 96%) 0%, hsl(210 20% 90%) 100%)",
         };

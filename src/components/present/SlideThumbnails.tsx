@@ -163,13 +163,13 @@ export function SlideThumbnails({
         return;
       }
       
-      // Only regenerate if content actually changed
+      // Only regenerate if content actually changed (including theme changes)
       if (existingHash !== hash && !generating.has(hash)) {
         setGenerating(prev => new Set(prev).add(hash));
         contentHashRef.current[slide.id] = hash;
       }
     });
-  }, [slides]);
+  }, [slides, theme]);
 
   const handleCapture = (slide: Slide, dataUrl: string) => {
     const hash = getContentHash(slide);

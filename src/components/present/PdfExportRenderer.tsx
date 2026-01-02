@@ -52,9 +52,14 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
 
     useImperativeHandle(ref, () => ({
       startExport: () => {
-        setIsExporting(true);
+        console.log("Starting PDF export with", slides.length, "slides");
         setCapturedImages([]);
-        setCurrentSlideIndex(0);
+        setCurrentSlideIndex(-1);
+        // Small delay to ensure state reset, then start
+        setTimeout(() => {
+          setIsExporting(true);
+          setCurrentSlideIndex(0);
+        }, 50);
       },
     }));
 
