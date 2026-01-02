@@ -135,18 +135,15 @@ export function SlideRenderer({ slide, layouts, theme = "default", className = "
   if (isFullscreen) {
     return (
       <div 
-        className={`relative font-raleway ${className}`}
+        className={`relative font-raleway h-full w-full ${className}`}
         style={{
-          height: "100%",
-          minHeight: "100%",
-          width: "100%",
           background: isSectionDivider 
             ? `linear-gradient(135deg, ${themeColors.primary}, hsl(217 80% 45%))` 
             : themeColors.background,
           color: themeColors.foreground,
         }}
       >
-        <ResponsiveSlideLayout slide={slide} themeColors={themeColors} />
+        <ResponsiveSlideLayout slide={slide} themeColors={themeColors} className="h-full" />
       </div>
     );
   }
