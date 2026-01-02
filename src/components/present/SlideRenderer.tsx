@@ -35,16 +35,59 @@ interface SlideRendererProps {
   isFullscreen?: boolean;
 }
 
+// Fluid typography scale based on container width
+const fluidSize = {
+  // Titles
+  titleFull: 'clamp(1.5rem, 5cqw, 4rem)',
+  titlePreview: 'clamp(0.75rem, 4cqw, 1.25rem)',
+  titleCoverFull: 'clamp(2rem, 7cqw, 5rem)',
+  titleCoverPreview: 'clamp(1rem, 5cqw, 1.5rem)',
+  
+  // Subtitles
+  subtitleFull: 'clamp(0.875rem, 2.5cqw, 1.5rem)',
+  subtitlePreview: 'clamp(0.5rem, 2cqw, 0.875rem)',
+  
+  // Body text
+  bodyFull: 'clamp(0.875rem, 2cqw, 1.25rem)',
+  bodyPreview: 'clamp(0.5rem, 1.5cqw, 0.75rem)',
+  
+  // Small text (descriptions, muted)
+  smallFull: 'clamp(0.75rem, 1.5cqw, 1rem)',
+  smallPreview: 'clamp(0.5rem, 1.25cqw, 0.625rem)',
+  
+  // Stats
+  statValueFull: 'clamp(1.5rem, 5cqw, 3.5rem)',
+  statValuePreview: 'clamp(1rem, 4cqw, 1.5rem)',
+  
+  // Spacing
+  gapFull: 'clamp(0.5rem, 1.5cqw, 1rem)',
+  gapPreview: 'clamp(0.25rem, 1cqw, 0.5rem)',
+  paddingFull: 'clamp(1rem, 3cqw, 2rem)',
+  paddingPreview: 'clamp(0.5rem, 2cqw, 1rem)',
+  
+  // Icons
+  bulletIconFull: 'clamp(6px, 1cqw, 12px)',
+  bulletIconPreview: 'clamp(4px, 1cqw, 6px)',
+  iconBoxFull: 'clamp(2rem, 4cqw, 3.5rem)',
+  iconBoxPreview: 'clamp(1.25rem, 3cqw, 2rem)',
+  iconSizeFull: 'clamp(1rem, 2cqw, 1.75rem)',
+  iconSizePreview: 'clamp(0.75rem, 1.5cqw, 1rem)',
+  
+  // Timeline
+  timelineCircleFull: 'clamp(1.5rem, 3cqw, 2.5rem)',
+  timelineCirclePreview: 'clamp(1rem, 2.5cqw, 1.5rem)',
+};
+
 // Markdown renderer for consistent styling
-const MarkdownText = ({ content, style }: { content: string; style?: React.CSSProperties }) => (
+const MarkdownText = ({ content, style, fontSize }: { content: string; style?: React.CSSProperties; fontSize?: string }) => (
   <ReactMarkdown
     components={{
-      p: ({ children }) => <p className="mb-2" style={style}>{children}</p>,
+      p: ({ children }) => <p className="mb-2" style={{ ...style, fontSize }}>{children}</p>,
       strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
       em: ({ children }) => <em className="italic">{children}</em>,
       ul: ({ children }) => <ul className="list-disc list-inside space-y-1 my-2">{children}</ul>,
       ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 my-2">{children}</ol>,
-      li: ({ children }) => <li style={style}>{children}</li>,
+      li: ({ children }) => <li style={{ ...style, fontSize }}>{children}</li>,
     }}
   >
     {content}
@@ -86,6 +129,10 @@ export function SlideRenderer({
         };
     }
   }, [theme]);
+
+  // Fluid size helpers
+  const fs = (full: keyof typeof fluidSize, preview: keyof typeof fluidSize) => 
+    isPreview ? fluidSize[preview] : fluidSize[full];
 
   // === UNIFIED CONTENT EXTRACTION ===
   const getContentByType = (type: string) => content?.find(c => c.type === type);
@@ -132,21 +179,31 @@ export function SlideRenderer({
   const isSectionDivider = layoutId === "section-divider";
   const isFullBleed = ["title-cover", "section-divider"].includes(layoutId);
 
-  // === RENDER HELPERS ===
+  // === RENDER HELPERS WITH FLUID TYPOGRAPHY ===
   const renderTitle = (centered = false) => (
-    <div className={`shrink-0 px-4 sm:px-6 lg:px-8 pt-4 lg:pt-6 pb-2 ${centered ? 'text-center' : ''}`}>
+    <div 
+      className={`shrink-0 ${centered ? 'text-center' : ''}`}
+      style={{ 
+        padding: fs('paddingFull', 'paddingPreview'),
+        paddingBottom: fs('gapFull', 'gapPreview'),
+      }}
+    >
       <h2 
-        className={`font-bold font-raleway leading-tight ${
-          isPreview ? 'text-base sm:text-lg' : 'text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl'
-        }`}
-        style={{ color: themeColors.foreground }}
+        className="font-bold font-raleway leading-tight"
+        style={{ 
+          color: themeColors.foreground,
+          fontSize: fs('titleFull', 'titlePreview'),
+        }}
       >
         {title}
       </h2>
       {subtitle && (
         <p 
-          className={`mt-1 opacity-80 ${isPreview ? 'text-xs' : 'text-xs sm:text-sm md:text-base'}`}
-          style={{ color: themeColors.muted }}
+          className="mt-1 opacity-80"
+          style={{ 
+            color: themeColors.muted,
+            fontSize: fs('subtitleFull', 'subtitlePreview'),
+          }}
         >
           {subtitle}
         </p>
@@ -155,30 +212,40 @@ export function SlideRenderer({
   );
 
   const renderBullets = (items: any[]) => (
-    <ul className="space-y-2 sm:space-y-3">
+    <ul style={{ display: 'flex', flexDirection: 'column', gap: fs('gapFull', 'gapPreview') }}>
       {items.map((item: any, i: number) => (
         <li 
           key={i} 
-          className="flex items-start gap-2 sm:gap-3"
-          style={{ color: themeColors.foreground }}
+          className="flex items-start"
+          style={{ 
+            color: themeColors.foreground,
+            gap: fs('gapFull', 'gapPreview'),
+          }}
         >
           <Circle 
             className="flex-shrink-0 mt-1.5" 
             style={{ 
-              width: isPreview ? 6 : 8, 
-              height: isPreview ? 6 : 8,
+              width: fs('bulletIconFull', 'bulletIconPreview'),
+              height: fs('bulletIconFull', 'bulletIconPreview'),
               color: themeColors.primary,
               fill: themeColors.primary,
             }} 
           />
-          <div className={`flex-1 ${isPreview ? 'text-xs' : 'text-sm md:text-base'}`}>
+          <div 
+            className="flex-1"
+            style={{ fontSize: fs('bodyFull', 'bodyPreview') }}
+          >
             {typeof item === "string" ? (
-              <MarkdownText content={item} style={{ color: themeColors.foreground }} />
+              <MarkdownText 
+                content={item} 
+                style={{ color: themeColors.foreground }}
+                fontSize={fs('bodyFull', 'bodyPreview')}
+              />
             ) : (
               <>
                 <span className="font-semibold">{item.title}</span>
                 {item.description && (
-                  <p className="mt-0.5 text-sm" style={{ color: themeColors.muted }}>
+                  <p style={{ color: themeColors.muted, fontSize: fs('smallFull', 'smallPreview'), marginTop: '0.25rem' }}>
                     {item.description}
                   </p>
                 )}
@@ -197,10 +264,14 @@ export function SlideRenderer({
     if (mainText) {
       return (
         <div 
-          className={`leading-relaxed ${isPreview ? 'text-xs' : 'text-sm md:text-base'}`}
-          style={{ color: themeColors.foreground }}
+          className="leading-relaxed"
+          style={{ color: themeColors.foreground, fontSize: fs('bodyFull', 'bodyPreview') }}
         >
-          <MarkdownText content={mainText} style={{ color: themeColors.foreground }} />
+          <MarkdownText 
+            content={mainText} 
+            style={{ color: themeColors.foreground }}
+            fontSize={fs('bodyFull', 'bodyPreview')}
+          />
         </div>
       );
     }
@@ -219,26 +290,30 @@ export function SlideRenderer({
   );
 
   const renderTimeline = (steps: any[]) => (
-    <div className="flex flex-col gap-3 sm:gap-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: fs('gapFull', 'gapPreview') }}>
       {steps.map((step: any, i: number) => (
-        <div key={i} className="flex items-start gap-3 sm:gap-4">
+        <div key={i} className="flex items-start" style={{ gap: fs('gapFull', 'gapPreview') }}>
           <div 
-            className={`shrink-0 rounded-full flex items-center justify-center font-bold ${
-              isPreview ? 'w-6 h-6 text-xs' : 'w-8 h-8 text-sm'
-            }`}
-            style={{ background: themeColors.primary, color: themeColors.background }}
+            className="shrink-0 rounded-full flex items-center justify-center font-bold"
+            style={{ 
+              background: themeColors.primary, 
+              color: themeColors.background,
+              width: fs('timelineCircleFull', 'timelineCirclePreview'),
+              height: fs('timelineCircleFull', 'timelineCirclePreview'),
+              fontSize: fs('smallFull', 'smallPreview'),
+            }}
           >
             {i + 1}
           </div>
           <div className="flex-1 pt-0.5">
             <div 
-              className={`font-semibold ${isPreview ? 'text-xs' : 'text-sm'}`}
-              style={{ color: themeColors.foreground }}
+              className="font-semibold"
+              style={{ color: themeColors.foreground, fontSize: fs('bodyFull', 'bodyPreview') }}
             >
               {step.title}
             </div>
             {step.description && (
-              <div className="text-xs mt-0.5" style={{ color: themeColors.muted }}>
+              <div style={{ color: themeColors.muted, fontSize: fs('smallFull', 'smallPreview'), marginTop: '0.25rem' }}>
                 {step.description}
               </div>
             )}
@@ -249,20 +324,26 @@ export function SlideRenderer({
   );
 
   const renderStats = (stats: SlideContent[]) => (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+    <div className="grid grid-cols-2" style={{ gap: fs('gapFull', 'gapPreview') }}>
       {stats.map((stat, i) => (
         <div 
           key={i} 
-          className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-lg" 
-          style={{ background: `${themeColors.primary}11` }}
+          className="flex flex-col items-center justify-center rounded-lg" 
+          style={{ 
+            background: `${themeColors.primary}11`,
+            padding: fs('paddingFull', 'paddingPreview'),
+          }}
         >
           <div 
-            className={`font-bold font-raleway ${isPreview ? 'text-xl' : 'text-2xl md:text-3xl'}`}
-            style={{ color: themeColors.primary }}
+            className="font-bold font-raleway"
+            style={{ color: themeColors.primary, fontSize: fs('statValueFull', 'statValuePreview') }}
           >
             {stat.data?.value || "0"}
           </div>
-          <div className="text-xs mt-1 text-center" style={{ color: themeColors.muted }}>
+          <div 
+            className="mt-1 text-center" 
+            style={{ color: themeColors.muted, fontSize: fs('smallFull', 'smallPreview') }}
+          >
             {stat.data?.label || ""}
           </div>
         </div>
@@ -271,30 +352,36 @@ export function SlideRenderer({
   );
 
   const renderIconGrid = (items: any[]) => (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+    <div className="grid grid-cols-2" style={{ gap: fs('gapFull', 'gapPreview') }}>
       {items.map((item: any, i: number) => (
-        <div key={i} className="flex flex-col items-center text-center p-2 sm:p-3">
+        <div 
+          key={i} 
+          className="flex flex-col items-center text-center"
+          style={{ padding: fs('gapFull', 'gapPreview') }}
+        >
           <div 
-            className={`rounded-lg flex items-center justify-center mb-2 ${
-              isPreview ? 'w-8 h-8' : 'w-10 h-10'
-            }`}
-            style={{ background: `${themeColors.primary}22` }}
+            className="rounded-lg flex items-center justify-center mb-2"
+            style={{ 
+              background: `${themeColors.primary}22`,
+              width: fs('iconBoxFull', 'iconBoxPreview'),
+              height: fs('iconBoxFull', 'iconBoxPreview'),
+            }}
           >
             <CheckCircle2 
               style={{ 
-                width: isPreview ? 16 : 24, 
-                height: isPreview ? 16 : 24, 
+                width: fs('iconSizeFull', 'iconSizePreview'), 
+                height: fs('iconSizeFull', 'iconSizePreview'), 
                 color: themeColors.primary 
               }} 
             />
           </div>
           <div 
-            className={`font-semibold ${isPreview ? 'text-xs' : 'text-sm'}`}
-            style={{ color: themeColors.foreground }}
+            className="font-semibold"
+            style={{ color: themeColors.foreground, fontSize: fs('bodyFull', 'bodyPreview') }}
           >
             {item.title}
           </div>
-          <div className="text-xs" style={{ color: themeColors.muted }}>
+          <div style={{ color: themeColors.muted, fontSize: fs('smallFull', 'smallPreview') }}>
             {item.description}
           </div>
         </div>
@@ -303,15 +390,15 @@ export function SlideRenderer({
   );
 
   // === LAYOUT RENDERING ===
-  // All layouts use the same flex-based approach that adapts via CSS
-
+  // Container with size containment for cqw units
   const containerClass = `
     relative font-raleway w-full h-full
     ${isFullscreen ? '' : 'aspect-video'}
     ${className}
   `;
 
-  const containerStyle = {
+  const containerStyle: React.CSSProperties = {
+    containerType: 'size',
     background: isSectionDivider 
       ? `linear-gradient(135deg, ${themeColors.primary}, hsl(217 80% 45%))` 
       : themeColors.background,
@@ -341,23 +428,26 @@ export function SlideRenderer({
             }}
           />
         )}
-        <div className="relative z-10 flex flex-col items-center justify-center h-full p-6 sm:p-8 lg:p-12 text-center">
+        <div 
+          className="relative z-10 flex flex-col items-center justify-center h-full text-center"
+          style={{ padding: fs('paddingFull', 'paddingPreview') }}
+        >
           <h1 
-            className={`font-bold font-raleway leading-tight ${
-              isPreview 
-                ? 'text-xl sm:text-2xl' 
-                : 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl'
-            }`}
-            style={{ color: themeColors.foreground }}
+            className="font-bold font-raleway leading-tight"
+            style={{ 
+              color: themeColors.foreground,
+              fontSize: fs('titleCoverFull', 'titleCoverPreview'),
+            }}
           >
             {title}
           </h1>
           {subtitle && (
             <p 
-              className={`mt-3 sm:mt-4 opacity-80 ${
-                isPreview ? 'text-sm' : 'text-base sm:text-lg md:text-xl'
-              }`}
-              style={{ color: themeColors.muted }}
+              className="mt-3 sm:mt-4 opacity-80"
+              style={{ 
+                color: themeColors.muted,
+                fontSize: fs('subtitleFull', 'subtitlePreview'),
+              }}
             >
               {subtitle}
             </p>
@@ -384,23 +474,36 @@ export function SlideRenderer({
             <div className={`
               shrink-0 
               ${isFullscreen ? 'h-[35%] lg:h-full lg:w-[40%]' : 'h-[40%]'}
-              p-2 sm:p-4
-            `}>
+            `}
+            style={{ padding: fs('gapFull', 'gapPreview') }}
+            >
               {renderImage(imgUrl, imageContent?.data?.alt)}
             </div>
           )}
           
           {/* Content section */}
           <div className={`
-            flex-1 flex flex-col min-h-0
+            flex-1 flex flex-col justify-center min-h-0
             ${isFullscreen ? 'lg:flex-1' : ''}
           `}>
             {renderTitle()}
-            <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-4 overflow-y-auto min-h-0">
+            <div 
+              className="flex-1 overflow-y-auto min-h-0"
+              style={{ 
+                paddingLeft: fs('paddingFull', 'paddingPreview'),
+                paddingRight: fs('paddingFull', 'paddingPreview'),
+                paddingBottom: fs('paddingFull', 'paddingPreview'),
+              }}
+            >
               {isArchitecture && !hasImage ? (
                 <div 
-                  className="text-center p-8 rounded-lg border-2 border-dashed h-full flex items-center justify-center"
-                  style={{ borderColor: themeColors.muted, color: themeColors.muted }}
+                  className="text-center rounded-lg border-2 border-dashed h-full flex items-center justify-center"
+                  style={{ 
+                    borderColor: themeColors.muted, 
+                    color: themeColors.muted,
+                    padding: fs('paddingFull', 'paddingPreview'),
+                    fontSize: fs('bodyFull', 'bodyPreview'),
+                  }}
                 >
                   Architecture Diagram Placeholder
                 </div>
@@ -415,15 +518,23 @@ export function SlideRenderer({
             <div className={`
               shrink-0 
               ${isFullscreen ? 'h-[35%] lg:h-full lg:w-[40%]' : 'h-[40%]'}
-              p-2 sm:p-4
-            `}>
+            `}
+            style={{ padding: fs('gapFull', 'gapPreview') }}
+            >
               {renderImage(imgUrl, imageContent?.data?.alt)}
             </div>
           )}
 
           {/* Architecture shows image in content area if available */}
           {isArchitecture && hasImage && (
-            <div className="flex-1 px-4 sm:px-6 pb-4">
+            <div 
+              className="flex-1"
+              style={{ 
+                paddingLeft: fs('paddingFull', 'paddingPreview'),
+                paddingRight: fs('paddingFull', 'paddingPreview'),
+                paddingBottom: fs('paddingFull', 'paddingPreview'),
+              }}
+            >
               {renderImage(imgUrl, "Architecture diagram")}
             </div>
           )}
@@ -438,7 +549,14 @@ export function SlideRenderer({
       <div className={containerClass} style={containerStyle}>
         <div className="flex flex-col h-full">
           {renderTitle()}
-          <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-4 flex items-center justify-center min-h-0">
+          <div 
+            className="flex-1 flex items-center justify-center min-h-0"
+            style={{ 
+              paddingLeft: fs('paddingFull', 'paddingPreview'),
+              paddingRight: fs('paddingFull', 'paddingPreview'),
+              paddingBottom: fs('paddingFull', 'paddingPreview'),
+            }}
+          >
             {renderStats(statsContent)}
           </div>
         </div>
@@ -452,7 +570,14 @@ export function SlideRenderer({
       <div className={containerClass} style={containerStyle}>
         <div className="flex flex-col h-full">
           {renderTitle()}
-          <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-4 overflow-y-auto min-h-0">
+          <div 
+            className="flex-1 overflow-y-auto min-h-0"
+            style={{ 
+              paddingLeft: fs('paddingFull', 'paddingPreview'),
+              paddingRight: fs('paddingFull', 'paddingPreview'),
+              paddingBottom: fs('paddingFull', 'paddingPreview'),
+            }}
+          >
             {renderTimeline(timelineContent.data.steps)}
           </div>
         </div>
@@ -466,7 +591,14 @@ export function SlideRenderer({
       <div className={containerClass} style={containerStyle}>
         <div className="flex flex-col h-full">
           {renderTitle()}
-          <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-4 flex items-center min-h-0">
+          <div 
+            className="flex-1 flex items-center min-h-0"
+            style={{ 
+              paddingLeft: fs('paddingFull', 'paddingPreview'),
+              paddingRight: fs('paddingFull', 'paddingPreview'),
+              paddingBottom: fs('paddingFull', 'paddingPreview'),
+            }}
+          >
             <div className="w-full">
               {renderIconGrid(gridContent.data.items)}
             </div>
@@ -490,10 +622,14 @@ export function SlideRenderer({
     if (textContent) {
       return (
         <div 
-          className={`leading-relaxed ${isPreview ? 'text-xs' : 'text-sm md:text-base'}`}
-          style={{ color: themeColors.foreground }}
+          className="leading-relaxed"
+          style={{ color: themeColors.foreground, fontSize: fs('bodyFull', 'bodyPreview') }}
         >
-          <MarkdownText content={textContent} style={{ color: themeColors.foreground }} />
+          <MarkdownText 
+            content={textContent} 
+            style={{ color: themeColors.foreground }}
+            fontSize={fs('bodyFull', 'bodyPreview')}
+          />
         </div>
       );
     }
@@ -513,17 +649,25 @@ export function SlideRenderer({
       <div className={containerClass} style={containerStyle}>
         <div className="flex flex-col h-full">
           {renderTitle()}
-          <div className={`
-            flex-1 px-4 sm:px-6 lg:px-8 pb-4 overflow-y-auto min-h-0
-            flex flex-col gap-4
-            ${isFullscreen ? 'lg:flex-row lg:gap-8' : ''}
-          `}>
+          <div 
+            className={`
+              flex-1 overflow-y-auto min-h-0
+              flex flex-col
+              ${isFullscreen ? 'lg:flex-row' : ''}
+            `}
+            style={{ 
+              paddingLeft: fs('paddingFull', 'paddingPreview'),
+              paddingRight: fs('paddingFull', 'paddingPreview'),
+              paddingBottom: fs('paddingFull', 'paddingPreview'),
+              gap: fs('gapFull', 'gapPreview'),
+            }}
+          >
             {hasLeft && (
               <div className={isFullscreen ? 'lg:flex-1' : ''}>
                 {leftContent?.data?.title && (
                   <h3 
-                    className={`font-semibold mb-2 ${isPreview ? 'text-xs' : 'text-sm'}`}
-                    style={{ color: themeColors.primary }}
+                    className="font-semibold mb-2"
+                    style={{ color: themeColors.primary, fontSize: fs('bodyFull', 'bodyPreview') }}
                   >
                     {leftContent.data.title}
                   </h3>
@@ -535,8 +679,8 @@ export function SlideRenderer({
               <div className={isFullscreen ? 'lg:flex-1' : ''}>
                 {rightContent?.data?.title && (
                   <h3 
-                    className={`font-semibold mb-2 ${isPreview ? 'text-xs' : 'text-sm'}`}
-                    style={{ color: themeColors.primary }}
+                    className="font-semibold mb-2"
+                    style={{ color: themeColors.primary, fontSize: fs('bodyFull', 'bodyPreview') }}
                   >
                     {rightContent.data.title}
                   </h3>
@@ -553,9 +697,16 @@ export function SlideRenderer({
   // Default: title-content, bullets, or any unrecognized layout
   return (
     <div className={containerClass} style={containerStyle}>
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full justify-center">
         {renderTitle()}
-        <div className="flex-1 px-4 sm:px-6 lg:px-8 pb-4 overflow-y-auto min-h-0">
+        <div 
+          className="flex-1 overflow-y-auto min-h-0"
+          style={{ 
+            paddingLeft: fs('paddingFull', 'paddingPreview'),
+            paddingRight: fs('paddingFull', 'paddingPreview'),
+            paddingBottom: fs('paddingFull', 'paddingPreview'),
+          }}
+        >
           {renderTextContent()}
         </div>
       </div>
