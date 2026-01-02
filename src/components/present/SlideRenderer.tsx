@@ -416,9 +416,9 @@ export function SlideRenderer({
 
   // === LAYOUT RENDERING ===
   // Container with size containment for cqw units
+  // Always maintain 16:9 aspect ratio for consistency
   const containerClass = `
     relative font-raleway w-full h-full
-    ${isFullscreen ? '' : 'aspect-video'}
     ${className}
   `;
 
@@ -428,6 +428,7 @@ export function SlideRenderer({
       ? `linear-gradient(135deg, ${themeColors.primary}, hsl(217 80% 45%))` 
       : themeColors.background,
     color: themeColors.foreground,
+    aspectRatio: '16 / 9',
   };
 
   // Title cover / Section divider

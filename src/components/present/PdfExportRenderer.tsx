@@ -74,12 +74,14 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
         try {
           toast.info(`Capturing slide ${currentSlideIndex + 1}/${slides.length}...`, { id: "pdf-progress" });
 
+          const bgColor = theme === "light" ? "#ffffff" : theme === "vibrant" ? "#1a0d26" : "#1e293b";
+          
           const dataUrl = await toPng(renderRef.current, {
             cacheBust: true,
             pixelRatio: 2,
             width: 1920,
             height: 1080,
-            backgroundColor: theme === "light" ? "#ffffff" : "#1a1f2e",
+            backgroundColor: bgColor,
           });
 
           setCapturedImages((prev) => [...prev, dataUrl]);
@@ -138,32 +140,36 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
     }
 
     const currentSlide = slides[currentSlideIndex];
+    
+    // Get background color based on theme
+    const bgColor = theme === "light" ? "#ffffff" : theme === "vibrant" ? "#1a0d26" : "#1e293b";
 
+    // Use fixed positioning with opacity 0 instead of negative coordinates
+    // This keeps element in rendering context while invisible
     return (
       <div
         ref={renderRef}
-        className="fixed"
         style={{
-          left: "-9999px",
-          top: "-9999px",
+          position: "fixed",
+          left: 0,
+          top: 0,
           width: 1920,
           height: 1080,
-          zIndex: -1,
+          zIndex: -9999,
           pointerEvents: "none",
-          backgroundColor: theme === "light" ? "#ffffff" : "#1a1f2e",
+          opacity: 0,
+          backgroundColor: bgColor,
         }}
       >
-        <div style={{ width: 1920, height: 1080 }}>
-          <SlideRenderer
-            slide={currentSlide}
-            layouts={layouts}
-            theme={theme}
-            isPreview={false}
-            isFullscreen={true}
-            fontScale={currentSlide.fontScale || 1}
-            className="w-full h-full"
-          />
-        </div>
+        <SlideRenderer
+          slide={currentSlide}
+          layouts={layouts}
+          theme={theme}
+          isPreview={false}
+          isFullscreen={false}
+          fontScale={currentSlide.fontScale || 1}
+          className="w-full h-full"
+        />
       </div>
     );
   }

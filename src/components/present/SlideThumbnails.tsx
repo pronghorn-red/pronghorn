@@ -39,7 +39,7 @@ interface SlideThumbnailsProps {
   theme?: "default" | "light" | "vibrant";
 }
 
-// Component to generate a single thumbnail
+// Component to generate a single thumbnail - renders offscreen then captures
 function ThumbnailGenerator({ 
   slide, 
   layouts, 
@@ -56,15 +56,15 @@ function ThumbnailGenerator({
 
   useEffect(() => {
     if (renderRef.current && !hasCapture) {
-      // Allow more time for rendering before capture
+      // Wait for render to complete
       const timer = setTimeout(() => {
         if (renderRef.current) {
           toPng(renderRef.current, {
             cacheBust: true,
             pixelRatio: 2,
             width: 384,
-            height: 216, // 16:9 aspect ratio
-            backgroundColor: '#1e293b',
+            height: 216,
+            backgroundColor: theme === 'light' ? '#ffffff' : '#1e293b',
           })
             .then((dataUrl) => {
               onCapture(dataUrl);
@@ -72,28 +72,38 @@ function ThumbnailGenerator({
             })
             .catch((err) => {
               console.warn("Failed to capture thumbnail:", err);
-              // Still mark as captured to avoid infinite retries
               setHasCapture(true);
             });
         }
-      }, 300);
+      }, 500);
       return () => clearTimeout(timer);
     }
-  }, [slide, hasCapture, onCapture]);
+  }, [slide, hasCapture, onCapture, theme]);
 
-  // Hidden offscreen renderer at 16:9 aspect ratio
+  // Offscreen container - use fixed positioning to keep in DOM but invisible
+  // Note: absolute positioning outside viewport can cause rendering issues in some browsers
   return (
     <div 
       ref={renderRef}
-      className="absolute -left-[9999px] -top-[9999px]"
-      style={{ width: 384, height: 216 }}
+      style={{ 
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        width: 384,
+        height: 216,
+        zIndex: -9999,
+        pointerEvents: 'none',
+        opacity: 0,
+      }}
     >
       <SlideRenderer
         slide={slide}
         layouts={layouts}
         theme={theme as any}
         isPreview={true}
+        isFullscreen={false}
         fontScale={slide.fontScale || 1}
+        className="w-full h-full"
       />
     </div>
   );

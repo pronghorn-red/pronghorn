@@ -798,7 +798,7 @@ export default function Present() {
                 )}
               </div>
               
-              {/* Presentations List Tab */}
+              {/* Presentations List Tab - Table view */}
               <TabsContent value="list" className="flex-1 overflow-hidden mt-0">
                 {isLoadingList ? (
                   <div className="flex items-center justify-center h-64">
@@ -815,56 +815,66 @@ export default function Present() {
                     </Button>
                   </div>
                 ) : (
-                  <ScrollArea className="h-full">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
-                      {presentationsList.map(p => (
-                        <Card 
-                          key={p.id} 
-                          className="cursor-pointer hover:border-primary/50 transition-colors"
-                          onClick={() => loadFullPresentation(p.id)}
-                        >
-                          <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                              <CardTitle className="text-base truncate">{p.name}</CardTitle>
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full">
+                      <thead className="bg-muted/50">
+                        <tr className="border-b">
+                          <th className="text-left p-3 text-sm font-medium">Name</th>
+                          <th className="text-left p-3 text-sm font-medium">Mode</th>
+                          <th className="text-left p-3 text-sm font-medium">Slides</th>
+                          <th className="text-left p-3 text-sm font-medium">Status</th>
+                          <th className="text-left p-3 text-sm font-medium">Created</th>
+                          <th className="text-right p-3 text-sm font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {presentationsList.map(p => (
+                          <tr 
+                            key={p.id} 
+                            className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
+                            onClick={() => loadFullPresentation(p.id)}
+                          >
+                            <td className="p-3 font-medium">{p.name}</td>
+                            <td className="p-3 text-sm text-muted-foreground capitalize">{p.mode}</td>
+                            <td className="p-3 text-sm text-muted-foreground">{p.slide_count}</td>
+                            <td className="p-3">
                               <Badge variant={p.status === "completed" ? "default" : "secondary"}>
                                 {p.status}
                               </Badge>
-                            </div>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="text-sm text-muted-foreground space-y-1">
-                              <p>{p.mode} • {p.slide_count} slides</p>
-                              <p className="text-xs">{new Date(p.created_at).toLocaleDateString()}</p>
-                            </div>
-                            <div className="flex gap-2 mt-3">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="flex-1"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  loadFullPresentation(p.id);
-                                }}
-                                disabled={isLoadingPresentation}
-                              >
-                                {isLoadingPresentation ? <Loader2 className="h-4 w-4 animate-spin" /> : "Open"}
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(p.id);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                            </td>
+                            <td className="p-3 text-sm text-muted-foreground">
+                              {new Date(p.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="p-3 text-right">
+                              <div className="flex gap-2 justify-end">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    loadFullPresentation(p.id);
+                                  }}
+                                  disabled={isLoadingPresentation}
+                                >
+                                  {isLoadingPresentation ? <Loader2 className="h-4 w-4 animate-spin" /> : "Open"}
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(p.id);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </TabsContent>
               
@@ -1098,22 +1108,37 @@ export default function Present() {
                 )}
               </TabsContent>
 
-              {/* Blackboard Tab */}
+              {/* Blackboard Tab - Table view */}
               <TabsContent value="blackboard" className="flex-1 overflow-hidden mt-0">
                 {selectedPresentation ? (
-                  <ScrollArea className="h-full">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pb-4">
-                      {getBlackboard(selectedPresentation).map((entry, i) => (
-                        <Card key={entry.id || i} className="p-3">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge variant="outline" className="text-xs">{entry.source}</Badge>
-                            <Badge variant="secondary" className="text-xs">{entry.category}</Badge>
-                          </div>
-                          <p className="text-sm">{entry.content}</p>
-                        </Card>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                  <div className="border rounded-lg overflow-hidden h-full flex flex-col">
+                    <table className="w-full">
+                      <thead className="bg-muted/50">
+                        <tr className="border-b">
+                          <th className="text-left p-3 text-sm font-medium w-28">Source</th>
+                          <th className="text-left p-3 text-sm font-medium w-28">Category</th>
+                          <th className="text-left p-3 text-sm font-medium">Content</th>
+                        </tr>
+                      </thead>
+                    </table>
+                    <ScrollArea className="flex-1">
+                      <table className="w-full">
+                        <tbody>
+                          {getBlackboard(selectedPresentation).map((entry, i) => (
+                            <tr key={entry.id || i} className="border-b hover:bg-muted/30">
+                              <td className="p-3 w-28 align-top">
+                                <Badge variant="outline" className="text-xs">{entry.source}</Badge>
+                              </td>
+                              <td className="p-3 w-28 align-top">
+                                <Badge variant="secondary" className="text-xs">{entry.category}</Badge>
+                              </td>
+                              <td className="p-3 text-sm">{entry.content}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </ScrollArea>
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full text-center">
                     <p className="text-muted-foreground">Select a presentation to view its blackboard</p>
