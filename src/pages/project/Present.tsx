@@ -446,16 +446,18 @@ export default function Present() {
 
   // Update slide data - LOCAL only, no DB save
   const handleUpdateSlide = (slideIndex: number, updates: Partial<any>) => {
-    if (!workingSlides) return;
-    
-    const updatedSlides = workingSlides.map((s, i) => i === slideIndex ? { ...s, ...updates } : s);
-    setWorkingSlides(updatedSlides);
+    setWorkingSlides(prev => {
+      if (!prev) return prev;
+      const updatedSlides = prev.map((s, i) => i === slideIndex ? { ...s, ...updates } : s);
+      
+      // Update JSON editor if in JSON mode
+      if (notesPanelMode === "json") {
+        setJsonEditValue(JSON.stringify(updatedSlides[slideIndex], null, 2));
+      }
+      
+      return updatedSlides;
+    });
     setHasUnsavedChanges(true);
-    
-    // Update JSON editor if in JSON mode
-    if (notesPanelMode === "json") {
-      setJsonEditValue(JSON.stringify(updatedSlides[slideIndex], null, 2));
-    }
   };
 
   // Save all changes to database
