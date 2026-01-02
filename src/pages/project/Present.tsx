@@ -1024,66 +1024,66 @@ export default function Present() {
                       </div>
                     </div>
                     
-                    {/* Main editor area */}
-                    <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
-                      {/* Thumbnails column */}
-                      <div className="w-48 shrink-0 border rounded-lg bg-muted/20 overflow-hidden">
-                        <SlideThumbnails
-                          slides={slides}
-                          layouts={layouts}
-                          selectedSlideIndex={selectedSlideIndex}
-                          onSlideChange={setSelectedSlideIndex}
-                          theme={currentTheme}
-                          onThumbnailCacheUpdate={setThumbnailCache}
-                        />
-                      </div>
-                      
-                      {/* Slide preview column */}
-                      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-                        {/* Slide controls */}
-                        {currentSlide && (
-                          <div className="shrink-0 flex items-center gap-4 mb-3 p-2 bg-muted/30 rounded-lg">
-                            <LayoutSelector 
-                              value={currentSlide.layoutId} 
-                              onChange={handleLayoutChange} 
-                            />
-                            {isRecasting && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-                            <FontScaleControl 
-                              value={currentSlide.fontScale || 1} 
-                              onChange={handleFontScaleChange} 
-                            />
+                    {/* Main editor area - vertical layout */}
+                    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                      {/* Slide controls - spans full width above content */}
+                      {currentSlide && (
+                        <div className="shrink-0 flex items-center gap-4 mb-3 p-2 bg-muted/30 rounded-lg">
+                          <LayoutSelector 
+                            value={currentSlide.layoutId} 
+                            onChange={handleLayoutChange} 
+                          />
+                          {isRecasting && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                          <FontScaleControl 
+                            value={currentSlide.fontScale || 1} 
+                            onChange={handleFontScaleChange} 
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsImageGeneratorOpen(true)}
+                            title="Generate Image"
+                          >
+                            <ImageIcon className="h-4 w-4" />
+                          </Button>
+                          <div className="flex-1" />
+                          <div className="flex items-center gap-2">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => setIsImageGeneratorOpen(true)}
-                              title="Generate Image"
+                              onClick={() => setSelectedSlideIndex(prev => Math.max(0, prev - 1))}
+                              disabled={selectedSlideIndex === 0}
                             >
-                              <ImageIcon className="h-4 w-4" />
+                              <ChevronLeft className="h-4 w-4" />
                             </Button>
-                            <div className="flex-1" />
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setSelectedSlideIndex(prev => Math.max(0, prev - 1))}
-                                disabled={selectedSlideIndex === 0}
-                              >
-                                <ChevronLeft className="h-4 w-4" />
-                              </Button>
-                              <span className="text-sm min-w-12 text-center">
-                                {selectedSlideIndex + 1}/{slides.length}
-                              </span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setSelectedSlideIndex(prev => Math.min(slides.length - 1, prev + 1))}
-                                disabled={selectedSlideIndex === slides.length - 1}
-                              >
-                                <ChevronRight className="h-4 w-4" />
-                              </Button>
-                            </div>
+                            <span className="text-sm min-w-12 text-center">
+                              {selectedSlideIndex + 1}/{slides.length}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedSlideIndex(prev => Math.min(slides.length - 1, prev + 1))}
+                              disabled={selectedSlideIndex === slides.length - 1}
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
                           </div>
-                        )}
+                        </div>
+                      )}
+                      
+                      {/* Content area - horizontal layout */}
+                      <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
+                        {/* Thumbnails column */}
+                        <div className="w-48 shrink-0 border rounded-lg bg-muted/20 overflow-hidden">
+                          <SlideThumbnails
+                            slides={slides}
+                            layouts={layouts}
+                            selectedSlideIndex={selectedSlideIndex}
+                            onSlideChange={setSelectedSlideIndex}
+                            theme={currentTheme}
+                            onThumbnailCacheUpdate={setThumbnailCache}
+                          />
+                        </div>
                         
                         {/* Slide renderer - transform-scaled canvas */}
                         <div className="flex-1 min-h-0 flex items-center justify-center border rounded-lg overflow-hidden bg-muted/10 p-4">
@@ -1100,7 +1100,6 @@ export default function Present() {
                             </SlideCanvas>
                           )}
                         </div>
-                      </div>
                       
                       {/* Notes/JSON panel - toggleable */}
                       {showNotesPanel && currentSlide && (
@@ -1160,6 +1159,7 @@ export default function Present() {
                           </div>
                         </div>
                       )}
+                      </div>
                     </div>
                   </div>
                 ) : (
