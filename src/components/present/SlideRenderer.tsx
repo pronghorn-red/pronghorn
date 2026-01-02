@@ -131,7 +131,11 @@ export function SlideRenderer({
     ) as typeof fluidSize;
   }, [fontScale]);
 
-  const themeColors = useMemo((): ThemeColors => {
+  const themeColors = useMemo((): ThemeColors & { 
+    sectionGradient: string; 
+    titleOverlay: string;
+    titleGradient: string;
+  } => {
     switch (theme) {
       case "light":
         return {
@@ -139,6 +143,9 @@ export function SlideRenderer({
           foreground: "hsl(222 47% 11%)",
           primary: "hsl(217 91% 50%)",
           muted: "hsl(215 16% 47%)",
+          sectionGradient: "linear-gradient(135deg, hsl(217 91% 50%), hsl(217 80% 60%))",
+          titleOverlay: "rgba(255, 255, 255, 0.85)",
+          titleGradient: "linear-gradient(135deg, hsl(210 40% 96%) 0%, hsl(210 20% 90%) 100%)",
         };
       case "vibrant":
         return {
@@ -146,6 +153,9 @@ export function SlideRenderer({
           foreground: "hsl(0 0% 100%)",
           primary: "hsl(280 100% 65%)",
           muted: "hsl(260 20% 70%)",
+          sectionGradient: "linear-gradient(135deg, hsl(280 100% 65%), hsl(300 80% 55%))",
+          titleOverlay: "rgba(26, 13, 38, 0.75)",
+          titleGradient: "linear-gradient(135deg, hsl(260 50% 10%) 0%, hsl(280 40% 15%) 100%)",
         };
       default:
         return {
@@ -153,6 +163,9 @@ export function SlideRenderer({
           foreground: "hsl(210 40% 98%)",
           primary: "hsl(217 91% 60%)",
           muted: "hsl(215 20% 65%)",
+          sectionGradient: "linear-gradient(135deg, hsl(217 91% 60%), hsl(217 80% 45%))",
+          titleOverlay: "rgba(30, 41, 59, 0.7)",
+          titleGradient: "linear-gradient(135deg, hsl(222 47% 11%) 0%, hsl(217 33% 17%) 100%)",
         };
     }
   }, [theme]);
@@ -427,7 +440,7 @@ export function SlideRenderer({
   const containerStyle: React.CSSProperties = {
     containerType: 'size',
     background: isSectionDivider 
-      ? `linear-gradient(135deg, ${themeColors.primary}, hsl(217 80% 45%))` 
+      ? themeColors.sectionGradient 
       : themeColors.background,
     color: themeColors.foreground,
     aspectRatio: '16 / 9',
@@ -445,15 +458,16 @@ export function SlideRenderer({
               className="w-full h-full object-cover opacity-80"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+            <div 
+              className="absolute inset-0" 
+              style={{ background: `linear-gradient(to top, ${themeColors.titleOverlay}, transparent)` }}
+            />
           </div>
         )}
         {isFullBleed && !isSectionDivider && !imgUrl && (
           <div 
             className="absolute inset-0 z-0"
-            style={{
-              background: `linear-gradient(135deg, ${themeColors.background} 0%, hsl(217 33% 17%) 100%)`,
-            }}
+            style={{ background: themeColors.titleGradient }}
           />
         )}
         <div 

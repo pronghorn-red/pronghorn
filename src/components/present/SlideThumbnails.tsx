@@ -124,7 +124,7 @@ export function SlideThumbnails({
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const [generating, setGenerating] = useState<Set<string>>(new Set());
 
-  // Create a content hash for detecting actual slide changes
+  // Create a content hash for detecting actual slide changes (including theme)
   const getContentHash = (slide: Slide): string => {
     const contentStr = JSON.stringify({
       layoutId: slide.layoutId,
@@ -133,6 +133,7 @@ export function SlideThumbnails({
       content: slide.content,
       imageUrl: slide.imageUrl,
       fontScale: slide.fontScale,
+      theme: theme, // Include theme so thumbnails regenerate on theme change
     });
     // Simple hash
     let hash = 0;
