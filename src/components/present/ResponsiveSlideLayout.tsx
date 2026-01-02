@@ -54,8 +54,17 @@ export function ResponsiveSlideLayout({ slide, themeColors, className = "" }: Re
   const getContentByType = (type: string) => content?.find(c => c.type === type);
   const getContentByRegion = (regionId: string) => content?.find(c => c.regionId === regionId);
   
-  // Get main content (bullets, text, etc.)
-  const bulletsContent = getContentByType("bullets") || getContentByRegion("bullets") || getContentByRegion("main");
+  // Get main content - check multiple possible regionIds and types
+  const getMainContent = () => {
+    return getContentByRegion("content") || 
+           getContentByRegion("main") || 
+           getContentByRegion("bullets") ||
+           getContentByType("richtext") ||
+           getContentByType("text") ||
+           getContentByType("bullets");
+  };
+  
+  const bulletsContent = getMainContent();
   const imageContent = getContentByType("image") || getContentByRegion("image");
   const timelineContent = getContentByType("timeline") || getContentByRegion("timeline");
   const statsContent = content?.filter(c => c.type === "stat");
@@ -364,17 +373,22 @@ export function ResponsiveSlideLayout({ slide, themeColors, className = "" }: Re
         </div>
       );
 
+    case "title-content":
     case "bullets":
     default:
+      // Get text content - could be in data.text, data.items, or data itself
+      const textContent = bulletsContent?.data?.text || 
+                          (typeof bulletsContent?.data === 'string' ? bulletsContent.data : null);
+      
       return (
         <div className={`flex flex-col h-full ${className}`}>
           {renderTitle()}
           <div className="flex-1 px-4 sm:px-6 pb-4 overflow-y-auto min-h-0">
             {bulletsContent?.data?.items ? (
               renderBullets(bulletsContent.data.items)
-            ) : bulletsContent?.data?.text ? (
-              <div className="text-sm" style={{ color: themeColors.foreground }}>
-                <MarkdownText content={bulletsContent.data.text} style={{ color: themeColors.foreground }} />
+            ) : textContent ? (
+              <div className="text-sm md:text-base leading-relaxed space-y-3" style={{ color: themeColors.foreground }}>
+                <MarkdownText content={textContent} style={{ color: themeColors.foreground }} />
               </div>
             ) : null}
           </div>
