@@ -250,10 +250,10 @@ export function SlideImageGenerator({
             <div className="space-y-2">
               <Label>Style</Label>
               <Select value={selectedStyle} onValueChange={setSelectedStyle}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[200]">
                   {IMAGE_STYLES.map((style) => (
                     <SelectItem key={style.id} value={style.id}>
                       {style.label}
@@ -267,10 +267,10 @@ export function SlideImageGenerator({
             <div className="space-y-2">
               <Label>Model</Label>
               <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[200]">
                   {IMAGE_MODELS.map((model) => (
                     <SelectItem key={model.id} value={model.id}>
                       {model.label}
