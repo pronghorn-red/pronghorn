@@ -22,6 +22,7 @@ import { SlideThumbnails } from "@/components/present/SlideThumbnails";
 import { FontScaleControl } from "@/components/present/FontScaleControl";
 import { LayoutSelector } from "@/components/present/LayoutSelector";
 import { SlideRenderer } from "@/components/present/SlideRenderer";
+import { SlideCanvas } from "@/components/present/SlideCanvas";
 import { SlideImageGenerator, IMAGE_MODELS, IMAGE_STYLES } from "@/components/present/SlideImageGenerator";
 import { PdfExportRenderer, PdfExportRendererRef } from "@/components/present/PdfExportRenderer";
 
@@ -649,16 +650,9 @@ export default function Present() {
         
         {/* Main content area */}
         <div className="flex-1 min-h-0 flex">
-          {/* Slide - 16:9 container with strict aspect ratio */}
+          {/* Slide - 16:9 container with transform scaling */}
           <div className="flex-1 min-h-0 flex items-center justify-center p-4">
-            <div 
-              className="relative"
-              style={{
-                width: '100%',
-                maxWidth: 'calc((100vh - 140px) * 16 / 9)',
-                aspectRatio: '16 / 9',
-              }}
-            >
+            <SlideCanvas className="w-full h-full max-w-full max-h-full">
               <SlideRenderer
                 slide={currentSlide}
                 layouts={layouts}
@@ -666,7 +660,7 @@ export default function Present() {
                 fontScale={currentSlide.fontScale || 1}
                 onAddImageClick={() => setIsImageGeneratorOpen(true)}
               />
-            </div>
+            </SlideCanvas>
           </div>
           
           {/* Notes panel - wider for better readability */}
@@ -1062,18 +1056,10 @@ export default function Present() {
                           </div>
                         )}
                         
-                        {/* Slide renderer - 16:9 aspect ratio container */}
+                        {/* Slide renderer - transform-scaled canvas */}
                         <div className="flex-1 min-h-0 flex items-center justify-center border rounded-lg overflow-hidden bg-muted/10 p-4">
                           {currentSlide && (
-                            <div 
-                              className="relative"
-                              style={{ 
-                                width: '100%',
-                                maxWidth: 'min(100%, calc((100% - 2rem) * 1))',
-                                maxHeight: '100%',
-                                aspectRatio: '16 / 9',
-                              }}
-                            >
+                            <SlideCanvas className="w-full h-full">
                               <SlideRenderer
                                 slide={currentSlide}
                                 layouts={layouts}
@@ -1081,7 +1067,7 @@ export default function Present() {
                                 fontScale={currentSlide.fontScale || 1}
                                 onAddImageClick={() => setIsImageGeneratorOpen(true)}
                               />
-                            </div>
+                            </SlideCanvas>
                           )}
                         </div>
                       </div>

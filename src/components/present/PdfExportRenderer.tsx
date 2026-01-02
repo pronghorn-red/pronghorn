@@ -62,11 +62,6 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
 
     useImperativeHandle(ref, () => ({
       startExport: () => {
-        if (!isMountedRef.current) {
-          console.error("PdfExportRenderer not mounted");
-          onError(new Error("Export component not ready"));
-          return;
-        }
         console.log("Starting PDF export with", slides.length, "slides");
         capturedImagesRef.current = [];
         setCurrentSlideIndex(-1);
@@ -161,15 +156,11 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
       }
     };
 
-    // Always render when exporting, but with visibility control
-    if (!isExporting || currentSlideIndex < 0 || currentSlideIndex >= slides.length) {
-      return null;
-    }
-
-    const currentSlide = slides[currentSlideIndex];
     const bgColor = theme === "light" ? "#ffffff" : theme === "vibrant" ? "#1a0d26" : "#1e293b";
+    const shouldRenderSlide = isExporting && currentSlideIndex >= 0 && currentSlideIndex < slides.length;
+    const currentSlide = shouldRenderSlide ? slides[currentSlideIndex] : null;
 
-    // Render slide at full PDF resolution
+    // Always render container (for ref), but only show content when exporting
     return (
       <div
         ref={renderRef}
@@ -180,20 +171,22 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
           width: PDF_WIDTH,
           height: PDF_HEIGHT,
           zIndex: -9999,
-          visibility: "visible",
+          visibility: shouldRenderSlide ? "visible" : "hidden",
           pointerEvents: "none",
           overflow: "hidden",
           backgroundColor: bgColor,
         }}
       >
-        <SlideRenderer
-          slide={currentSlide}
-          layouts={layouts}
-          theme={theme}
-          fontScale={currentSlide.fontScale || 1}
-          designWidth={PDF_WIDTH}
-          designHeight={PDF_HEIGHT}
-        />
+        {currentSlide && (
+          <SlideRenderer
+            slide={currentSlide}
+            layouts={layouts}
+            theme={theme}
+            fontScale={currentSlide.fontScale || 1}
+            designWidth={PDF_WIDTH}
+            designHeight={PDF_HEIGHT}
+          />
+        )}
       </div>
     );
   }
