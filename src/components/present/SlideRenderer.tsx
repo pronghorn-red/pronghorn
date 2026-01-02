@@ -33,6 +33,7 @@ interface SlideRendererProps {
   className?: string;
   isPreview?: boolean;
   isFullscreen?: boolean;
+  fontScale?: number;
 }
 
 // Fluid typography scale based on container width
@@ -100,9 +101,33 @@ export function SlideRenderer({
   theme = "default", 
   className = "", 
   isPreview = false, 
-  isFullscreen = false 
+  isFullscreen = false,
+  fontScale = 1 
 }: SlideRendererProps) {
   const { layoutId, title, subtitle, content, imageUrl } = slide;
+  
+  // Apply font scale multiplier to fluid sizes
+  const scaledFluidSize = useMemo(() => {
+    if (fontScale === 1) return fluidSize;
+    // Apply scale factor to clamp values
+    const scale = (value: string) => {
+      // Parse clamp and multiply the values
+      const match = value.match(/clamp\(([\d.]+)rem,\s*([\d.]+)([a-z]+)\s*(?:\+\s*([\d.]+)rem)?,\s*([\d.]+)rem\)/);
+      if (match) {
+        const [, min, preferred, unit, offset, max] = match;
+        const scaledMin = (parseFloat(min) * fontScale).toFixed(3);
+        const scaledMax = (parseFloat(max) * fontScale).toFixed(3);
+        const scaledPreferred = (parseFloat(preferred) * fontScale).toFixed(2);
+        const scaledOffset = offset ? (parseFloat(offset) * fontScale).toFixed(3) : null;
+        return `clamp(${scaledMin}rem, ${scaledPreferred}${unit}${scaledOffset ? ` + ${scaledOffset}rem` : ''}, ${scaledMax}rem)`;
+      }
+      return value;
+    };
+    
+    return Object.fromEntries(
+      Object.entries(fluidSize).map(([key, value]) => [key, scale(value)])
+    ) as typeof fluidSize;
+  }, [fontScale]);
 
   const themeColors = useMemo((): ThemeColors => {
     switch (theme) {
@@ -130,9 +155,9 @@ export function SlideRenderer({
     }
   }, [theme]);
 
-  // Fluid size helpers
+  // Fluid size helpers - use scaled version
   const fs = (full: keyof typeof fluidSize, preview: keyof typeof fluidSize) => 
-    isPreview ? fluidSize[preview] : fluidSize[full];
+    isPreview ? scaledFluidSize[preview] : scaledFluidSize[full];
 
   // === UNIFIED CONTENT EXTRACTION ===
   const getContentByType = (type: string) => content?.find(c => c.type === type);

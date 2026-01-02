@@ -20,6 +20,7 @@ interface Slide {
   content: SlideContent[];
   notes?: string;
   imageUrl?: string;
+  fontScale?: number;
 }
 
 interface Layout {
@@ -36,7 +37,8 @@ interface SlidePreviewProps {
   selectedSlideIndex: number;
   onSlideChange: (index: number) => void;
   theme?: "default" | "light" | "vibrant";
-  externalFullscreen?: boolean; // When true, skip controls and render slide only
+  externalFullscreen?: boolean;
+  fontScale?: number;
 }
 
 export function SlidePreview({ 
@@ -45,7 +47,8 @@ export function SlidePreview({
   selectedSlideIndex, 
   onSlideChange, 
   theme = "default",
-  externalFullscreen = false
+  externalFullscreen = false,
+  fontScale = 1
 }: SlidePreviewProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
@@ -90,6 +93,7 @@ export function SlidePreview({
           theme={theme}
           isPreview={false}
           isFullscreen={true}
+          fontScale={currentSlide.fontScale || fontScale}
           className="h-full w-full"
         />
       </div>
@@ -174,6 +178,7 @@ export function SlidePreview({
               theme={theme}
               isPreview={false}
               isFullscreen={true}
+              fontScale={currentSlide.fontScale || fontScale}
               className="h-full w-full"
             />
           ) : (
@@ -186,6 +191,7 @@ export function SlidePreview({
                     theme={theme}
                     isPreview={false}
                     isFullscreen={false}
+                    fontScale={currentSlide.fontScale || fontScale}
                   />
                 </div>
               </CardContent>

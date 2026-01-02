@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
@@ -16,11 +16,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Play, Trash2, Download, Loader2, Sparkles, Maximize2, Minimize2 } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Download, Loader2, Sparkles, Maximize2, Minimize2, FileDown, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
 import { SlidePreview } from "@/components/present/SlidePreview";
 import { SlideThumbnails } from "@/components/present/SlideThumbnails";
+import { SlideNotesEditor } from "@/components/present/SlideNotesEditor";
+import { FontScaleControl } from "@/components/present/FontScaleControl";
+import { LayoutSelector } from "@/components/present/LayoutSelector";
+import { SlideRenderer } from "@/components/present/SlideRenderer";
+import { exportPresentationToPdf } from "@/lib/presentationPdfExport";
 // Layouts loaded from static JSON
 const presentationLayoutsData = {
   layouts: [
@@ -156,6 +161,17 @@ export default function Present() {
   const [newMode, setNewMode] = useState<"concise" | "detailed">("concise");
   const [newTargetSlides, setNewTargetSlides] = useState(15);
   const [newPrompt, setNewPrompt] = useState("");
+  const [newImageModel, setNewImageModel] = useState("gemini-2.5-flash-image");
+  
+  // PDF export state
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const slideRenderRef = useRef<HTMLDivElement>(null);
+  
+  // Image models for selection
+  const IMAGE_MODELS = [
+    { id: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image (Recommended)' },
+    { id: 'gemini-3-pro-image-preview', label: 'Gemini 3 Pro Image Preview' },
+  ];
 
   // Load presentations
   useEffect(() => {
@@ -187,7 +203,7 @@ export default function Present() {
     if (!projectId || !shareToken) return;
     
     try {
-      // Create the presentation record
+      // Create the presentation record with imageModel in metadata
       const { data: presentation, error } = await supabase.rpc("insert_presentation_with_token", {
         p_project_id: projectId,
         p_token: shareToken,
@@ -195,6 +211,7 @@ export default function Present() {
         p_initial_prompt: newPrompt || null,
         p_mode: newMode,
         p_target_slides: newTargetSlides,
+        p_metadata: { imageModel: newImageModel },
       });
       
       if (error) throw error;
@@ -237,6 +254,7 @@ export default function Present() {
             mode: presentation.mode,
             targetSlides: presentation.target_slides,
             initialPrompt: presentation.initial_prompt,
+            imageModel: (presentation.metadata as any)?.imageModel || newImageModel,
           }),
         }
       );
@@ -335,6 +353,81 @@ export default function Present() {
     URL.revokeObjectURL(url);
   };
 
+  // Export as PDF
+  const handleExportPDF = async () => {
+    if (!selectedPresentation) return;
+    const slides = getSlides(selectedPresentation);
+    if (slides.length === 0) {
+      toast.error("No slides to export");
+      return;
+    }
+
+    setIsExportingPdf(true);
+    toast.info("Generating PDF...", { duration: 10000 });
+
+    try {
+      await exportPresentationToPdf(
+        selectedPresentation.name,
+        slides,
+        (slideIndex) => {
+          // Create a temporary container for rendering
+          const container = document.getElementById(`pdf-slide-render-${slideIndex}`);
+          return container;
+        },
+        (current, total) => {
+          toast.info(`Capturing slide ${current}/${total}...`, { id: "pdf-progress" });
+        }
+      );
+      toast.success("PDF exported successfully!", { id: "pdf-progress" });
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast.error("Failed to export PDF");
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
+  // Update slide data
+  const handleUpdateSlide = async (slideIndex: number, updates: Partial<any>) => {
+    if (!selectedPresentation || !shareToken) return;
+    
+    const slides = getSlides(selectedPresentation);
+    const updatedSlides = slides.map((s, i) => i === slideIndex ? { ...s, ...updates } : s);
+    
+    try {
+      await supabase.rpc("update_presentation_with_token", {
+        p_presentation_id: selectedPresentation.id,
+        p_token: shareToken,
+        p_slides: updatedSlides,
+      });
+      
+      // Update local state
+      const updatedPresentation = { ...selectedPresentation, slides: updatedSlides as unknown as Json };
+      setSelectedPresentation(updatedPresentation);
+      setPresentations(prev => prev.map(p => p.id === selectedPresentation.id ? updatedPresentation : p));
+    } catch (err) {
+      console.error("Failed to update slide:", err);
+      toast.error("Failed to save changes");
+    }
+  };
+
+  // Handle notes save
+  const handleSaveNotes = async (notes: string) => {
+    await handleUpdateSlide(selectedSlideIndex, { notes });
+    toast.success("Notes saved");
+  };
+
+  // Handle font scale change
+  const handleFontScaleChange = async (fontScale: number) => {
+    await handleUpdateSlide(selectedSlideIndex, { fontScale });
+  };
+
+  // Handle layout change
+  const handleLayoutChange = async (layoutId: string) => {
+    await handleUpdateSlide(selectedSlideIndex, { layoutId });
+    toast.success("Layout updated");
+  };
+
   // Helper to safely get slides array
   const getSlides = (p: Presentation): any[] => {
     if (Array.isArray(p.slides)) return p.slides;
@@ -346,6 +439,9 @@ export default function Present() {
     if (Array.isArray(p.blackboard)) return p.blackboard as unknown as BlackboardEntry[];
     return [];
   };
+
+  // Get current slide
+  const currentSlide = selectedPresentation ? getSlides(selectedPresentation)[selectedSlideIndex] : null;
 
   if (tokenMissing) {
     return (
@@ -491,6 +587,25 @@ export default function Present() {
                         placeholder="Any specific areas you want to emphasize..."
                       />
                     </div>
+                    
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <Bot className="h-4 w-4" />
+                        Image Generation Model
+                      </Label>
+                      <Select value={newImageModel} onValueChange={setNewImageModel}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {IMAGE_MODELS.map(model => (
+                            <SelectItem key={model.id} value={model.id}>
+                              {model.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   
                   <DialogFooter>
@@ -621,11 +736,14 @@ export default function Present() {
                           <Button variant="outline" size="sm" onClick={() => setIsFullscreen(true)}>
                             <Maximize2 className="h-4 w-4" />
                           </Button>
-                          <Button variant="outline" size="sm" onClick={handleExportJSON}>
+                          <Button variant="outline" size="sm" onClick={handleExportJSON} title="Export JSON">
                             <Download className="h-4 w-4" />
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => generatePresentation(selectedPresentation)}>
-                            <Play className="h-4 w-4" />
+                          <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={isExportingPdf} title="Export PDF">
+                            {isExportingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => generatePresentation(selectedPresentation)} title="Regenerate Presentation">
+                            <RefreshCw className="h-4 w-4" />
                           </Button>
                           <Button variant="outline" size="sm" onClick={() => handleDelete(selectedPresentation.id)}>
                             <Trash2 className="h-4 w-4" />
@@ -654,13 +772,34 @@ export default function Present() {
                             
                             {/* Main Preview */}
                             <div className="lg:col-span-3">
+                              {/* Slide controls */}
+                              {currentSlide && (
+                                <div className="flex items-center gap-4 mb-3 p-2 bg-muted/30 rounded-lg">
+                                  <LayoutSelector 
+                                    value={currentSlide.layoutId} 
+                                    onChange={handleLayoutChange} 
+                                  />
+                                  <FontScaleControl 
+                                    value={currentSlide.fontScale || 1} 
+                                    onChange={handleFontScaleChange} 
+                                  />
+                                </div>
+                              )}
                               <SlidePreview
                                 slides={getSlides(selectedPresentation)}
                                 layouts={layouts}
                                 selectedSlideIndex={selectedSlideIndex}
                                 onSlideChange={setSelectedSlideIndex}
                                 theme={currentTheme}
+                                fontScale={currentSlide?.fontScale}
                               />
+                              {/* Notes editor */}
+                              {currentSlide && (
+                                <SlideNotesEditor
+                                  notes={currentSlide.notes || ""}
+                                  onSave={handleSaveNotes}
+                                />
+                              )}
                             </div>
                           </div>
                         </TabsContent>
