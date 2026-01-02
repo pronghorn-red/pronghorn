@@ -63,8 +63,8 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
       if (!isExporting || currentSlideIndex < 0 || currentSlideIndex >= slides.length) return;
 
       const captureSlide = async () => {
-        // Wait for render to complete
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        // Wait for render to complete - longer delay like parseDocx.ts approach
+        await new Promise((resolve) => setTimeout(resolve, 800));
 
         if (!renderRef.current) {
           console.error("Render ref not available");

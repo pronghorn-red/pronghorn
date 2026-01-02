@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Wand2, Loader2, Download, ImageIcon, Sparkles } from "lucide-react";
+import { Wand2, Loader2, Download, ImageIcon, Sparkles, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const IMAGE_MODELS = [
@@ -38,6 +38,7 @@ interface SlideImageGeneratorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImageGenerated: (imageUrl: string) => void;
+  onImageDeleted?: () => void;
   initialPrompt?: string;
   currentImageUrl?: string;
   projectContext?: string;
@@ -49,6 +50,7 @@ export function SlideImageGenerator({
   open,
   onOpenChange,
   onImageGenerated,
+  onImageDeleted,
   initialPrompt = "",
   currentImageUrl,
   projectContext,
@@ -60,6 +62,8 @@ export function SlideImageGenerator({
   const [selectedStyle, setSelectedStyle] = useState(imageStyle);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Update prompt when dialog opens with new initial prompt
   useEffect(() => {
@@ -152,7 +156,55 @@ export function SlideImageGenerator({
     setGeneratedImage(null);
   };
 
-  const displayImage = generatedImage || currentImageUrl;
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Image must be less than 10MB");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      // Convert to base64 data URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        setGeneratedImage(dataUrl);
+        setIsUploading(false);
+        toast.success("Image uploaded successfully!");
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read image file");
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Failed to upload image");
+      setIsUploading(false);
+    }
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteImage = () => {
+    if (onImageDeleted) {
+      onImageDeleted();
+    }
+    setGeneratedImage(null);
+  };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -246,26 +298,60 @@ export function SlideImageGenerator({
 
           {/* Right column - Preview */}
           <div className="flex flex-col space-y-3 overflow-hidden">
-            <Label className="shrink-0">
-              {generatedImage ? "Generated Image" : currentImageUrl ? "Current Image" : "Preview"}
-            </Label>
+            <div className="flex items-center justify-between shrink-0">
+              <Label>
+                {generatedImage ? "New Image" : currentImageUrl ? "Current Image" : "Preview"}
+              </Label>
+              <div className="flex gap-2">
+                {/* Hidden file input */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                >
+                  {isUploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                </Button>
+                {currentImageUrl && onImageDeleted && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteImage}
+                    title="Remove image"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
+              </div>
+            </div>
             <div className="flex-1 min-h-0 bg-muted rounded-lg overflow-hidden border flex items-center justify-center">
-              {displayImage ? (
+              {(generatedImage || currentImageUrl) ? (
                 <img
-                  src={displayImage}
-                  alt={generatedImage ? "Generated slide image" : "Current slide image"}
+                  src={generatedImage || currentImageUrl}
+                  alt={generatedImage ? "New image" : "Current slide image"}
                   className={`max-w-full max-h-full object-contain ${!generatedImage && currentImageUrl ? 'opacity-50' : ''}`}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center text-muted-foreground p-8">
                   <ImageIcon className="h-12 w-12 mb-3 opacity-50" />
-                  <p className="text-sm">Enter a prompt and generate an image</p>
+                  <p className="text-sm text-center">Enter a prompt and generate,<br />or upload an image</p>
                 </div>
               )}
             </div>
             {generatedImage && (
               <p className="text-xs text-muted-foreground text-center">
-                16:9 aspect ratio • Ready to use
+                Ready to use
               </p>
             )}
           </div>

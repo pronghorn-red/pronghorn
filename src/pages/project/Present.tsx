@@ -1048,6 +1048,7 @@ export default function Present() {
                                 isFullscreen={false}
                                 fontScale={currentSlide.fontScale || 1}
                                 className="w-full h-full"
+                                onAddImageClick={() => setIsImageGeneratorOpen(true)}
                               />
                             </div>
                           )}
@@ -1190,6 +1191,10 @@ export default function Present() {
           onOpenChange={setIsImageGeneratorOpen}
           onImageGenerated={(url) => {
             handleUpdateSlide(selectedSlideIndex, { imageUrl: url });
+            setIsImageGeneratorOpen(false);
+          }}
+          onImageDeleted={() => {
+            handleUpdateSlide(selectedSlideIndex, { imageUrl: undefined });
             setIsImageGeneratorOpen(false);
           }}
           currentImageUrl={currentSlide.imageUrl}

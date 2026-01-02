@@ -34,6 +34,7 @@ interface SlideRendererProps {
   isPreview?: boolean;
   isFullscreen?: boolean;
   fontScale?: number;
+  onAddImageClick?: () => void;
 }
 
 // Fluid typography scale based on container width
@@ -102,7 +103,8 @@ export function SlideRenderer({
   className = "", 
   isPreview = false, 
   isFullscreen = false,
-  fontScale = 1 
+  fontScale = 1,
+  onAddImageClick 
 }: SlideRendererProps) {
   const { layoutId, title, subtitle, content, imageUrl } = slide;
   
@@ -492,12 +494,13 @@ export function SlideRenderer({
     // Placeholder for image layouts without images
     const renderImagePlaceholder = () => (
       <div 
-        className="w-full h-full min-h-[100px] rounded-lg border-2 border-dashed flex flex-col items-center justify-center"
+        className={`w-full h-full min-h-[100px] rounded-lg border-2 border-dashed flex flex-col items-center justify-center ${onAddImageClick ? 'cursor-pointer hover:bg-opacity-20' : ''}`}
         style={{ 
           borderColor: themeColors.muted, 
           color: themeColors.muted,
           background: `${themeColors.primary}08`,
         }}
+        onClick={onAddImageClick}
       >
         <ImageIcon 
           style={{ 
@@ -508,7 +511,7 @@ export function SlideRenderer({
           }} 
         />
         <span style={{ fontSize: fs('smallFull', 'smallPreview') }}>
-          Click to add image
+          {onAddImageClick ? 'Click to add image' : 'No image'}
         </span>
       </div>
     );

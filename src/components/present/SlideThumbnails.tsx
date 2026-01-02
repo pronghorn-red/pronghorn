@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { toPng } from "html-to-image";
 import { SlideRenderer } from "./SlideRenderer";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -118,37 +118,66 @@ export function SlideThumbnails({
   onSlideChange, 
   theme = "default" 
 }: SlideThumbnailsProps) {
+  // Use refs for persistent caching across re-renders/view changes
+  const thumbnailCacheRef = useRef<Record<string, string>>({});
+  const contentHashRef = useRef<Record<string, string>>({});
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const [generating, setGenerating] = useState<Set<string>>(new Set());
 
-  // Generate thumbnails for slides that don't have them
-  const getSlideKey = (slide: Slide | null | undefined) => {
-    if (!slide) return 'invalid-slide';
-    const id = slide.id || 'no-id';
-    const layoutId = slide.layoutId || 'no-layout';
-    const title = slide.title || '';
-    // Use a simpler key that won't cause issues with large content
-    return `${id}-${layoutId}-${title.slice(0, 30)}`;
+  // Create a content hash for detecting actual slide changes
+  const getContentHash = (slide: Slide): string => {
+    const contentStr = JSON.stringify({
+      layoutId: slide.layoutId,
+      title: slide.title,
+      subtitle: slide.subtitle,
+      content: slide.content,
+      imageUrl: slide.imageUrl,
+      fontScale: slide.fontScale,
+    });
+    // Simple hash
+    let hash = 0;
+    for (let i = 0; i < contentStr.length; i++) {
+      const char = contentStr.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return `${slide.id}-${hash}`;
   };
 
+  // Generate thumbnails only for slides that have changed
   useEffect(() => {
     if (!slides || slides.length === 0) return;
     
     slides.forEach((slide) => {
       if (!slide) return;
-      const key = getSlideKey(slide);
-      if (key !== 'invalid-slide' && !thumbnails[key] && !generating.has(key)) {
-        setGenerating(prev => new Set(prev).add(key));
+      const hash = getContentHash(slide);
+      const existingHash = contentHashRef.current[slide.id];
+      
+      // Check if we already have a cached thumbnail for this content
+      if (thumbnailCacheRef.current[hash]) {
+        // Use cached thumbnail
+        if (!thumbnails[hash]) {
+          setThumbnails(prev => ({ ...prev, [hash]: thumbnailCacheRef.current[hash] }));
+        }
+        return;
+      }
+      
+      // Only regenerate if content actually changed
+      if (existingHash !== hash && !generating.has(hash)) {
+        setGenerating(prev => new Set(prev).add(hash));
+        contentHashRef.current[slide.id] = hash;
       }
     });
-  }, [slides, thumbnails, generating]);
+  }, [slides]);
 
   const handleCapture = (slide: Slide, dataUrl: string) => {
-    const key = getSlideKey(slide);
-    setThumbnails(prev => ({ ...prev, [key]: dataUrl }));
+    const hash = getContentHash(slide);
+    // Cache in ref for persistence
+    thumbnailCacheRef.current[hash] = dataUrl;
+    setThumbnails(prev => ({ ...prev, [hash]: dataUrl }));
     setGenerating(prev => {
       const next = new Set(prev);
-      next.delete(key);
+      next.delete(hash);
       return next;
     });
   };
@@ -158,11 +187,11 @@ export function SlideThumbnails({
       {/* Offscreen thumbnail generators */}
       {slides.map((slide) => {
         if (!slide) return null;
-        const key = getSlideKey(slide);
-        if (key !== 'invalid-slide' && !thumbnails[key] && generating.has(key)) {
+        const hash = getContentHash(slide);
+        if (!thumbnails[hash] && generating.has(hash)) {
           return (
             <ThumbnailGenerator
-              key={`gen-${key}`}
+              key={`gen-${hash}`}
               slide={slide}
               layouts={layouts}
               theme={theme}
@@ -177,9 +206,9 @@ export function SlideThumbnails({
         <div className="space-y-3 p-2">
           {slides.map((slide, index) => {
             if (!slide) return null;
-            const key = getSlideKey(slide);
-            const thumbnailUrl = thumbnails[key];
-            const isGenerating = generating.has(key);
+            const hash = getContentHash(slide);
+            const thumbnailUrl = thumbnails[hash];
+            const isGenerating = generating.has(hash);
 
             return (
               <button

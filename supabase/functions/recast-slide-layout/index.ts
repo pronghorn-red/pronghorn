@@ -29,7 +29,7 @@ interface RecastRequest {
   projectContext?: string;
 }
 
-// Layout content requirements
+// Layout content requirements with exact JSON examples
 const LAYOUT_REQUIREMENTS: Record<string, { regions: string[], needsImage: boolean, description: string }> = {
   "title-cover": { regions: ["subtitle"], needsImage: false, description: "Full-bleed cover with title and subtitle" },
   "section-divider": { regions: ["subtitle"], needsImage: false, description: "Bold section break" },
@@ -40,10 +40,110 @@ const LAYOUT_REQUIREMENTS: Record<string, { regions: string[], needsImage: boole
   "image-left": { regions: ["content", "image"], needsImage: true, description: "Image on left with content on right" },
   "image-right": { regions: ["content", "image"], needsImage: true, description: "Content on left with image on right" },
   "stats-grid": { regions: ["stats"], needsImage: false, description: "Grid of 4 statistics with labels and values" },
-  "timeline": { regions: ["timeline"], needsImage: false, description: "Horizontal timeline with steps" },
-  "icon-grid": { regions: ["icons"], needsImage: false, description: "Grid of icons with labels" },
+  "timeline": { regions: ["timeline"], needsImage: false, description: "Vertical timeline with numbered steps" },
+  "icon-grid": { regions: ["grid"], needsImage: false, description: "Grid of items with icons" },
   "architecture": { regions: ["diagram", "content"], needsImage: true, description: "Architecture or system diagram" },
   "quote": { regions: ["quote", "attribution"], needsImage: false, description: "Large quote with attribution" },
+};
+
+// EXACT JSON examples for each layout - this is what the SlideRenderer expects
+const LAYOUT_EXAMPLES: Record<string, string> = {
+  "title-cover": `{
+  "title": "Main Title Here",
+  "subtitle": "Subtitle or tagline",
+  "content": []
+}`,
+  "section-divider": `{
+  "title": "Section Title",
+  "subtitle": "Section description",
+  "content": []
+}`,
+  "title-content": `{
+  "title": "Slide Title",
+  "content": [
+    { "regionId": "content", "type": "text", "data": { "text": "Main paragraph content goes here. Can be multiple sentences with rich detail about the topic." } }
+  ]
+}`,
+  "bullets": `{
+  "title": "Key Points",
+  "subtitle": "Important takeaways",
+  "content": [
+    { "regionId": "bullets", "type": "bullets", "data": { "items": ["First bullet point with key information", "Second bullet point explaining another aspect", "Third bullet point with additional details", "Fourth bullet point summarizing"] } }
+  ]
+}`,
+  "two-column": `{
+  "title": "Two Column Layout",
+  "content": [
+    { "regionId": "left", "type": "text", "data": { "text": "Left column content goes here. This can contain detailed information about the first topic or aspect." } },
+    { "regionId": "right", "type": "text", "data": { "text": "Right column content goes here. This can contain complementary information or a different perspective." } }
+  ]
+}`,
+  "comparison": `{
+  "title": "Comparison",
+  "content": [
+    { "regionId": "left", "type": "text", "data": { "text": "Option A details:\n• Feature 1\n• Feature 2\n• Feature 3" } },
+    { "regionId": "right", "type": "text", "data": { "text": "Option B details:\n• Feature 1\n• Feature 2\n• Feature 3" } }
+  ]
+}`,
+  "image-left": `{
+  "title": "Visual Feature",
+  "content": [
+    { "regionId": "content", "type": "text", "data": { "text": "Description text explaining the visual. This content appears on the right side of the image and should provide context or details about what the image shows." } }
+  ],
+  "imagePrompt": "Professional visualization related to the slide title"
+}`,
+  "image-right": `{
+  "title": "Visual Feature",
+  "content": [
+    { "regionId": "content", "type": "text", "data": { "text": "Description text explaining the visual. This content appears on the left side of the image and should provide context or details about what the image shows." } }
+  ],
+  "imagePrompt": "Professional visualization related to the slide title"
+}`,
+  "stats-grid": `{
+  "title": "Key Metrics",
+  "content": [
+    { "regionId": "stats", "type": "stat", "data": { "label": "Users", "value": "10K+" } },
+    { "regionId": "stats", "type": "stat", "data": { "label": "Revenue", "value": "$1M" } },
+    { "regionId": "stats", "type": "stat", "data": { "label": "Growth", "value": "150%" } },
+    { "regionId": "stats", "type": "stat", "data": { "label": "Rating", "value": "4.9" } }
+  ]
+}`,
+  "timeline": `{
+  "title": "Project Timeline",
+  "content": [
+    { "regionId": "timeline", "type": "timeline", "data": { "steps": [
+      { "title": "Phase 1", "description": "Initial planning and setup" },
+      { "title": "Phase 2", "description": "Development and implementation" },
+      { "title": "Phase 3", "description": "Testing and refinement" },
+      { "title": "Phase 4", "description": "Launch and deployment" }
+    ] } }
+  ]
+}`,
+  "icon-grid": `{
+  "title": "Features Overview",
+  "content": [
+    { "regionId": "grid", "type": "icon-grid", "data": { "items": [
+      { "title": "Feature One", "description": "Brief description of the first feature" },
+      { "title": "Feature Two", "description": "Brief description of the second feature" },
+      { "title": "Feature Three", "description": "Brief description of the third feature" },
+      { "title": "Feature Four", "description": "Brief description of the fourth feature" }
+    ] } }
+  ]
+}`,
+  "architecture": `{
+  "title": "System Architecture",
+  "content": [
+    { "regionId": "content", "type": "text", "data": { "text": "Description of the architecture or diagram being shown." } }
+  ],
+  "imagePrompt": "Technical architecture diagram showing system components"
+}`,
+  "quote": `{
+  "title": "Quote",
+  "content": [
+    { "regionId": "quote", "type": "text", "data": { "text": "The actual quote text goes here. It should be impactful and memorable." } },
+    { "regionId": "attribution", "type": "text", "data": { "text": "— Author Name, Title" } }
+  ]
+}`
 };
 
 serve(async (req) => {
@@ -63,71 +163,99 @@ serve(async (req) => {
 
     const sourceLayout = LAYOUT_REQUIREMENTS[slide.layoutId] || LAYOUT_REQUIREMENTS["title-content"];
     const targetLayout = LAYOUT_REQUIREMENTS[targetLayoutId] || LAYOUT_REQUIREMENTS["title-content"];
+    const targetExample = LAYOUT_EXAMPLES[targetLayoutId] || LAYOUT_EXAMPLES["title-content"];
 
-    // Extract all text content from the source slide
-    const extractText = (content: SlideContent[]): string => {
-      const texts: string[] = [];
+    // Extract all text content from the source slide comprehensively
+    const extractAllContent = (content: SlideContent[]): { texts: string[], bullets: string[], stats: any[], timeline: any[], grid: any[] } => {
+      const result = { texts: [] as string[], bullets: [] as string[], stats: [] as any[], timeline: [] as any[], grid: [] as any[] };
+      
       for (const item of content) {
+        // Handle text data
         if (typeof item.data === "string") {
-          texts.push(item.data);
-        } else if (Array.isArray(item.data)) {
-          for (const d of item.data) {
-            if (typeof d === "string") texts.push(d);
-            else if (d?.text) texts.push(d.text);
-            else if (d?.label) texts.push(`${d.label}: ${d.value || ""}`);
-            else if (d?.title) texts.push(d.title);
-          }
+          result.texts.push(item.data);
         } else if (item.data?.text) {
-          texts.push(item.data.text);
+          result.texts.push(item.data.text);
+        }
+        
+        // Handle arrays (bullets, items, etc.)
+        if (item.data?.items) {
+          for (const d of item.data.items) {
+            if (typeof d === "string") {
+              result.bullets.push(d);
+            } else if (d?.title || d?.description) {
+              result.bullets.push(`${d.title || ''}: ${d.description || ''}`);
+              result.grid.push(d);
+            } else if (d?.text) {
+              result.bullets.push(d.text);
+            }
+          }
+        }
+        
+        // Handle stats
+        if (item.type === "stat" && item.data) {
+          result.stats.push(item.data);
+        }
+        
+        // Handle timeline steps
+        if (item.data?.steps) {
+          result.timeline = item.data.steps;
+          for (const step of item.data.steps) {
+            result.bullets.push(`${step.title || step.label || ''}: ${step.description || ''}`);
+          }
         }
       }
-      return texts.join("\n");
+      
+      return result;
     };
 
-    const sourceText = extractText(slide.content);
+    const sourceContent = extractAllContent(slide.content);
+    const allText = [...sourceContent.texts, ...sourceContent.bullets].filter(Boolean).join("\n\n");
 
-    // Build prompt for AI recasting
-    const prompt = `You are a presentation slide content adapter. Convert content from one slide layout to another while preserving meaning.
+    // Build comprehensive prompt for AI recasting
+    const prompt = `You are a presentation slide layout adapter. Your job is to recast slide content from one layout format to another.
 
-SOURCE SLIDE:
-- Layout: ${slide.layoutId} (${sourceLayout.description})
-- Title: ${slide.title}
-${slide.subtitle ? `- Subtitle: ${slide.subtitle}` : ""}
-- Content: ${sourceText}
+CRITICAL RULES:
+1. PRESERVE ALL CONTENT - Do not lose any information from the source slide
+2. ADAPT THE FORMAT - Restructure content to fit the target layout's structure exactly
+3. USE THE EXACT JSON STRUCTURE - The output MUST match the example format precisely
 
-TARGET LAYOUT: ${targetLayoutId} (${targetLayout.description})
-Required regions: ${targetLayout.regions.join(", ")}
-${targetLayout.needsImage ? "This layout includes an image area - provide an imagePrompt for generation." : ""}
+SOURCE SLIDE DATA:
+- Layout: ${slide.layoutId}
+- Title: "${slide.title}"
+${slide.subtitle ? `- Subtitle: "${slide.subtitle}"` : ""}
+- All Content Text:
+${allText}
 
-${projectContext ? `Project Context: ${projectContext}` : ""}
+${sourceContent.stats.length > 0 ? `- Stats Data: ${JSON.stringify(sourceContent.stats)}` : ""}
+${sourceContent.timeline.length > 0 ? `- Timeline Data: ${JSON.stringify(sourceContent.timeline)}` : ""}
+${sourceContent.grid.length > 0 ? `- Grid Items: ${JSON.stringify(sourceContent.grid)}` : ""}
 
-Generate a JSON object with the adapted slide content. The response MUST be valid JSON with this structure:
-{
-  "title": "slide title (may keep or adapt)",
-  "subtitle": "optional subtitle",
-  "content": [
-    { "regionId": "region_name", "type": "content_type", "data": ... }
-  ]${targetLayout.needsImage ? ',\n  "imagePrompt": "description for image generation"' : ''}
-}
+TARGET LAYOUT: ${targetLayoutId}
+Description: ${targetLayout.description}
 
-Content type examples:
-- For "bullets" region: { "regionId": "bullets", "type": "bullets", "data": ["Point 1", "Point 2", "Point 3"] }
-- For "content" region: { "regionId": "content", "type": "text", "data": "paragraph text here" }
-- For "stats" region: { "regionId": "stats", "type": "stats", "data": [{"label": "Metric", "value": "100%"}, ...] }
-- For "timeline" region: { "regionId": "timeline", "type": "timeline", "data": [{"step": 1, "label": "Step 1", "description": "..."}, ...] }
-- For "icons" region: { "regionId": "icons", "type": "icon-grid", "data": [{"icon": "star", "label": "Feature"}, ...] }
-- For "left"/"right" regions: { "regionId": "left", "type": "text", "data": "content" }
-- For "quote" region: { "regionId": "quote", "type": "text", "data": "The quote text" }
-- For "attribution" region: { "regionId": "attribution", "type": "text", "data": "- Author Name" }
+EXACT JSON STRUCTURE REQUIRED (follow this format precisely):
+${targetExample}
 
-Respond with ONLY the JSON object, no explanation.`;
+${targetLayout.needsImage ? 'IMPORTANT: This layout needs an image. Include an "imagePrompt" field with a description for generating a relevant image.' : ''}
+
+INSTRUCTIONS:
+1. Keep the title (you may adapt it slightly if needed)
+2. Transform ALL the source content into the target format
+3. If target is "bullets": Create an array of bullet point strings from all the text
+4. If target is "two-column" or "comparison": Split content logically between left and right
+5. If target is "timeline": Create steps array with title and description for each step
+6. If target is "icon-grid": Create items array with title and description for each item
+7. If target is "stats-grid": Create 4 stat objects with label and value (extract numbers/metrics from content or create relevant ones)
+8. The "data" field structure must match the example exactly
+
+Respond with ONLY valid JSON matching the structure above. No explanations.`;
 
     // Call Gemini for the conversion
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiApiKey) {
-      // Fallback: simple content transformation without AI
+      // Fallback: transformation without AI
       console.log("No GEMINI_API_KEY, using fallback transformation");
-      const fallbackContent = createFallbackContent(slide, targetLayoutId, targetLayout);
+      const fallbackContent = createFallbackContent(slide, targetLayoutId, targetLayout, sourceContent, allText);
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -150,8 +278,8 @@ Respond with ONLY the JSON object, no explanation.`;
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 2000,
+            temperature: 0.2,
+            maxOutputTokens: 3000,
             responseMimeType: "application/json",
           },
         }),
@@ -167,7 +295,7 @@ Respond with ONLY the JSON object, no explanation.`;
     const geminiData = await geminiResponse.json();
     const responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
     
-    console.log("Gemini response:", responseText.slice(0, 500));
+    console.log("Gemini response:", responseText.slice(0, 1000));
 
     // Parse the response
     let recastData;
@@ -212,66 +340,77 @@ Respond with ONLY the JSON object, no explanation.`;
   }
 });
 
-// Fallback transformation without AI
-function createFallbackContent(slide: Slide, targetLayoutId: string, targetLayout: { regions: string[], needsImage: boolean }): { content: SlideContent[], imagePrompt?: string } {
+// Improved fallback transformation without AI
+function createFallbackContent(
+  slide: Slide, 
+  targetLayoutId: string, 
+  targetLayout: { regions: string[], needsImage: boolean },
+  sourceContent: { texts: string[], bullets: string[], stats: any[], timeline: any[], grid: any[] },
+  allText: string
+): { content: SlideContent[], imagePrompt?: string } {
   const content: SlideContent[] = [];
-  
-  // Extract text from existing content
-  const extractedTexts: string[] = [];
-  for (const item of slide.content) {
-    if (typeof item.data === "string") {
-      extractedTexts.push(item.data);
-    } else if (Array.isArray(item.data)) {
-      extractedTexts.push(...item.data.map(d => typeof d === "string" ? d : d?.text || d?.label || ""));
-    }
-  }
-  
-  const combinedText = extractedTexts.filter(Boolean).join("\n");
-  const textLines = combinedText.split("\n").filter(Boolean);
+  const textLines = allText.split(/\n+/).filter(Boolean);
 
   // Generate content based on target layout
   switch (targetLayoutId) {
     case "bullets":
+      // Use existing bullets or split text into bullets
+      const bulletItems = sourceContent.bullets.length > 0 
+        ? sourceContent.bullets.slice(0, 8)
+        : textLines.slice(0, 8);
       content.push({
         regionId: "bullets",
         type: "bullets",
-        data: textLines.length > 0 ? textLines.slice(0, 6) : ["Point 1", "Point 2", "Point 3"]
+        data: { items: bulletItems.length > 0 ? bulletItems : ["Content from previous slide"] }
       });
       break;
       
     case "stats-grid":
-      content.push({
-        regionId: "stats",
-        type: "stats",
-        data: [
-          { label: "Metric 1", value: "100%" },
-          { label: "Metric 2", value: "50+" },
-          { label: "Metric 3", value: "24/7" },
-          { label: "Metric 4", value: "5x" },
-        ]
-      });
+      // Use existing stats or create placeholder stats
+      if (sourceContent.stats.length >= 4) {
+        sourceContent.stats.slice(0, 4).forEach(stat => {
+          content.push({ regionId: "stats", type: "stat", data: stat });
+        });
+      } else {
+        const defaultStats = [
+          { label: "Key Metric 1", value: "100%" },
+          { label: "Key Metric 2", value: "50+" },
+          { label: "Key Metric 3", value: "24/7" },
+          { label: "Key Metric 4", value: "5x" },
+        ];
+        defaultStats.forEach(stat => {
+          content.push({ regionId: "stats", type: "stat", data: stat });
+        });
+      }
       break;
       
     case "timeline":
+      // Use existing timeline or create from text lines
+      const steps = sourceContent.timeline.length > 0 
+        ? sourceContent.timeline.slice(0, 5)
+        : textLines.slice(0, 5).map((text, i) => ({
+            title: `Step ${i + 1}`,
+            description: text
+          }));
       content.push({
         regionId: "timeline",
         type: "timeline",
-        data: textLines.slice(0, 4).map((text, i) => ({
-          step: i + 1,
-          label: `Step ${i + 1}`,
-          description: text
-        }))
+        data: { steps: steps.length > 0 ? steps : [{ title: "Step 1", description: "Content" }] }
       });
       break;
       
     case "icon-grid":
+      // Use existing grid items or create from text
+      const gridItems = sourceContent.grid.length > 0 
+        ? sourceContent.grid.slice(0, 6)
+        : textLines.slice(0, 6).map(text => ({
+            title: text.slice(0, 30),
+            description: text.length > 30 ? text.slice(30) : ""
+          }));
       content.push({
-        regionId: "icons",
+        regionId: "grid",
         type: "icon-grid",
-        data: textLines.slice(0, 6).map(text => ({
-          icon: "star",
-          label: text.slice(0, 30)
-        }))
+        data: { items: gridItems.length > 0 ? gridItems : [{ title: "Feature", description: "Description" }] }
       });
       break;
       
@@ -281,21 +420,22 @@ function createFallbackContent(slide: Slide, targetLayoutId: string, targetLayou
       content.push({
         regionId: "left",
         type: "text",
-        data: textLines.slice(0, half).join("\n") || "Left column content"
+        data: { text: textLines.slice(0, half).join("\n\n") || "Left column content" }
       });
       content.push({
         regionId: "right",
         type: "text",
-        data: textLines.slice(half).join("\n") || "Right column content"
+        data: { text: textLines.slice(half).join("\n\n") || "Right column content" }
       });
       break;
       
     case "image-left":
     case "image-right":
+    case "architecture":
       content.push({
         regionId: "content",
         type: "text",
-        data: combinedText || "Add content here"
+        data: { text: allText || "Add content here" }
       });
       break;
       
@@ -303,20 +443,21 @@ function createFallbackContent(slide: Slide, targetLayoutId: string, targetLayou
       content.push({
         regionId: "quote",
         type: "text",
-        data: combinedText || "Add your quote here"
+        data: { text: allText || "Add your quote here" }
       });
       content.push({
         regionId: "attribution",
         type: "text",
-        data: "- Author"
+        data: { text: "— Author" }
       });
       break;
       
+    case "title-content":
     default:
       content.push({
         regionId: "content",
         type: "text",
-        data: combinedText || "Add content here"
+        data: { text: allText || "Add content here" }
       });
   }
 
