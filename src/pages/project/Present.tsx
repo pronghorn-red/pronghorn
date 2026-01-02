@@ -949,16 +949,20 @@ export default function Present() {
                   </div>
                 ) : selectedPresentation && slides.length > 0 ? (
                   <div className="flex flex-col h-full overflow-hidden">
-                    {/* Header */}
-                    <div className="shrink-0 flex items-center justify-between mb-4">
+                    {/* Header - responsive stacking */}
+                    <div className="shrink-0 flex flex-col gap-3 mb-4">
+                      {/* Title and metadata row */}
                       <div>
                         <h3 className="text-lg font-semibold">{selectedPresentation.name}</h3>
                         <p className="text-sm text-muted-foreground">
                           {slides.length} slides • {selectedPresentation.mode}
-                          {hasUnsavedChanges && <span className="text-amber-500 ml-2">• Unsaved changes</span>}
                         </p>
+                        {hasUnsavedChanges && (
+                          <p className="text-sm text-amber-500">Unsaved changes</p>
+                        )}
                       </div>
-                      <div className="flex gap-2">
+                      {/* Actions row */}
+                      <div className="flex flex-wrap gap-2">
                         <Button 
                           variant={hasUnsavedChanges ? "default" : "outline"} 
                           size="sm" 
