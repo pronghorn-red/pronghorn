@@ -139,7 +139,9 @@ export function SlideImageGenerator({
   };
 
   const handleUseImage = () => {
+    console.log("handleUseImage called, generatedImage:", !!generatedImage);
     if (generatedImage) {
+      console.log("Calling onImageGenerated with URL length:", generatedImage.length);
       onImageGenerated(generatedImage);
       onOpenChange(false);
       setGeneratedImage(null);

@@ -446,9 +446,14 @@ export default function Present() {
 
   // Update slide data - LOCAL only, no DB save
   const handleUpdateSlide = (slideIndex: number, updates: Partial<any>) => {
+    console.log("handleUpdateSlide called:", { slideIndex, updates });
     setWorkingSlides(prev => {
-      if (!prev) return prev;
+      if (!prev) {
+        console.log("handleUpdateSlide: prev is null");
+        return prev;
+      }
       const updatedSlides = prev.map((s, i) => i === slideIndex ? { ...s, ...updates } : s);
+      console.log("handleUpdateSlide: updated slide", updatedSlides[slideIndex]);
       
       // Update JSON editor if in JSON mode
       if (notesPanelMode === "json") {
