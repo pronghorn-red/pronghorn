@@ -16,10 +16,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, RefreshCw, Trash2, Download, Loader2, Sparkles, Maximize2, Minimize2, FileDown, Bot, Palette } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Download, Loader2, Sparkles, Maximize2, Minimize2, FileDown, Bot, Palette, Pencil, ChevronLeft, ChevronRight, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
-import { SlidePreview } from "@/components/present/SlidePreview";
 import { SlideThumbnails } from "@/components/present/SlideThumbnails";
 import { SlideNotesEditor } from "@/components/present/SlideNotesEditor";
 import { FontScaleControl } from "@/components/present/FontScaleControl";
@@ -27,82 +26,47 @@ import { LayoutSelector } from "@/components/present/LayoutSelector";
 import { SlideRenderer } from "@/components/present/SlideRenderer";
 import { SlideImageGenerator, IMAGE_MODELS, IMAGE_STYLES } from "@/components/present/SlideImageGenerator";
 import { PdfExportRenderer, PdfExportRendererRef } from "@/components/present/PdfExportRenderer";
+
 // Layouts loaded from static JSON
 const presentationLayoutsData = {
   layouts: [
-    { id: "title-cover", name: "Title Cover", description: "Full-bleed cover", category: "title", regions: [
-      { id: "background", type: "image", x: 0, y: 0, width: 100, height: 100 },
-      { id: "title", type: "heading", x: 10, y: 35, width: 80, height: 20, align: "center", level: 1 },
-      { id: "subtitle", type: "text", x: 10, y: 55, width: 80, height: 10, align: "center" }
-    ]},
-    { id: "section-divider", name: "Section Divider", description: "Bold section break", category: "divider", regions: [
-      { id: "section-number", type: "heading", x: 10, y: 30, width: 80, height: 15, align: "center", level: 1 },
-      { id: "title", type: "heading", x: 10, y: 50, width: 80, height: 15, align: "center", level: 2 }
-    ]},
-    { id: "title-content", name: "Title + Content", description: "Header with content", category: "content", regions: [
-      { id: "title", type: "heading", x: 5, y: 5, width: 90, height: 12, level: 2 },
-      { id: "content", type: "richtext", x: 5, y: 22, width: 90, height: 73 }
-    ]},
-    { id: "two-column", name: "Two Columns", description: "Side-by-side content", category: "content", regions: [
-      { id: "title", type: "heading", x: 5, y: 5, width: 90, height: 12, level: 2 },
-      { id: "left-content", type: "richtext", x: 5, y: 20, width: 43, height: 75 },
-      { id: "right-content", type: "richtext", x: 52, y: 20, width: 43, height: 75 }
-    ]},
-    { id: "image-left", name: "Image Left", description: "Image on left with content", category: "media", regions: [
-      { id: "title", type: "heading", x: 52, y: 5, width: 43, height: 12, level: 2 },
-      { id: "image", type: "image", x: 0, y: 0, width: 48, height: 100 },
-      { id: "content", type: "richtext", x: 52, y: 20, width: 43, height: 75 }
-    ]},
-    { id: "image-right", name: "Image Right", description: "Content with image on right", category: "media", regions: [
-      { id: "title", type: "heading", x: 5, y: 5, width: 43, height: 12, level: 2 },
-      { id: "content", type: "richtext", x: 5, y: 20, width: 43, height: 75 },
-      { id: "image", type: "image", x: 52, y: 0, width: 48, height: 100 }
-    ]},
-    { id: "stats-grid", name: "Statistics Grid", description: "4-cell metrics grid", category: "data", regions: [
-      { id: "title", type: "heading", x: 5, y: 5, width: 90, height: 12, level: 2 },
-      { id: "stat-1", type: "stat", x: 5, y: 22, width: 43, height: 35 },
-      { id: "stat-2", type: "stat", x: 52, y: 22, width: 43, height: 35 },
-      { id: "stat-3", type: "stat", x: 5, y: 60, width: 43, height: 35 },
-      { id: "stat-4", type: "stat", x: 52, y: 60, width: 43, height: 35 }
-    ]},
-    { id: "bullets", name: "Bullet Points", description: "Clean bullet list", category: "content", regions: [
-      { id: "title", type: "heading", x: 5, y: 5, width: 90, height: 12, level: 2 },
-      { id: "bullets", type: "bullets", x: 5, y: 20, width: 90, height: 75 }
-    ]},
-    { id: "quote", name: "Quote", description: "Prominent quote", category: "accent", regions: [
-      { id: "quote", type: "text", x: 15, y: 35, width: 70, height: 30, size: "2xl" },
-      { id: "attribution", type: "text", x: 15, y: 70, width: 70, height: 8, align: "right" }
-    ]},
-    { id: "architecture", name: "Architecture", description: "Visual diagram", category: "technical", regions: [
-      { id: "title", type: "heading", x: 5, y: 3, width: 90, height: 8, level: 2 },
-      { id: "diagram", type: "image", x: 5, y: 13, width: 90, height: 82 }
-    ]},
-    { id: "timeline", name: "Timeline", description: "Horizontal timeline", category: "content", regions: [
-      { id: "title", type: "heading", x: 5, y: 5, width: 90, height: 10, level: 2 },
-      { id: "timeline", type: "timeline", x: 5, y: 20, width: 90, height: 75 }
-    ]},
-    { id: "icon-grid", name: "Icon Grid", description: "Grid of icons with labels", category: "content", regions: [
-      { id: "title", type: "heading", x: 5, y: 5, width: 90, height: 10, level: 2 },
-      { id: "grid", type: "icon-grid", x: 5, y: 25, width: 90, height: 70 }
-    ]},
-    { id: "table", name: "Data Table", description: "Tabular data", category: "data", regions: [
-      { id: "title", type: "heading", x: 5, y: 5, width: 90, height: 10, level: 2 },
-      { id: "table", type: "table", x: 5, y: 18, width: 90, height: 77 }
-    ]},
-    { id: "comparison", name: "Comparison", description: "Side-by-side comparison", category: "content", regions: [
-      { id: "title", type: "heading", x: 5, y: 5, width: 90, height: 10, level: 2 },
-      { id: "left-header", type: "heading", x: 5, y: 18, width: 43, height: 8, level: 3 },
-      { id: "right-header", type: "heading", x: 52, y: 18, width: 43, height: 8, level: 3 },
-      { id: "left-content", type: "bullets", x: 5, y: 28, width: 43, height: 67 },
-      { id: "right-content", type: "bullets", x: 52, y: 28, width: 43, height: 67 }
-    ]},
-    { id: "chart-full", name: "Full Chart", description: "Large chart visualization", category: "data", regions: [
-      { id: "title", type: "heading", x: 5, y: 5, width: 70, height: 10, level: 2 },
-      { id: "chart", type: "chart", x: 5, y: 22, width: 90, height: 73 }
-    ]}
+    { id: "title-cover", name: "Title Cover", description: "Full-bleed cover", category: "title", regions: [] },
+    { id: "section-divider", name: "Section Divider", description: "Bold section break", category: "divider", regions: [] },
+    { id: "title-content", name: "Title + Content", description: "Header with content", category: "content", regions: [] },
+    { id: "two-column", name: "Two Columns", description: "Side-by-side content", category: "content", regions: [] },
+    { id: "image-left", name: "Image Left", description: "Image on left with content", category: "media", regions: [] },
+    { id: "image-right", name: "Image Right", description: "Content with image on right", category: "media", regions: [] },
+    { id: "stats-grid", name: "Statistics Grid", description: "4-cell metrics grid", category: "data", regions: [] },
+    { id: "bullets", name: "Bullet Points", description: "Clean bullet list", category: "content", regions: [] },
+    { id: "quote", name: "Quote", description: "Prominent quote", category: "accent", regions: [] },
+    { id: "architecture", name: "Architecture", description: "Visual diagram", category: "technical", regions: [] },
+    { id: "timeline", name: "Timeline", description: "Horizontal timeline", category: "content", regions: [] },
+    { id: "icon-grid", name: "Icon Grid", description: "Grid of icons with labels", category: "content", regions: [] },
+    { id: "table", name: "Data Table", description: "Tabular data", category: "data", regions: [] },
+    { id: "comparison", name: "Comparison", description: "Side-by-side comparison", category: "content", regions: [] },
+    { id: "chart-full", name: "Full Chart", description: "Large chart visualization", category: "data", regions: [] }
   ]
 };
 
+// Lightweight presentation metadata type (no slides/blackboard)
+interface PresentationMeta {
+  id: string;
+  project_id: string;
+  name: string;
+  initial_prompt: string | null;
+  mode: string;
+  target_slides: number | null;
+  status: string;
+  slide_count: number;
+  cover_image_url: string | null;
+  metadata: Json;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  version: number;
+}
+
+// Full presentation type
 interface Presentation {
   id: string;
   project_id: string;
@@ -143,15 +107,21 @@ export default function Present() {
   const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId || "");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  const [presentations, setPresentations] = useState<Presentation[]>([]);
+  // List of presentation metadata (lightweight)
+  const [presentationsList, setPresentationsList] = useState<PresentationMeta[]>([]);
+  // Full presentation data (loaded on demand)
   const [selectedPresentation, setSelectedPresentation] = useState<Presentation | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingList, setIsLoadingList] = useState(true);
+  const [isLoadingPresentation, setIsLoadingPresentation] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [liveBlackboard, setLiveBlackboard] = useState<BlackboardEntry[]>([]);
   const [generationStatus, setGenerationStatus] = useState<string>("");
   const [selectedSlideIndex, setSelectedSlideIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<"default" | "light" | "vibrant">("default");
+  
+  // Main page tab
+  const [activeTab, setActiveTab] = useState<"list" | "editor">("list");
   
   // Layouts from JSON
   const layouts: Layout[] = presentationLayoutsData.layouts;
@@ -169,40 +139,66 @@ export default function Present() {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const pdfExportRef = useRef<PdfExportRendererRef>(null);
   
-  // Image generator state for slide-level
-  const [isSlideImageGeneratorOpen, setIsSlideImageGeneratorOpen] = useState(false);
+  // Fullscreen edit mode
+  const [showEditControls, setShowEditControls] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
 
-  // Load presentations
+  // Load presentations list (lightweight - metadata only)
   useEffect(() => {
-    const loadPresentations = async () => {
+    const loadPresentationsList = async () => {
       if (!projectId || !isTokenSet) return;
-      setIsLoading(true);
+      setIsLoadingList(true);
       
       try {
-        const { data, error } = await supabase.rpc("get_project_presentations_with_token", {
+        const { data, error } = await supabase.rpc("get_project_presentations_list_with_token", {
           p_project_id: projectId,
           p_token: shareToken,
         });
         
         if (error) throw error;
-        setPresentations((data || []) as Presentation[]);
+        setPresentationsList((data || []) as PresentationMeta[]);
       } catch (err: any) {
-        console.error("Error loading presentations:", err);
+        console.error("Error loading presentations list:", err);
         toast.error("Failed to load presentations");
       } finally {
-        setIsLoading(false);
+        setIsLoadingList(false);
       }
     };
     
-    loadPresentations();
+    loadPresentationsList();
   }, [projectId, shareToken, isTokenSet]);
+
+  // Load full presentation data when selecting one
+  const loadFullPresentation = async (presentationId: string) => {
+    if (!shareToken) return;
+    
+    setIsLoadingPresentation(true);
+    try {
+      const { data, error } = await supabase.rpc("get_presentation_with_token", {
+        p_presentation_id: presentationId,
+        p_token: shareToken,
+      });
+      
+      if (error) throw error;
+      const presentations = data as Presentation[];
+      if (presentations && presentations.length > 0) {
+        setSelectedPresentation(presentations[0]);
+        setSelectedSlideIndex(0);
+        setActiveTab("editor");
+      }
+    } catch (err: any) {
+      console.error("Error loading presentation:", err);
+      toast.error("Failed to load presentation");
+    } finally {
+      setIsLoadingPresentation(false);
+    }
+  };
 
   // Create and generate presentation
   const handleCreatePresentation = async () => {
     if (!projectId || !shareToken) return;
     
     try {
-      // Create the presentation record with imageModel and imageStyle in metadata
       const { data: presentation, error } = await supabase.rpc("insert_presentation_with_token", {
         p_project_id: projectId,
         p_token: shareToken,
@@ -217,8 +213,26 @@ export default function Present() {
       
       const newPresentation = presentation as Presentation;
       setIsCreateOpen(false);
-      setPresentations(prev => [newPresentation, ...prev]);
       setSelectedPresentation(newPresentation);
+      setActiveTab("editor");
+      
+      // Update list with new entry
+      setPresentationsList(prev => [{
+        id: newPresentation.id,
+        project_id: newPresentation.project_id,
+        name: newPresentation.name,
+        initial_prompt: newPresentation.initial_prompt,
+        mode: newPresentation.mode,
+        target_slides: newPresentation.target_slides,
+        status: newPresentation.status,
+        slide_count: 0,
+        cover_image_url: newPresentation.cover_image_url,
+        metadata: newPresentation.metadata,
+        created_at: newPresentation.created_at,
+        updated_at: newPresentation.updated_at,
+        created_by: newPresentation.created_by,
+        version: newPresentation.version,
+      }, ...prev]);
       
       // Start generation
       await generatePresentation(newPresentation);
@@ -286,8 +300,6 @@ export default function Present() {
                   setGenerationStatus(data.message);
                 } else if (event === "blackboard") {
                   setLiveBlackboard(prev => [...prev, data]);
-                } else if (event === "slide") {
-                  // Handle slide generation
                 } else if (event === "complete") {
                   toast.success(`Generated ${data.slideCount} slides`);
                 } else if (event === "error") {
@@ -301,17 +313,16 @@ export default function Present() {
         }
       }
 
-      // Reload presentation
-      const { data: updated } = await supabase.rpc("get_project_presentations_with_token", {
+      // Reload the full presentation
+      await loadFullPresentation(presentation.id);
+      
+      // Update list counts
+      const { data: updatedList } = await supabase.rpc("get_project_presentations_list_with_token", {
         p_project_id: projectId,
         p_token: shareToken,
       });
-      
-      if (updated) {
-        const updatedPresentations = updated as Presentation[];
-        setPresentations(updatedPresentations);
-        const current = updatedPresentations.find(p => p.id === presentation.id);
-        if (current) setSelectedPresentation(current);
+      if (updatedList) {
+        setPresentationsList(updatedList as PresentationMeta[]);
       }
       
     } catch (err: any) {
@@ -333,8 +344,11 @@ export default function Present() {
         p_token: shareToken,
       });
       
-      setPresentations(prev => prev.filter(p => p.id !== id));
-      if (selectedPresentation?.id === id) setSelectedPresentation(null);
+      setPresentationsList(prev => prev.filter(p => p.id !== id));
+      if (selectedPresentation?.id === id) {
+        setSelectedPresentation(null);
+        setActiveTab("list");
+      }
       toast.success("Presentation deleted");
     } catch (err: any) {
       toast.error("Failed to delete");
@@ -386,7 +400,6 @@ export default function Present() {
     // OPTIMISTIC: Update local state immediately
     const updatedPresentation = { ...selectedPresentation, slides: updatedSlides as unknown as Json };
     setSelectedPresentation(updatedPresentation);
-    setPresentations(prev => prev.map(p => p.id === selectedPresentation.id ? updatedPresentation : p));
     
     // Then persist to database in background
     try {
@@ -397,9 +410,7 @@ export default function Present() {
       });
     } catch (err) {
       console.error("Failed to persist slide update:", err);
-      // Revert on error
       setSelectedPresentation(selectedPresentation);
-      setPresentations(prev => prev.map(p => p.id === selectedPresentation.id ? selectedPresentation : p));
       toast.error("Failed to save changes");
     }
   };
@@ -419,7 +430,7 @@ export default function Present() {
   const handleLayoutChange = (layoutId: string) => {
     handleUpdateSlide(selectedSlideIndex, { layoutId });
   };
-  
+
   // Get project context for image generation from blackboard
   const getProjectContext = () => {
     if (!selectedPresentation) return "";
@@ -445,6 +456,7 @@ export default function Present() {
 
   // Get current slide
   const currentSlide = selectedPresentation ? getSlides(selectedPresentation)[selectedSlideIndex] : null;
+  const slides = selectedPresentation ? getSlides(selectedPresentation) : [];
 
   if (tokenMissing) {
     return (
@@ -460,413 +472,498 @@ export default function Present() {
     );
   }
 
-  // Fullscreen rendering - bypasses all page layout
-  if (isFullscreen && selectedPresentation) {
-    const slides = getSlides(selectedPresentation);
-    const currentSlideData = slides[selectedSlideIndex];
+  // Fullscreen mode
+  if (isFullscreen && selectedPresentation && currentSlide) {
     const metadata = selectedPresentation.metadata as any;
     
-    if (currentSlideData) {
-      return (
-        <div 
-          className="fixed inset-0 z-50 bg-background flex flex-col"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setIsFullscreen(false);
-            if (e.key === "ArrowLeft" && selectedSlideIndex > 0) setSelectedSlideIndex(prev => prev - 1);
-            if (e.key === "ArrowRight" && selectedSlideIndex < slides.length - 1) setSelectedSlideIndex(prev => prev + 1);
-          }}
-        >
-          {/* Controls bar */}
-          <div className="shrink-0 flex items-center justify-between p-3 border-b bg-background/95">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedSlideIndex(prev => Math.max(0, prev - 1))}
-                disabled={selectedSlideIndex === 0}
-              >
-                ←
-              </Button>
-              <span className="text-sm font-medium min-w-16 text-center">
-                {selectedSlideIndex + 1} / {slides.length}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedSlideIndex(prev => Math.min(slides.length - 1, prev + 1))}
-                disabled={selectedSlideIndex === slides.length - 1}
-              >
-                →
-              </Button>
-            </div>
+    return (
+      <div 
+        className="fixed inset-0 z-50 bg-background flex flex-col"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setIsFullscreen(false);
+          if (e.key === "ArrowLeft" && selectedSlideIndex > 0) setSelectedSlideIndex(prev => prev - 1);
+          if (e.key === "ArrowRight" && selectedSlideIndex < slides.length - 1) setSelectedSlideIndex(prev => prev + 1);
+        }}
+      >
+        {/* Top controls bar */}
+        <div className="shrink-0 flex items-center justify-between p-3 border-b bg-background">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedSlideIndex(prev => Math.max(0, prev - 1))}
+              disabled={selectedSlideIndex === 0}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium min-w-16 text-center">
+              {selectedSlideIndex + 1} / {slides.length}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedSlideIndex(prev => Math.min(slides.length - 1, prev + 1))}
+              disabled={selectedSlideIndex === slides.length - 1}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showNotes ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setShowNotes(!showNotes)}
+            >
+              <StickyNote className="h-4 w-4 mr-1" />
+              Notes
+            </Button>
+            <Button
+              variant={showEditControls ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setShowEditControls(!showEditControls)}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setIsFullscreen(false)}>
               <Minimize2 className="h-4 w-4" />
             </Button>
           </div>
-          
-          {/* Slide fills remaining space with edit controls */}
-          <div className="flex-1 min-h-0">
-            <SlidePreview
-              slides={slides}
-              layouts={layouts}
-              selectedSlideIndex={selectedSlideIndex}
-              onSlideChange={setSelectedSlideIndex}
-              theme={currentTheme}
-              externalFullscreen={true}
-              onUpdateSlide={handleUpdateSlide}
-              projectContext={getProjectContext()}
-              imageStyle={metadata?.imageStyle}
-              imageModel={metadata?.imageModel}
+        </div>
+        
+        {/* Edit controls bar - toggleable */}
+        {showEditControls && (
+          <div className="shrink-0 flex items-center gap-4 p-3 border-b bg-muted/30">
+            <LayoutSelector 
+              value={currentSlide.layoutId} 
+              onChange={handleLayoutChange} 
+            />
+            <FontScaleControl 
+              value={currentSlide.fontScale || 1} 
+              onChange={handleFontScaleChange} 
             />
           </div>
+        )}
+        
+        {/* Main content area */}
+        <div className="flex-1 min-h-0 flex">
+          {/* Slide */}
+          <div className={`flex-1 min-h-0 ${showNotes ? 'w-2/3' : 'w-full'}`}>
+            <SlideRenderer
+              slide={currentSlide}
+              layouts={layouts}
+              theme={currentTheme}
+              isPreview={false}
+              isFullscreen={true}
+              fontScale={currentSlide.fontScale || 1}
+              className="h-full w-full"
+            />
+          </div>
+          
+          {/* Notes panel */}
+          {showNotes && (
+            <div className="w-1/3 border-l bg-background p-4 overflow-y-auto">
+              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                <StickyNote className="h-4 w-4" />
+                Speaker Notes
+              </h3>
+              <Textarea
+                value={currentSlide.notes || ""}
+                onChange={(e) => handleUpdateSlide(selectedSlideIndex, { notes: e.target.value })}
+                placeholder="Add speaker notes for this slide..."
+                className="min-h-[200px] resize-none"
+              />
+            </div>
+          )}
         </div>
-      );
-    }
+      </div>
+    );
   }
 
   return (
     <div className="flex h-screen bg-background">
       <ProjectSidebar projectId={projectId || ""} isOpen={isSidebarOpen} onOpenChange={setIsSidebarOpen} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 md:p-6 flex-1 overflow-auto">
+        <div className="p-4 md:p-6 flex-1 flex flex-col overflow-hidden">
           <ProjectPageHeader title="Present" onMenuClick={() => setIsSidebarOpen(true)} />
           <AccessLevelBanner projectId={projectId || ""} shareToken={shareToken} />
           
-          <div className="mt-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold font-raleway">Presentations</h2>
-                <p className="text-muted-foreground">Generate AI-powered project presentations</p>
-              </div>
-              
-              <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Presentation
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create Presentation</DialogTitle>
-                    <DialogDescription>
-                      Configure and generate an AI-powered project presentation
-                    </DialogDescription>
-                  </DialogHeader>
-                  
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label>Name</Label>
-                      <Input value={newName} onChange={e => setNewName(e.target.value)} />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label>Mode</Label>
-                      <Select value={newMode} onValueChange={(v: "concise" | "detailed") => setNewMode(v)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="concise">Concise (10-15 slides)</SelectItem>
-                          <SelectItem value="detailed">Detailed (20-30 slides)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label>Target Slides</Label>
-                      <Input 
-                        type="number" 
-                        value={newTargetSlides} 
-                        onChange={e => setNewTargetSlides(parseInt(e.target.value) || 15)} 
-                        min={5} 
-                        max={50}
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label>Custom Focus (optional)</Label>
-                      <Textarea 
-                        value={newPrompt} 
-                        onChange={e => setNewPrompt(e.target.value)}
-                        placeholder="Any specific areas you want to emphasize..."
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        <Palette className="h-4 w-4" />
-                        Image Style
-                      </Label>
-                      <Select value={newImageStyle} onValueChange={setNewImageStyle}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {IMAGE_STYLES.map(style => (
-                            <SelectItem key={style.id} value={style.id}>
-                              {style.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        <Bot className="h-4 w-4" />
-                        Image Generation Model
-                      </Label>
-                      <Select value={newImageModel} onValueChange={setNewImageModel}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {IMAGE_MODELS.map(model => (
-                            <SelectItem key={model.id} value={model.id}>
-                              {model.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-                    <Button onClick={handleCreatePresentation}>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Generate
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-
-            {/* Main Content Layout */}
-            {isFullscreen && selectedPresentation ? (
-              // Fullscreen slide viewer
-              <div className="fixed inset-0 z-50 bg-background">
-                <div className="absolute top-4 right-4 z-10">
-                  <Button variant="outline" size="sm" onClick={() => setIsFullscreen(false)}>
-                    <Minimize2 className="h-4 w-4 mr-1" />
-                    Exit Fullscreen
-                  </Button>
-                </div>
-                <SlidePreview
-                  slides={getSlides(selectedPresentation)}
-                  layouts={layouts}
-                  selectedSlideIndex={selectedSlideIndex}
-                  onSlideChange={setSelectedSlideIndex}
-                  theme={currentTheme}
-                />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                {/* Presentations List */}
-                <Card className="lg:col-span-1">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">Presentations</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-2">
-                    <ScrollArea className="h-[calc(100vh-320px)]">
-                      {isLoading ? (
-                        <div className="flex items-center justify-center py-8">
-                          <Loader2 className="h-6 w-6 animate-spin" />
-                        </div>
-                      ) : presentations.length === 0 ? (
-                        <p className="text-muted-foreground text-center py-8 text-sm">No presentations yet</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {presentations.map(p => (
-                            <div 
-                              key={p.id}
-                              className={`p-3 rounded-lg border cursor-pointer transition-colors ${selectedPresentation?.id === p.id ? "bg-muted border-primary" : "hover:bg-muted/50"}`}
-                              onClick={() => {
-                                setSelectedPresentation(p);
-                                setSelectedSlideIndex(0);
-                              }}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium truncate text-sm">{p.name}</span>
-                                <Badge variant={p.status === "completed" ? "default" : "secondary"} className="text-xs">
-                                  {p.status}
-                                </Badge>
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-1">
-                                {p.mode} • {getSlides(p).length} slides
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-
-                {/* Main Viewer */}
-                <Card className="lg:col-span-3">
-                  {isGenerating ? (
-                    <div className="p-6">
-                      <div className="flex items-center gap-3 mb-4">
-                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                        <span className="font-medium">{generationStatus}</span>
-                      </div>
+          <div className="mt-4 flex-1 flex flex-col overflow-hidden">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "list" | "editor")} className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
+                <TabsList>
+                  <TabsTrigger value="list">Presentations</TabsTrigger>
+                  <TabsTrigger value="editor" disabled={!selectedPresentation}>
+                    {selectedPresentation ? selectedPresentation.name : "Editor"}
+                  </TabsTrigger>
+                </TabsList>
+                
+                {activeTab === "list" && (
+                  <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Plus className="h-4 w-4 mr-2" />
+                        New Presentation
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Create Presentation</DialogTitle>
+                        <DialogDescription>
+                          Configure and generate an AI-powered project presentation
+                        </DialogDescription>
+                      </DialogHeader>
                       
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div>
-                          <h4 className="text-sm font-medium mb-2">Blackboard (Live)</h4>
-                          <ScrollArea className="h-[400px] border rounded-lg p-3 bg-muted/30">
-                            {liveBlackboard.map((entry, i) => (
-                              <div key={entry.id || i} className="mb-3 p-2 bg-background rounded border">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Badge variant="outline" className="text-xs">{entry.source}</Badge>
-                                  <Badge variant="secondary" className="text-xs">{entry.category}</Badge>
-                                </div>
-                                <p className="text-sm">{entry.content}</p>
-                              </div>
-                            ))}
-                          </ScrollArea>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label>Name</Label>
+                          <Input value={newName} onChange={e => setNewName(e.target.value)} />
                         </div>
-                        <div className="flex items-center justify-center bg-muted/20 rounded-lg border-2 border-dashed">
-                          <div className="text-center p-8">
-                            <Sparkles className="h-12 w-12 text-primary/50 mx-auto mb-3 animate-pulse" />
-                            <p className="text-muted-foreground">Generating slides...</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : selectedPresentation ? (
-                    <div className="p-4">
-                      {/* Header */}
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h3 className="text-lg font-semibold font-raleway">{selectedPresentation.name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {getSlides(selectedPresentation).length} slides • {selectedPresentation.mode}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Select value={currentTheme} onValueChange={(v: "default" | "light" | "vibrant") => setCurrentTheme(v)}>
-                            <SelectTrigger className="w-32 h-8 text-xs">
+                        
+                        <div className="space-y-2">
+                          <Label>Mode</Label>
+                          <Select value={newMode} onValueChange={(v: "concise" | "detailed") => setNewMode(v)}>
+                            <SelectTrigger>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="default">Dark Theme</SelectItem>
-                              <SelectItem value="light">Light Theme</SelectItem>
-                              <SelectItem value="vibrant">Vibrant Theme</SelectItem>
+                              <SelectItem value="concise">Concise (10-15 slides)</SelectItem>
+                              <SelectItem value="detailed">Detailed (20-30 slides)</SelectItem>
                             </SelectContent>
                           </Select>
-                          <Button variant="outline" size="sm" onClick={() => setIsFullscreen(true)}>
-                            <Maximize2 className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={handleExportJSON} title="Export JSON">
-                            <Download className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={isExportingPdf} title="Export PDF">
-                            {isExportingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => generatePresentation(selectedPresentation)} title="Regenerate Presentation">
-                            <RefreshCw className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleDelete(selectedPresentation.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Target Slides</Label>
+                          <Input 
+                            type="number" 
+                            value={newTargetSlides} 
+                            onChange={e => setNewTargetSlides(parseInt(e.target.value) || 15)} 
+                            min={5} 
+                            max={50}
+                          />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Custom Focus (optional)</Label>
+                          <Textarea 
+                            value={newPrompt} 
+                            onChange={e => setNewPrompt(e.target.value)}
+                            placeholder="Any specific areas you want to emphasize..."
+                          />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-2">
+                            <Palette className="h-4 w-4" />
+                            Image Style
+                          </Label>
+                          <Select value={newImageStyle} onValueChange={setNewImageStyle}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {IMAGE_STYLES.map(style => (
+                                <SelectItem key={style.id} value={style.id}>
+                                  {style.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-2">
+                            <Bot className="h-4 w-4" />
+                            Image Generation Model
+                          </Label>
+                          <Select value={newImageModel} onValueChange={setNewImageModel}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {IMAGE_MODELS.map(model => (
+                                <SelectItem key={model.id} value={model.id}>
+                                  {model.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                       
-                      <Tabs defaultValue="slides">
-                        <TabsList className="mb-3">
-                          <TabsTrigger value="slides">Slides</TabsTrigger>
-                          <TabsTrigger value="blackboard">Blackboard ({getBlackboard(selectedPresentation).length})</TabsTrigger>
-                        </TabsList>
-                        
-                        <TabsContent value="slides" className="mt-0">
-                          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                            {/* Thumbnails */}
-                            <div className="lg:col-span-1 border rounded-lg bg-muted/20 h-[calc(100vh-320px)] min-h-[400px]">
-                              <SlideThumbnails
-                                slides={getSlides(selectedPresentation)}
-                                layouts={layouts}
-                                selectedSlideIndex={selectedSlideIndex}
-                                onSlideChange={setSelectedSlideIndex}
-                                theme={currentTheme}
-                              />
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                        <Button onClick={handleCreatePresentation}>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Generate
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </div>
+              
+              {/* Presentations List Tab */}
+              <TabsContent value="list" className="flex-1 overflow-hidden mt-0">
+                {isLoadingList ? (
+                  <div className="flex items-center justify-center h-64">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : presentationsList.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-64 text-center">
+                    <Sparkles className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Presentations Yet</h3>
+                    <p className="text-muted-foreground mb-4">Create your first AI-powered presentation</p>
+                    <Button onClick={() => setIsCreateOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Presentation
+                    </Button>
+                  </div>
+                ) : (
+                  <ScrollArea className="h-full">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
+                      {presentationsList.map(p => (
+                        <Card 
+                          key={p.id} 
+                          className="cursor-pointer hover:border-primary/50 transition-colors"
+                          onClick={() => loadFullPresentation(p.id)}
+                        >
+                          <CardHeader className="pb-2">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-base truncate">{p.name}</CardTitle>
+                              <Badge variant={p.status === "completed" ? "default" : "secondary"}>
+                                {p.status}
+                              </Badge>
                             </div>
-                            
-                            {/* Main Preview */}
-                            <div className="lg:col-span-3">
-                              {/* Slide controls */}
-                              {currentSlide && (
-                                <div className="flex items-center gap-4 mb-3 p-2 bg-muted/30 rounded-lg">
-                                  <LayoutSelector 
-                                    value={currentSlide.layoutId} 
-                                    onChange={handleLayoutChange} 
-                                  />
-                                  <FontScaleControl 
-                                    value={currentSlide.fontScale || 1} 
-                                    onChange={handleFontScaleChange} 
-                                  />
-                                </div>
-                              )}
-                              <SlidePreview
-                                slides={getSlides(selectedPresentation)}
-                                layouts={layouts}
-                                selectedSlideIndex={selectedSlideIndex}
-                                onSlideChange={setSelectedSlideIndex}
-                                theme={currentTheme}
-                                fontScale={currentSlide?.fontScale}
-                              />
-                              {/* Notes editor */}
-                              {currentSlide && (
-                                <SlideNotesEditor
-                                  notes={currentSlide.notes || ""}
-                                  onSave={handleSaveNotes}
-                                />
-                              )}
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-sm text-muted-foreground space-y-1">
+                              <p>{p.mode} • {p.slide_count} slides</p>
+                              <p className="text-xs">{new Date(p.created_at).toLocaleDateString()}</p>
+                            </div>
+                            <div className="flex gap-2 mt-3">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="flex-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  loadFullPresentation(p.id);
+                                }}
+                                disabled={isLoadingPresentation}
+                              >
+                                {isLoadingPresentation ? <Loader2 className="h-4 w-4 animate-spin" /> : "Open"}
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(p.id);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </TabsContent>
+              
+              {/* Editor Tab */}
+              <TabsContent value="editor" className="flex-1 overflow-hidden mt-0">
+                {isGenerating ? (
+                  <div className="p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      <span className="font-medium">{generationStatus}</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Blackboard (Live)</h4>
+                        <ScrollArea className="h-[400px] border rounded-lg p-3 bg-muted/30">
+                          {liveBlackboard.map((entry, i) => (
+                            <div key={entry.id || i} className="mb-3 p-2 bg-background rounded border">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant="outline" className="text-xs">{entry.source}</Badge>
+                                <Badge variant="secondary" className="text-xs">{entry.category}</Badge>
+                              </div>
+                              <p className="text-sm">{entry.content}</p>
+                            </div>
+                          ))}
+                        </ScrollArea>
+                      </div>
+                      <div className="flex items-center justify-center bg-muted/20 rounded-lg border-2 border-dashed">
+                        <div className="text-center p-8">
+                          <Sparkles className="h-12 w-12 text-primary/50 mx-auto mb-3 animate-pulse" />
+                          <p className="text-muted-foreground">Generating slides...</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : selectedPresentation ? (
+                  <div className="flex flex-col h-full overflow-hidden">
+                    {/* Header */}
+                    <div className="shrink-0 flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold">{selectedPresentation.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {slides.length} slides • {selectedPresentation.mode}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Select value={currentTheme} onValueChange={(v: "default" | "light" | "vibrant") => setCurrentTheme(v)}>
+                          <SelectTrigger className="w-32 h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">Dark Theme</SelectItem>
+                            <SelectItem value="light">Light Theme</SelectItem>
+                            <SelectItem value="vibrant">Vibrant Theme</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button variant="outline" size="sm" onClick={() => setIsFullscreen(true)}>
+                          <Maximize2 className="h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={handleExportJSON} title="Export JSON">
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={isExportingPdf} title="Export PDF">
+                          {isExportingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => generatePresentation(selectedPresentation)} title="Regenerate">
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {/* Main editor area */}
+                    <div className="flex-1 grid grid-cols-12 gap-4 min-h-0 overflow-hidden">
+                      {/* Thumbnails column */}
+                      <div className="col-span-2 border rounded-lg bg-muted/20 overflow-hidden">
+                        <SlideThumbnails
+                          slides={slides}
+                          layouts={layouts}
+                          selectedSlideIndex={selectedSlideIndex}
+                          onSlideChange={setSelectedSlideIndex}
+                          theme={currentTheme}
+                        />
+                      </div>
+                      
+                      {/* Slide preview column */}
+                      <div className="col-span-7 flex flex-col overflow-hidden">
+                        {/* Slide controls */}
+                        {currentSlide && (
+                          <div className="shrink-0 flex items-center gap-4 mb-3 p-2 bg-muted/30 rounded-lg">
+                            <LayoutSelector 
+                              value={currentSlide.layoutId} 
+                              onChange={handleLayoutChange} 
+                            />
+                            <FontScaleControl 
+                              value={currentSlide.fontScale || 1} 
+                              onChange={handleFontScaleChange} 
+                            />
+                            <div className="flex-1" />
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedSlideIndex(prev => Math.max(0, prev - 1))}
+                                disabled={selectedSlideIndex === 0}
+                              >
+                                <ChevronLeft className="h-4 w-4" />
+                              </Button>
+                              <span className="text-sm min-w-12 text-center">
+                                {selectedSlideIndex + 1}/{slides.length}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedSlideIndex(prev => Math.min(slides.length - 1, prev + 1))}
+                                disabled={selectedSlideIndex === slides.length - 1}
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
-                        </TabsContent>
+                        )}
                         
-                        <TabsContent value="blackboard" className="mt-0">
-                          <ScrollArea className="h-[calc(100vh-400px)]">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {getBlackboard(selectedPresentation).map((entry, i) => (
-                                <div key={entry.id || i} className="p-3 bg-muted rounded-lg">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <Badge variant="outline" className="text-xs">{entry.source}</Badge>
-                                    <Badge 
-                                      variant={entry.category === "insight" ? "default" : entry.category === "analysis" ? "secondary" : "outline"} 
-                                      className="text-xs"
-                                    >
-                                      {entry.category}
-                                    </Badge>
+                        {/* Slide renderer - fill remaining space */}
+                        <div className="flex-1 min-h-0 border rounded-lg overflow-hidden bg-muted/10">
+                          {currentSlide && (
+                            <SlideRenderer
+                              slide={currentSlide}
+                              layouts={layouts}
+                              theme={currentTheme}
+                              isPreview={false}
+                              isFullscreen={false}
+                              fontScale={currentSlide.fontScale || 1}
+                              className="h-full w-full"
+                            />
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Notes/Blackboard column */}
+                      <div className="col-span-3 flex flex-col overflow-hidden">
+                        <Tabs defaultValue="notes" className="flex-1 flex flex-col overflow-hidden">
+                          <TabsList className="shrink-0 w-full">
+                            <TabsTrigger value="notes" className="flex-1">Notes</TabsTrigger>
+                            <TabsTrigger value="blackboard" className="flex-1">Blackboard</TabsTrigger>
+                          </TabsList>
+                          
+                          <TabsContent value="notes" className="flex-1 overflow-hidden mt-2">
+                            {currentSlide && (
+                              <div className="h-full flex flex-col">
+                                <Textarea
+                                  value={currentSlide.notes || ""}
+                                  onChange={(e) => handleUpdateSlide(selectedSlideIndex, { notes: e.target.value })}
+                                  placeholder="Add speaker notes for this slide..."
+                                  className="flex-1 resize-none"
+                                />
+                              </div>
+                            )}
+                          </TabsContent>
+                          
+                          <TabsContent value="blackboard" className="flex-1 overflow-hidden mt-2">
+                            <ScrollArea className="h-full">
+                              <div className="space-y-2 pr-2">
+                                {getBlackboard(selectedPresentation).map((entry, i) => (
+                                  <div key={entry.id || i} className="p-2 bg-muted rounded-lg">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <Badge variant="outline" className="text-xs">{entry.source}</Badge>
+                                      <Badge variant="secondary" className="text-xs">{entry.category}</Badge>
+                                    </div>
+                                    <p className="text-xs">{entry.content}</p>
                                   </div>
-                                  <p className="text-sm">{entry.content}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        </TabsContent>
-                      </Tabs>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          </TabsContent>
+                        </Tabs>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="p-6 flex flex-col items-center justify-center h-[500px] text-center">
-                      <Sparkles className="h-12 w-12 text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-semibold mb-2 font-raleway">No Presentation Selected</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Select an existing presentation or create a new one
-                      </p>
-                      <Button onClick={() => setIsCreateOpen(true)}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Presentation
-                      </Button>
-                    </div>
-                  )}
-                </Card>
-              </div>
-            )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center">
+                    <Sparkles className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Presentation Selected</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Select a presentation from the list or create a new one
+                    </p>
+                    <Button onClick={() => setActiveTab("list")}>
+                      View Presentations
+                    </Button>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </div>

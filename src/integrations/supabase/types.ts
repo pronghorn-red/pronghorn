@@ -4515,6 +4515,32 @@ export type Database = {
           path: string
         }[]
       }
+      get_presentation_with_token: {
+        Args: { p_presentation_id: string; p_token?: string }
+        Returns: {
+          blackboard: Json
+          cover_image_url: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          initial_prompt: string | null
+          metadata: Json | null
+          mode: string
+          name: string
+          project_id: string
+          slides: Json
+          status: string
+          target_slides: number | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_presentations"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_prime_repo_with_token: {
         Args: { p_project_id: string; p_token: string }
         Returns: {
@@ -4616,6 +4642,25 @@ export type Database = {
           tags: string[]
           thinking_budget: number
           thinking_enabled: boolean
+        }[]
+      }
+      get_project_presentations_list_with_token: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: {
+          cover_image_url: string
+          created_at: string
+          created_by: string
+          id: string
+          initial_prompt: string
+          metadata: Json
+          mode: string
+          name: string
+          project_id: string
+          slide_count: number
+          status: string
+          target_slides: number
+          updated_at: string
+          version: number
         }[]
       }
       get_project_presentations_with_token: {
