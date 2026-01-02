@@ -169,17 +169,31 @@ export function SlideRenderer({
   const mainItems = mainContent?.data?.items;
 
   const getImageUrl = () => {
-    const url = imageContent?.data?.url || 
-           imageContent?.data?.imageUrl || 
-           getContentByRegion("diagram")?.data?.url ||
-           imageUrl;
+    // Prioritize slide-level imageUrl (user-set images take priority)
+    if (imageUrl && typeof imageUrl === 'string' && 
+        (imageUrl.startsWith('data:') || imageUrl.startsWith('http') || imageUrl.startsWith('/'))) {
+      return imageUrl;
+    }
     
-    if (url && (url.startsWith('data:') || url.startsWith('http') || url.startsWith('/'))) {
+    // Then check content-level URLs
+    let url = imageContent?.data?.url || 
+           imageContent?.data?.imageUrl || 
+           getContentByRegion("diagram")?.data?.url;
+    
+    // Handle malformed URL objects (e.g., { _type: "String", value: "..." })
+    if (url && typeof url === 'object' && (url as any).value) {
+      url = (url as any).value;
+    }
+    
+    if (url && typeof url === 'string' && 
+        (url.startsWith('data:') || url.startsWith('http') || url.startsWith('/'))) {
       return url;
     }
-    if (url && (url.includes('placeholder') || url.endsWith('.svg') && !url.startsWith('http'))) {
+    
+    if (url && typeof url === 'string' && (url.includes('placeholder') || url.endsWith('.svg') && !url.startsWith('http'))) {
       return null;
     }
+    
     return url;
   };
 
