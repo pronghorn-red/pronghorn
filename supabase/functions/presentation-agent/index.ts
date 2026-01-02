@@ -323,7 +323,7 @@ serve(async (req) => {
           controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_specifications", message: "Reading specifications..." })));
           
           try {
-            const { data: specs, error } = await supabase.rpc("get_latest_specifications_with_token", {
+            const { data: specs, error } = await supabase.rpc("get_project_specifications_with_token", {
               p_project_id: projectId,
               p_token: shareToken,
             });
@@ -473,7 +473,7 @@ serve(async (req) => {
           controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_connections", message: "Reading external connections..." })));
           
           try {
-            const { data: connections, error } = await supabase.rpc("get_database_connections_with_token", {
+            const { data: connections, error } = await supabase.rpc("get_db_connections_with_token", {
               p_project_id: projectId,
               p_token: shareToken,
             });
@@ -512,7 +512,7 @@ serve(async (req) => {
           controller.enqueue(encoder.encode(sseMessage("status", { phase: "read_deployments", message: "Reading deployments..." })));
           
           try {
-            const { data: deployments, error } = await supabase.rpc("get_project_deployments_with_token", {
+            const { data: deployments, error } = await supabase.rpc("get_deployments_with_token", {
               p_project_id: projectId,
               p_token: shareToken,
             });
