@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, RefreshCw, Trash2, Download, Loader2, Sparkles, Maximize2, Minimize2, FileDown, Bot, Palette, Pencil, ChevronLeft, ChevronRight, StickyNote, Save, PanelRightClose, PanelRight } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Download, Loader2, Sparkles, Maximize2, Minimize2, FileDown, Bot, Palette, Pencil, ChevronLeft, ChevronRight, StickyNote, Save, PanelRightClose, PanelRight, Code } from "lucide-react";
 import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
 import { SlideThumbnails } from "@/components/present/SlideThumbnails";
@@ -125,8 +125,14 @@ export default function Present() {
   // Main page tabs: list, editor, blackboard
   const [activeTab, setActiveTab] = useState<"list" | "editor" | "blackboard">("list");
   
-  // Right panel toggle for notes
+  // Right panel toggle for notes and mode (notes vs json)
   const [showNotesPanel, setShowNotesPanel] = useState(true);
+  const [notesPanelMode, setNotesPanelMode] = useState<"notes" | "json">("notes");
+  const [jsonEditValue, setJsonEditValue] = useState("");
+  const [jsonError, setJsonError] = useState<string | null>(null);
+  
+  // Layout recast loading state
+  const [isRecasting, setIsRecasting] = useState(false);
   
   // Layouts from JSON
   const layouts: Layout[] = presentationLayoutsData.layouts;
@@ -184,6 +190,14 @@ export default function Present() {
     }
   }, [selectedPresentation]);
 
+  // Update JSON editor when slide changes
+  useEffect(() => {
+    if (workingSlides && workingSlides[selectedSlideIndex]) {
+      setJsonEditValue(JSON.stringify(workingSlides[selectedSlideIndex], null, 2));
+      setJsonError(null);
+    }
+  }, [selectedSlideIndex, workingSlides]);
+
   // Load full presentation data when selecting one
   const loadFullPresentation = async (presentationId: string) => {
     if (!shareToken) return;
@@ -210,19 +224,23 @@ export default function Present() {
     }
   };
 
-  // Create and generate presentation
+  // Create and generate presentation - FIXED: removed p_metadata parameter
   const handleCreatePresentation = async () => {
     if (!projectId || !shareToken) return;
     
     try {
+      // Store image settings in initial_prompt as JSON suffix
+      const promptWithSettings = newPrompt 
+        ? `${newPrompt}\n\n[Settings: imageModel=${newImageModel}, imageStyle=${newImageStyle}]`
+        : `[Settings: imageModel=${newImageModel}, imageStyle=${newImageStyle}]`;
+      
       const { data: presentation, error } = await supabase.rpc("insert_presentation_with_token", {
         p_project_id: projectId,
         p_token: shareToken,
         p_name: newName,
-        p_initial_prompt: newPrompt || null,
+        p_initial_prompt: promptWithSettings,
         p_mode: newMode,
         p_target_slides: newTargetSlides,
-        p_metadata: { imageModel: newImageModel, imageStyle: newImageStyle },
       });
       
       if (error) throw error;
@@ -283,8 +301,8 @@ export default function Present() {
             mode: presentation.mode,
             targetSlides: presentation.target_slides,
             initialPrompt: presentation.initial_prompt,
-            imageModel: (presentation.metadata as any)?.imageModel || newImageModel,
-            imageStyle: (presentation.metadata as any)?.imageStyle || newImageStyle,
+            imageModel: newImageModel,
+            imageStyle: newImageStyle,
           }),
         }
       );
@@ -415,6 +433,11 @@ export default function Present() {
     const updatedSlides = workingSlides.map((s, i) => i === slideIndex ? { ...s, ...updates } : s);
     setWorkingSlides(updatedSlides);
     setHasUnsavedChanges(true);
+    
+    // Update JSON editor if in JSON mode
+    if (notesPanelMode === "json") {
+      setJsonEditValue(JSON.stringify(updatedSlides[slideIndex], null, 2));
+    }
   };
 
   // Save all changes to database
@@ -443,9 +466,59 @@ export default function Present() {
     handleUpdateSlide(selectedSlideIndex, { fontScale });
   };
 
-  // Handle layout change
-  const handleLayoutChange = (layoutId: string) => {
-    handleUpdateSlide(selectedSlideIndex, { layoutId });
+  // Handle layout change with AI recasting
+  const handleLayoutChange = async (layoutId: string) => {
+    if (!workingSlides || !workingSlides[selectedSlideIndex]) return;
+    
+    const currentSlide = workingSlides[selectedSlideIndex];
+    if (currentSlide.layoutId === layoutId) return;
+    
+    setIsRecasting(true);
+    try {
+      const response = await fetch(
+        "https://obkzdksfayygnrzdqoam.supabase.co/functions/v1/recast-slide-layout",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slide: currentSlide,
+            targetLayoutId: layoutId,
+            projectContext: selectedPresentation?.name,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to recast layout");
+      }
+
+      const result = await response.json();
+      if (result.success && result.recastSlide) {
+        handleUpdateSlide(selectedSlideIndex, result.recastSlide);
+        toast.success("Layout converted");
+      } else {
+        // Fallback: just change layout without content adaptation
+        handleUpdateSlide(selectedSlideIndex, { layoutId });
+      }
+    } catch (err) {
+      console.error("Layout recast error:", err);
+      // Fallback: just change layout
+      handleUpdateSlide(selectedSlideIndex, { layoutId });
+    } finally {
+      setIsRecasting(false);
+    }
+  };
+
+  // Handle JSON editor save
+  const handleJsonSave = () => {
+    try {
+      const parsed = JSON.parse(jsonEditValue);
+      handleUpdateSlide(selectedSlideIndex, parsed);
+      setJsonError(null);
+      toast.success("Slide updated from JSON");
+    } catch (e) {
+      setJsonError("Invalid JSON");
+    }
   };
 
   // Get project context for image generation from blackboard
@@ -558,13 +631,14 @@ export default function Present() {
               value={currentSlide.fontScale || 1} 
               onChange={handleFontScaleChange} 
             />
+            {isRecasting && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
           </div>
         )}
         
         {/* Main content area */}
         <div className="flex-1 min-h-0 flex">
           {/* Slide - 16:9 container */}
-          <div className={`flex-1 min-h-0 flex items-center justify-center p-4 ${showNotes ? '' : ''}`}>
+          <div className="flex-1 min-h-0 flex items-center justify-center p-4">
             <div className="w-full h-full max-w-[calc((100vh-120px)*16/9)] aspect-video">
               <SlideRenderer
                 slide={currentSlide}
@@ -873,7 +947,7 @@ export default function Present() {
                           variant="outline"
                           size="sm"
                           onClick={() => setShowNotesPanel(!showNotesPanel)}
-                          title={showNotesPanel ? "Hide notes" : "Show notes"}
+                          title={showNotesPanel ? "Hide panel" : "Show panel"}
                         >
                           {showNotesPanel ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
                         </Button>
@@ -902,6 +976,7 @@ export default function Present() {
                               value={currentSlide.layoutId} 
                               onChange={handleLayoutChange} 
                             />
+                            {isRecasting && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
                             <FontScaleControl 
                               value={currentSlide.fontScale || 1} 
                               onChange={handleFontScaleChange} 
@@ -949,19 +1024,62 @@ export default function Present() {
                         </div>
                       </div>
                       
-                      {/* Notes panel - toggleable */}
+                      {/* Notes/JSON panel - toggleable */}
                       {showNotesPanel && currentSlide && (
-                        <div className="w-72 shrink-0 flex flex-col overflow-hidden border rounded-lg bg-muted/20 p-3">
-                          <h4 className="text-sm font-medium mb-2 flex items-center gap-2 shrink-0">
-                            <StickyNote className="h-4 w-4" />
-                            Speaker Notes
-                          </h4>
-                          <Textarea
-                            value={currentSlide.notes || ""}
-                            onChange={(e) => handleUpdateSlide(selectedSlideIndex, { notes: e.target.value })}
-                            placeholder="Add speaker notes..."
-                            className="flex-1 resize-none text-sm"
-                          />
+                        <div className="w-72 shrink-0 flex flex-col overflow-hidden border rounded-lg bg-muted/20">
+                          {/* Panel mode tabs */}
+                          <div className="flex border-b">
+                            <button
+                              onClick={() => setNotesPanelMode("notes")}
+                              className={`flex-1 px-3 py-2 text-xs font-medium flex items-center justify-center gap-1 ${
+                                notesPanelMode === "notes" ? "bg-background border-b-2 border-primary" : "text-muted-foreground"
+                              }`}
+                            >
+                              <StickyNote className="h-3 w-3" />
+                              Notes
+                            </button>
+                            <button
+                              onClick={() => setNotesPanelMode("json")}
+                              className={`flex-1 px-3 py-2 text-xs font-medium flex items-center justify-center gap-1 ${
+                                notesPanelMode === "json" ? "bg-background border-b-2 border-primary" : "text-muted-foreground"
+                              }`}
+                            >
+                              <Code className="h-3 w-3" />
+                              JSON
+                            </button>
+                          </div>
+                          
+                          <div className="flex-1 p-3 overflow-hidden flex flex-col">
+                            {notesPanelMode === "notes" ? (
+                              <>
+                                <h4 className="text-sm font-medium mb-2 shrink-0">Speaker Notes</h4>
+                                <Textarea
+                                  value={currentSlide.notes || ""}
+                                  onChange={(e) => handleUpdateSlide(selectedSlideIndex, { notes: e.target.value })}
+                                  placeholder="Add speaker notes..."
+                                  className="flex-1 resize-none text-sm"
+                                />
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex items-center justify-between mb-2 shrink-0">
+                                  <h4 className="text-sm font-medium">Slide JSON</h4>
+                                  <Button size="sm" variant="outline" onClick={handleJsonSave} className="h-6 text-xs">
+                                    Apply
+                                  </Button>
+                                </div>
+                                {jsonError && (
+                                  <p className="text-xs text-destructive mb-2">{jsonError}</p>
+                                )}
+                                <Textarea
+                                  value={jsonEditValue}
+                                  onChange={(e) => setJsonEditValue(e.target.value)}
+                                  className="flex-1 resize-none font-mono text-xs"
+                                  placeholder="Slide JSON..."
+                                />
+                              </>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

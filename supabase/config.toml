@@ -158,3 +158,6 @@ verify_jwt = false
 
 [functions.presentation-agent]
 verify_jwt = false
+
+[functions.recast-slide-layout]
+verify_jwt = false
