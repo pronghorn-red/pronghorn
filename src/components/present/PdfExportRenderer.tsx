@@ -150,15 +150,20 @@ export const PdfExportRenderer = forwardRef<PdfExportRendererRef, PdfExportRende
           height: 1080,
           zIndex: -1,
           pointerEvents: "none",
+          backgroundColor: theme === "light" ? "#ffffff" : "#1a1f2e",
         }}
       >
-        <SlideRenderer
-          slide={currentSlide}
-          layouts={layouts}
-          theme={theme}
-          isPreview={false}
-          fontScale={currentSlide.fontScale || 1}
-        />
+        <div style={{ width: 1920, height: 1080 }}>
+          <SlideRenderer
+            slide={currentSlide}
+            layouts={layouts}
+            theme={theme}
+            isPreview={false}
+            isFullscreen={true}
+            fontScale={currentSlide.fontScale || 1}
+            className="w-full h-full"
+          />
+        </div>
       </div>
     );
   }

@@ -30,15 +30,13 @@ const LAYOUTS = [
 
 export function LayoutSelector({ value, onChange }: LayoutSelectorProps) {
   const currentLayout = LAYOUTS.find(l => l.id === value);
-  const CurrentIcon = currentLayout?.icon || Layout;
 
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="w-[180px] h-8 text-xs">
-        <div className="flex items-center gap-2">
-          <CurrentIcon className="h-3.5 w-3.5" />
-          <SelectValue placeholder="Select layout" />
-        </div>
+        <SelectValue placeholder="Select layout">
+          {currentLayout?.name || "Select layout"}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {LAYOUTS.map((layout) => {
@@ -47,7 +45,7 @@ export function LayoutSelector({ value, onChange }: LayoutSelectorProps) {
             <SelectItem key={layout.id} value={layout.id}>
               <div className="flex items-center gap-2">
                 <Icon className="h-3.5 w-3.5" />
-                {layout.name}
+                <span>{layout.name}</span>
               </div>
             </SelectItem>
           );

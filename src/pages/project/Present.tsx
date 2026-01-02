@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { ProjectSidebar } from "@/components/layout/ProjectSidebar";
 import { ProjectPageHeader } from "@/components/layout/ProjectPageHeader";
-import { AccessLevelBanner } from "@/components/project/AccessLevelBanner";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useShareToken } from "@/hooks/useShareToken";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,11 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, RefreshCw, Trash2, Download, Loader2, Sparkles, Maximize2, Minimize2, FileDown, Bot, Palette, Pencil, ChevronLeft, ChevronRight, StickyNote } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Download, Loader2, Sparkles, Maximize2, Minimize2, FileDown, Bot, Palette, Pencil, ChevronLeft, ChevronRight, StickyNote, Save, PanelRightClose, PanelRight } from "lucide-react";
 import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
 import { SlideThumbnails } from "@/components/present/SlideThumbnails";
-import { SlideNotesEditor } from "@/components/present/SlideNotesEditor";
 import { FontScaleControl } from "@/components/present/FontScaleControl";
 import { LayoutSelector } from "@/components/present/LayoutSelector";
 import { SlideRenderer } from "@/components/present/SlideRenderer";
@@ -111,6 +109,10 @@ export default function Present() {
   const [presentationsList, setPresentationsList] = useState<PresentationMeta[]>([]);
   // Full presentation data (loaded on demand)
   const [selectedPresentation, setSelectedPresentation] = useState<Presentation | null>(null);
+  // Local working copy for edits (only saved on explicit save)
+  const [workingSlides, setWorkingSlides] = useState<any[] | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [isLoadingPresentation, setIsLoadingPresentation] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -120,8 +122,11 @@ export default function Present() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<"default" | "light" | "vibrant">("default");
   
-  // Main page tab
-  const [activeTab, setActiveTab] = useState<"list" | "editor">("list");
+  // Main page tabs: list, editor, blackboard
+  const [activeTab, setActiveTab] = useState<"list" | "editor" | "blackboard">("list");
+  
+  // Right panel toggle for notes
+  const [showNotesPanel, setShowNotesPanel] = useState(true);
   
   // Layouts from JSON
   const layouts: Layout[] = presentationLayoutsData.layouts;
@@ -137,6 +142,7 @@ export default function Present() {
   
   // PDF export state
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const pdfExportRef = useRef<PdfExportRendererRef>(null);
   
   // Fullscreen edit mode
@@ -167,6 +173,16 @@ export default function Present() {
     
     loadPresentationsList();
   }, [projectId, shareToken, isTokenSet]);
+
+  // Sync workingSlides when selectedPresentation changes
+  useEffect(() => {
+    if (selectedPresentation) {
+      setWorkingSlides(getSlides(selectedPresentation));
+      setHasUnsavedChanges(false);
+    } else {
+      setWorkingSlides(null);
+    }
+  }, [selectedPresentation]);
 
   // Load full presentation data when selecting one
   const loadFullPresentation = async (presentationId: string) => {
@@ -347,6 +363,7 @@ export default function Present() {
       setPresentationsList(prev => prev.filter(p => p.id !== id));
       if (selectedPresentation?.id === id) {
         setSelectedPresentation(null);
+        setWorkingSlides(null);
         setActiveTab("list");
       }
       toast.success("Presentation deleted");
@@ -358,7 +375,8 @@ export default function Present() {
   // Export as JSON
   const handleExportJSON = () => {
     if (!selectedPresentation) return;
-    const blob = new Blob([JSON.stringify(selectedPresentation, null, 2)], { type: "application/json" });
+    const exportData = { ...selectedPresentation, slides: workingSlides };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -369,9 +387,8 @@ export default function Present() {
 
   // Export as PDF
   const handleExportPDF = () => {
-    if (!selectedPresentation) return;
-    const slides = getSlides(selectedPresentation);
-    if (slides.length === 0) {
+    if (!selectedPresentation || !workingSlides) return;
+    if (workingSlides.length === 0) {
       toast.error("No slides to export");
       return;
     }
@@ -382,6 +399,7 @@ export default function Present() {
 
   const handlePdfExportComplete = () => {
     setIsExportingPdf(false);
+    toast.success("PDF exported successfully");
   };
 
   const handlePdfExportError = (error: Error) => {
@@ -390,35 +408,34 @@ export default function Present() {
     setIsExportingPdf(false);
   };
 
-  // Update slide data - OPTIMISTIC updates
-  const handleUpdateSlide = async (slideIndex: number, updates: Partial<any>) => {
-    if (!selectedPresentation || !shareToken) return;
+  // Update slide data - LOCAL only, no DB save
+  const handleUpdateSlide = (slideIndex: number, updates: Partial<any>) => {
+    if (!workingSlides) return;
     
-    const slides = getSlides(selectedPresentation);
-    const updatedSlides = slides.map((s, i) => i === slideIndex ? { ...s, ...updates } : s);
+    const updatedSlides = workingSlides.map((s, i) => i === slideIndex ? { ...s, ...updates } : s);
+    setWorkingSlides(updatedSlides);
+    setHasUnsavedChanges(true);
+  };
+
+  // Save all changes to database
+  const handleSaveChanges = async () => {
+    if (!selectedPresentation || !shareToken || !workingSlides) return;
     
-    // OPTIMISTIC: Update local state immediately
-    const updatedPresentation = { ...selectedPresentation, slides: updatedSlides as unknown as Json };
-    setSelectedPresentation(updatedPresentation);
-    
-    // Then persist to database in background
+    setIsSaving(true);
     try {
       await supabase.rpc("update_presentation_with_token", {
         p_presentation_id: selectedPresentation.id,
         p_token: shareToken,
-        p_slides: updatedSlides,
+        p_slides: workingSlides,
       });
+      setHasUnsavedChanges(false);
+      toast.success("Changes saved");
     } catch (err) {
-      console.error("Failed to persist slide update:", err);
-      setSelectedPresentation(selectedPresentation);
+      console.error("Failed to save:", err);
       toast.error("Failed to save changes");
+    } finally {
+      setIsSaving(false);
     }
-  };
-
-  // Handle notes save
-  const handleSaveNotes = (notes: string) => {
-    handleUpdateSlide(selectedSlideIndex, { notes });
-    toast.success("Notes saved");
   };
 
   // Handle font scale change
@@ -454,9 +471,9 @@ export default function Present() {
     return [];
   };
 
-  // Get current slide
-  const currentSlide = selectedPresentation ? getSlides(selectedPresentation)[selectedSlideIndex] : null;
-  const slides = selectedPresentation ? getSlides(selectedPresentation) : [];
+  // Get current slide from working copy
+  const slides = workingSlides || [];
+  const currentSlide = slides[selectedSlideIndex] || null;
 
   if (tokenMissing) {
     return (
@@ -474,8 +491,6 @@ export default function Present() {
 
   // Fullscreen mode
   if (isFullscreen && selectedPresentation && currentSlide) {
-    const metadata = selectedPresentation.metadata as any;
-    
     return (
       <div 
         className="fixed inset-0 z-50 bg-background flex flex-col"
@@ -548,23 +563,25 @@ export default function Present() {
         
         {/* Main content area */}
         <div className="flex-1 min-h-0 flex">
-          {/* Slide */}
-          <div className={`flex-1 min-h-0 ${showNotes ? 'w-2/3' : 'w-full'}`}>
-            <SlideRenderer
-              slide={currentSlide}
-              layouts={layouts}
-              theme={currentTheme}
-              isPreview={false}
-              isFullscreen={true}
-              fontScale={currentSlide.fontScale || 1}
-              className="h-full w-full"
-            />
+          {/* Slide - 16:9 container */}
+          <div className={`flex-1 min-h-0 flex items-center justify-center p-4 ${showNotes ? '' : ''}`}>
+            <div className="w-full h-full max-w-[calc((100vh-120px)*16/9)] aspect-video">
+              <SlideRenderer
+                slide={currentSlide}
+                layouts={layouts}
+                theme={currentTheme}
+                isPreview={false}
+                isFullscreen={true}
+                fontScale={currentSlide.fontScale || 1}
+                className="w-full h-full"
+              />
+            </div>
           </div>
           
           {/* Notes panel */}
           {showNotes && (
-            <div className="w-1/3 border-l bg-background p-4 overflow-y-auto">
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <div className="w-80 border-l bg-background p-4 flex flex-col overflow-hidden">
+              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 shrink-0">
                 <StickyNote className="h-4 w-4" />
                 Speaker Notes
               </h3>
@@ -572,7 +589,7 @@ export default function Present() {
                 value={currentSlide.notes || ""}
                 onChange={(e) => handleUpdateSlide(selectedSlideIndex, { notes: e.target.value })}
                 placeholder="Add speaker notes for this slide..."
-                className="min-h-[200px] resize-none"
+                className="flex-1 resize-none"
               />
             </div>
           )}
@@ -587,15 +604,17 @@ export default function Present() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="p-4 md:p-6 flex-1 flex flex-col overflow-hidden">
           <ProjectPageHeader title="Present" onMenuClick={() => setIsSidebarOpen(true)} />
-          <AccessLevelBanner projectId={projectId || ""} shareToken={shareToken} />
           
           <div className="mt-4 flex-1 flex flex-col overflow-hidden">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "list" | "editor")} className="flex-1 flex flex-col overflow-hidden">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "list" | "editor" | "blackboard")} className="flex-1 flex flex-col overflow-hidden">
               <div className="flex items-center justify-between mb-4">
                 <TabsList>
                   <TabsTrigger value="list">Presentations</TabsTrigger>
                   <TabsTrigger value="editor" disabled={!selectedPresentation}>
                     {selectedPresentation ? selectedPresentation.name : "Editor"}
+                  </TabsTrigger>
+                  <TabsTrigger value="blackboard" disabled={!selectedPresentation}>
+                    Blackboard
                   </TabsTrigger>
                 </TabsList>
                 
@@ -807,7 +826,7 @@ export default function Present() {
                       </div>
                     </div>
                   </div>
-                ) : selectedPresentation ? (
+                ) : selectedPresentation && slides.length > 0 ? (
                   <div className="flex flex-col h-full overflow-hidden">
                     {/* Header */}
                     <div className="shrink-0 flex items-center justify-between mb-4">
@@ -815,9 +834,19 @@ export default function Present() {
                         <h3 className="text-lg font-semibold">{selectedPresentation.name}</h3>
                         <p className="text-sm text-muted-foreground">
                           {slides.length} slides • {selectedPresentation.mode}
+                          {hasUnsavedChanges && <span className="text-amber-500 ml-2">• Unsaved changes</span>}
                         </p>
                       </div>
                       <div className="flex gap-2">
+                        <Button 
+                          variant={hasUnsavedChanges ? "default" : "outline"} 
+                          size="sm" 
+                          onClick={handleSaveChanges}
+                          disabled={!hasUnsavedChanges || isSaving}
+                        >
+                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                          Save
+                        </Button>
                         <Select value={currentTheme} onValueChange={(v: "default" | "light" | "vibrant") => setCurrentTheme(v)}>
                           <SelectTrigger className="w-32 h-8 text-xs">
                             <SelectValue />
@@ -840,13 +869,21 @@ export default function Present() {
                         <Button variant="outline" size="sm" onClick={() => generatePresentation(selectedPresentation)} title="Regenerate">
                           <RefreshCw className="h-4 w-4" />
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowNotesPanel(!showNotesPanel)}
+                          title={showNotesPanel ? "Hide notes" : "Show notes"}
+                        >
+                          {showNotesPanel ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
+                        </Button>
                       </div>
                     </div>
                     
                     {/* Main editor area */}
-                    <div className="flex-1 grid grid-cols-12 gap-4 min-h-0 overflow-hidden">
+                    <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
                       {/* Thumbnails column */}
-                      <div className="col-span-2 border rounded-lg bg-muted/20 overflow-hidden">
+                      <div className="w-48 shrink-0 border rounded-lg bg-muted/20 overflow-hidden">
                         <SlideThumbnails
                           slides={slides}
                           layouts={layouts}
@@ -857,7 +894,7 @@ export default function Present() {
                       </div>
                       
                       {/* Slide preview column */}
-                      <div className="col-span-7 flex flex-col overflow-hidden">
+                      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
                         {/* Slide controls */}
                         {currentSlide && (
                           <div className="shrink-0 flex items-center gap-4 mb-3 p-2 bg-muted/30 rounded-lg">
@@ -894,60 +931,39 @@ export default function Present() {
                           </div>
                         )}
                         
-                        {/* Slide renderer - fill remaining space */}
-                        <div className="flex-1 min-h-0 border rounded-lg overflow-hidden bg-muted/10">
+                        {/* Slide renderer - 16:9 aspect ratio container */}
+                        <div className="flex-1 min-h-0 flex items-center justify-center border rounded-lg overflow-hidden bg-muted/10 p-4">
                           {currentSlide && (
-                            <SlideRenderer
-                              slide={currentSlide}
-                              layouts={layouts}
-                              theme={currentTheme}
-                              isPreview={false}
-                              isFullscreen={false}
-                              fontScale={currentSlide.fontScale || 1}
-                              className="h-full w-full"
-                            />
+                            <div className="w-full h-full max-h-full" style={{ maxWidth: 'calc((100%) * 16 / 9)', aspectRatio: '16/9' }}>
+                              <SlideRenderer
+                                slide={currentSlide}
+                                layouts={layouts}
+                                theme={currentTheme}
+                                isPreview={false}
+                                isFullscreen={false}
+                                fontScale={currentSlide.fontScale || 1}
+                                className="w-full h-full"
+                              />
+                            </div>
                           )}
                         </div>
                       </div>
                       
-                      {/* Notes/Blackboard column */}
-                      <div className="col-span-3 flex flex-col overflow-hidden">
-                        <Tabs defaultValue="notes" className="flex-1 flex flex-col overflow-hidden">
-                          <TabsList className="shrink-0 w-full">
-                            <TabsTrigger value="notes" className="flex-1">Notes</TabsTrigger>
-                            <TabsTrigger value="blackboard" className="flex-1">Blackboard</TabsTrigger>
-                          </TabsList>
-                          
-                          <TabsContent value="notes" className="flex-1 overflow-hidden mt-2">
-                            {currentSlide && (
-                              <div className="h-full flex flex-col">
-                                <Textarea
-                                  value={currentSlide.notes || ""}
-                                  onChange={(e) => handleUpdateSlide(selectedSlideIndex, { notes: e.target.value })}
-                                  placeholder="Add speaker notes for this slide..."
-                                  className="flex-1 resize-none"
-                                />
-                              </div>
-                            )}
-                          </TabsContent>
-                          
-                          <TabsContent value="blackboard" className="flex-1 overflow-hidden mt-2">
-                            <ScrollArea className="h-full">
-                              <div className="space-y-2 pr-2">
-                                {getBlackboard(selectedPresentation).map((entry, i) => (
-                                  <div key={entry.id || i} className="p-2 bg-muted rounded-lg">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <Badge variant="outline" className="text-xs">{entry.source}</Badge>
-                                      <Badge variant="secondary" className="text-xs">{entry.category}</Badge>
-                                    </div>
-                                    <p className="text-xs">{entry.content}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </ScrollArea>
-                          </TabsContent>
-                        </Tabs>
-                      </div>
+                      {/* Notes panel - toggleable */}
+                      {showNotesPanel && currentSlide && (
+                        <div className="w-72 shrink-0 flex flex-col overflow-hidden border rounded-lg bg-muted/20 p-3">
+                          <h4 className="text-sm font-medium mb-2 flex items-center gap-2 shrink-0">
+                            <StickyNote className="h-4 w-4" />
+                            Speaker Notes
+                          </h4>
+                          <Textarea
+                            value={currentSlide.notes || ""}
+                            onChange={(e) => handleUpdateSlide(selectedSlideIndex, { notes: e.target.value })}
+                            placeholder="Add speaker notes..."
+                            className="flex-1 resize-none text-sm"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -963,16 +979,39 @@ export default function Present() {
                   </div>
                 )}
               </TabsContent>
+
+              {/* Blackboard Tab */}
+              <TabsContent value="blackboard" className="flex-1 overflow-hidden mt-0">
+                {selectedPresentation ? (
+                  <ScrollArea className="h-full">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pb-4">
+                      {getBlackboard(selectedPresentation).map((entry, i) => (
+                        <Card key={entry.id || i} className="p-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="outline" className="text-xs">{entry.source}</Badge>
+                            <Badge variant="secondary" className="text-xs">{entry.category}</Badge>
+                          </div>
+                          <p className="text-sm">{entry.content}</p>
+                        </Card>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center">
+                    <p className="text-muted-foreground">Select a presentation to view its blackboard</p>
+                  </div>
+                )}
+              </TabsContent>
             </Tabs>
           </div>
         </div>
       </div>
 
       {/* PDF Export Renderer - offscreen */}
-      {selectedPresentation && isExportingPdf && (
+      {selectedPresentation && isExportingPdf && workingSlides && (
         <PdfExportRenderer
           ref={pdfExportRef}
-          slides={getSlides(selectedPresentation)}
+          slides={workingSlides}
           layouts={layouts}
           presentationName={selectedPresentation.name}
           theme={currentTheme}

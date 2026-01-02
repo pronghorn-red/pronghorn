@@ -56,14 +56,15 @@ function ThumbnailGenerator({
 
   useEffect(() => {
     if (renderRef.current && !hasCapture) {
-      // Small delay to ensure render is complete
+      // Allow more time for rendering before capture
       const timer = setTimeout(() => {
         if (renderRef.current) {
           toPng(renderRef.current, {
             cacheBust: true,
-            pixelRatio: 1,
-            width: 320,
-            height: 180,
+            pixelRatio: 2,
+            width: 384,
+            height: 216, // 16:9 aspect ratio
+            backgroundColor: '#1e293b',
           })
             .then((dataUrl) => {
               onCapture(dataUrl);
@@ -71,19 +72,21 @@ function ThumbnailGenerator({
             })
             .catch((err) => {
               console.warn("Failed to capture thumbnail:", err);
+              // Still mark as captured to avoid infinite retries
+              setHasCapture(true);
             });
         }
-      }, 100);
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [slide, hasCapture, onCapture]);
 
-  // Hidden offscreen renderer
+  // Hidden offscreen renderer at 16:9 aspect ratio
   return (
     <div 
       ref={renderRef}
       className="absolute -left-[9999px] -top-[9999px]"
-      style={{ width: 320, height: 180 }}
+      style={{ width: 384, height: 216 }}
     >
       <SlideRenderer
         slide={slide}
@@ -111,8 +114,9 @@ export function SlideThumbnails({
     if (!slide) return 'invalid-slide';
     const id = slide.id || 'no-id';
     const layoutId = slide.layoutId || 'no-layout';
-    const contentStr = JSON.stringify(slide.content || []);
-    return `${id}-${layoutId}-${contentStr.slice(0, 100)}`;
+    const title = slide.title || '';
+    // Use a simpler key that won't cause issues with large content
+    return `${id}-${layoutId}-${title.slice(0, 30)}`;
   };
 
   useEffect(() => {
@@ -127,9 +131,8 @@ export function SlideThumbnails({
     });
   }, [slides, thumbnails, generating]);
 
-  const handleCapture = (slideId: string, layoutId: string, content: any[], dataUrl: string) => {
-    const contentStr = JSON.stringify(content || []);
-    const key = `${slideId || 'no-id'}-${layoutId || 'no-layout'}-${contentStr.slice(0, 100)}`;
+  const handleCapture = (slide: Slide, dataUrl: string) => {
+    const key = getSlideKey(slide);
     setThumbnails(prev => ({ ...prev, [key]: dataUrl }));
     setGenerating(prev => {
       const next = new Set(prev);
@@ -142,15 +145,16 @@ export function SlideThumbnails({
     <>
       {/* Offscreen thumbnail generators */}
       {slides.map((slide) => {
+        if (!slide) return null;
         const key = getSlideKey(slide);
-        if (!thumbnails[key] && generating.has(key)) {
+        if (key !== 'invalid-slide' && !thumbnails[key] && generating.has(key)) {
           return (
             <ThumbnailGenerator
               key={`gen-${key}`}
               slide={slide}
               layouts={layouts}
               theme={theme}
-              onCapture={(dataUrl) => handleCapture(slide.id, slide.layoutId, slide.content, dataUrl)}
+              onCapture={(dataUrl) => handleCapture(slide, dataUrl)}
             />
           );
         }
@@ -160,6 +164,7 @@ export function SlideThumbnails({
       <ScrollArea className="h-full">
         <div className="space-y-3 p-2">
           {slides.map((slide, index) => {
+            if (!slide) return null;
             const key = getSlideKey(slide);
             const thumbnailUrl = thumbnails[key];
             const isGenerating = generating.has(key);
@@ -181,7 +186,7 @@ export function SlideThumbnails({
                     {index + 1}
                   </div>
                   
-                  {/* Thumbnail image or loading state */}
+                  {/* 16:9 aspect ratio thumbnail */}
                   <div className="w-full aspect-video bg-muted">
                     {thumbnailUrl ? (
                       <img 
@@ -190,11 +195,11 @@ export function SlideThumbnails({
                         className="w-full h-full object-cover"
                       />
                     ) : isGenerating ? (
-                      <div className="w-full h-full flex items-center justify-center">
+                      <div className="w-full h-full flex items-center justify-center bg-slate-800">
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       </div>
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
+                      <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground bg-slate-800">
                         {slide.title?.slice(0, 20) || "Slide"}
                       </div>
                     )}

@@ -152,9 +152,11 @@ export function SlideImageGenerator({
     setGeneratedImage(null);
   };
 
+  const displayImage = generatedImage || currentImageUrl;
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[calc(100%-50px)] h-[calc(100vh-50px)] max-w-none max-h-none flex flex-col p-0">
+      <DialogContent className="w-[calc(100%-50px)] max-w-5xl h-[calc(100vh-100px)] max-h-[700px] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Wand2 className="h-5 w-5" />
@@ -171,36 +173,10 @@ export function SlideImageGenerator({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="space-y-4 max-w-2xl mx-auto">
-            {/* Current image preview */}
-            {currentImageUrl && !generatedImage && (
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Current Image</Label>
-                <div className="aspect-video bg-muted rounded-lg overflow-hidden">
-                  <img
-                    src={currentImageUrl}
-                    alt="Current slide image"
-                    className="w-full h-full object-cover opacity-50"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Generated image preview */}
-            {generatedImage && (
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Generated Image</Label>
-                <div className="aspect-video bg-muted rounded-lg overflow-hidden border-2 border-primary">
-                  <img
-                    src={generatedImage}
-                    alt="Generated slide image"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              </div>
-            )}
-
+        {/* Two-column layout: controls left, preview right */}
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 p-6 overflow-hidden">
+          {/* Left column - Controls */}
+          <div className="flex flex-col space-y-4 overflow-y-auto">
             {/* Prompt input */}
             <div className="space-y-2">
               <Label>Image Prompt</Label>
@@ -208,46 +184,90 @@ export function SlideImageGenerator({
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe the image you want to generate..."
-                className="min-h-[100px]"
+                className="min-h-[120px]"
               />
             </div>
 
-            {/* Model and Style selectors in a row */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Style</Label>
-                <Select value={selectedStyle} onValueChange={setSelectedStyle}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {IMAGE_STYLES.map((style) => (
-                      <SelectItem key={style.id} value={style.id}>
-                        {style.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Model</Label>
-                <Select value={selectedModel} onValueChange={setSelectedModel}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {IMAGE_MODELS.map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        <div className="flex flex-col">
-                          <span>{model.label}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Style selector */}
+            <div className="space-y-2">
+              <Label>Style</Label>
+              <Select value={selectedStyle} onValueChange={setSelectedStyle}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {IMAGE_STYLES.map((style) => (
+                    <SelectItem key={style.id} value={style.id}>
+                      {style.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            
+            {/* Model selector */}
+            <div className="space-y-2">
+              <Label>Model</Label>
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {IMAGE_MODELS.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Generate button for mobile - inline */}
+            <div className="md:hidden pt-2">
+              <Button 
+                onClick={handleGenerate} 
+                disabled={isGenerating || !prompt.trim()}
+                className="w-full"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="h-4 w-4 mr-2" />
+                    Generate
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Right column - Preview */}
+          <div className="flex flex-col space-y-3 overflow-hidden">
+            <Label className="shrink-0">
+              {generatedImage ? "Generated Image" : currentImageUrl ? "Current Image" : "Preview"}
+            </Label>
+            <div className="flex-1 min-h-0 bg-muted rounded-lg overflow-hidden border flex items-center justify-center">
+              {displayImage ? (
+                <img
+                  src={displayImage}
+                  alt={generatedImage ? "Generated slide image" : "Current slide image"}
+                  className={`max-w-full max-h-full object-contain ${!generatedImage && currentImageUrl ? 'opacity-50' : ''}`}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-muted-foreground p-8">
+                  <ImageIcon className="h-12 w-12 mb-3 opacity-50" />
+                  <p className="text-sm">Enter a prompt and generate an image</p>
+                </div>
+              )}
+            </div>
+            {generatedImage && (
+              <p className="text-xs text-muted-foreground text-center">
+                16:9 aspect ratio • Ready to use
+              </p>
+            )}
           </div>
         </div>
 
