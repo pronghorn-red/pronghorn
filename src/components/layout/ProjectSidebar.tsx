@@ -1,4 +1,4 @@
-import { ListTree, Layout, ShieldCheck, Hammer, Code, FileText, Settings as SettingsIcon, Menu, X, Archive, MessageSquare, GitBranch, Rocket, Database, ClipboardCheck } from "lucide-react";
+import { ListTree, Layout, ShieldCheck, Hammer, Code, FileText, Settings as SettingsIcon, Menu, X, Archive, MessageSquare, GitBranch, Rocket, Database, ClipboardCheck, Presentation } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,7 @@ const activeNavItems = [
 
 const experimentalNavItems = [
   { icon: ClipboardCheck, label: "Audit", path: "audit" },
+  { icon: Presentation, label: "Present", path: "present" },
 ];
 
 const comingSoonItems: Array<{ icon: any; label: string }> = [];

@@ -1,0 +1,284 @@
+{
+  "agent_identity": {
+    "name": "PresentationAgent",
+    "version": "1.0.0",
+    "description": "AI agent that reads project data sequentially, builds understanding through a blackboard memory system, and generates structured presentation slides",
+    "capabilities": [
+      "Read project settings, requirements, artifacts, canvas, specifications",
+      "Read repository file structure (not content)",
+      "Read database schemas and connections",
+      "Read deployment configurations",
+      "Accumulate insights in blackboard memory",
+      "Generate structured slide content",
+      "Generate cover images using image generation"
+    ]
+  },
+
+  "tools": {
+    "read_settings": {
+      "description": "Read project title, description, and metadata",
+      "returns": "Project name, description, organization, scope, created_at",
+      "insights_to_capture": [
+        "Project name and purpose",
+        "Target audience or users",
+        "Scope and boundaries",
+        "Key objectives"
+      ]
+    },
+    "read_requirements": {
+      "description": "Read all requirements with hierarchy",
+      "returns": "Array of requirements with id, title, content, parent_id, code, priority",
+      "insights_to_capture": [
+        "Total requirement count",
+        "Requirement categories and breakdown",
+        "Key functional requirements",
+        "Non-functional requirements",
+        "Priority distribution"
+      ]
+    },
+    "read_artifacts": {
+      "description": "Read all artifacts with titles, summaries, and image URLs",
+      "returns": "Array of artifacts with id, ai_title, ai_summary, content, image_url, source_type",
+      "insights_to_capture": [
+        "Types of artifacts present",
+        "Key documents and their purposes",
+        "Available images for slides",
+        "Source types (uploaded, generated, etc.)"
+      ]
+    },
+    "read_canvas": {
+      "description": "Read canvas nodes and edges for architecture visualization",
+      "returns": "{ nodes: [...], edges: [...] } with node types, labels, positions, connections",
+      "insights_to_capture": [
+        "Architecture components",
+        "System relationships",
+        "Data flows",
+        "Integration points",
+        "Node type distribution"
+      ]
+    },
+    "read_specifications": {
+      "description": "Read latest generated specifications for each agent",
+      "returns": "Array of specifications with agent_title, generated_spec content, version",
+      "insights_to_capture": [
+        "Available specification types",
+        "Key decisions documented",
+        "Technical constraints",
+        "Implementation guidelines"
+      ]
+    },
+    "read_repo_structure": {
+      "description": "Read repository file/folder structure (paths only, not content)",
+      "returns": "Array of files with path, is_binary flag, size estimate",
+      "insights_to_capture": [
+        "Code organization pattern",
+        "Key directories",
+        "File types present",
+        "Approximate codebase size",
+        "Framework indicators"
+      ]
+    },
+    "read_databases": {
+      "description": "Read database schemas including tables, columns, relationships",
+      "returns": "Array of databases with tables, columns, indexes, foreign keys",
+      "insights_to_capture": [
+        "Database provider",
+        "Table count and names",
+        "Key entities",
+        "Relationship patterns",
+        "Data model complexity"
+      ]
+    },
+    "read_connections": {
+      "description": "Read external database connections configured for the project",
+      "returns": "Array of connections with name, host, status (no credentials)",
+      "insights_to_capture": [
+        "External integrations",
+        "Data sources",
+        "Connection status"
+      ]
+    },
+    "read_deployments": {
+      "description": "Read deployment configurations and status",
+      "returns": "Array of deployments with name, platform, environment, status, url",
+      "insights_to_capture": [
+        "Deployment platforms",
+        "Environment setup",
+        "Live URLs",
+        "Deployment status"
+      ]
+    },
+    "write_to_blackboard": {
+      "description": "Write insights and observations to the growing blackboard memory",
+      "params": {
+        "source": "Which tool/data source this insight came from",
+        "category": "observation | insight | question | decision | estimate",
+        "content": "The actual insight text",
+        "data": "Optional structured data (counts, lists, etc.)"
+      }
+    },
+    "generate_cover_image": {
+      "description": "Generate an attractive cover image using Nano Banana image generation",
+      "params": {
+        "prompt": "Detailed prompt describing the desired cover image",
+        "style": "Style hints (professional, tech, abstract, etc.)"
+      }
+    },
+    "generate_slides": {
+      "description": "Generate the final slide structure based on accumulated blackboard insights",
+      "params": {
+        "mode": "concise | detailed",
+        "targetSlides": "Target number of slides"
+      }
+    }
+  },
+
+  "blackboard_categories": {
+    "observation": "Direct factual observations from reading data",
+    "insight": "Synthesized understanding combining multiple observations",
+    "question": "Open questions or uncertainties identified",
+    "decision": "Choices made about presentation content or structure",
+    "estimate": "Quantitative estimates (completion %, complexity, etc.)"
+  },
+
+  "execution_flow": {
+    "phases": [
+      {
+        "phase": 1,
+        "name": "Foundation",
+        "tools": ["read_settings"],
+        "purpose": "Establish project identity and context"
+      },
+      {
+        "phase": 2,
+        "name": "Requirements Understanding",
+        "tools": ["read_requirements"],
+        "purpose": "Understand what the project aims to accomplish"
+      },
+      {
+        "phase": 3,
+        "name": "Documentation Review",
+        "tools": ["read_artifacts", "read_specifications"],
+        "purpose": "Gather supporting materials and generated specs"
+      },
+      {
+        "phase": 4,
+        "name": "Architecture Analysis",
+        "tools": ["read_canvas"],
+        "purpose": "Understand system design and component relationships"
+      },
+      {
+        "phase": 5,
+        "name": "Implementation Review",
+        "tools": ["read_repo_structure", "read_databases", "read_connections"],
+        "purpose": "Assess technical implementation and data model"
+      },
+      {
+        "phase": 6,
+        "name": "Deployment Status",
+        "tools": ["read_deployments"],
+        "purpose": "Understand current deployment state"
+      },
+      {
+        "phase": 7,
+        "name": "Synthesis",
+        "tools": ["write_to_blackboard"],
+        "purpose": "Generate final insights, estimates, and recommendations"
+      },
+      {
+        "phase": 8,
+        "name": "Generation",
+        "tools": ["generate_cover_image", "generate_slides"],
+        "purpose": "Create the presentation content"
+      }
+    ]
+  },
+
+  "slide_content_guidelines": {
+    "cover": {
+      "title": "Project name",
+      "subtitle": "One-line description or tagline",
+      "image": "Generated cover image or key artifact image"
+    },
+    "bluf": {
+      "quote": "2-3 sentence executive summary answering: What is this? Why does it matter? What's the status?",
+      "style": "Direct, confident, action-oriented"
+    },
+    "overview": {
+      "content": "Project purpose, target users, key value proposition",
+      "length": "3-5 paragraphs for detailed, 1-2 for concise"
+    },
+    "requirements": {
+      "selection": "Top 5-10 most important requirements",
+      "format": "Bullet points with clear, action-oriented language"
+    },
+    "architecture": {
+      "image": "Canvas screenshot or artifact image if available",
+      "description": "High-level component overview"
+    },
+    "technology": {
+      "items": "Key technologies with brief purpose explanations",
+      "grouping": "Frontend, Backend, Database, Infrastructure"
+    },
+    "status": {
+      "metrics": [
+        "Requirements coverage %",
+        "Canvas node count",
+        "Repository file count",
+        "Deployment status"
+      ]
+    },
+    "challenges": {
+      "format": "Risk/challenge paired with mitigation/status",
+      "source": "Derived from missing data, incomplete areas, complexity"
+    },
+    "opportunities": {
+      "format": "Actionable next steps or improvements",
+      "tone": "Forward-looking, constructive"
+    }
+  },
+
+  "estimation_rules": {
+    "requirements_coverage": {
+      "formula": "canvas_nodes_matching_requirements / total_requirements * 100",
+      "fallback": "If no canvas: estimate from specifications and repo structure"
+    },
+    "code_completion": {
+      "formula": "Based on repo file count and structure completeness",
+      "indicators": ["Has package.json", "Has src/ structure", "Has components", "Has tests"]
+    },
+    "documentation_completeness": {
+      "formula": "Based on artifacts count and specification presence",
+      "indicators": ["Has README", "Has specs", "Has API docs", "Has user guides"]
+    }
+  },
+
+  "output_format": {
+    "slides": {
+      "type": "array",
+      "items": {
+        "id": "unique slide id",
+        "order": "sequence number",
+        "layoutId": "reference to layout in presentationLayouts.json",
+        "title": "slide title",
+        "subtitle": "optional subtitle",
+        "content": "array of content blocks matching layout regions",
+        "notes": "optional speaker notes",
+        "metadata": "source references, data used"
+      }
+    },
+    "content_block": {
+      "regionId": "matches layout region id",
+      "type": "text | heading | bullets | image | table | chart | stat",
+      "data": "content specific to type"
+    }
+  },
+
+  "prompts": {
+    "system": "You are PresentationAgent, an AI that creates professional project presentations. You read project data systematically, accumulate insights in your blackboard memory, and generate clear, compelling slide content. Be concise, use data to support claims, and focus on what matters most to stakeholders.",
+    "initial_context": "You are creating a {mode} presentation with approximately {targetSlides} slides for the project '{projectName}'. {customPrompt}",
+    "per_tool_instruction": "After reading this data, write to the blackboard with your key observations and insights. Focus on what will be most valuable for the presentation.",
+    "synthesis_instruction": "Review all blackboard entries. Identify the key themes, assess project status, and prepare to generate slides that tell a coherent story.",
+    "generation_instruction": "Generate slides following the {mode} structure. Use specific data from your blackboard. Include relevant images from artifacts. Create a compelling narrative."
+  }
+}

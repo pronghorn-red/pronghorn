@@ -155,3 +155,6 @@ verify_jwt = false
 
 [functions.audit-merge-concepts-v2]
 verify_jwt = false
+
+[functions.presentation-agent]
+verify_jwt = false

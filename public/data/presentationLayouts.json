@@ -1,0 +1,288 @@
+{
+  "layouts": [
+    {
+      "id": "title-cover",
+      "name": "Title Cover",
+      "description": "Full-bleed cover with centered title and subtitle",
+      "category": "title",
+      "regions": [
+        { "id": "background", "type": "image", "x": 0, "y": 0, "width": 100, "height": 100, "zIndex": 0 },
+        { "id": "overlay", "type": "overlay", "x": 0, "y": 0, "width": 100, "height": 100, "zIndex": 1, "style": "gradient" },
+        { "id": "title", "type": "heading", "x": 10, "y": 35, "width": 80, "height": 20, "zIndex": 2, "align": "center", "level": 1 },
+        { "id": "subtitle", "type": "text", "x": 10, "y": 55, "width": 80, "height": 10, "zIndex": 2, "align": "center" },
+        { "id": "date", "type": "text", "x": 10, "y": 85, "width": 80, "height": 5, "zIndex": 2, "align": "center", "muted": true }
+      ]
+    },
+    {
+      "id": "section-divider",
+      "name": "Section Divider",
+      "description": "Bold section break with icon or number",
+      "category": "divider",
+      "regions": [
+        { "id": "background", "type": "solid", "x": 0, "y": 0, "width": 100, "height": 100, "color": "primary" },
+        { "id": "section-number", "type": "heading", "x": 10, "y": 30, "width": 80, "height": 15, "align": "center", "level": 1, "size": "6xl" },
+        { "id": "title", "type": "heading", "x": 10, "y": 50, "width": 80, "height": 15, "align": "center", "level": 2 },
+        { "id": "subtitle", "type": "text", "x": 15, "y": 68, "width": 70, "height": 10, "align": "center", "muted": true }
+      ]
+    },
+    {
+      "id": "title-content",
+      "name": "Title + Content",
+      "description": "Header with full-width content below",
+      "category": "content",
+      "regions": [
+        { "id": "title", "type": "heading", "x": 5, "y": 5, "width": 90, "height": 12, "level": 2 },
+        { "id": "divider", "type": "divider", "x": 5, "y": 18, "width": 20, "height": 1 },
+        { "id": "content", "type": "richtext", "x": 5, "y": 22, "width": 90, "height": 73 }
+      ]
+    },
+    {
+      "id": "two-column",
+      "name": "Two Columns",
+      "description": "Side-by-side content areas with header",
+      "category": "content",
+      "regions": [
+        { "id": "title", "type": "heading", "x": 5, "y": 5, "width": 90, "height": 12, "level": 2 },
+        { "id": "left-content", "type": "richtext", "x": 5, "y": 20, "width": 43, "height": 75 },
+        { "id": "right-content", "type": "richtext", "x": 52, "y": 20, "width": 43, "height": 75 }
+      ]
+    },
+    {
+      "id": "image-left",
+      "name": "Image Left + Content",
+      "description": "Large image on left with content on right",
+      "category": "media",
+      "regions": [
+        { "id": "title", "type": "heading", "x": 52, "y": 5, "width": 43, "height": 12, "level": 2 },
+        { "id": "image", "type": "image", "x": 0, "y": 0, "width": 48, "height": 100, "objectFit": "cover" },
+        { "id": "content", "type": "richtext", "x": 52, "y": 20, "width": 43, "height": 75 }
+      ]
+    },
+    {
+      "id": "image-right",
+      "name": "Content + Image Right",
+      "description": "Content on left with large image on right",
+      "category": "media",
+      "regions": [
+        { "id": "title", "type": "heading", "x": 5, "y": 5, "width": 43, "height": 12, "level": 2 },
+        { "id": "content", "type": "richtext", "x": 5, "y": 20, "width": 43, "height": 75 },
+        { "id": "image", "type": "image", "x": 52, "y": 0, "width": 48, "height": 100, "objectFit": "cover" }
+      ]
+    },
+    {
+      "id": "stats-grid",
+      "name": "Statistics Grid",
+      "description": "4-cell grid for key metrics and numbers",
+      "category": "data",
+      "regions": [
+        { "id": "title", "type": "heading", "x": 5, "y": 5, "width": 90, "height": 12, "level": 2 },
+        { "id": "stat-1", "type": "stat", "x": 5, "y": 22, "width": 43, "height": 35 },
+        { "id": "stat-2", "type": "stat", "x": 52, "y": 22, "width": 43, "height": 35 },
+        { "id": "stat-3", "type": "stat", "x": 5, "y": 60, "width": 43, "height": 35 },
+        { "id": "stat-4", "type": "stat", "x": 52, "y": 60, "width": 43, "height": 35 }
+      ]
+    },
+    {
+      "id": "chart-full",
+      "name": "Full Chart",
+      "description": "Large chart visualization with title",
+      "category": "data",
+      "regions": [
+        { "id": "title", "type": "heading", "x": 5, "y": 5, "width": 70, "height": 10, "level": 2 },
+        { "id": "subtitle", "type": "text", "x": 5, "y": 15, "width": 70, "height": 5, "muted": true },
+        { "id": "chart", "type": "chart", "x": 5, "y": 22, "width": 90, "height": 73 }
+      ]
+    },
+    {
+      "id": "table",
+      "name": "Data Table",
+      "description": "Tabular data display with header",
+      "category": "data",
+      "regions": [
+        { "id": "title", "type": "heading", "x": 5, "y": 5, "width": 90, "height": 10, "level": 2 },
+        { "id": "table", "type": "table", "x": 5, "y": 18, "width": 90, "height": 77 }
+      ]
+    },
+    {
+      "id": "bullets",
+      "name": "Bullet Points",
+      "description": "Clean bullet list with optional icon",
+      "category": "content",
+      "regions": [
+        { "id": "title", "type": "heading", "x": 5, "y": 5, "width": 90, "height": 12, "level": 2 },
+        { "id": "bullets", "type": "bullets", "x": 5, "y": 20, "width": 90, "height": 75 }
+      ]
+    },
+    {
+      "id": "quote",
+      "name": "Quote/Callout",
+      "description": "Prominent quote or key insight",
+      "category": "accent",
+      "regions": [
+        { "id": "quote-mark", "type": "decoration", "x": 10, "y": 25, "width": 10, "height": 15, "content": """ },
+        { "id": "quote", "type": "text", "x": 15, "y": 35, "width": 70, "height": 30, "size": "2xl", "italic": true },
+        { "id": "attribution", "type": "text", "x": 15, "y": 70, "width": 70, "height": 8, "align": "right", "muted": true }
+      ]
+    },
+    {
+      "id": "architecture",
+      "name": "Architecture Diagram",
+      "description": "Visual system architecture or flow",
+      "category": "technical",
+      "regions": [
+        { "id": "title", "type": "heading", "x": 5, "y": 3, "width": 90, "height": 8, "level": 2 },
+        { "id": "diagram", "type": "image", "x": 5, "y": 13, "width": 90, "height": 82, "objectFit": "contain" }
+      ]
+    },
+    {
+      "id": "comparison",
+      "name": "Comparison",
+      "description": "Side-by-side comparison with headers",
+      "category": "content",
+      "regions": [
+        { "id": "title", "type": "heading", "x": 5, "y": 5, "width": 90, "height": 10, "level": 2 },
+        { "id": "left-header", "type": "heading", "x": 5, "y": 18, "width": 43, "height": 8, "level": 3 },
+        { "id": "right-header", "type": "heading", "x": 52, "y": 18, "width": 43, "height": 8, "level": 3 },
+        { "id": "left-content", "type": "bullets", "x": 5, "y": 28, "width": 43, "height": 67 },
+        { "id": "right-content", "type": "bullets", "x": 52, "y": 28, "width": 43, "height": 67 }
+      ]
+    },
+    {
+      "id": "timeline",
+      "name": "Timeline",
+      "description": "Horizontal timeline or process flow",
+      "category": "content",
+      "regions": [
+        { "id": "title", "type": "heading", "x": 5, "y": 5, "width": 90, "height": 10, "level": 2 },
+        { "id": "timeline", "type": "timeline", "x": 5, "y": 20, "width": 90, "height": 75 }
+      ]
+    },
+    {
+      "id": "icon-grid",
+      "name": "Icon Grid",
+      "description": "Grid of icons with labels for features or steps",
+      "category": "content",
+      "regions": [
+        { "id": "title", "type": "heading", "x": 5, "y": 5, "width": 90, "height": 10, "level": 2 },
+        { "id": "subtitle", "type": "text", "x": 5, "y": 15, "width": 90, "height": 5, "muted": true },
+        { "id": "grid", "type": "icon-grid", "x": 5, "y": 25, "width": 90, "height": 70, "columns": 3 }
+      ]
+    }
+  ],
+  "themes": {
+    "default": {
+      "name": "Professional Dark",
+      "fonts": {
+        "heading": "Raleway",
+        "body": "Open Sans"
+      },
+      "colors": {
+        "background": "hsl(222, 47%, 11%)",
+        "foreground": "hsl(210, 40%, 98%)",
+        "primary": "hsl(217, 91%, 60%)",
+        "primaryForeground": "hsl(222, 47%, 11%)",
+        "secondary": "hsl(217, 33%, 17%)",
+        "muted": "hsl(217, 33%, 17%)",
+        "mutedForeground": "hsl(215, 20%, 65%)",
+        "accent": "hsl(199, 89%, 48%)",
+        "border": "hsl(217, 33%, 25%)"
+      },
+      "spacing": {
+        "slide": { "paddingX": 5, "paddingY": 5 }
+      }
+    },
+    "light": {
+      "name": "Clean Light",
+      "fonts": {
+        "heading": "Raleway",
+        "body": "Open Sans"
+      },
+      "colors": {
+        "background": "hsl(0, 0%, 100%)",
+        "foreground": "hsl(222, 47%, 11%)",
+        "primary": "hsl(217, 91%, 50%)",
+        "primaryForeground": "hsl(0, 0%, 100%)",
+        "secondary": "hsl(210, 40%, 96%)",
+        "muted": "hsl(210, 40%, 96%)",
+        "mutedForeground": "hsl(215, 16%, 47%)",
+        "accent": "hsl(199, 89%, 48%)",
+        "border": "hsl(214, 32%, 91%)"
+      }
+    },
+    "vibrant": {
+      "name": "Vibrant Gradient",
+      "fonts": {
+        "heading": "Raleway",
+        "body": "Open Sans"
+      },
+      "colors": {
+        "background": "hsl(260, 50%, 10%)",
+        "foreground": "hsl(0, 0%, 100%)",
+        "primary": "hsl(280, 100%, 65%)",
+        "primaryForeground": "hsl(0, 0%, 100%)",
+        "secondary": "hsl(260, 40%, 20%)",
+        "muted": "hsl(260, 30%, 25%)",
+        "mutedForeground": "hsl(260, 20%, 70%)",
+        "accent": "hsl(320, 100%, 60%)",
+        "border": "hsl(260, 40%, 30%)"
+      },
+      "gradients": {
+        "primary": "linear-gradient(135deg, hsl(280, 100%, 65%), hsl(320, 100%, 60%))",
+        "background": "linear-gradient(135deg, hsl(260, 50%, 10%), hsl(280, 50%, 15%))"
+      }
+    }
+  },
+  "slideStructures": {
+    "concise": {
+      "name": "Concise (10-15 slides)",
+      "description": "Executive summary format for quick understanding",
+      "structure": [
+        { "order": 1, "type": "cover", "layoutId": "title-cover", "title": "Cover" },
+        { "order": 2, "type": "bluf", "layoutId": "quote", "title": "Executive Summary (BLUF)" },
+        { "order": 3, "type": "overview", "layoutId": "title-content", "title": "Project Overview" },
+        { "order": 4, "type": "architecture", "layoutId": "architecture", "title": "Architecture Overview" },
+        { "order": 5, "type": "requirements", "layoutId": "bullets", "title": "Key Requirements" },
+        { "order": 6, "type": "technology", "layoutId": "icon-grid", "title": "Technology Stack" },
+        { "order": 7, "type": "status", "layoutId": "stats-grid", "title": "Current Status" },
+        { "order": 8, "type": "challenges", "layoutId": "two-column", "title": "Challenges & Risks" },
+        { "order": 9, "type": "opportunities", "layoutId": "bullets", "title": "Opportunities" },
+        { "order": 10, "type": "next-steps", "layoutId": "timeline", "title": "Next Steps" }
+      ]
+    },
+    "detailed": {
+      "name": "Detailed (20-30 slides)",
+      "description": "Comprehensive breakdown with deep dives",
+      "structure": [
+        { "order": 1, "type": "cover", "layoutId": "title-cover", "title": "Cover" },
+        { "order": 2, "type": "bluf", "layoutId": "quote", "title": "Executive Summary" },
+        { "order": 3, "type": "section", "layoutId": "section-divider", "title": "01 Overview" },
+        { "order": 4, "type": "overview", "layoutId": "title-content", "title": "Project Overview" },
+        { "order": 5, "type": "overview-2", "layoutId": "image-right", "title": "Vision & Goals" },
+        { "order": 6, "type": "section", "layoutId": "section-divider", "title": "02 Requirements" },
+        { "order": 7, "type": "requirements", "layoutId": "bullets", "title": "Functional Requirements" },
+        { "order": 8, "type": "requirements-2", "layoutId": "bullets", "title": "Non-Functional Requirements" },
+        { "order": 9, "type": "requirements-3", "layoutId": "table", "title": "Requirements Coverage" },
+        { "order": 10, "type": "section", "layoutId": "section-divider", "title": "03 Architecture" },
+        { "order": 11, "type": "architecture", "layoutId": "architecture", "title": "System Architecture" },
+        { "order": 12, "type": "architecture-2", "layoutId": "image-left", "title": "Component Diagram" },
+        { "order": 13, "type": "section", "layoutId": "section-divider", "title": "04 Data" },
+        { "order": 14, "type": "database", "layoutId": "architecture", "title": "Database Schema" },
+        { "order": 15, "type": "database-2", "layoutId": "table", "title": "Key Entities" },
+        { "order": 16, "type": "section", "layoutId": "section-divider", "title": "05 Technology" },
+        { "order": 17, "type": "technology", "layoutId": "icon-grid", "title": "Technology Stack" },
+        { "order": 18, "type": "code", "layoutId": "two-column", "title": "Code Structure" },
+        { "order": 19, "type": "section", "layoutId": "section-divider", "title": "06 Status" },
+        { "order": 20, "type": "status", "layoutId": "stats-grid", "title": "Project Status" },
+        { "order": 21, "type": "coverage", "layoutId": "chart-full", "title": "Coverage Analysis" },
+        { "order": 22, "type": "deployments", "layoutId": "table", "title": "Deployments" },
+        { "order": 23, "type": "section", "layoutId": "section-divider", "title": "07 Analysis" },
+        { "order": 24, "type": "challenges", "layoutId": "comparison", "title": "Challenges & Risks" },
+        { "order": 25, "type": "opportunities", "layoutId": "bullets", "title": "Opportunities" },
+        { "order": 26, "type": "recommendations", "layoutId": "bullets", "title": "Recommendations" },
+        { "order": 27, "type": "section", "layoutId": "section-divider", "title": "08 Next Steps" },
+        { "order": 28, "type": "next-steps", "layoutId": "timeline", "title": "Roadmap" },
+        { "order": 29, "type": "appendix", "layoutId": "bullets", "title": "Appendix: Links & Resources" }
+      ]
+    }
+  }
+}

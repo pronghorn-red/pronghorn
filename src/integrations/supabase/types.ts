@@ -1910,6 +1910,68 @@ export type Database = {
           },
         ]
       }
+      project_presentations: {
+        Row: {
+          blackboard: Json
+          cover_image_url: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          initial_prompt: string | null
+          metadata: Json | null
+          mode: string
+          name: string
+          project_id: string
+          slides: Json
+          status: string
+          target_slides: number | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          blackboard?: Json
+          cover_image_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          initial_prompt?: string | null
+          metadata?: Json | null
+          mode?: string
+          name: string
+          project_id: string
+          slides?: Json
+          status?: string
+          target_slides?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          blackboard?: Json
+          cover_image_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          initial_prompt?: string | null
+          metadata?: Json | null
+          mode?: string
+          name?: string
+          project_id?: string
+          slides?: Json
+          status?: string
+          target_slides?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_presentations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_repos: {
         Row: {
           auto_commit: boolean | null
@@ -3104,6 +3166,32 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      append_presentation_blackboard_with_token: {
+        Args: { p_entry?: Json; p_presentation_id: string; p_token?: string }
+        Returns: {
+          blackboard: Json
+          cover_image_url: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          initial_prompt: string | null
+          metadata: Json | null
+          mode: string
+          name: string
+          project_id: string
+          slides: Json
+          status: string
+          target_slides: number | null
+          updated_at: string
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_presentations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       authorize_project_access: {
         Args: { p_project_id: string; p_token?: string }
         Returns: Database["public"]["Enums"]["project_token_role"]
@@ -3371,6 +3459,10 @@ export type Database = {
       }
       delete_migration_with_token: {
         Args: { p_migration_id: string; p_token?: string }
+        Returns: undefined
+      }
+      delete_presentation_with_token: {
+        Args: { p_presentation_id: string; p_token?: string }
         Returns: undefined
       }
       delete_project_repo_with_token: {
@@ -4525,6 +4617,32 @@ export type Database = {
           thinking_budget: number
           thinking_enabled: boolean
         }[]
+      }
+      get_project_presentations_with_token: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: {
+          blackboard: Json
+          cover_image_url: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          initial_prompt: string | null
+          metadata: Json | null
+          mode: string
+          name: string
+          project_id: string
+          slides: Json
+          status: string
+          target_slides: number | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_presentations"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_project_repos_with_token: {
         Args: { p_project_id: string; p_token: string }
@@ -5780,6 +5898,39 @@ export type Database = {
               isSetofReturn: false
             }
           }
+      insert_presentation_with_token: {
+        Args: {
+          p_initial_prompt?: string
+          p_mode?: string
+          p_name?: string
+          p_project_id: string
+          p_target_slides?: number
+          p_token?: string
+        }
+        Returns: {
+          blackboard: Json
+          cover_image_url: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          initial_prompt: string | null
+          metadata: Json | null
+          mode: string
+          name: string
+          project_id: string
+          slides: Json
+          status: string
+          target_slides: number | null
+          updated_at: string
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_presentations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       insert_project_standard_with_token: {
         Args: { p_project_id: string; p_standard_id: string; p_token: string }
         Returns: {
@@ -6890,6 +7041,41 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "project_deployments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_presentation_with_token: {
+        Args: {
+          p_blackboard?: Json
+          p_cover_image_url?: string
+          p_metadata?: Json
+          p_name?: string
+          p_presentation_id: string
+          p_slides?: Json
+          p_status?: string
+          p_token?: string
+        }
+        Returns: {
+          blackboard: Json
+          cover_image_url: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          initial_prompt: string | null
+          metadata: Json | null
+          mode: string
+          name: string
+          project_id: string
+          slides: Json
+          status: string
+          target_slides: number | null
+          updated_at: string
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_presentations"
           isOneToOne: true
           isSetofReturn: false
         }
