@@ -5806,48 +5806,27 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      insert_requirement_standard_with_token:
-        | {
-            Args: {
-              p_requirement_id: string
-              p_standard_id: string
-              p_token: string
-            }
-            Returns: {
-              created_at: string
-              id: string
-              notes: string | null
-              requirement_id: string
-              standard_id: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "requirement_standards"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_notes?: string
-              p_requirement_id: string
-              p_standard_id: string
-              p_token: string
-            }
-            Returns: {
-              created_at: string
-              id: string
-              notes: string | null
-              requirement_id: string
-              standard_id: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "requirement_standards"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      insert_requirement_standard_with_token: {
+        Args: {
+          p_notes?: string
+          p_requirement_id: string
+          p_standard_id: string
+          p_token: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          notes: string | null
+          requirement_id: string
+          standard_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "requirement_standards"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       insert_requirement_with_token: {
         Args: {
           p_parent_id: string
