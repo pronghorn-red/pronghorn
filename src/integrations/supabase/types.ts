@@ -6488,56 +6488,33 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      update_agent_session_status_with_token:
-        | {
-            Args: { p_session_id: string; p_status: string; p_token: string }
-            Returns: {
-              abort_requested: boolean | null
-              completed_at: string | null
-              created_at: string
-              created_by: string | null
-              id: string
-              mode: string
-              project_id: string
-              started_at: string
-              status: string
-              task_description: string | null
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "agent_sessions"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_completed_at?: string
-              p_session_id: string
-              p_status: string
-              p_token: string
-            }
-            Returns: {
-              abort_requested: boolean | null
-              completed_at: string | null
-              created_at: string
-              created_by: string | null
-              id: string
-              mode: string
-              project_id: string
-              started_at: string
-              status: string
-              task_description: string | null
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "agent_sessions"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      update_agent_session_status_with_token: {
+        Args: {
+          p_completed_at?: string
+          p_session_id: string
+          p_status: string
+          p_token: string
+        }
+        Returns: {
+          abort_requested: boolean | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          mode: string
+          project_id: string
+          started_at: string
+          status: string
+          task_description: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_artifact_collaboration_with_token: {
         Args: {
           p_collaboration_id: string
