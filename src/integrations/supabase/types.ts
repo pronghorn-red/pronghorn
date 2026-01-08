@@ -5677,76 +5677,41 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      insert_migration_with_token:
-        | {
-            Args: {
-              p_connection_id?: string
-              p_database_id?: string
-              p_name?: string
-              p_object_name?: string
-              p_object_schema?: string
-              p_object_type?: string
-              p_sql_content?: string
-              p_statement_type?: string
-              p_token?: string
-            }
-            Returns: {
-              connection_id: string | null
-              created_at: string
-              database_id: string | null
-              executed_at: string
-              executed_by: string | null
-              id: string
-              name: string | null
-              object_name: string | null
-              object_schema: string | null
-              object_type: string
-              project_id: string
-              sequence_number: number
-              sql_content: string
-              statement_type: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "project_migrations"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_database_id: string
-              p_name?: string
-              p_object_name?: string
-              p_object_schema?: string
-              p_object_type: string
-              p_sql_content: string
-              p_statement_type: string
-              p_token?: string
-            }
-            Returns: {
-              connection_id: string | null
-              created_at: string
-              database_id: string | null
-              executed_at: string
-              executed_by: string | null
-              id: string
-              name: string | null
-              object_name: string | null
-              object_schema: string | null
-              object_type: string
-              project_id: string
-              sequence_number: number
-              sql_content: string
-              statement_type: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "project_migrations"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      insert_migration_with_token: {
+        Args: {
+          p_connection_id?: string
+          p_database_id?: string
+          p_name?: string
+          p_object_name?: string
+          p_object_schema?: string
+          p_object_type?: string
+          p_sql_content?: string
+          p_statement_type?: string
+          p_token?: string
+        }
+        Returns: {
+          connection_id: string | null
+          created_at: string
+          database_id: string | null
+          executed_at: string
+          executed_by: string | null
+          id: string
+          name: string | null
+          object_name: string | null
+          object_schema: string | null
+          object_type: string
+          project_id: string
+          sequence_number: number
+          sql_content: string
+          statement_type: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_migrations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       insert_presentation_with_token: {
         Args: {
           p_initial_prompt?: string
