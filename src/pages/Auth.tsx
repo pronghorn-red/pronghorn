@@ -153,15 +153,20 @@ export default function Auth() {
     }
   }, [session, navigate, resetMode, searchParams]);
 
-  const validateSignupCode = async (code: string): Promise<boolean> => {
+  const validateSignupCode = async (code: string): Promise<{ valid: boolean; error?: string }> => {
     try {
       const { data, error } = await supabase.functions.invoke('validate-signup-code', {
         body: { code }
       });
-      if (error) return false;
-      return data?.valid === true;
-    } catch {
-      return false;
+      if (error) {
+        // Try to extract the actual error message from FunctionsHttpError
+        const errorMessage = error.message || 'Failed to validate signup code';
+        return { valid: false, error: errorMessage };
+      }
+      return { valid: data?.valid === true };
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to validate signup code';
+      return { valid: false, error: message };
     }
   };
 
@@ -214,11 +219,11 @@ export default function Auth() {
     
     // Validate signup code first
     setSignupCodeValidating(true);
-    const isCodeValid = await validateSignupCode(signupCode);
+    const codeResult = await validateSignupCode(signupCode);
     setSignupCodeValidating(false);
     
-    if (!isCodeValid) {
-      setSignupCodeError("Invalid signup code. Please contact an administrator.");
+    if (!codeResult.valid) {
+      setSignupCodeError(codeResult.error || "Invalid signup code. Please contact an administrator.");
       return;
     }
     

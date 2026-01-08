@@ -23,8 +23,15 @@ serve(async (req: Request) => {
 
     const isValid = code && code.trim().toUpperCase() === validCode.trim().toUpperCase();
 
-    return new Response(JSON.stringify({ valid: isValid }), {
-      status: isValid ? 200 : 403,
+    if (!isValid) {
+      return new Response(JSON.stringify({ valid: false, error: "Invalid signup code" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", ...corsHeaders }
+      });
+    }
+
+    return new Response(JSON.stringify({ valid: true }), {
+      status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders }
     });
   } catch (error: unknown) {
