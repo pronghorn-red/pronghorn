@@ -1,0 +1,2 @@
+-- Drop the older version with p_status but no p_splash_image_url
+DROP FUNCTION IF EXISTS public.update_project_with_token(uuid, uuid, text, text, text, text, numeric, text, date, date, project_status, text[]);
