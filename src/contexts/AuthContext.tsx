@@ -59,7 +59,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.error) {
         console.error("Signup error:", response.error);
-        return { error: response.error };
+        // Try to extract the actual error message from the response data
+        // When edge function returns non-2xx, the error body is in response.data
+        const errorMessage = response.data?.error || response.error.message || "Failed to create account";
+        return { error: { message: errorMessage } };
       }
 
       if (response.data?.error) {
