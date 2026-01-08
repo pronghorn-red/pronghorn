@@ -7722,35 +7722,13 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      upsert_files_batch_with_token:
-        | {
-            Args: { p_files: Json; p_repo_id: string; p_token: string }
-            Returns: {
-              files_updated: number
-              success: boolean
-            }[]
-          }
-        | {
-            Args: { p_files: Json; p_repo_id: string; p_token: string }
-            Returns: {
-              content: string
-              content_length: number | null
-              created_at: string
-              id: string
-              is_binary: boolean
-              last_commit_sha: string | null
-              path: string
-              project_id: string
-              repo_id: string
-              updated_at: string
-            }[]
-            SetofOptions: {
-              from: "*"
-              to: "repo_files"
-              isOneToOne: false
-              isSetofReturn: true
-            }
-          }
+      upsert_files_batch_with_token: {
+        Args: { p_files: Json; p_repo_id: string; p_token: string }
+        Returns: {
+          files_updated: number
+          success: boolean
+        }[]
+      }
       validate_file_access: {
         Args: { p_file_id: string; p_token: string }
         Returns: boolean
