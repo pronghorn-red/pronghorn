@@ -40,6 +40,7 @@ export default function Auth() {
   const [signupCode, setSignupCode] = useState("");
   const [signupCodeError, setSignupCodeError] = useState<string | null>(null);
   const [signupCodeValidating, setSignupCodeValidating] = useState(false);
+  const [signupError, setSignupError] = useState<string | null>(null);
 
   // Password visibility states
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -200,13 +201,14 @@ export default function Auth() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignupCodeError(null);
+    setSignupError(null);
     
     if (signupPassword !== signupConfirm) {
-      toast.error("Passwords don't match");
+      setSignupError("Passwords don't match");
       return;
     }
     if (signupPassword.length < 6) {
-      toast.error("Password must be at least 6 characters");
+      setSignupError("Password must be at least 6 characters");
       return;
     }
     
@@ -224,8 +226,9 @@ export default function Auth() {
     const { error } = await signUp(signupEmail, signupPassword, true);
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      setSignupError(error.message);
     } else {
+      setSignupError(null);
       toast.success("Account created! Please check your email to verify your account.");
     }
   };
@@ -538,6 +541,14 @@ export default function Auth() {
                     <PasswordToggle show={showSignupConfirm} onToggle={() => setShowSignupConfirm(!showSignupConfirm)} />
                   </div>
                 </div>
+                {signupError && (
+                  <Alert className="border-destructive/50 bg-destructive/10">
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                    <AlertDescription className="text-destructive">
+                      {signupError}
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <Button type="submit" className="w-full" disabled={loading || signupCodeValidating}>
                   {(loading || signupCodeValidating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {signupCodeValidating ? 'Validating Code...' : 'Create Account'}
