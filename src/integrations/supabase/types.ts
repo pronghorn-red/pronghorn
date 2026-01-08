@@ -6428,51 +6428,29 @@ export type Database = {
               isSetofReturn: false
             }
           }
-      move_file_with_token:
-        | {
-            Args: { p_file_id: string; p_new_path: string; p_token: string }
-            Returns: {
-              content_length: number | null
-              created_at: string | null
-              created_by: string | null
-              file_path: string
-              id: string
-              is_binary: boolean
-              new_content: string | null
-              old_content: string | null
-              old_path: string | null
-              operation_type: string
-              project_id: string
-              repo_id: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "repo_staging"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: { p_file_id: string; p_new_path: string; p_token: string }
-            Returns: {
-              content: string
-              content_length: number | null
-              created_at: string
-              id: string
-              is_binary: boolean
-              last_commit_sha: string | null
-              path: string
-              project_id: string
-              repo_id: string
-              updated_at: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "repo_files"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      move_file_with_token: {
+        Args: { p_file_id: string; p_new_path: string; p_token: string }
+        Returns: {
+          content_length: number | null
+          created_at: string | null
+          created_by: string | null
+          file_path: string
+          id: string
+          is_binary: boolean
+          new_content: string | null
+          old_content: string | null
+          old_path: string | null
+          operation_type: string
+          project_id: string
+          repo_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_staging"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       publish_project_to_gallery: {
         Args: {
           p_category?: string
