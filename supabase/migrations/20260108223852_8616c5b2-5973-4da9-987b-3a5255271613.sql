@@ -1,0 +1,2 @@
+-- Drop the broken version with p_x_element_id as uuid (table uses text)
+DROP FUNCTION IF EXISTS public.upsert_audit_tesseract_cell_with_token(uuid, uuid, text, integer, integer, double precision, uuid, text, text, text, text, jsonb, text[]);
