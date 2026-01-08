@@ -6006,72 +6006,38 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      log_repo_commit_with_token:
-        | {
-            Args: {
-              p_branch: string
-              p_commit_message: string
-              p_commit_sha: string
-              p_files_changed: number
-              p_repo_id: string
-              p_token: string
-            }
-            Returns: {
-              branch: string
-              commit_message: string
-              commit_sha: string
-              committed_at: string
-              committed_by: string | null
-              created_at: string
-              files_changed: number
-              files_metadata: Json | null
-              github_sha: string | null
-              id: string
-              parent_commit_id: string | null
-              project_id: string
-              pushed_at: string | null
-              repo_id: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "repo_commits"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_branch: string
-              p_files_changed?: Json
-              p_message: string
-              p_pushed?: boolean
-              p_repo_id: string
-              p_sha: string
-              p_token: string
-            }
-            Returns: {
-              branch: string
-              commit_message: string
-              commit_sha: string
-              committed_at: string
-              committed_by: string | null
-              created_at: string
-              files_changed: number
-              files_metadata: Json | null
-              github_sha: string | null
-              id: string
-              parent_commit_id: string | null
-              project_id: string
-              pushed_at: string | null
-              repo_id: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "repo_commits"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      log_repo_commit_with_token: {
+        Args: {
+          p_branch: string
+          p_commit_message: string
+          p_commit_sha: string
+          p_files_changed: number
+          p_repo_id: string
+          p_token: string
+        }
+        Returns: {
+          branch: string
+          commit_message: string
+          commit_sha: string
+          committed_at: string
+          committed_by: string | null
+          created_at: string
+          files_changed: number
+          files_metadata: Json | null
+          github_sha: string | null
+          id: string
+          parent_commit_id: string | null
+          project_id: string
+          pushed_at: string | null
+          repo_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "repo_commits"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mark_commits_pushed_with_token: {
         Args: {
           p_branch?: string
