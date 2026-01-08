@@ -5978,61 +5978,34 @@ export type Database = {
         Args: { p_project_id: string; p_token: string }
         Returns: Json
       }
-      log_agent_operation_with_token:
-        | {
-            Args: {
-              p_details?: Json
-              p_error_message?: string
-              p_file_path: string
-              p_operation_type: string
-              p_session_id: string
-              p_status: string
-              p_token?: string
-            }
-            Returns: {
-              completed_at: string | null
-              created_at: string
-              details: Json | null
-              error_message: string | null
-              file_path: string | null
-              id: string
-              operation_type: string
-              session_id: string
-              status: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "agent_file_operations"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              p_details?: Json
-              p_file_path?: string
-              p_operation_type: string
-              p_session_id: string
-              p_token: string
-            }
-            Returns: {
-              completed_at: string | null
-              created_at: string
-              details: Json | null
-              error_message: string | null
-              file_path: string | null
-              id: string
-              operation_type: string
-              session_id: string
-              status: string
-            }
-            SetofOptions: {
-              from: "*"
-              to: "agent_file_operations"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
+      log_agent_operation_with_token: {
+        Args: {
+          p_details?: Json
+          p_error_message?: string
+          p_file_path: string
+          p_operation_type: string
+          p_session_id: string
+          p_status: string
+          p_token?: string
+        }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          details: Json | null
+          error_message: string | null
+          file_path: string | null
+          id: string
+          operation_type: string
+          session_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_file_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       log_repo_commit_with_token:
         | {
             Args: {
