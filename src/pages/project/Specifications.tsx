@@ -884,13 +884,13 @@ export default function Specifications() {
   const getStatusColor = (status: AgentResult['status']) => {
     switch (status) {
       case 'completed':
-        return 'border-green-500 bg-green-50';
+        return 'border-green-500 bg-green-500/10 dark:bg-green-500/20';
       case 'error':
-        return 'border-red-500 bg-red-50';
+        return 'border-red-500 bg-red-500/10 dark:bg-red-500/20';
       case 'streaming':
-        return 'border-yellow-500 bg-yellow-50';
+        return 'border-yellow-500 bg-yellow-500/10 dark:bg-yellow-500/20';
       case 'pending':
-        return 'border-gray-300 bg-gray-50';
+        return 'border-gray-300 dark:border-gray-600 bg-gray-500/10 dark:bg-gray-500/20';
     }
   };
 
