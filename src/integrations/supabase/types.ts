@@ -5208,6 +5208,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      hook_validate_signup_code: { Args: { event: Json }; Returns: Json }
       increment_build_book_deploy_count: {
         Args: { p_build_book_id: string }
         Returns: undefined

@@ -37,6 +37,9 @@ export default function Auth() {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupConfirm, setSignupConfirm] = useState("");
+  const [signupCode, setSignupCode] = useState("");
+  const [signupCodeError, setSignupCodeError] = useState<string | null>(null);
+  const [signupCodeValidating, setSignupCodeValidating] = useState(false);
 
   // Password visibility states
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -149,11 +152,21 @@ export default function Auth() {
     }
   }, [session, navigate, resetMode, searchParams]);
 
+  const validateSignupCode = async (code: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('validate-signup-code', {
+        body: { code }
+      });
+      if (error) return false;
+      return data?.valid === true;
+    } catch {
+      return false;
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
-    const {
-      error
-    } = await signInWithGoogle();
+    const { error } = await signInWithGoogle();
     if (error) {
       toast.error(error.message);
       setGoogleLoading(false);
@@ -162,9 +175,7 @@ export default function Auth() {
 
   const handleAzureSignIn = async () => {
     setAzureLoading(true);
-    const {
-      error
-    } = await signInWithAzure();
+    const { error } = await signInWithAzure();
     if (error) {
       toast.error(error.message);
       setAzureLoading(false);
@@ -188,6 +199,8 @@ export default function Auth() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSignupCodeError(null);
+    
     if (signupPassword !== signupConfirm) {
       toast.error("Passwords don't match");
       return;
@@ -196,10 +209,19 @@ export default function Auth() {
       toast.error("Password must be at least 6 characters");
       return;
     }
+    
+    // Validate signup code first
+    setSignupCodeValidating(true);
+    const isCodeValid = await validateSignupCode(signupCode);
+    setSignupCodeValidating(false);
+    
+    if (!isCodeValid) {
+      setSignupCodeError("Invalid signup code. Please contact an administrator.");
+      return;
+    }
+    
     setLoading(true);
-    const {
-      error
-    } = await signUp(signupEmail, signupPassword);
+    const { error } = await signUp(signupEmail, signupPassword, true);
     setLoading(false);
     if (error) {
       toast.error(error.message);
@@ -479,6 +501,26 @@ export default function Auth() {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
+                  <Label htmlFor="signup-code">Signup Code</Label>
+                  <Input 
+                    id="signup-code" 
+                    type="text" 
+                    placeholder="Enter signup code" 
+                    value={signupCode} 
+                    onChange={e => {
+                      setSignupCode(e.target.value);
+                      setSignupCodeError(null);
+                    }} 
+                    required 
+                  />
+                  {signupCodeError && (
+                    <p className="text-sm text-destructive">{signupCodeError}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Contact an administrator to obtain a signup code.
+                  </p>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
                   <Input id="signup-email" type="email" placeholder="you@example.com" value={signupEmail} onChange={e => setSignupEmail(e.target.value)} required />
                 </div>
@@ -496,9 +538,9 @@ export default function Auth() {
                     <PasswordToggle show={showSignupConfirm} onToggle={() => setShowSignupConfirm(!showSignupConfirm)} />
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Create Account
+                <Button type="submit" className="w-full" disabled={loading || signupCodeValidating}>
+                  {(loading || signupCodeValidating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {signupCodeValidating ? 'Validating Code...' : 'Create Account'}
                 </Button>
               </form>
 

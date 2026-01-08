@@ -161,3 +161,6 @@ verify_jwt = false
 
 [functions.recast-slide-layout]
 verify_jwt = false
+
+[functions.validate-signup-code]
+verify_jwt = false

@@ -11,6 +11,7 @@ interface SendAuthEmailRequest {
   type: 'signup' | 'recovery';
   email: string;
   password?: string; // Required for signup
+  signupValidated?: boolean; // Flag indicating signup code was validated
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -29,7 +30,7 @@ const handler = async (req: Request): Promise<Response> => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
     
-    const { type, email, password }: SendAuthEmailRequest = await req.json();
+    const { type, email, password, signupValidated }: SendAuthEmailRequest = await req.json();
     
     console.log(`Processing ${type} email for: ${email}`);
 
@@ -56,7 +57,10 @@ const handler = async (req: Request): Promise<Response> => {
         email: email,
         password: password,
         options: {
-          redirectTo: `${baseUrl}/auth?verified=true`
+          redirectTo: `${baseUrl}/auth?verified=true`,
+          data: {
+            signup_validated: signupValidated === true
+          }
         }
       });
 
