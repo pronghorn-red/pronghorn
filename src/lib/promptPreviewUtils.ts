@@ -4,7 +4,8 @@ import { ToolsManifest, AgentPromptSection } from '@/hooks/useProjectAgent';
 export function generateToolsListText(manifest: ToolsManifest | null): string {
   if (!manifest) return "{{TOOLS_LIST}}";
   
-  const lines: string[] = ["=== AVAILABLE TOOLS ===\n"];
+  // NOTE: No header here - the section title "Available Tools" already provides the header
+  const lines: string[] = [];
   
   // File Operations
   lines.push("## FILE OPERATIONS\n");
@@ -117,10 +118,10 @@ export function generatePromptPreview(
     '{{ATTACHED_FILES_LIST}}': withFiles ? '\n\n[File attachments would appear here]' : '',
     '{{CURRENT_ITERATION}}': '1',
     '{{MAX_ITERATIONS}}': '30',
-    // Runtime placeholders - show as-is or with placeholder content
-    '{{PROJECT_CONTEXT}}': '{{PROJECT_CONTEXT}} <!-- Runtime: project requirements, canvas, artifacts -->',
-    '{{CHAT_HISTORY}}': '{{CHAT_HISTORY}} <!-- Runtime: conversation history -->',
-    '{{BLACKBOARD}}': '{{BLACKBOARD}} <!-- Runtime: agent memory/planning journal -->',
+    // Runtime placeholders - show placeholder text without HTML comments
+    '{{PROJECT_CONTEXT}}': '{{PROJECT_CONTEXT}}',
+    '{{CHAT_HISTORY}}': '{{CHAT_HISTORY}}',
+    '{{BLACKBOARD}}': '{{BLACKBOARD}}',
   };
 
   // Filter sections based on files attached scenario

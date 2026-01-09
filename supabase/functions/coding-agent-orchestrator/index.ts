@@ -144,7 +144,8 @@ function parseAgentResponseText(rawText: string): any {
 
 // Generate tool list text from manifest for prompt
 function generateToolsListText(manifest: ToolsManifest, exposeProject: boolean): string {
-  const lines: string[] = ["=== AVAILABLE TOOLS ===\n"];
+  // NOTE: No header here - the section title "Available Tools" already provides the header
+  const lines: string[] = [];
   
   // File Operations
   lines.push("## FILE OPERATIONS\n");
@@ -810,8 +811,8 @@ Adjust your behavior based on the current mode.`
         editable: "editable",
         order: 5,
         content: `=== CRITICAL RULES (MUST FOLLOW) ===
-1. NEVER use replace_file unless the file is <150 lines OR it's a config file (package.json, tsconfig.json, etc.)
-2. ALWAYS prefer edit_lines over full file replacement - it preserves git blame and produces cleaner diffs
+1. ALWAYS use edit_lines for targeted changes - it preserves git blame and produces cleaner diffs
+2. For small config files (<50 lines), you may replace entire content via edit_lines with start_line=1, end_line=total_lines
 3. ALWAYS call list_files or wildcard_search FIRST if no files are attached to get current file IDs
 4. NEVER assume file paths exist - always verify with list_files or search first
 5. ALWAYS include a blackboard_entry in EVERY response (it is required)

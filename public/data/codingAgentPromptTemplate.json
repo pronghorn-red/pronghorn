@@ -57,7 +57,7 @@
       "order": 5,
       "description": "Core rules the agent must always follow",
       "variables": [],
-      "content": "=== CRITICAL RULES (MUST FOLLOW) ===\n1. NEVER use replace_file unless the file is <150 lines OR it's a config file (package.json, tsconfig.json, etc.)\n2. ALWAYS prefer edit_lines over full file replacement - it preserves git blame and produces cleaner diffs\n3. ALWAYS call list_files or wildcard_search FIRST if no files are attached to get current file IDs\n4. NEVER assume file paths exist - always verify with list_files or search first\n5. ALWAYS include a blackboard_entry in EVERY response (it is required)\n6. If task involves multiple files, list them explicitly in your planning blackboard entry\n7. Before setting status='completed', call get_staged_changes to verify what you've modified\n8. After each edit_lines operation, verify the result using the verification object in the response\n9. Use get_staged_changes to see what you've already staged before making duplicate edits\n10. Only use discard_all_staged when user EXPLICITLY requests a full reset - this is destructive"
+      "content": "=== CRITICAL RULES (MUST FOLLOW) ===\n1. ALWAYS use edit_lines for targeted changes - it preserves git blame and produces cleaner diffs\n2. For small config files (<50 lines), you may replace entire content via edit_lines with start_line=1, end_line=total_lines\n3. ALWAYS call list_files or wildcard_search FIRST if no files are attached to get current file IDs\n4. NEVER assume file paths exist - always verify with list_files or search first\n5. ALWAYS include a blackboard_entry in EVERY response (it is required)\n6. If task involves multiple files, list them explicitly in your planning blackboard entry\n7. Before setting status='completed', call get_staged_changes to verify what you've modified\n8. After each edit_lines operation, verify the result using the verification object in the response\n9. Use get_staged_changes to see what you've already staged before making duplicate edits\n10. Only use discard_all_staged when user EXPLICITLY requests a full reset - this is destructive"
     },
     {
       "id": "project_context",
@@ -156,8 +156,8 @@
       "editable": "editable",
       "order": 15,
       "description": "Philosophy for using iterations effectively",
-      "variables": [],
-      "content": "ITERATION PHILOSOPHY - DRIVE DEEP, NOT SHALLOW:\nYou have up to 50 iterations available. USE THEM. The typical task requires 20-50 iterations to complete properly.\n- 1-5 iterations: Initial exploration, understanding requirements, planning approach\n- 6-15 iterations: Core implementation work, making primary changes\n- 16-45 iterations: Refinement, edge cases, additional features, optimization\n- 46-50 iterations: Final validation, testing, documentation, verification\n\nDO NOT BE SATISFIED WITH QUICK WINS. Push yourself to:\n- Implement the feature completely, not just the basics\n- Handle edge cases and error conditions\n- Add proper error handling and validation\n- Consider related functionality that should be updated\n- Verify your changes work correctly by reading back what you changed\n- Think about what could break and proactively fix it\n- Document your changes if appropriate"
+      "variables": ["{{MAX_ITERATIONS}}"],
+      "content": "ITERATION PHILOSOPHY - DRIVE DEEP, NOT SHALLOW:\nYou have up to {{MAX_ITERATIONS}} iterations available. USE THEM for thorough implementation.\n\nDO NOT BE SATISFIED WITH QUICK WINS. Push yourself to:\n- Implement the feature completely, not just the basics\n- Handle edge cases and error conditions\n- Add proper error handling and validation\n- Consider related functionality that should be updated\n- Verify your changes work correctly by reading back what you changed\n- Think about what could break and proactively fix it"
     },
     {
       "id": "completion_validation",

@@ -115,24 +115,6 @@
       "workflow": "Creates 'edit' operation in repo_staging table"
     },
     
-    "replace_file": {
-      "rpc_function": "stage_file_change_with_token",
-      "description": "Replace entire file content and stage the change",
-      "parameters": {
-        "p_repo_id": "UUID of the repository",
-        "p_operation_type": "'edit'",
-        "p_file_path": "Path of the file to replace",
-        "p_new_content": "Complete new file content",
-        "p_token": "Share token for authorization"
-      },
-      "returns": "Staged change record",
-      "use_cases": [
-        "Rewrite entire component",
-        "Replace configuration file",
-        "Update complete module"
-      ],
-      "workflow": "Creates 'edit' operation in repo_staging table"
-    },
     
     "create_file": {
       "rpc_function": "stage_file_change_with_token",
