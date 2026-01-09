@@ -456,8 +456,8 @@ function generateRunignore(): string {
 # =====================================================
 
 # Logs and temporary files
-/backend/logs/
-/logs/
+/app/backend/logs/
+/app/backend/data/
 *.log
 *.tmp
 
