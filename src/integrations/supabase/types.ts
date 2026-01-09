@@ -1538,6 +1538,56 @@ export type Database = {
           },
         ]
       }
+      project_agents: {
+        Row: {
+          agent_type: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          project_id: string
+          sections: Json
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          agent_type?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          project_id: string
+          sections?: Json
+          updated_at?: string
+          version?: string
+        }
+        Update: {
+          agent_type?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          project_id?: string
+          sections?: Json
+          updated_at?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_agents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_database_connections: {
         Row: {
           connection_string: string
@@ -3465,6 +3515,10 @@ export type Database = {
         Args: { p_presentation_id: string; p_token?: string }
         Returns: undefined
       }
+      delete_project_agent_with_token: {
+        Args: { p_agent_type?: string; p_project_id: string; p_token: string }
+        Returns: boolean
+      }
       delete_project_repo_with_token: {
         Args: { p_repo_id: string; p_token: string }
         Returns: undefined
@@ -4535,6 +4589,22 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_project_agent_with_token: {
+        Args: { p_agent_type?: string; p_project_id: string; p_token: string }
+        Returns: {
+          agent_type: string
+          created_at: string
+          created_by: string
+          description: string
+          id: string
+          is_default: boolean
+          name: string
+          project_id: string
+          sections: Json
+          updated_at: string
+          version: string
+        }[]
       }
       get_project_category_with_token: {
         Args: { p_category: string; p_project_id: string; p_token?: string }
@@ -7211,6 +7281,18 @@ export type Database = {
           files_updated: number
           success: boolean
         }[]
+      }
+      upsert_project_agent_with_token: {
+        Args: {
+          p_agent_type: string
+          p_description?: string
+          p_name: string
+          p_project_id: string
+          p_sections?: Json
+          p_token: string
+          p_version?: string
+        }
+        Returns: string
       }
       validate_file_access: {
         Args: { p_file_id: string; p_token: string }
