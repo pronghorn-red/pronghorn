@@ -689,14 +689,36 @@ serve(async (req) => {
       
       console.log(`[buildDynamicSystemPrompt] ${sections.length} total sections, ${enabledSections.length} enabled`);
       
+      // Generate dynamic content from manifest
+      const toolsListText = generateToolsListText(manifest, exposeProject);
+      const responseSchemaText = generateResponseSchemaText(manifest, exposeProject);
+      
+      // Determine which attached files section to use
+      const hasAttachedFiles = attachedFiles && attachedFiles.length > 0;
+      
+      // Filter sections based on attached files state
+      const filteredSections = sortedSections.filter(s => {
+        // Show "attached_files_with" only when files are attached
+        if (s.id === "attached_files_with") return hasAttachedFiles;
+        // Show "attached_files_without" only when no files are attached
+        if (s.id === "attached_files_without") return !hasAttachedFiles;
+        // Legacy support for old templates
+        if (s.id === "attached_files_instruction") return true;
+        return true;
+      });
+      
       // Build variable substitutions
       const variables: Record<string, string> = {
-        "{{FILE_OPERATIONS}}": JSON.stringify(manifest.file_operations, null, 2),
-        "{{TOOLS_MANIFEST}}": JSON.stringify(manifest, null, 2),
+        // New unified variables
+        "{{TOOLS_LIST}}": toolsListText,
+        "{{RESPONSE_SCHEMA}}": responseSchemaText,
+        // Runtime values
         "{{TASK_MODE}}": mode,
         "{{AUTO_COMMIT}}": String(autoCommit),
         "{{PROJECT_CONTEXT}}": contextSummary ? `Project Context:\n${contextSummary}` : "",
-        "{{ATTACHED_FILES_INSTRUCTION}}": attachedFiles && attachedFiles.length > 0
+        "{{ATTACHED_FILES_LIST}}": attachedFilesSection,
+        // Legacy support for old templates
+        "{{ATTACHED_FILES_INSTRUCTION}}": hasAttachedFiles
           ? `The user has attached specific file(s) with their file_id values listed above. DO NOT call list_files first - use read_file directly with the provided file_id values to work with these files immediately.${attachedFilesSection}`
           : `Your FIRST operation MUST be list_files or wildcard_search to get CURRENT file IDs.
 File IDs from chat history are STALE and INVALID - never reuse them!
@@ -706,64 +728,19 @@ File IDs from chat history are STALE and INVALID - never reuse them!
 }
 This loads the complete file structure with all CURRENT file IDs and paths. You CANNOT edit, read, or delete files without getting their IDs from THIS session first.`,
         "{{CHAT_HISTORY}}": chatHistorySection,
-        "{{PROJECT_EXPLORATION_TOOLS}}": exposeProject ? `=== PROJECT EXPLORATION TOOLS (ENABLED) ===
-
-You have READ-ONLY access to explore the entire project via these additional tools:
-
-project_inventory:
-  - Returns counts and brief previews for ALL project elements in one call
-  - Use this FIRST to understand project scope before diving into specifics
-  - Returns: { category: { count, items: [{id, title, snippet}] } } for all categories
-  - params: {} (no parameters required)
-
-project_category:
-  - Load ALL items from a specific category with full details
-  - Categories: requirements, chat_sessions, chat_messages, standards, tech_stacks, 
-    artifacts, project_metadata, canvas_nodes, canvas_edges, canvas_layers,
-    repositories, repo_files, repo_staging, repo_commits, agent_sessions, agent_messages
-  - params: { "category": "category_name" }
-  - Use when you need to review an entire category in depth
-
-project_elements:
-  - Load SPECIFIC elements by their IDs with full details
-  - Pass array of {category, id} pairs to fetch multiple elements at once
-  - params: { "elements": [{"category": "requirements", "id": "uuid"}, ...] }
-  - Use when you know exactly which items you need
-
-PROJECT EXPLORATION WORKFLOW:
-1. Start with project_inventory to see counts and previews of all categories
-2. Use project_category to load full details of categories you need
-3. Use project_elements to fetch specific items by ID
-
-EXAMPLE USE CASES:
-- "Do these pages cover all requirements?" → Use project_inventory, then project_category("requirements"), 
-  then project_category("canvas_nodes") to compare
-- "Create controllers for all APIs on canvas" → Use project_category("canvas_nodes"), filter for API type,
-  then create files accordingly
-- "Review the recent chat sessions" → Use project_category("chat_sessions") to see all sessions
-
-These tools are READ-ONLY. You cannot modify project elements through these tools.
-Use them to understand context and inform your file operations.` : "",
+        // Deprecated - kept for backward compatibility with old custom configs
+        "{{FILE_OPERATIONS}}": JSON.stringify(manifest.file_operations, null, 2),
+        "{{TOOLS_MANIFEST}}": JSON.stringify(manifest, null, 2),
         // New dynamic variables for iteration and blackboard
         "{{BLACKBOARD}}": blackboardEntries ? `=== AGENT BLACKBOARD (Your Memory) ===\n${blackboardEntries}` : "",
         "{{CURRENT_ITERATION}}": String(currentIteration),
         "{{MAX_ITERATIONS}}": String(maxIterations),
       };
 
-      // Critical variables that should appear somewhere in the prompt
-      const criticalVariables = ["{{FILE_OPERATIONS}}", "{{PROJECT_CONTEXT}}", "{{ATTACHED_FILES_INSTRUCTION}}"];
-      const allContent = sortedSections.map(s => s.content).join("");
-      
-      for (const critVar of criticalVariables) {
-        if (!allContent.includes(critVar)) {
-          console.warn(`[buildDynamicSystemPrompt] WARNING: Critical variable ${critVar} is not present in any enabled section. The agent may lack important context.`);
-        }
-      }
-
       // Build prompt from sections, substituting variables
       const promptParts: string[] = [];
       
-      for (const section of sortedSections) {
+      for (const section of filteredSections) {
         let content = section.content;
         
         // Substitute all variables in the content
@@ -782,7 +759,7 @@ Use them to understand context and inform your file operations.` : "",
       return promptParts.join("\n\n");
     }
 
-    // Embedded default prompt template (mirrors /public/data/codingAgentPromptTemplate.json)
+    // Embedded default prompt template (mirrors /public/data/codingAgentPromptTemplate.json v1.2.0)
     const defaultPromptSections: AgentPromptSection[] = [
       {
         id: "response_format_critical",
@@ -798,22 +775,40 @@ Use them to understand context and inform your file operations.` : "",
         type: "static",
         editable: "editable",
         order: 2,
-        content: "You are CodingAgent, an autonomous coding agent with the following capabilities:\n\n{{FILE_OPERATIONS}}\n\nYou can execute these file operations by responding with structured JSON containing the operations to perform."
+        content: "You are CodingAgent, an autonomous coding agent that can explore, read, create, edit, move, and delete files in a repository. You work by responding with structured JSON containing operations to perform."
       },
       {
-        id: "task_mode",
-        title: "Task Mode",
+        id: "tools_list",
+        title: "Available Tools",
         type: "dynamic",
         editable: "readonly",
         order: 3,
-        content: "Your task mode is: {{TASK_MODE}}\nAuto-commit enabled: {{AUTO_COMMIT}}"
+        content: "{{TOOLS_LIST}}"
+      },
+      {
+        id: "task_mode",
+        title: "Task Mode & Settings",
+        type: "dynamic",
+        editable: "editable",
+        order: 4,
+        content: `=== TASK MODE: {{TASK_MODE}} ===
+
+Task modes define your approach:
+- **task**: Focus on completing a specific user request
+- **iterative_loop**: Work through multiple iterations with feedback
+- **continuous_improvement**: Ongoing refinement and optimization
+
+Auto-commit: {{AUTO_COMMIT}}
+When auto-commit is enabled (true), your staged changes will be automatically committed after each operation. When disabled (false), changes remain staged for manual review.
+
+Adjust your behavior based on the current mode.`
       },
       {
         id: "critical_rules",
         title: "Critical Rules",
         type: "static",
         editable: "editable",
-        order: 4,
+        order: 5,
         content: `=== CRITICAL RULES (MUST FOLLOW) ===
 1. NEVER use replace_file unless the file is <150 lines OR it's a config file (package.json, tsconfig.json, etc.)
 2. ALWAYS prefer edit_lines over full file replacement - it preserves git blame and produces cleaner diffs
@@ -831,7 +826,7 @@ Use them to understand context and inform your file operations.` : "",
         title: "Project Context",
         type: "dynamic",
         editable: "readonly",
-        order: 5,
+        order: 6,
         content: "{{PROJECT_CONTEXT}}"
       },
       {
@@ -839,7 +834,7 @@ Use them to understand context and inform your file operations.` : "",
         title: "File ID Warning",
         type: "static",
         editable: "editable",
-        order: 6,
+        order: 7,
         content: `⚠️ CRITICAL WARNING ABOUT FILE IDs FROM CHAT HISTORY:
 Any file IDs mentioned in the RECENT CONVERSATION CONTEXT above are from PREVIOUS sessions and are STALE/INVALID.
 File IDs change when:
@@ -852,45 +847,43 @@ ALWAYS call list_files or wildcard_search FIRST to get CURRENT, VALID file IDs f
 Even if chat history shows "file_id: abc123", that ID is INVALID - you MUST get fresh IDs.`
       },
       {
-        id: "attached_files_instruction",
-        title: "Attached Files Instruction",
+        id: "attached_files_with",
+        title: "When Files Are Attached",
         type: "dynamic",
-        editable: "readonly",
-        order: 7,
-        content: "{{ATTACHED_FILES_INSTRUCTION}}"
+        editable: "editable",
+        order: 8,
+        content: `The user has attached specific file(s) with their file_id values listed above. DO NOT call list_files first - use read_file directly with the provided file_id values to work with these files immediately.
+
+{{ATTACHED_FILES_LIST}}`
+      },
+      {
+        id: "attached_files_without",
+        title: "When No Files Attached",
+        type: "static",
+        editable: "editable",
+        order: 9,
+        content: `Your FIRST operation MUST be list_files or wildcard_search to get CURRENT file IDs.
+File IDs from chat history are STALE and INVALID - never reuse them!
+{
+  "type": "list_files",
+  "params": { "path_prefix": null }
+}
+This loads the complete file structure with all CURRENT file IDs and paths. You CANNOT edit, read, or delete files without getting their IDs from THIS session first.`
       },
       {
         id: "response_structure",
         title: "Response Structure",
-        type: "static",
-        editable: "editable",
-        order: 8,
-        content: `When responding, structure your response as:
-{
-  "reasoning": "Your chain-of-thought reasoning about what to do next",
-  "operations": [
-    { "type": "list_files", "params": { "path_prefix": null } },
-    { "type": "wildcard_search", "params": { "query": "search terms" } },
-    { "type": "search", "params": { "keyword": "keyword" } },
-    { "type": "read_file", "params": { "path": "src/components/Example.tsx" } },
-    { "type": "edit_lines", "params": { "path": "src/file.tsx", "start_line": 1, "end_line": 5, "new_content": "replacement" } },
-    { "type": "create_file", "params": { "path": "path/to/file.ext", "content": "content" } },
-    { "type": "delete_file", "params": { "path": "src/old-file.tsx" } },
-    { "type": "move_file", "params": { "path": "src/old.tsx", "new_path": "src/new.tsx" } }
-  ],
-  "blackboard_entry": {
-    "entry_type": "planning" | "progress" | "decision" | "reasoning" | "next_steps" | "reflection",
-    "content": "Your memory/reflection for this step"
-  },
-  "status": "in_progress" | "completed" | "requires_commit"
-}`
+        type: "dynamic",
+        editable: "readonly",
+        order: 10,
+        content: "{{RESPONSE_SCHEMA}}"
       },
       {
         id: "line_number_rules",
         title: "Line Number Rules",
         type: "static",
         editable: "editable",
-        order: 9,
+        order: 11,
         content: `READ_FILE LINE NUMBER FORMAT:
 When you call read_file, the content is returned with line numbers prefixed as <<N>> where N is the line number.
 IMPORTANT: The <<N>> markers are for YOUR REFERENCE ONLY - NEVER include <<N>> in your edit_lines new_content.
@@ -901,7 +894,7 @@ When specifying start_line and end_line for edit_lines, use the numbers shown in
         title: "Additional Critical Rules",
         type: "static",
         editable: "editable",
-        order: 10,
+        order: 12,
         content: `CRITICAL RULES:
 1. If user attached files, use read_file directly with those IDs - DO NOT call list_files first
 2. If no files attached, start with list_files OR wildcard_search
@@ -918,7 +911,7 @@ When specifying start_line and end_line for edit_lines, use the numbers shown in
         title: "Edit Lines Operation Modes",
         type: "static",
         editable: "editable",
-        order: 11,
+        order: 13,
         content: `EDIT_LINES OPERATION MODES:
 1. REPLACE LINES: start_line=X, end_line=Y replaces lines X-Y with new_content
 2. INSERT ONLY: end_line = start_line - 1 inserts WITHOUT deleting anything
@@ -929,7 +922,7 @@ When specifying start_line and end_line for edit_lines, use the numbers shown in
         title: "Operation Batching",
         type: "static",
         editable: "editable",
-        order: 12,
+        order: 14,
         content: `OPERATION BATCHING - Include multiple operations per response for efficiency.
 Batch up to 10 edit_lines operations in ONE response. Don't wait for separate iterations.`
       },
@@ -938,7 +931,7 @@ Batch up to 10 edit_lines operations in ONE response. Don't wait for separate it
         title: "Iteration Philosophy",
         type: "static",
         editable: "editable",
-        order: 13,
+        order: 15,
         content: `ITERATION PHILOSOPHY - DRIVE DEEP:
 You have many iterations available. USE THEM. Implement completely, handle edge cases, verify changes.`
       },
@@ -947,7 +940,7 @@ You have many iterations available. USE THEM. Implement completely, handle edge 
         title: "Completion Validation",
         type: "static",
         editable: "editable",
-        order: 14,
+        order: 16,
         content: `BEFORE marking status="completed":
 1. Call list_files to verify project state
 2. Re-read original task and confirm ALL requirements met
@@ -959,24 +952,16 @@ You have many iterations available. USE THEM. Implement completely, handle edge 
         title: "Response Format Enforcement",
         type: "static",
         editable: "editable",
-        order: 15,
+        order: 17,
         content: `RESPONSE FORMAT: Your entire response must be a single valid JSON object.
 Start with { and end with }. No text before or after.`
-      },
-      {
-        id: "project_exploration_tools",
-        title: "Project Exploration Tools",
-        type: "dynamic",
-        editable: "readonly",
-        order: 16,
-        content: "{{PROJECT_EXPLORATION_TOOLS}}"
       },
       {
         id: "blackboard",
         title: "Agent Blackboard",
         type: "dynamic",
         editable: "readonly",
-        order: 17,
+        order: 18,
         content: "{{BLACKBOARD}}"
       },
       {
@@ -984,7 +969,7 @@ Start with { and end with }. No text before or after.`
         title: "Iteration Status",
         type: "dynamic",
         editable: "readonly",
-        order: 18,
+        order: 19,
         content: "Current iteration: {{CURRENT_ITERATION}} of {{MAX_ITERATIONS}}"
       }
     ];
