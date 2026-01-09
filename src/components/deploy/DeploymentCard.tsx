@@ -143,17 +143,17 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate, onSelect, isSelected
       if (!data.success) throw new Error(data.error);
 
       if (mode === 'env-only') {
-        // Plain text .env file
+        // Plain text .run file (same format as .env, different name to avoid conflicts)
         const blob = new Blob([data.data], { type: 'text/plain' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = data.filename || `${deployment.environment}-${deployment.name}.env`;
+        a.download = data.filename || `${deployment.environment}-${deployment.name}.run`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
-        toast.success('.env file downloaded');
+        toast.success('.run config file downloaded');
       } else {
         // Decode base64 ZIP to binary
         const binaryString = atob(data.data);
@@ -298,7 +298,7 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate, onSelect, isSelected
                 <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2 space-y-1">
                   <p className="font-medium text-foreground">Two ways to run locally:</p>
                   <p><strong>Full Package:</strong> Download ZIP → Extract → <code className="bg-muted px-1 rounded">npm i</code> → <code className="bg-muted px-1 rounded">npm start</code></p>
-                  <p><strong>.env Only:</strong> <code className="bg-muted px-1 rounded">git clone github.com/pronghorn-red/pronghorn-runner</code> → Drop in .env → <code className="bg-muted px-1 rounded">npm i</code> → <code className="bg-muted px-1 rounded">npm start</code></p>
+                  <p><strong>.run Only:</strong> <code className="bg-muted px-1 rounded">git clone github.com/pronghorn-red/pronghorn-runner</code> → Drop in .run → <code className="bg-muted px-1 rounded">npm i</code> → <code className="bg-muted px-1 rounded">npm start</code></p>
                 </div>
               </div>
             )}
@@ -428,7 +428,7 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate, onSelect, isSelected
                   onClick={() => handleDownloadPackage('full')}
                   disabled={isActionLoading === 'download-full'}
                   className="text-xs"
-                  title="Download complete ZIP with runner code + .env"
+                  title="Download complete ZIP with runner code + .run config"
                 >
                   {isActionLoading === 'download-full' ? (
                     <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
@@ -443,14 +443,14 @@ const DeploymentCard = ({ deployment, shareToken, onUpdate, onSelect, isSelected
                   onClick={() => handleDownloadPackage('env-only')}
                   disabled={isActionLoading === 'download-env'}
                   className="text-xs bg-blue-600 hover:bg-blue-700"
-                  title="Download .env config file only (use with pronghorn-runner git clone)"
+                  title="Download .run config file only (use with pronghorn-runner git clone)"
                 >
                   {isActionLoading === 'download-env' ? (
                     <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
                   ) : (
                     <FileText className="h-3 w-3 mr-1" />
                   )}
-                  .env Only
+                  .run Only
                 </Button>
               </>
             )}
