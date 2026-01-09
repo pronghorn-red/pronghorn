@@ -1206,31 +1206,33 @@ export function UnifiedAgentInterface({
 
       {/* Chat History Settings Dialog */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh] w-[90vw] h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] w-[90vw] h-[90vh] md:max-w-[90vw] md:max-h-[90vh] max-sm:max-w-full max-sm:max-h-full max-sm:w-full max-sm:h-full max-sm:rounded-none overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Agent Settings & Debug</DialogTitle>
             <DialogDescription>
               Configure chat history settings and view raw LLM logs for debugging.
             </DialogDescription>
           </DialogHeader>
           
-          <Tabs defaultValue="settings" className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="settings">
-                <Settings className="h-4 w-4 mr-2" />
-                History Settings
-              </TabsTrigger>
-              <TabsTrigger value="raw-logs">
-                <Database className="h-4 w-4 mr-2" />
-                Raw LLM Logs
-              </TabsTrigger>
-              <TabsTrigger value="prompt-editor">
-                <Wrench className="h-4 w-4 mr-2" />
-                Prompt Editor
-              </TabsTrigger>
-            </TabsList>
+          <Tabs defaultValue="settings" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="flex-shrink-0 overflow-x-auto">
+              <TabsList className="inline-flex w-auto min-w-full">
+                <TabsTrigger value="settings" className="whitespace-nowrap">
+                  <Settings className="h-4 w-4 mr-2" />
+                  History Settings
+                </TabsTrigger>
+                <TabsTrigger value="raw-logs" className="whitespace-nowrap">
+                  <Database className="h-4 w-4 mr-2" />
+                  Raw LLM Logs
+                </TabsTrigger>
+                <TabsTrigger value="prompt-editor" className="whitespace-nowrap">
+                  <Wrench className="h-4 w-4 mr-2" />
+                  Prompt Editor
+                </TabsTrigger>
+              </TabsList>
+            </div>
             
-            <TabsContent value="settings" className="flex-1 overflow-y-auto">
+            <TabsContent value="settings" className="flex-1 overflow-y-auto mt-4">
               <div className="space-y-6 py-4">
                 {/* Include History Toggle */}
                 <div className="flex items-center gap-2">
