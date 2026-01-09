@@ -42,6 +42,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RawLLMLogsViewer } from './RawLLMLogsViewer';
 import { AgentPromptEditor } from './AgentPromptEditor';
+import { useProjectAgent } from '@/hooks/useProjectAgent';
 
 interface UnifiedAgentInterfaceProps {
   projectId: string;
@@ -76,6 +77,9 @@ export function UnifiedAgentInterface({
 }: UnifiedAgentInterfaceProps) {
   const { messages: loadedMessages, loading: messagesLoading, hasMore: hasMoreMessages, loadMore: loadMoreMessages, refetch: refetchMessages } = useInfiniteAgentMessages(projectId, shareToken);
   const { operations, loading: operationsLoading, hasMore: hasMoreOperations, loadMore: loadMoreOperations, refetch: refetchOperations } = useInfiniteAgentOperations(projectId, shareToken);
+  
+  // Load project agent configuration for custom prompt sections
+  const { sections: promptSections, hasCustomConfig } = useProjectAgent(projectId, 'coding-agent-orchestrator', shareToken);
   
   // Local messages state for optimistic updates
   const [messages, setMessages] = useState<any[]>(loadedMessages);
@@ -397,6 +401,8 @@ export function UnifiedAgentInterface({
           attachedFiles: attachedFiles,
           exposeProject: agentConfig.exposeProject,
           maxIterations: agentConfig.maxIterations,
+          // Pass custom prompt sections if user has configured them
+          promptSections: hasCustomConfig ? promptSections : undefined,
           projectContext: attachedContext ? {
             projectMetadata: attachedContext.projectMetadata || null,
             artifacts: attachedContext.artifacts.length > 0 ? attachedContext.artifacts : undefined,

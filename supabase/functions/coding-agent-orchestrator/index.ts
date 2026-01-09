@@ -6,6 +6,17 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface AgentPromptSection {
+  id: string;
+  title: string;
+  type: "static" | "dynamic";
+  editable: "editable" | "readonly" | "substitutable";
+  order: number;
+  content: string;
+  variables?: string[];
+  isCustom?: boolean;
+}
+
 interface TaskRequest {
   projectId: string;
   repoId: string;
@@ -18,6 +29,7 @@ interface TaskRequest {
   chatHistory?: string;
   exposeProject?: boolean;
   maxIterations?: number;
+  promptSections?: AgentPromptSection[];
 }
 
 function parseAgentResponseText(rawText: string): any {
@@ -296,6 +308,7 @@ serve(async (req) => {
       chatHistory,
       exposeProject = false,
       maxIterations: requestedMaxIterations = 30,
+      promptSections,
     } = requestData;
 
     console.log("Starting CodingAgent task:", { projectId, mode, taskDescription });
@@ -540,8 +553,99 @@ serve(async (req) => {
       chatHistorySection = `\n\n📜 RECENT CONVERSATION CONTEXT:\n${chatHistory}\n--- END CONVERSATION CONTEXT ---`;
     }
 
-    // Build system prompt
-    const systemPrompt = `CRITICAL: You MUST respond with ONLY valid JSON. No prose, no markdown, no explanations outside the JSON structure.
+    // Dynamic system prompt builder - substitutes variables in prompt sections
+    function buildDynamicSystemPrompt(sections: AgentPromptSection[]): string {
+      // Sort sections by order
+      const sortedSections = [...sections].sort((a, b) => a.order - b.order);
+      
+      // Build variable substitutions
+      const variables: Record<string, string> = {
+        "{{FILE_OPERATIONS}}": JSON.stringify(manifest.file_operations, null, 2),
+        "{{TASK_MODE}}": mode,
+        "{{AUTO_COMMIT}}": String(autoCommit),
+        "{{PROJECT_CONTEXT}}": contextSummary ? `Project Context:\n${contextSummary}` : "",
+        "{{ATTACHED_FILES_INSTRUCTION}}": attachedFiles && attachedFiles.length > 0
+          ? `The user has attached specific file(s) with their file_id values listed above. DO NOT call list_files first - use read_file directly with the provided file_id values to work with these files immediately.${attachedFilesSection}`
+          : `Your FIRST operation MUST be list_files or wildcard_search to get CURRENT file IDs.
+File IDs from chat history are STALE and INVALID - never reuse them!
+{
+  "type": "list_files",
+  "params": { "path_prefix": null }
+}
+This loads the complete file structure with all CURRENT file IDs and paths. You CANNOT edit, read, or delete files without getting their IDs from THIS session first.`,
+        "{{CHAT_HISTORY}}": chatHistorySection,
+        "{{PROJECT_EXPLORATION_TOOLS}}": exposeProject ? `=== PROJECT EXPLORATION TOOLS (ENABLED) ===
+
+You have READ-ONLY access to explore the entire project via these additional tools:
+
+project_inventory:
+  - Returns counts and brief previews for ALL project elements in one call
+  - Use this FIRST to understand project scope before diving into specifics
+  - Returns: { category: { count, items: [{id, title, snippet}] } } for all categories
+  - params: {} (no parameters required)
+
+project_category:
+  - Load ALL items from a specific category with full details
+  - Categories: requirements, chat_sessions, chat_messages, standards, tech_stacks, 
+    artifacts, project_metadata, canvas_nodes, canvas_edges, canvas_layers,
+    repositories, repo_files, repo_staging, repo_commits, agent_sessions, agent_messages
+  - params: { "category": "category_name" }
+  - Use when you need to review an entire category in depth
+
+project_elements:
+  - Load SPECIFIC elements by their IDs with full details
+  - Pass array of {category, id} pairs to fetch multiple elements at once
+  - params: { "elements": [{"category": "requirements", "id": "uuid"}, ...] }
+  - Use when you know exactly which items you need
+
+PROJECT EXPLORATION WORKFLOW:
+1. Start with project_inventory to see counts and previews of all categories
+2. Use project_category to load full details of categories you need
+3. Use project_elements to fetch specific items by ID
+
+EXAMPLE USE CASES:
+- "Do these pages cover all requirements?" → Use project_inventory, then project_category("requirements"), 
+  then project_category("canvas_nodes") to compare
+- "Create controllers for all APIs on canvas" → Use project_category("canvas_nodes"), filter for API type,
+  then create files accordingly
+- "Review the recent chat sessions" → Use project_category("chat_sessions") to see all sessions
+
+These tools are READ-ONLY. You cannot modify project elements through these tools.
+Use them to understand context and inform your file operations.` : "",
+      };
+
+      // Build prompt from sections, substituting variables
+      const promptParts: string[] = [];
+      
+      for (const section of sortedSections) {
+        let content = section.content;
+        
+        // Substitute all variables in the content
+        for (const [varName, varValue] of Object.entries(variables)) {
+          content = content.replace(new RegExp(varName.replace(/[{}]/g, '\\$&'), 'g'), varValue);
+        }
+        
+        // Skip empty dynamic sections (e.g., no chat history, no project exploration)
+        if (section.type === "dynamic" && !content.trim()) {
+          continue;
+        }
+        
+        promptParts.push(content);
+      }
+
+      return promptParts.join("\n\n");
+    }
+
+    // Build system prompt - use custom sections if provided, otherwise use hardcoded default
+    let systemPrompt: string;
+
+    if (promptSections && promptSections.length > 0) {
+      // Use dynamic prompt from user-provided sections
+      console.log(`Building dynamic system prompt from ${promptSections.length} sections`);
+      systemPrompt = buildDynamicSystemPrompt(promptSections);
+    } else {
+      // Fall back to hardcoded default prompt for backward compatibility
+      systemPrompt = `CRITICAL: You MUST respond with ONLY valid JSON. No prose, no markdown, no explanations outside the JSON structure.
 
 You are CodingAgent, an autonomous coding agent with the following capabilities:
 
@@ -853,7 +957,7 @@ EXAMPLE USE CASES:
 
 These tools are READ-ONLY. You cannot modify project elements through these tools.
 Use them to understand context and inform your file operations.` : ''}`;
-
+    }
     // Autonomous iteration loop - use requested max or default to 30, cap at 500
     const MAX_ITERATIONS = Math.min(Math.max(requestedMaxIterations, 1), 500);
     console.log(`Max iterations set to: ${MAX_ITERATIONS} (requested: ${requestedMaxIterations})`);
