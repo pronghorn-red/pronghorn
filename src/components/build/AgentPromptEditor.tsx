@@ -1,10 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import {
   Accordion,
   AccordionContent,
@@ -59,11 +60,18 @@ import {
   ChevronDown,
   Wrench,
   FolderSearch,
+  Eye,
+  Copy,
+  Info,
+  Hash,
+  Type,
+  FileText,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useProjectAgent, AgentPromptSection, AgentDefinition, ToolParamDefinition } from '@/hooks/useProjectAgent';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { generatePromptPreview } from '@/lib/promptPreviewUtils';
 
 interface AgentPromptEditorProps {
   projectId: string;
@@ -97,6 +105,7 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
   const sortedSections = [...sections].sort((a, b) => a.order - b.order);
 
   const [isAddSectionOpen, setIsAddSectionOpen] = useState(false);
+  const [previewWithFiles, setPreviewWithFiles] = useState(false);
   const [newSection, setNewSection] = useState<Partial<AgentPromptSection>>({
     id: '',
     title: '',
@@ -107,6 +116,24 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
     content: '',
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Generate preview whenever sections or manifest change
+  const previewData = useMemo(() => {
+    return generatePromptPreview(sections, toolsManifest, {
+      withFiles: previewWithFiles,
+      taskMode: 'task',
+      autoCommit: 'false',
+    });
+  }, [sections, toolsManifest, previewWithFiles]);
+
+  const handleCopyPreview = async () => {
+    try {
+      await navigator.clipboard.writeText(previewData.prompt);
+      toast.success('Prompt copied to clipboard');
+    } catch {
+      toast.error('Failed to copy to clipboard');
+    }
+  };
 
   const handleSave = async () => {
     if (!agentDefinition) return;
@@ -351,6 +378,10 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
               {hasCustomToolDescriptions && (
                 <Badge variant="secondary" className="ml-1 text-xs">Modified</Badge>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="preview" className="gap-2">
+              <Eye className="h-4 w-4" />
+              Preview
             </TabsTrigger>
           </TabsList>
         </div>
@@ -685,6 +716,61 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
               </div>
             </div>
           </ScrollArea>
+        </TabsContent>
+
+        {/* Preview Tab */}
+        <TabsContent value="preview" className="flex-1 m-0 overflow-hidden">
+          <div className="p-4 space-y-4 h-full flex flex-col">
+            {/* Stats Bar */}
+            <div className="flex flex-wrap items-center gap-3 p-3 bg-muted rounded-lg">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">{previewData.charCount.toLocaleString()} chars</span>
+              </div>
+              <Separator orientation="vertical" className="h-4" />
+              <div className="flex items-center gap-2">
+                <Type className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">{previewData.wordCount.toLocaleString()} words</span>
+              </div>
+              <Separator orientation="vertical" className="h-4" />
+              <div className="flex items-center gap-2">
+                <Hash className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">~{previewData.tokenEstimate.toLocaleString()} tokens</span>
+              </div>
+              <div className="flex-1" />
+              <div className="flex items-center gap-2">
+                <Label htmlFor="preview-files" className="text-xs text-muted-foreground cursor-pointer">
+                  With files attached
+                </Label>
+                <Switch
+                  id="preview-files"
+                  checked={previewWithFiles}
+                  onCheckedChange={setPreviewWithFiles}
+                  className="h-4 w-7"
+                />
+              </div>
+              <Button variant="outline" size="sm" onClick={handleCopyPreview}>
+                <Copy className="h-4 w-4 mr-2" />
+                Copy
+              </Button>
+            </div>
+            
+            {/* Info about placeholders */}
+            <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-md text-sm text-amber-700 dark:text-amber-400">
+              <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <span>
+                Variables in <code className="bg-amber-100 dark:bg-amber-900 px-1.5 py-0.5 rounded text-xs font-mono">{'{{handlebars}}'}</code> are 
+                substituted at runtime with live data (project context, chat history, blackboard memory).
+              </span>
+            </div>
+            
+            {/* Preview Content */}
+            <ScrollArea className="flex-1 border rounded-lg bg-muted/30">
+              <pre className="p-4 text-xs font-mono whitespace-pre-wrap leading-relaxed">
+                {previewData.prompt}
+              </pre>
+            </ScrollArea>
+          </div>
         </TabsContent>
       </Tabs>
 
