@@ -1,13 +1,13 @@
 {
   "id": "coding-agent-tools",
   "name": "Coding Agent Tools Manifest",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Unified tool definitions including names, descriptions, parameters, and categories",
   "updatedAt": "2025-01-09T00:00:00Z",
 
   "file_operations": {
     "list_files": {
-      "description": "List all files with metadata (id, path, updated_at). MUST be called FIRST to load file structure. For session-created files, IDs are kept current.",
+      "description": "List all files with metadata (id, path, updated_at). Typically, this is the first tool you call to load the file structure.",
       "category": "discovery",
       "enabled": true,
       "params": {
@@ -26,7 +26,7 @@
         "query": {
           "type": "string",
           "required": true,
-          "description": "Multi-term search query to find files by concept"
+          "description": "Enter comma-separated search terms to find files by concept"
         }
       }
     },
@@ -43,7 +43,7 @@
       }
     },
     "read_file": {
-      "description": "Read complete content of a single file. Returns content WITH LINE NUMBERS prefixed as <<N>>. Can use file_id OR path parameter. For newly created files, prefer using path.",
+      "description": "Read complete content of a single file. Returns content WITH LINE NUMBERS prefixed as <<N>>. Can use file_id OR path parameter. Path is more reliable because file_id can change when files are created, edited, or moved.",
       "category": "read",
       "enabled": true,
       "params": {
@@ -60,7 +60,7 @@
       }
     },
     "edit_lines": {
-      "description": "Edit specific line range in a file and stage the change. Use line numbers from <<N>> prefix in read_file output. Can use file_id OR path parameter. For newly created files, prefer using path.",
+      "description": "This is one of the most important tools. Use this tool with specific line range in a file and stage the change. Use line numbers from <<N>> prefix in read_file output. Can use file_id OR path parameter (preferred).",
       "category": "write",
       "enabled": true,
       "params": {
@@ -175,7 +175,7 @@
 
   "project_exploration_tools": {
     "project_inventory": {
-      "description": "Returns counts and brief previews for ALL project elements in one call. Use FIRST to understand project scope.",
+      "description": "Returns counts and brief previews for ALL project elements in one call. Use this when you need to understand something about the project. You'll see this project has artifacts, requirements, canvas nodes and edges, and a range of other key artifacts.",
       "category": "project",
       "enabled": true,
       "params": {}
