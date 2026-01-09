@@ -146,11 +146,9 @@ function parseAgentResponseText(rawText: string): any {
 function generateToolsListText(manifest: ToolsManifest, exposeProject: boolean): string {
   const lines: string[] = [];
   
-  // Intro paragraph
-  lines.push("You work by executing available tools to manipulate files in the project repository. Each tool has specific parameters you must provide. You can call one or more tools at a time. Always call as many tools as practical for each iteration.\n");
-  
   // File Operations
   lines.push("## FILE OPERATIONS\n");
+  lines.push("You work by executing available tools to manipulate files in the project repository. Each tool has specific parameters you must provide. You can call one or more tools at a time. Always call as many tools as practical for each iteration.\n");
   for (const [name, tool] of Object.entries(manifest.file_operations)) {
     if (!tool.enabled) continue;
     lines.push(`**${name}** [${tool.category}]`);
