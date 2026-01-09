@@ -135,13 +135,13 @@ serve(async (req) => {
     // Generate the comprehensive .env file with decrypted values
     const envContent = generateEnvFile(deployment, shareToken, repo, SUPABASE_URL, SUPABASE_ANON_KEY, decryptedEnvVars);
 
-    // ENV-ONLY MODE: Just return the .env content as text
+    // ENV-ONLY MODE: Just return the .run content as text
     if (mode === 'env-only') {
-      console.log('[generate-local-package] Returning .env file only');
+      console.log('[generate-local-package] Returning .run file only');
       return new Response(JSON.stringify({ 
         success: true, 
         data: envContent,
-        filename: '.env',
+        filename: '.run',
         contentType: 'text/plain'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
