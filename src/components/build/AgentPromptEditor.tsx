@@ -323,8 +323,8 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
       </div>
 
       {/* Tabs for Sections and Tools */}
-      <Tabs defaultValue="sections" className="flex-1 flex flex-col">
-        <div className="px-4 pt-2 border-b">
+      <Tabs defaultValue="sections" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="px-4 pt-2 border-b flex-shrink-0">
           <TabsList>
             <TabsTrigger value="sections" className="gap-2">
               <FileCode className="h-4 w-4" />
@@ -341,8 +341,8 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
         </div>
 
         {/* Sections Tab */}
-        <TabsContent value="sections" className="flex-1 m-0">
-          <ScrollArea className="h-full">
+        <TabsContent value="sections" className="flex-1 m-0 overflow-hidden">
+          <ScrollArea className="h-full w-full">
             <div className="p-4">
               <Accordion type="multiple" className="space-y-2">
                 {sortedSections.map((section, index) => {
@@ -512,8 +512,8 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
         </TabsContent>
 
         {/* Tools Tab */}
-        <TabsContent value="tools" className="flex-1 m-0">
-          <ScrollArea className="h-full">
+        <TabsContent value="tools" className="flex-1 m-0 overflow-hidden">
+          <ScrollArea className="h-full w-full">
             <div className="p-4 space-y-6">
               {/* File Operations */}
               <div className="space-y-3">
