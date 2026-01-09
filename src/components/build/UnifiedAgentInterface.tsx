@@ -41,6 +41,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RawLLMLogsViewer } from './RawLLMLogsViewer';
+import { AgentPromptEditor } from './AgentPromptEditor';
 
 interface UnifiedAgentInterfaceProps {
   projectId: string;
@@ -1203,7 +1204,7 @@ export function UnifiedAgentInterface({
           </DialogHeader>
           
           <Tabs defaultValue="settings" className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="settings">
                 <Settings className="h-4 w-4 mr-2" />
                 History Settings
@@ -1211,6 +1212,10 @@ export function UnifiedAgentInterface({
               <TabsTrigger value="raw-logs">
                 <Database className="h-4 w-4 mr-2" />
                 Raw LLM Logs
+              </TabsTrigger>
+              <TabsTrigger value="prompt-editor">
+                <Wrench className="h-4 w-4 mr-2" />
+                Prompt Editor
               </TabsTrigger>
             </TabsList>
             
@@ -1373,6 +1378,13 @@ export function UnifiedAgentInterface({
             
             <TabsContent value="raw-logs" className="flex-1 overflow-hidden">
               <RawLLMLogsViewer 
+                projectId={projectId}
+                shareToken={shareToken}
+              />
+            </TabsContent>
+            
+            <TabsContent value="prompt-editor" className="flex-1 overflow-hidden">
+              <AgentPromptEditor 
                 projectId={projectId}
                 shareToken={shareToken}
               />
