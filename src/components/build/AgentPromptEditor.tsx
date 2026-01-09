@@ -290,7 +290,7 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b space-y-4">
         <div className="flex items-center justify-between">
@@ -366,20 +366,20 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
 
       {/* Tabs for Sections and Tools */}
       <Tabs defaultValue="sections" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <div className="px-4 pt-2 border-b flex-shrink-0">
-          <TabsList>
-            <TabsTrigger value="sections" className="gap-2">
+        <div className="px-4 pt-2 border-b flex-shrink-0 overflow-x-auto">
+          <TabsList className="inline-flex w-auto min-w-full">
+            <TabsTrigger value="sections" className="gap-2 whitespace-nowrap">
               <FileCode className="h-4 w-4" />
               Prompt Sections
             </TabsTrigger>
-            <TabsTrigger value="tools" className="gap-2">
+            <TabsTrigger value="tools" className="gap-2 whitespace-nowrap">
               <Wrench className="h-4 w-4" />
               Tools Manifest
               {hasCustomToolDescriptions && (
                 <Badge variant="secondary" className="ml-1 text-xs">Modified</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="preview" className="gap-2">
+            <TabsTrigger value="preview" className="gap-2 whitespace-nowrap">
               <Eye className="h-4 w-4" />
               Preview
             </TabsTrigger>
@@ -387,9 +387,8 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
         </div>
 
         {/* Sections Tab */}
-        <TabsContent value="sections" className="flex-1 m-0 overflow-hidden">
-          <ScrollArea className="h-full w-full">
-            <div className="p-4">
+        <TabsContent value="sections" className="flex-1 m-0 min-h-0 overflow-auto">
+          <div className="p-4">
               <Accordion type="multiple" className="space-y-2">
                 {sortedSections.map((section, index) => {
                   const isEnabled = section.enabled ?? true;
@@ -559,12 +558,10 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                 })}
               </Accordion>
             </div>
-          </ScrollArea>
         </TabsContent>
 
         {/* Tools Tab */}
-        <TabsContent value="tools" className="flex-1 m-0 overflow-hidden">
-          <ScrollArea className="h-full w-full">
+        <TabsContent value="tools" className="flex-1 m-0 min-h-0 overflow-auto">
             <div className="p-4 space-y-6">
               {/* File Operations */}
               <div className="space-y-3">
@@ -715,12 +712,11 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
                 </div>
               </div>
             </div>
-          </ScrollArea>
         </TabsContent>
 
         {/* Preview Tab */}
-        <TabsContent value="preview" className="flex-1 m-0 overflow-hidden">
-          <div className="p-4 space-y-4 h-full flex flex-col">
+        <TabsContent value="preview" className="flex-1 m-0 min-h-0 overflow-auto">
+          <div className="p-4 space-y-4">
             {/* Stats Bar */}
             <div className="flex flex-wrap items-center gap-3 p-3 bg-muted rounded-lg">
               <div className="flex items-center gap-2">
@@ -765,11 +761,11 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
             </div>
             
             {/* Preview Content */}
-            <ScrollArea className="flex-1 border rounded-lg bg-muted/30">
+            <div className="border rounded-lg bg-muted/30 overflow-auto max-h-[60vh]">
               <pre className="p-4 text-xs font-mono whitespace-pre-wrap leading-relaxed">
                 {previewData.prompt}
               </pre>
-            </ScrollArea>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
