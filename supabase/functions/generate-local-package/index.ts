@@ -169,6 +169,9 @@ serve(async (req) => {
     // 5. Create .run.example as template
     zip.file('.run.example', generateEnvExample());
 
+    // 6. Create .runignore with default patterns
+    zip.file('.runignore', generateRunignore());
+
     // Generate the ZIP as base64
     const zipContent = await zip.generateAsync({ type: 'base64' });
 
@@ -429,6 +432,69 @@ PROJECT_SYNC_FOLDER=./project
 # ===========================================
 APP_ENVIRONMENT=development
 APP_PORT=3000
+`;
+}
+
+function generateRunignore(): string {
+  return `# =====================================================
+# .runignore - Pronghorn Local Development Ignore File
+# =====================================================
+#
+# This file specifies which paths should be EXCLUDED from
+# cloud synchronization when using the Pronghorn runner.
+#
+# Syntax follows .gitignore patterns:
+#   - Lines starting with # are comments
+#   - Blank lines are ignored
+#   - Patterns starting with / are relative to ./app folder
+#   - Patterns ending with / match directories only
+#   - Use * for wildcards, ** for recursive matches
+#   - Prefix with ! to negate (include) a previously excluded pattern
+#
+# =====================================================
+# EXAMPLES
+# =====================================================
+
+# Logs and temporary files
+/backend/logs/
+/logs/
+*.log
+*.tmp
+
+# Build artifacts (usually don't need to sync back)
+/dist/
+/build/
+/.vite/
+
+# Local development files
+/.env.local
+/.env.*.local
+
+# IDE and editor files
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node modules (synced separately)
+/node_modules/
+
+# Large media files (optional - uncomment if needed)
+# /public/videos/
+# /assets/large-files/
+
+# Database files
+*.sqlite
+*.db
+
+# =====================================================
+# ADD YOUR CUSTOM PATTERNS BELOW
+# =====================================================
+
 `;
 }
 
