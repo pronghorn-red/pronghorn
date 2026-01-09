@@ -168,6 +168,26 @@
       "description": "Additional tools for exploring project context - only shown when exposeProject is enabled",
       "variables": ["{{PROJECT_EXPLORATION_TOOLS}}"],
       "content": "{{PROJECT_EXPLORATION_TOOLS}}"
+    },
+    {
+      "id": "blackboard",
+      "title": "Agent Blackboard",
+      "type": "dynamic",
+      "editable": "readonly",
+      "order": 17,
+      "description": "Agent's planning journal and memory from previous iterations - automatically populated at runtime",
+      "variables": ["{{BLACKBOARD}}"],
+      "content": "{{BLACKBOARD}}"
+    },
+    {
+      "id": "iteration_status",
+      "title": "Iteration Status",
+      "type": "dynamic",
+      "editable": "readonly",
+      "order": 18,
+      "description": "Current iteration number and limits - automatically populated at runtime",
+      "variables": ["{{CURRENT_ITERATION}}", "{{MAX_ITERATIONS}}"],
+      "content": "Current iteration: {{CURRENT_ITERATION}} of {{MAX_ITERATIONS}}"
     }
   ]
 }

@@ -331,25 +331,34 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
 
                     {/* Content Editor */}
                     {section.editable === 'editable' ? (
-                      <Textarea
-                        value={section.content}
-                        onChange={(e) => updateSection(section.id, { content: e.target.value })}
-                        className="font-mono text-xs min-h-[200px]"
-                        placeholder="Enter section content..."
-                      />
+                      <div className="space-y-2">
+                        <Textarea
+                          value={section.content}
+                          onChange={(e) => updateSection(section.id, { content: e.target.value })}
+                          className="font-mono text-xs min-h-[200px]"
+                          placeholder="Enter section content..."
+                        />
+                        {section.variables && section.variables.length > 0 && (
+                          <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                            <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                            <p className="text-xs text-amber-600 dark:text-amber-400">
+                              <strong>Warning:</strong> This section contains dynamic variables ({section.variables.join(', ')}). 
+                              Removing these variables will prevent runtime data from being injected into the prompt.
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <div className="relative">
                         <pre className="bg-muted/50 p-4 rounded-lg text-xs font-mono whitespace-pre-wrap overflow-x-auto max-h-[300px] overflow-y-auto">
                           {section.content}
                         </pre>
-                        {section.editable === 'readonly' && (
-                          <div className="absolute top-2 right-2">
-                            <Badge variant="secondary" className="text-xs gap-1">
-                              <Lock className="h-3 w-3" />
-                              Read-only (system-managed)
-                            </Badge>
-                          </div>
-                        )}
+                        <div className="absolute top-2 right-2">
+                          <Badge variant="secondary" className="text-xs gap-1">
+                            <Lock className="h-3 w-3" />
+                            {section.editable === 'readonly' ? 'System-managed' : 'Dynamic'}
+                          </Badge>
+                        </div>
                       </div>
                     )}
 

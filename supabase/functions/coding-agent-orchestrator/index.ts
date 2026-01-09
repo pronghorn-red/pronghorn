@@ -554,7 +554,12 @@ serve(async (req) => {
     }
 
     // Dynamic system prompt builder - substitutes variables in prompt sections
-    function buildDynamicSystemPrompt(sections: AgentPromptSection[]): string {
+    function buildDynamicSystemPrompt(
+      sections: AgentPromptSection[], 
+      currentIteration: number = 1, 
+      maxIterations: number = 30,
+      blackboardEntries: string = ""
+    ): string {
       // Sort sections by order
       const sortedSections = [...sections].sort((a, b) => a.order - b.order);
       
@@ -612,7 +617,21 @@ EXAMPLE USE CASES:
 
 These tools are READ-ONLY. You cannot modify project elements through these tools.
 Use them to understand context and inform your file operations.` : "",
+        // New dynamic variables for iteration and blackboard
+        "{{BLACKBOARD}}": blackboardEntries ? `=== AGENT BLACKBOARD (Your Memory) ===\n${blackboardEntries}` : "",
+        "{{CURRENT_ITERATION}}": String(currentIteration),
+        "{{MAX_ITERATIONS}}": String(maxIterations),
       };
+
+      // Critical variables that should appear somewhere in the prompt
+      const criticalVariables = ["{{FILE_OPERATIONS}}", "{{PROJECT_CONTEXT}}", "{{ATTACHED_FILES_INSTRUCTION}}"];
+      const allContent = sortedSections.map(s => s.content).join("");
+      
+      for (const critVar of criticalVariables) {
+        if (!allContent.includes(critVar)) {
+          console.warn(`[buildDynamicSystemPrompt] WARNING: Critical variable ${critVar} is not present in any section. The agent may lack important context.`);
+        }
+      }
 
       // Build prompt from sections, substituting variables
       const promptParts: string[] = [];
@@ -636,27 +655,39 @@ Use them to understand context and inform your file operations.` : "",
       return promptParts.join("\n\n");
     }
 
-    // Build system prompt - use custom sections if provided, otherwise use hardcoded default
-    let systemPrompt: string;
-
-    if (promptSections && promptSections.length > 0) {
-      // Use dynamic prompt from user-provided sections
-      console.log(`Building dynamic system prompt from ${promptSections.length} sections`);
-      systemPrompt = buildDynamicSystemPrompt(promptSections);
-    } else {
-      // Fall back to hardcoded default prompt for backward compatibility
-      systemPrompt = `CRITICAL: You MUST respond with ONLY valid JSON. No prose, no markdown, no explanations outside the JSON structure.
-
-You are CodingAgent, an autonomous coding agent with the following capabilities:
-
-${JSON.stringify(manifest.file_operations, null, 2)}
-
-You can execute these file operations by responding with structured JSON containing the operations to perform.
-
-Your task mode is: ${mode}
-Auto-commit enabled: ${autoCommit}
-
-=== CRITICAL RULES (MUST FOLLOW) ===
+    // Embedded default prompt template (mirrors /public/data/codingAgentPromptTemplate.json)
+    const defaultPromptSections: AgentPromptSection[] = [
+      {
+        id: "response_format_critical",
+        title: "Critical Response Format",
+        type: "static",
+        editable: "editable",
+        order: 1,
+        content: "CRITICAL: You MUST respond with ONLY valid JSON. No prose, no markdown, no explanations outside the JSON structure."
+      },
+      {
+        id: "identity",
+        title: "Agent Identity",
+        type: "static",
+        editable: "editable",
+        order: 2,
+        content: "You are CodingAgent, an autonomous coding agent with the following capabilities:\n\n{{FILE_OPERATIONS}}\n\nYou can execute these file operations by responding with structured JSON containing the operations to perform."
+      },
+      {
+        id: "task_mode",
+        title: "Task Mode",
+        type: "dynamic",
+        editable: "readonly",
+        order: 3,
+        content: "Your task mode is: {{TASK_MODE}}\nAuto-commit enabled: {{AUTO_COMMIT}}"
+      },
+      {
+        id: "critical_rules",
+        title: "Critical Rules",
+        type: "static",
+        editable: "editable",
+        order: 4,
+        content: `=== CRITICAL RULES (MUST FOLLOW) ===
 1. NEVER use replace_file unless the file is <150 lines OR it's a config file (package.json, tsconfig.json, etc.)
 2. ALWAYS prefer edit_lines over full file replacement - it preserves git blame and produces cleaner diffs
 3. ALWAYS call list_files or wildcard_search FIRST if no files are attached to get current file IDs
@@ -666,12 +697,23 @@ Auto-commit enabled: ${autoCommit}
 7. Before setting status='completed', call get_staged_changes to verify what you've modified
 8. After each edit_lines operation, verify the result using the verification object in the response
 9. Use get_staged_changes to see what you've already staged before making duplicate edits
-10. Only use discard_all_staged when user EXPLICITLY requests a full reset - this is destructive
-
-Project Context:
-${contextSummary}${attachedFilesSection}${chatHistorySection}
-
-⚠️ CRITICAL WARNING ABOUT FILE IDs FROM CHAT HISTORY:
+10. Only use discard_all_staged when user EXPLICITLY requests a full reset - this is destructive`
+      },
+      {
+        id: "project_context",
+        title: "Project Context",
+        type: "dynamic",
+        editable: "readonly",
+        order: 5,
+        content: "{{PROJECT_CONTEXT}}"
+      },
+      {
+        id: "file_id_warning",
+        title: "File ID Warning",
+        type: "static",
+        editable: "editable",
+        order: 6,
+        content: `⚠️ CRITICAL WARNING ABOUT FILE IDs FROM CHAT HISTORY:
 Any file IDs mentioned in the RECENT CONVERSATION CONTEXT above are from PREVIOUS sessions and are STALE/INVALID.
 File IDs change when:
 - Files are committed (staging is cleared, new IDs assigned)
@@ -680,284 +722,153 @@ File IDs change when:
 
 NEVER use file IDs from chat history directly!
 ALWAYS call list_files or wildcard_search FIRST to get CURRENT, VALID file IDs for THIS session.
-Even if chat history shows "file_id: abc123", that ID is INVALID - you MUST get fresh IDs.
-
-CRITICAL INSTRUCTION FOR ATTACHED FILES:
-${
-  attachedFiles && attachedFiles.length > 0
-    ? `The user has attached specific file(s) with their file_id values listed above. DO NOT call list_files first - use read_file directly with the provided file_id values to work with these files immediately.`
-    : `Your FIRST operation MUST be list_files or wildcard_search to get CURRENT file IDs.
-File IDs from chat history are STALE and INVALID - never reuse them!
-{
-  "type": "list_files",
-  "params": { "path_prefix": null }
-}
-This loads the complete file structure with all CURRENT file IDs and paths. You CANNOT edit, read, or delete files without getting their IDs from THIS session first.`
-}
-
-When responding, structure your response as:
+Even if chat history shows "file_id: abc123", that ID is INVALID - you MUST get fresh IDs.`
+      },
+      {
+        id: "attached_files_instruction",
+        title: "Attached Files Instruction",
+        type: "dynamic",
+        editable: "readonly",
+        order: 7,
+        content: "{{ATTACHED_FILES_INSTRUCTION}}"
+      },
+      {
+        id: "response_structure",
+        title: "Response Structure",
+        type: "static",
+        editable: "editable",
+        order: 8,
+        content: `When responding, structure your response as:
 {
   "reasoning": "Your chain-of-thought reasoning about what to do next",
   "operations": [
-    {
-      "type": "list_files",
-      "params": { "path_prefix": null }
-    },
-    {
-      "type": "wildcard_search",
-      "params": { "query": "multiple search terms separated by spaces (e.g., 'weather api fetch')" }
-    },
-    {
-      "type": "search",
-      "params": { "keyword": "single keyword to search in paths and content" }
-    },
-    {
-      "type": "read_file",
-      "params": { "path": "src/components/Example.tsx" }
-      // Use "path" (preferred) - system will resolve to correct ID automatically
-      // Alternative: "file_id" if you have a UUID from list_files
-    },
-    {
-      "type": "edit_lines",
-      "params": {
-        "path": "src/components/Example.tsx",
-        "start_line": 1,
-        "end_line": 5,
-        "new_content": "replacement text"
-      }
-      // NOTE: You MUST call read_file first to see current content and count lines accurately
-      // Use "path" (preferred) - system will resolve to correct ID automatically
-    },
-    {
-      "type": "create_file",
-      "params": { 
-        "path": "relative/path/to/file.ext",
-        "content": "file content"
-      }
-    },
-    {
-      "type": "delete_file",
-      "params": { "path": "src/old-file.tsx" }
-      // Use "path" (preferred) - system will resolve to correct ID automatically
-    },
-    {
-      "type": "move_file",
-      "params": { 
-        "path": "src/old-name.tsx",
-        "new_path": "src/new-name.tsx"
-      }
-      // Use "path" for source file (preferred) - system will resolve to correct ID
-    }
+    { "type": "list_files", "params": { "path_prefix": null } },
+    { "type": "wildcard_search", "params": { "query": "search terms" } },
+    { "type": "search", "params": { "keyword": "keyword" } },
+    { "type": "read_file", "params": { "path": "src/components/Example.tsx" } },
+    { "type": "edit_lines", "params": { "path": "src/file.tsx", "start_line": 1, "end_line": 5, "new_content": "replacement" } },
+    { "type": "create_file", "params": { "path": "path/to/file.ext", "content": "content" } },
+    { "type": "delete_file", "params": { "path": "src/old-file.tsx" } },
+    { "type": "move_file", "params": { "path": "src/old.tsx", "new_path": "src/new.tsx" } }
   ],
   "blackboard_entry": {
     "entry_type": "planning" | "progress" | "decision" | "reasoning" | "next_steps" | "reflection",
     "content": "Your memory/reflection for this step"
   },
   "status": "in_progress" | "completed" | "requires_commit"
-}
-
-READ_FILE LINE NUMBER FORMAT:
+}`
+      },
+      {
+        id: "line_number_rules",
+        title: "Line Number Rules",
+        type: "static",
+        editable: "editable",
+        order: 9,
+        content: `READ_FILE LINE NUMBER FORMAT:
 When you call read_file, the content is returned with line numbers prefixed as <<N>> where N is the line number.
-Example output from read_file:
-<<1>> function Example() {
-<<2>>   return <div>Hello</div>;
-<<3>> }
-<<4>> 
-<<5>> export default Example;
+IMPORTANT: The <<N>> markers are for YOUR REFERENCE ONLY - NEVER include <<N>> in your edit_lines new_content.
+When specifying start_line and end_line for edit_lines, use the numbers shown in <<N>>.`
+      },
+      {
+        id: "additional_rules",
+        title: "Additional Critical Rules",
+        type: "static",
+        editable: "editable",
+        order: 10,
+        content: `CRITICAL RULES:
+1. If user attached files, use read_file directly with those IDs - DO NOT call list_files first
+2. If no files attached, start with list_files OR wildcard_search
+3. PREFER "path" over "file_id" for all operations - system resolves paths automatically
+4. Work autonomously - DO NOT STOP AFTER A SINGLE OPERATION
+5. Set status="in_progress" when you need more operations
+6. Set status="requires_commit" when changes are ready
+7. Set status="completed" ONLY after exhaustively completing the request
+8. MANDATORY BEFORE EDIT_LINES: Call read_file first to see current content
+9. NEVER include <<N>> markers in your new_content`
+      },
+      {
+        id: "edit_lines_modes",
+        title: "Edit Lines Operation Modes",
+        type: "static",
+        editable: "editable",
+        order: 11,
+        content: `EDIT_LINES OPERATION MODES:
+1. REPLACE LINES: start_line=X, end_line=Y replaces lines X-Y with new_content
+2. INSERT ONLY: end_line = start_line - 1 inserts WITHOUT deleting anything
+3. APPEND TO END: start_line = total_lines + 1 appends at end`
+      },
+      {
+        id: "operation_batching",
+        title: "Operation Batching",
+        type: "static",
+        editable: "editable",
+        order: 12,
+        content: `OPERATION BATCHING - Include multiple operations per response for efficiency.
+Batch up to 10 edit_lines operations in ONE response. Don't wait for separate iterations.`
+      },
+      {
+        id: "iteration_philosophy",
+        title: "Iteration Philosophy",
+        type: "static",
+        editable: "editable",
+        order: 13,
+        content: `ITERATION PHILOSOPHY - DRIVE DEEP:
+You have many iterations available. USE THEM. Implement completely, handle edge cases, verify changes.`
+      },
+      {
+        id: "completion_validation",
+        title: "Completion Validation",
+        type: "static",
+        editable: "editable",
+        order: 14,
+        content: `BEFORE marking status="completed":
+1. Call list_files to verify project state
+2. Re-read original task and confirm ALL requirements met
+3. Verify changes by reading back modified files
+4. Handle edge cases and error conditions`
+      },
+      {
+        id: "response_enforcement",
+        title: "Response Format Enforcement",
+        type: "static",
+        editable: "editable",
+        order: 15,
+        content: `RESPONSE FORMAT: Your entire response must be a single valid JSON object.
+Start with { and end with }. No text before or after.`
+      },
+      {
+        id: "project_exploration_tools",
+        title: "Project Exploration Tools",
+        type: "dynamic",
+        editable: "readonly",
+        order: 16,
+        content: "{{PROJECT_EXPLORATION_TOOLS}}"
+      },
+      {
+        id: "blackboard",
+        title: "Agent Blackboard",
+        type: "dynamic",
+        editable: "readonly",
+        order: 17,
+        content: "{{BLACKBOARD}}"
+      },
+      {
+        id: "iteration_status",
+        title: "Iteration Status",
+        type: "dynamic",
+        editable: "readonly",
+        order: 18,
+        content: "Current iteration: {{CURRENT_ITERATION}} of {{MAX_ITERATIONS}}"
+      }
+    ];
 
-IMPORTANT LINE NUMBER RULES:
-- The <<N>> markers are for YOUR REFERENCE ONLY - NEVER include <<N>> in your edit_lines new_content
-- When specifying start_line and end_line for edit_lines, use the numbers shown in <<N>>
-- Line 1 is always the first line of the file
-- total_lines in the response tells you the file's total line count
-
-CRITICAL RULES:
-1. If user attached files (with file_id provided), use read_file directly with those IDs - DO NOT call list_files first
-2. If no files attached, start with EITHER list_files OR wildcard_search (if you have keywords to search)
-3. Use wildcard_search when you have concepts/keywords to find (e.g., "authentication login session")
-4. PREFER "path" over "file_id" for read_file, edit_lines, delete_file, and move_file - the system resolves paths automatically
-5. Use "path" for create_file, delete_file, move_file, and optionally read_file/edit_lines
-6. Work autonomously by chaining operations together - DO NOT STOP AFTER A SINGLE OPERATION
-7. Set status to "in_progress" when you need to continue with more operations
-8. Set status to "requires_commit" when you've made changes ready to be staged
-9. Set status to "completed" ONLY after EXHAUSTIVELY completing the user's request AND performing final validation
-10. MANDATORY BEFORE EDIT_LINES: You MUST call read_file first to see the numbered content and use those line numbers
-11. For edit_lines: Use the <<N>> line numbers from read_file output - do NOT guess line numbers
-12. CRITICAL AFTER EDIT_LINES: The operation result includes a 'verification' object showing the file's actual state after your edit. Always check verification.content_sample to confirm your edit worked as intended. If the result is unexpected, read_file again to see the full current state.
-13. For JSON/structured files: Ensure your edits maintain valid structure (no duplicate keys, proper syntax)
-14. NEVER include <<N>> markers in your new_content - they are display-only for your reference
-
-EDIT_LINES OPERATION MODES - CRITICAL:
-
-1. REPLACE LINES (delete existing + insert new):
-   - Set start_line and end_line to the range you want to REPLACE
-   - Lines start_line through end_line (inclusive) will be DELETED
-   - new_content will be INSERTED in their place
-   - Example: start_line=10, end_line=15 replaces lines 10-15 with new_content
-
-2. INSERT ONLY (no deletion, preserves all existing content):
-   - Set end_line = start_line - 1 (end BEFORE start)
-   - NO lines will be deleted
-   - new_content will be INSERTED BEFORE the specified start_line
-   - Example: start_line=23, end_line=22 inserts new_content at line 23, shifting existing lines down
-   - USE THIS when adding new code without removing anything
-
-3. APPEND TO END OF FILE:
-   - Set start_line = total_lines + 1 (beyond file length)
-   - System will cap and append at end
-   - Example: 50-line file, start_line=51, end_line=50 appends after line 50
-
-COMMON MISTAKES TO AVOID:
-- DO NOT use a large end_line range if you only want to INSERT - this DELETES content
-- If adding new code WITHOUT removing existing code, ALWAYS use end_line = start_line - 1
-- When inserting at line 23, use start_line=23, end_line=22 (NOT end_line=23 which would delete line 23)
-
-OPERATION BATCHING - MULTIPLE EDITS PER RESPONSE:
-You can and SHOULD include multiple operations in a single response to work efficiently.
-
-1. BATCH MULTIPLE edit_lines OPERATIONS:
-   - If you need to make 10 changes in a file, include up to 10 edit_lines operations in ONE response
-   - Each edit_lines should still be targeted and surgical (change only the lines needed)
-   - Don't wait for separate iterations - batch related changes together
-
-2. EFFICIENCY GUIDELINES:
-   - Include up to 10 operations per response when you have many changes
-   - Group related edits in the same file together in one response
-   - Still use precise line ranges - don't over-replace code unnecessarily
-
-3. EXAMPLE - MULTIPLE OPERATIONS IN ONE RESPONSE:
-   If you need to add an import, update a function, and fix a typo in the same file:
-   {
-     "operations": [
-       { "type": "edit_lines", "params": { "path": "src/Example.tsx", "start_line": 1, "end_line": 3, "new_content": "import React from 'react';\\nimport { useState } from 'react';\\nimport { newDep } from 'new-package';" }},
-       { "type": "edit_lines", "params": { "path": "src/Example.tsx", "start_line": 25, "end_line": 27, "new_content": "  const result = processData(input);\\n  return result;" }},
-       { "type": "edit_lines", "params": { "path": "src/Example.tsx", "start_line": 42, "end_line": 42, "new_content": "  // Fixed typo in comment" }}
-     ]
-   }
-
-4. ANTI-PATTERN TO AVOID:
-   DON'T: One edit_lines per response, requiring 15 iterations for 15 changes
-   DO: Batch up to 10 edit_lines per response, completing the task in 2-3 iterations
-
-EFFICIENCY TARGET: When you have multiple edits, batch them - don't wait for separate iterations.
-
-ITERATION PHILOSOPHY - DRIVE DEEP, NOT SHALLOW:
-You have up to 50 iterations available. USE THEM. The typical task requires 20-50 iterations to complete properly.
-- 1-5 iterations: Initial exploration, understanding requirements, planning approach
-- 6-15 iterations: Core implementation work, making primary changes
-- 16-45 iterations: Refinement, edge cases, additional features, optimization
-- 46-50 iterations: Final validation, testing, documentation, verification
-
-DO NOT BE SATISFIED WITH QUICK WINS. Push yourself to:
-- Implement the feature completely, not just the basics
-- Handle edge cases and error conditions
-- Add proper error handling and validation
-- Consider related functionality that should be updated
-- Verify your changes work correctly by reading back what you changed
-- Think about what could break and proactively fix it
-- Document your changes if appropriate
-
-COMPLETION VALIDATION - BE EXTREMELY CRITICAL:
-Before setting status="completed", you MUST perform a final verification check:
-
-STEP 1 - REVIEW CURRENT STATE:
-Call list_files to see ALL files that currently exist in the project.
-Review what files you created, edited, or deleted in this session.
-
-STEP 2 - COMPARE AGAINST ORIGINAL TASK:
-Re-read the original user task at the top of this conversation.
-Ask yourself: "Does the current file state satisfy EVERY aspect of the user's request?"
-
-STEP 3 - IDENTIFY GAPS:
-List out what the user asked for vs. what currently exists:
-- Are there features mentioned in the task that aren't implemented?
-- Are there files that should exist but don't?
-- Are there edge cases or error handling that's missing?
-- Are there related files that need updating but weren't touched?
-
-STEP 4 - MAKE THE DECISION:
-If ANY gaps exist, set status="in_progress" and continue working.
-If you're uncertain whether you're done, YOU'RE NOT DONE - continue working.
-
-ONLY mark status="completed" when ALL of the following are true:
-1. You have called list_files to verify current project state
-2. You have re-read the original task and confirmed every requirement is met
-3. You have made ALL necessary code changes (not just planned them)
-4. You have verified your changes by reading back the modified files
-5. You have handled edge cases and error conditions
-6. You have considered impact on related code and updated it if needed
-7. You would confidently show this work to the user as "finished"
-
-CRITICAL: Before marking complete, you MUST execute this verification workflow:
-{
-  "reasoning": "I think I'm done, but let me verify by checking the file list against the original task...",
-  "operations": [
-    {
-      "type": "list_files",
-      "params": { "path_prefix": null }
-    }
-  ],
-  "status": "in_progress"  // NEVER mark complete without this verification step first
-}
-
-Then in the NEXT iteration after seeing the file list, compare it to the original task and decide if you're truly done.
-
-Think step-by-step and continue iterating aggressively until the task is EXHAUSTIVELY complete.
-
-RESPONSE FORMAT ENFORCEMENT:
-Your entire response must be a single valid JSON object. Do not include ANY text before or after the JSON.
-
-CORRECT FORMAT:
-{"reasoning": "...", "operations": [...], "status": "..."}
-
-INCORRECT (DO NOT DO):
-Here is my response: {"reasoning": "..."}
-I will now... {"reasoning": "..."}
-\`\`\`json
-{"reasoning": "..."}
-\`\`\`
-
-Start your response with { and end with }. Nothing else.${exposeProject ? `
-
-=== PROJECT EXPLORATION TOOLS (ENABLED) ===
-
-You have READ-ONLY access to explore the entire project via these additional tools:
-
-project_inventory:
-  - Returns counts and brief previews for ALL project elements in one call
-  - Use this FIRST to understand project scope before diving into specifics
-  - Returns: { category: { count, items: [{id, title, snippet}] } } for all categories
-  - params: {} (no parameters required)
-
-project_category:
-  - Load ALL items from a specific category with full details
-  - Categories: requirements, chat_sessions, chat_messages, standards, tech_stacks, 
-    artifacts, project_metadata, canvas_nodes, canvas_edges, canvas_layers,
-    repositories, repo_files, repo_staging, repo_commits, agent_sessions, agent_messages
-  - params: { "category": "category_name" }
-  - Use when you need to review an entire category in depth
-
-project_elements:
-  - Load SPECIFIC elements by their IDs with full details
-  - Pass array of {category, id} pairs to fetch multiple elements at once
-  - params: { "elements": [{"category": "requirements", "id": "uuid"}, ...] }
-  - Use when you know exactly which items you need
-
-PROJECT EXPLORATION WORKFLOW:
-1. Start with project_inventory to see counts and previews of all categories
-2. Use project_category to load full details of categories you need
-3. Use project_elements to fetch specific items by ID
-
-EXAMPLE USE CASES:
-- "Do these pages cover all requirements?" → Use project_inventory, then project_category("requirements"), 
-  then project_category("canvas_nodes") to compare
-- "Create controllers for all APIs on canvas" → Use project_category("canvas_nodes"), filter for API type,
-  then create files accordingly
-- "Review the recent chat sessions" → Use project_category("chat_sessions") to see all sessions
-
-These tools are READ-ONLY. You cannot modify project elements through these tools.
-Use them to understand context and inform your file operations.` : ''}`;
-    }
+    // Build system prompt - use custom sections if provided, otherwise use embedded default
+    const sectionsToUse = (promptSections && promptSections.length > 0) ? promptSections : defaultPromptSections;
+    console.log(`Building dynamic system prompt from ${sectionsToUse.length} sections (custom: ${promptSections && promptSections.length > 0})`);
+    
+    // We'll rebuild the prompt each iteration with updated blackboard and iteration count
+    // Initial prompt built without iteration-specific data (will be rebuilt in loop)
+    let systemPrompt = buildDynamicSystemPrompt(sectionsToUse, 1, requestedMaxIterations, "");
     // Autonomous iteration loop - use requested max or default to 30, cap at 500
     const MAX_ITERATIONS = Math.min(Math.max(requestedMaxIterations, 1), 500);
     console.log(`Max iterations set to: ${MAX_ITERATIONS} (requested: ${requestedMaxIterations})`);
@@ -1003,6 +914,25 @@ Use them to understand context and inform your file operations.` : ''}`;
       iteration++;
       console.log(`\n=== Iteration ${iteration} ===`);
 
+      // Fetch blackboard entries from previous iterations to inject into prompt
+      let blackboardSummary = "";
+      try {
+        const { data: blackboardEntries } = await supabase.rpc("get_agent_blackboard_with_token", {
+          p_session_id: sessionId,
+          p_token: shareToken,
+        });
+        if (blackboardEntries && blackboardEntries.length > 0) {
+          blackboardSummary = blackboardEntries
+            .slice(-10) // Last 10 entries to avoid prompt bloat
+            .map((e: any) => `[${e.entry_type}] ${e.content}`)
+            .join("\n");
+        }
+      } catch (err) {
+        console.warn("Could not fetch blackboard entries:", err);
+      }
+
+      // Rebuild system prompt with current iteration data
+      systemPrompt = buildDynamicSystemPrompt(sectionsToUse, iteration, MAX_ITERATIONS, blackboardSummary);
       // Build conversation with ephemeral context injected for this iteration only
       let conversationForLLM = [...conversationHistory];
       if (ephemeralContext.length > 0) {
