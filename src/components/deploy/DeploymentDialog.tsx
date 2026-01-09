@@ -46,6 +46,7 @@ interface ProjectTypeConfig {
   runtime: string | null;
   buildCommand: string;
   runCommand: string | null;
+  installCommand?: string;
   buildFolder: string;
   runFolder: string;
   publishPath?: string;

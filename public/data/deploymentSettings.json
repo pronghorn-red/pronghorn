@@ -7,6 +7,7 @@
       "runtime": null,
       "buildCommand": "",
       "runCommand": null,
+      "installCommand": "npm install",
       "buildFolder": ".",
       "runFolder": ".",
       "publishPath": ".",
@@ -19,6 +20,7 @@
       "runtime": "node",
       "buildCommand": "npm install && npm install -g serve && npm run build",
       "runCommand": "serve -s dist",
+      "installCommand": "npm install",
       "buildFolder": "dist",
       "runFolder": "/",
       "description": "Vue app built with Vite, served via serve"
@@ -30,9 +32,22 @@
       "runtime": "node",
       "buildCommand": "npm install && npm install -g serve && npm run build",
       "runCommand": "serve -s dist",
+      "installCommand": "npm install",
       "buildFolder": "dist",
       "runFolder": "/",
       "description": "React app built with Vite, served via serve"
+    },
+    {
+      "value": "vue_node_monorepo",
+      "label": "Vue.js/Node.js Monorepo",
+      "renderType": "web_service",
+      "runtime": "node",
+      "buildCommand": "npm run build",
+      "runCommand": "npm run start",
+      "installCommand": "npm run install:all",
+      "buildFolder": "dist",
+      "runFolder": "/",
+      "description": "Monorepo with Vue frontend and Node.js backend using workspace scripts"
     },
     {
       "value": "node",
@@ -41,6 +56,7 @@
       "runtime": "node",
       "buildCommand": "npm install",
       "runCommand": "node index.js",
+      "installCommand": "npm install",
       "buildFolder": "/",
       "runFolder": "/",
       "description": "Standard Node.js application"
@@ -52,6 +68,7 @@
       "runtime": "python",
       "buildCommand": "pip install -r requirements.txt",
       "runCommand": "python main.py",
+      "installCommand": "pip install -r requirements.txt",
       "buildFolder": "/",
       "runFolder": "/",
       "description": "Python application with requirements.txt"
@@ -63,6 +80,7 @@
       "runtime": "go",
       "buildCommand": "go build -o app",
       "runCommand": "./app",
+      "installCommand": "go mod download",
       "buildFolder": "/",
       "runFolder": "/",
       "description": "Go application compiled to binary"
@@ -74,6 +92,7 @@
       "runtime": "ruby",
       "buildCommand": "bundle install",
       "runCommand": "bundle exec ruby app.rb",
+      "installCommand": "bundle install",
       "buildFolder": "/",
       "runFolder": "/",
       "description": "Ruby application with Bundler"
@@ -85,6 +104,7 @@
       "runtime": "rust",
       "buildCommand": "cargo build --release",
       "runCommand": "./target/release/app",
+      "installCommand": "",
       "buildFolder": "/",
       "runFolder": "/",
       "description": "Rust application compiled with Cargo"
@@ -96,6 +116,7 @@
       "runtime": "elixir",
       "buildCommand": "mix deps.get && mix compile",
       "runCommand": "mix run --no-halt",
+      "installCommand": "mix deps.get",
       "buildFolder": "/",
       "runFolder": "/",
       "description": "Elixir/Phoenix application"
@@ -107,6 +128,7 @@
       "runtime": "docker",
       "buildCommand": "",
       "runCommand": "",
+      "installCommand": "",
       "buildFolder": "/",
       "runFolder": "/",
       "description": "Uses Dockerfile in repository root"

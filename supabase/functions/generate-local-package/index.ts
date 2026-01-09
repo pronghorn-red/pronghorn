@@ -194,10 +194,12 @@ serve(async (req) => {
 function generateEnvFile(deployment: any, shareToken: string | undefined, repo: any, supabaseUrl: string, supabaseAnonKey: string, decryptedEnvVars: Record<string, string> = {}): string {
   const projectType = deployment.project_type || 'vue_vite';
   const isVite = isViteProject(projectType);
+  const isMonorepo = projectType === 'vue_node_monorepo';
   
   // Determine commands based on project type
   const runCommand = isVite ? 'npm run dev' : (deployment.run_command || 'npm run dev');
   const buildCommand = isVite ? 'npm run build' : (deployment.build_command || '');
+  const installCommand = isMonorepo ? 'npm run install:all' : (deployment.install_command || 'npm install');
   const runFolder = isVite ? '/' : (deployment.run_folder || '/');
   const buildFolder = isVite ? 'dist' : (deployment.build_folder || 'dist');
 
@@ -227,7 +229,7 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     '# Active runtime settings (uncomment and modify as needed)',
     `RUN_COMMAND=${runCommand}`,
     buildCommand ? `BUILD_COMMAND=${buildCommand}` : '# BUILD_COMMAND=',
-    `INSTALL_COMMAND=npm install`,
+    `INSTALL_COMMAND=${installCommand}`,
     `RUN_FOLDER=${runFolder}`,
     `BUILD_FOLDER=${buildFolder}`,
     '',
@@ -310,6 +312,16 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     '# RUN_COMMAND=docker-compose up',
     '# BUILD_COMMAND=docker build -t app .',
     '# INSTALL_COMMAND=',
+    '# RUN_FOLDER=/',
+    '',
+    '# ===========================================',
+    '# VUE.JS/NODE.JS MONOREPO',
+    '# Uncomment these for monorepo projects with workspace scripts',
+    '# ===========================================',
+    '# PROJECT_TYPE=vue_node_monorepo',
+    '# RUN_COMMAND=npm run start',
+    '# BUILD_COMMAND=npm run build',
+    '# INSTALL_COMMAND=npm run install:all',
     '# RUN_FOLDER=/',
     '',
     '# ===========================================',
