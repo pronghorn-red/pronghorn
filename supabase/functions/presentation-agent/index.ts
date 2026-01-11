@@ -15,6 +15,60 @@ interface PresentationRequest {
   initialPrompt?: string;
 }
 
+// Slide content JSON schema for structured output enforcement
+const SLIDE_CONTENT_SCHEMA = {
+  type: "object",
+  properties: {
+    id: { type: "string", description: "Unique slide identifier" },
+    order: { type: "integer", description: "Slide order number" },
+    layoutId: { type: "string", description: "Layout identifier" },
+    title: { type: "string", description: "Slide title" },
+    subtitle: { type: "string", description: "Optional subtitle" },
+    content: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          regionId: { type: "string", description: "Layout region ID" },
+          type: { type: "string", description: "Content type" },
+          data: { type: "object", description: "Content data" }
+        },
+        required: ["regionId", "type", "data"]
+      }
+    },
+    notes: { type: "string", description: "Speaker notes" },
+    imagePrompt: { type: "string", description: "AI image generation prompt" }
+  },
+  required: ["id", "order", "layoutId", "title", "content"]
+};
+
+// Gemini-compatible schema (no additionalProperties)
+const GEMINI_SLIDE_SCHEMA = {
+  type: "object",
+  properties: {
+    id: { type: "string" },
+    order: { type: "integer" },
+    layoutId: { type: "string" },
+    title: { type: "string" },
+    subtitle: { type: "string" },
+    content: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          regionId: { type: "string" },
+          type: { type: "string" },
+          data: { type: "object" }
+        },
+        required: ["regionId", "type", "data"]
+      }
+    },
+    notes: { type: "string" },
+    imagePrompt: { type: "string" }
+  },
+  required: ["id", "order", "layoutId", "title", "content"]
+};
+
 interface BlackboardEntry {
   id: string;
   timestamp: string;
@@ -62,7 +116,7 @@ function sseMessage(event: string, data: any): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-// Battle-tested JSON parser from coding-agent-orchestrator
+// Battle-tested JSON parser with sanitization for control characters
 function parseAgentResponseText(rawText: string): any {
   const originalText = rawText.trim();
   let text = originalText;
@@ -81,12 +135,26 @@ function parseAgentResponseText(rawText: string): any {
     }
   };
 
+  // Sanitize control characters that break JSON parsing
+  const sanitizeJson = (str: string): string => {
+    // Fix unescaped newlines inside JSON strings (common LLM issue)
+    // This is tricky - we need to escape newlines inside string values only
+    return str
+      // Remove any BOM or zero-width characters
+      .replace(/^\uFEFF/, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      // Replace literal tabs with escaped tabs
+      .replace(/\t/g, '\\t');
+  };
+
+  const sanitizedText = sanitizeJson(text);
+
   // Method 1: Direct parse
-  let result = tryParse(text, "direct parse");
+  let result = tryParse(sanitizedText, "direct parse");
   if (result) return result;
 
   // Method 2: Extract from LAST ```json fence
-  const lastFenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```[\s\S]*$/i);
+  const lastFenceMatch = sanitizedText.match(/```(?:json)?\s*([\s\S]*?)\s*```[\s\S]*$/i);
   if (lastFenceMatch?.[1]) {
     const extracted = lastFenceMatch[1].trim();
     const cleaned = extracted
@@ -98,7 +166,7 @@ function parseAgentResponseText(rawText: string): any {
   }
 
   // Method 3: Find ALL code blocks and try each (reverse order)
-  const allFences = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)];
+  const allFences = [...sanitizedText.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)];
   for (let i = allFences.length - 1; i >= 0; i--) {
     const content = allFences[i][1].trim();
     if (content) {
@@ -108,22 +176,23 @@ function parseAgentResponseText(rawText: string): any {
   }
 
   // Method 4: Brace/bracket matching (arrays for slides)
-  const firstBracket = originalText.indexOf("[");
-  const lastBracket = originalText.lastIndexOf("]");
+  const firstBracket = sanitizedText.indexOf("[");
+  const lastBracket = sanitizedText.lastIndexOf("]");
   if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-    const candidate = originalText.slice(firstBracket, lastBracket + 1);
+    const candidate = sanitizedText.slice(firstBracket, lastBracket + 1);
     result = tryParse(candidate, "bracket extraction (array)");
     if (result) return result;
   }
 
   // Method 5: Brace matching (objects)
-  const firstBrace = originalText.indexOf("{");
-  const lastBrace = originalText.lastIndexOf("}");
+  const firstBrace = sanitizedText.indexOf("{");
+  const lastBrace = sanitizedText.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    const candidate = originalText.slice(firstBrace, lastBrace + 1);
+    const candidate = sanitizedText.slice(firstBrace, lastBrace + 1);
     result = tryParse(candidate, "brace extraction (raw)");
     if (result) return result;
 
+    // Try aggressive cleanup - collapse all whitespace
     const cleaned = candidate.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
     result = tryParse(cleaned, "brace extraction (cleaned)");
     if (result) return result;
@@ -387,13 +456,21 @@ function createSlideStructure(
 
 // ============ PHASE 2: LLM CONTENT GENERATION FOR SINGLE SLIDE ============
 
+interface ModelConfig {
+  model: string;
+  maxTokens: number;
+  apiKey: string;
+  anthropicKey?: string;
+  xaiKey?: string;
+}
+
 async function generateSlideContent(
   spec: SlideSpec,
   blackboard: BlackboardEntry[],
   collectedData: Record<string, any>,
   allSpecs: SlideSpec[],
   previousSlides: GeneratedSlide[],
-  apiKey: string
+  modelConfig: ModelConfig
 ): Promise<GeneratedSlide> {
   const projectName = collectedData.settings?.name || "Project";
   const projectDesc = collectedData.settings?.description || "";
@@ -409,12 +486,20 @@ STATUS: ${maturityEntry?.content || 'Unknown maturity'}
 EXECUTIVE SUMMARY: ${blufEntry?.content || 'Project under development'}
 `.trim();
 
-  // Get previous slides content for narrative continuity
+  // Get previous slides content for narrative continuity - IMPROVED extraction
   const prevSlidesContext = previousSlides.slice(-3).map(slide => {
-    const textContent = slide.content?.map(c => 
-      c.data?.text || c.data?.items?.map((i: any) => i.title).join(', ') || ''
-    ).filter(Boolean).join(' ') || '';
-    return `Slide ${slide.order} "${slide.title}": ${textContent.slice(0, 200)}`;
+    const extractText = (content: SlideContent[]): string => {
+      return content.map(c => {
+        const data = c.data || {};
+        if (data.text) return data.text;
+        if (data.items) return data.items.map((i: any) => `${i.title}: ${i.description || ''}`).join('; ');
+        if (data.steps) return data.steps.map((s: any) => `${s.title}: ${s.description || ''}`).join('; ');
+        if (data.value && data.label) return `${data.label}: ${data.value}`;
+        return '';
+      }).filter(Boolean).join(' ').slice(0, 400);
+    };
+    const textContent = extractText(slide.content || []);
+    return `Slide ${slide.order} "${slide.title}": ${textContent || 'Content pending'}`;
   }).join('\n');
   
   // Get relevant data based on section - WITH ACTUAL CONTENT
@@ -563,6 +648,24 @@ ${files.length === 0 ? '- Begin implementation' : '- Continue development'}`;
   
   const layoutRegions = getLayoutRegions(spec.layoutId);
   
+  const systemPrompt = `You are a senior presentation content expert creating executive-quality slides.
+
+ABSOLUTE REQUIREMENTS:
+1. Use ACTUAL project data provided - no generic placeholders like "TBD", "Details to be added", "Key Point 1"
+2. Include SPECIFIC numbers, names, requirement codes, and component names from the project
+3. Use markdown formatting: **bold**, *italic* - ABSOLUTELY NO HTML tags
+4. Content must flow naturally from previous slides
+5. For stats-grid layouts: Use REAL numbers from the project data
+6. For timeline layouts: Create realistic phases based on actual project scope
+7. For risks: Identify REAL concerns based on project gaps visible in the data
+
+If project data is sparse, CREATE plausible content based on:
+- Project name and description
+- The section's purpose
+- Standard project patterns
+
+NEVER return empty content arrays. Every slide MUST have substantive content.`;
+
   const prompt = `Generate SPECIFIC, DATA-RICH content for slide ${spec.order}/${allSpecs.length} of "${projectName}" presentation.
 
 === SLIDE SPECIFICATION ===
@@ -588,54 +691,118 @@ Next: ${nextSlides.map(s => s.suggestedTitle).join(" → ") || "Final slide"}
 === PROJECT DATA FOR THIS SLIDE ===
 ${contextData}
 
-=== CRITICAL CONTENT RULES ===
-1. Use ACTUAL project data from above - no generic placeholders
-2. Include SPECIFIC numbers, names, and details from the project
-3. Use markdown: **bold**, *italic* - ABSOLUTELY NO HTML tags (<br>, <ul>, etc.)
-4. Content must flow naturally from previous slides
-5. Make content compelling and actionable
-
-=== JSON FORMAT RULES ===
-Return a JSON object with this EXACT structure:
+=== REQUIRED JSON OUTPUT ===
 {
   "id": "slide-${spec.order}",
   "order": ${spec.order},
   "layoutId": "${spec.layoutId}",
-  "title": "Your specific title",
+  "title": "Your specific title using actual project terms",
   "content": [
     { "regionId": "region-name", "type": "content-type", "data": { ... } }
   ],
-  "notes": "Speaker notes",
-  ${spec.requiresImage ? '"imagePrompt": "Detailed image description"' : ''}
+  "notes": "Speaker notes with key talking points"${spec.requiresImage ? `,
+  "imagePrompt": "Detailed professional image description - specify style (isometric, photorealistic, diagram), colors, and subject matter. No text in image."` : ''}
 }
 
 CONTENT TYPE FORMATS:
+- heading: { "text": "Title", "level": 2 }
 - text/richtext: { "text": "Markdown content here" }
 - bullets: { "items": [{ "title": "Point", "description": "Detail" }] }
 - stat: { "value": "42", "label": "Metric name" }
 - timeline: { "steps": [{ "title": "Step", "description": "Detail" }] }
 - icon-grid: { "items": [{ "icon": "📊", "title": "Item", "description": "Detail" }] }
 
-Return ONLY valid JSON.`;
+Return ONLY valid JSON with no additional text.`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
+  // Call LLM based on model selection
+  const { model, maxTokens, apiKey, anthropicKey, xaiKey } = modelConfig;
+  let response: Response;
+  
+  if (model.startsWith("gemini")) {
+    // Gemini with JSON schema enforcement
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            maxOutputTokens: Math.min(maxTokens, 8192), // Gemini has per-request limit
+            temperature: 0.5,
+            responseMimeType: "application/json",
+            responseSchema: GEMINI_SLIDE_SCHEMA,
+          },
+        }),
+      }
+    );
+  } else if (model.startsWith("claude")) {
+    // Claude with tool-based JSON enforcement
+    response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": anthropicKey || "",
+        "anthropic-version": "2023-06-01",
+      },
       body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: "You are a presentation content expert. Generate rich, specific slide content using actual project data. Return ONLY valid JSON with no HTML tags - use markdown for formatting. Never use placeholder text like 'TBD' or 'Details to be added'." }],
-        },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          maxOutputTokens: 3000,
-          temperature: 0.5,
-          responseMimeType: "application/json",
+        model,
+        max_tokens: Math.min(maxTokens, 4096),
+        system: systemPrompt,
+        messages: [{ role: "user", content: prompt }],
+        tools: [{
+          name: "generate_slide",
+          description: "Generate slide content as structured JSON",
+          input_schema: { ...SLIDE_CONTENT_SCHEMA, additionalProperties: false },
+        }],
+        tool_choice: { type: "tool", name: "generate_slide" },
+      }),
+    });
+  } else if (model.startsWith("grok")) {
+    // Grok/xAI with JSON schema
+    response = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${xaiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: Math.min(maxTokens, 8192),
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "slide_content",
+            strict: true,
+            schema: SLIDE_CONTENT_SCHEMA,
+          },
         },
       }),
-    }
-  );
+    });
+  } else {
+    // Fallback to Gemini
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            maxOutputTokens: 8192,
+            temperature: 0.5,
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    );
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -644,7 +811,20 @@ Return ONLY valid JSON.`;
   }
 
   const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  
+  // Extract text based on model
+  let text = "";
+  if (model.startsWith("claude")) {
+    // Claude tool response
+    const toolUse = data.content?.find((c: any) => c.type === "tool_use");
+    text = toolUse?.input ? JSON.stringify(toolUse.input) : "";
+  } else if (model.startsWith("grok")) {
+    text = data.choices?.[0]?.message?.content || "";
+  } else {
+    // Gemini
+    text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  }
+  
   const parsed = parseAgentResponseText(text);
 
   if (!parsed || typeof parsed !== "object") {
@@ -654,7 +834,7 @@ Return ONLY valid JSON.`;
 
   // Build the slide with guaranteed fields
   const slide: GeneratedSlide = {
-    id: parsed.id || `slide-${spec.order}`,
+    id: parsed.id || generateId(),
     order: spec.order,
     layoutId: spec.layoutId,
     title: parsed.title || spec.suggestedTitle,
@@ -671,8 +851,88 @@ Return ONLY valid JSON.`;
   return slide;
 }
 
-// Create a fallback slide when LLM fails
-function createFallbackSlideFromSpec(spec: SlideSpec): GeneratedSlide {
+// Create a data-aware fallback slide when LLM fails
+function createFallbackSlideFromSpec(
+  spec: SlideSpec, 
+  collectedData?: Record<string, any>
+): GeneratedSlide {
+  const requirements = collectedData?.requirements || [];
+  const nodes = collectedData?.canvas?.nodes || [];
+  const files = collectedData?.repoStructure?.files || [];
+  const projectName = collectedData?.settings?.name || "Project";
+  
+  // Section-specific data-aware fallback content
+  const getSectionContent = (): SlideContent[] => {
+    switch (spec.section) {
+      case "Status":
+        return [
+          { regionId: "title", type: "heading", data: { text: "Project Status", level: 2 } },
+          { regionId: "stat-1", type: "stat", data: { value: String(requirements.length), label: "Requirements" } },
+          { regionId: "stat-2", type: "stat", data: { value: String(nodes.length), label: "Components" } },
+          { regionId: "stat-3", type: "stat", data: { value: String(files.length), label: "Code Files" } },
+          { regionId: "stat-4", type: "stat", data: { value: files.length > 0 ? "In Progress" : "Planning", label: "Phase" } },
+        ];
+        
+      case "Risks":
+        const risks = [];
+        if (requirements.length === 0) risks.push({ title: "Scope Definition", description: "Requirements not yet documented" });
+        if (nodes.length === 0) risks.push({ title: "Architecture Gap", description: "System design needs definition" });
+        if (files.length === 0) risks.push({ title: "Implementation Start", description: "Development not yet begun" });
+        if (risks.length === 0) risks.push({ title: "Ongoing Monitoring", description: "Regular risk assessment needed" });
+        
+        return [
+          { regionId: "title", type: "heading", data: { text: "Risks & Mitigations", level: 2 } },
+          { regionId: "left-content", type: "bullets", data: { items: risks } },
+          { regionId: "right-content", type: "richtext", data: { 
+            text: `**Mitigation Strategy**\n\n- Regular stakeholder reviews\n- Iterative development approach\n- Continuous documentation` 
+          } },
+        ];
+        
+      case "Next Steps":
+        const steps = [];
+        if (requirements.length === 0) steps.push({ title: "Phase 1", description: "Define core requirements" });
+        else if (nodes.length === 0) steps.push({ title: "Phase 1", description: "Design system architecture" });
+        else if (files.length === 0) steps.push({ title: "Phase 1", description: "Begin implementation" });
+        else steps.push({ title: "Phase 1", description: "Continue development" });
+        steps.push({ title: "Phase 2", description: "Testing and validation" });
+        steps.push({ title: "Phase 3", description: "Deployment and rollout" });
+        
+        return [
+          { regionId: "title", type: "heading", data: { text: "Roadmap", level: 2 } },
+          { regionId: "timeline", type: "timeline", data: { steps } },
+        ];
+        
+      case "Requirements":
+        const topReqs = requirements.filter((r: any) => !r.parent_id).slice(0, 4);
+        if (topReqs.length > 0) {
+          return [
+            { regionId: "title", type: "heading", data: { text: "Core Requirements", level: 2 } },
+            { regionId: "bullets", type: "bullets", data: { items: topReqs.map((r: any) => ({
+              title: `${r.code || 'REQ'}: ${r.title}`,
+              description: (r.content || '').slice(0, 100)
+            })) } },
+          ];
+        }
+        break;
+        
+      case "Architecture":
+        if (nodes.length > 0) {
+          const nodeTypes = [...new Set(nodes.map((n: any) => n.type || 'component'))].slice(0, 4);
+          return [
+            { regionId: "title", type: "heading", data: { text: "System Architecture", level: 2 } },
+            { regionId: "content", type: "richtext", data: { 
+              text: `**${projectName} Architecture**\n\n${nodes.length} components across ${nodeTypes.length} layers:\n${nodeTypes.map(t => `- ${t}`).join('\n')}`
+            } },
+          ];
+        }
+        break;
+    }
+    return [];
+  };
+  
+  const sectionContent = getSectionContent();
+  
+  // Layout-based fallback if section-specific didn't work
   const contentMap: Record<string, SlideContent[]> = {
     "title-cover": [
       { regionId: "title", type: "heading", data: { text: spec.suggestedTitle, level: 1 } },
@@ -680,30 +940,38 @@ function createFallbackSlideFromSpec(spec: SlideSpec): GeneratedSlide {
     ],
     "quote": [
       { regionId: "quote", type: "text", data: { text: `"${spec.purpose}"` } },
-      { regionId: "attribution", type: "text", data: { text: "Project Team" } },
+      { regionId: "attribution", type: "text", data: { text: projectName } },
     ],
     "bullets": [
       { regionId: "title", type: "heading", data: { text: spec.suggestedTitle, level: 2 } },
       { regionId: "bullets", type: "bullets", data: { items: [
-        { title: "Key Point 1", description: "Details to be added" },
-        { title: "Key Point 2", description: "Details to be added" },
-        { title: "Key Point 3", description: "Details to be added" },
+        { title: "Key deliverable", description: "Primary outcome for this phase" },
+        { title: "Success criteria", description: "Measurable objectives" },
+        { title: "Dependencies", description: "Required inputs and resources" },
       ] } },
     ],
     "stats-grid": [
       { regionId: "title", type: "heading", data: { text: spec.suggestedTitle, level: 2 } },
-      { regionId: "stat-1", type: "stat", data: { value: "—", label: "Metric 1" } },
-      { regionId: "stat-2", type: "stat", data: { value: "—", label: "Metric 2" } },
-      { regionId: "stat-3", type: "stat", data: { value: "—", label: "Metric 3" } },
-      { regionId: "stat-4", type: "stat", data: { value: "—", label: "Metric 4" } },
+      { regionId: "stat-1", type: "stat", data: { value: String(requirements.length), label: "Requirements" } },
+      { regionId: "stat-2", type: "stat", data: { value: String(nodes.length), label: "Components" } },
+      { regionId: "stat-3", type: "stat", data: { value: String(files.length), label: "Files" } },
+      { regionId: "stat-4", type: "stat", data: { value: "Active", label: "Status" } },
     ],
     "timeline": [
       { regionId: "title", type: "heading", data: { text: spec.suggestedTitle, level: 2 } },
       { regionId: "timeline", type: "timeline", data: { steps: [
-        { title: "Step 1", description: "First milestone" },
-        { title: "Step 2", description: "Second milestone" },
-        { title: "Step 3", description: "Third milestone" },
+        { title: "Phase 1", description: "Foundation and planning" },
+        { title: "Phase 2", description: "Development and testing" },
+        { title: "Phase 3", description: "Deployment and review" },
       ] } },
+    ],
+    "two-column": [
+      { regionId: "title", type: "heading", data: { text: spec.suggestedTitle, level: 2 } },
+      { regionId: "left-content", type: "richtext", data: { text: `**Overview**\n\n${spec.purpose}` } },
+      { regionId: "right-content", type: "richtext", data: { text: `**Key Points**\n\n- Point 1\n- Point 2\n- Point 3` } },
+    ],
+    "image-full": [
+      { regionId: "image", type: "image", data: { url: "", alt: spec.purpose } },
     ],
   };
 
@@ -712,11 +980,11 @@ function createFallbackSlideFromSpec(spec: SlideSpec): GeneratedSlide {
     order: spec.order,
     layoutId: spec.layoutId,
     title: spec.suggestedTitle,
-    content: contentMap[spec.layoutId] || [
+    content: sectionContent.length > 0 ? sectionContent : (contentMap[spec.layoutId] || [
       { regionId: "title", type: "heading", data: { text: spec.suggestedTitle, level: 2 } },
       { regionId: "content", type: "richtext", data: { text: spec.purpose } },
-    ],
-    notes: spec.purpose,
+    ]),
+    notes: `[Fallback] ${spec.purpose}`,
     imagePrompt: spec.requiresImage ? `Professional visualization for: ${spec.purpose}` : undefined,
   };
 }
@@ -737,6 +1005,8 @@ serve(async (req) => {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
         const geminiKey = Deno.env.get("GEMINI_API_KEY")!;
+        const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+        const xaiKey = Deno.env.get("XAI_API_KEY");
 
         const supabase = createClient(supabaseUrl, supabaseKey, {
           global: {
@@ -751,6 +1021,30 @@ serve(async (req) => {
 
         controller.enqueue(encoder.encode(sseMessage("status", { phase: "starting", message: "Initializing presentation agent..." })));
 
+        // Get project settings for model selection
+        const { data: projectSettings, error: projectError } = await supabase.rpc("get_project_with_token", {
+          p_project_id: projectId,
+          p_token: shareToken,
+        });
+
+        if (projectError) {
+          console.error("Failed to get project settings:", projectError);
+        }
+
+        const selectedModel = projectSettings?.selected_model || "gemini-2.5-flash";
+        const maxTokens = projectSettings?.max_tokens || 8192;
+
+        // Build model config
+        const modelConfig: ModelConfig = {
+          model: selectedModel,
+          maxTokens,
+          apiKey: geminiKey,
+          anthropicKey,
+          xaiKey,
+        };
+
+        console.log("Using model config:", { model: selectedModel, maxTokens });
+
         // Update presentation status
         await supabase.rpc("update_presentation_with_token", {
           p_presentation_id: presentationId,
@@ -758,7 +1052,7 @@ serve(async (req) => {
           p_status: "generating",
         });
 
-        if (!geminiKey) {
+        if (!geminiKey && selectedModel.startsWith("gemini")) {
           throw new Error("GEMINI_API_KEY is not configured");
         }
 
@@ -1410,7 +1704,7 @@ serve(async (req) => {
               collectedData,
               slideSpecs,
               generatedSlides, // Pass previously generated slides for context
-              geminiKey
+              modelConfig
             );
 
             // Update the slide in our array
@@ -1433,8 +1727,8 @@ serve(async (req) => {
           } catch (slideError: any) {
             console.error(`Failed to generate content for slide ${i + 1}:`, slideError);
 
-            // Use fallback slide from spec
-            const fallbackSlide = createFallbackSlideFromSpec(spec);
+            // Use data-aware fallback slide from spec
+            const fallbackSlide = createFallbackSlideFromSpec(spec, collectedData);
             slidesJson[i] = fallbackSlide;
             generatedSlides.push(fallbackSlide);
             controller.enqueue(encoder.encode(sseMessage("slide", fallbackSlide)));
@@ -1474,31 +1768,43 @@ serve(async (req) => {
             if (imageUrl) {
               const slideIndex = slidesJson.findIndex((s: any) => s.id === slide.id);
               if (slideIndex !== -1) {
-                slidesJson[slideIndex].imageUrl = imageUrl;
-
                 // Add to content array for image region
                 const imageLayouts: Record<string, string> = {
                   "image-left": "image",
                   "image-right": "image",
+                  "image-full": "image",
                   "architecture": "diagram",
                   "title-cover": "background",
                 };
 
                 const imageRegion = imageLayouts[slide.layoutId];
+                
+                // Use immutable update to ensure changes persist
+                const updatedContent = [...(slidesJson[slideIndex].content || [])];
+                
                 if (imageRegion) {
-                  const hasImageContent = slidesJson[slideIndex].content?.some(
+                  const hasImageContent = updatedContent.some(
                     (c: any) => c.regionId === imageRegion && c.type === "image"
                   );
 
                   if (!hasImageContent) {
-                    slidesJson[slideIndex].content = slidesJson[slideIndex].content || [];
-                    slidesJson[slideIndex].content.push({
+                    updatedContent.push({
                       regionId: imageRegion,
                       type: "image",
                       data: { url: imageUrl, alt: slide.imagePrompt }
                     });
                   }
                 }
+                
+                // Create new slide object with all updates
+                slidesJson[slideIndex] = {
+                  ...slidesJson[slideIndex],
+                  imageUrl: imageUrl,
+                  content: updatedContent,
+                };
+                
+                // Stream the updated slide
+                controller.enqueue(encoder.encode(sseMessage("slide", slidesJson[slideIndex])));
               }
               imagesGenerated++;
             }
@@ -1517,7 +1823,7 @@ serve(async (req) => {
 
         const metadata = {
           generatedAt: new Date().toISOString(),
-          model: "gemini-2.5-flash",
+          model: selectedModel,
           mode,
           targetSlides,
           actualSlides: slidesJson.length,
@@ -1547,7 +1853,7 @@ serve(async (req) => {
           presentationId,
           slideCount: slidesJson.length,
           blackboardCount: blackboard.length,
-          model: "gemini-2.5-flash",
+          model: selectedModel,
         })));
 
         controller.close();
