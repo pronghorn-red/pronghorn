@@ -4,8 +4,14 @@ import ReactMarkdown from "react-markdown";
 
 interface SlideContent {
   regionId: string;
-  type: string;
-  data: any;
+  type?: string;
+  data?: any;
+  // LLM sometimes outputs flat structure
+  text?: string;
+  items?: any[];
+  steps?: any[];
+  value?: string;
+  label?: string;
 }
 
 interface Slide {
@@ -61,6 +67,37 @@ const SPACING = {
   padding: 32,
   paddingSmall: 16,
 };
+
+// Normalize content item to handle both LLM formats:
+// Format 1 (correct): { regionId, type, data: { text: "..." } }
+// Format 2 (LLM outputs): { regionId, text: "..." }
+function normalizeContent(item: SlideContent): SlideContent {
+  // Already normalized
+  if (item.data !== undefined) {
+    return item;
+  }
+  
+  // Convert flat format to normalized
+  const normalized: SlideContent = {
+    regionId: item.regionId,
+    type: item.type || 'text',
+    data: {},
+  };
+  
+  // Move text/items/steps/value/label to data
+  if (item.text) normalized.data.text = item.text;
+  if (item.items) normalized.data.items = item.items;
+  if (item.steps) normalized.data.steps = item.steps;
+  if (item.value !== undefined) normalized.data.value = item.value;
+  if (item.label) normalized.data.label = item.label;
+  
+  // Infer type from content
+  if (item.items) normalized.type = 'bullets';
+  if (item.steps) normalized.type = 'timeline';
+  if (item.value !== undefined) normalized.type = 'stat';
+  
+  return normalized;
+}
 
 // Markdown renderer for consistent styling
 const MarkdownText = ({ content, style, fontSize }: { content: string; style?: React.CSSProperties; fontSize?: number }) => (
@@ -147,22 +184,31 @@ export function SlideRenderer({
     }
   }, [theme]);
 
-  // === UNIFIED CONTENT EXTRACTION ===
-  const getContentByType = (type: string) => content?.find(c => c.type === type);
-  const getContentByRegion = (regionId: string) => content?.find(c => c.regionId === regionId);
+  // === NORMALIZE ALL CONTENT ON MOUNT ===
+  const normalizedContent = useMemo(() => {
+    return content?.map(normalizeContent) || [];
+  }, [content]);
+
+  // === UNIFIED CONTENT EXTRACTION (using normalized) ===
+  const getContentByType = (type: string) => normalizedContent.find(c => c.type === type);
+  const getContentByRegion = (regionId: string) => normalizedContent.find(c => c.regionId === regionId);
   
   const mainContent = useMemo(() => {
+    // For quote layout, get quote region
+    if (layoutId === 'quote') {
+      return getContentByRegion("quote");
+    }
     return getContentByRegion("content") || 
            getContentByRegion("main") || 
            getContentByRegion("bullets") ||
            getContentByType("richtext") ||
            getContentByType("text") ||
            getContentByType("bullets");
-  }, [content]);
+  }, [normalizedContent, layoutId]);
 
   const imageContent = getContentByType("image") || getContentByRegion("image");
   const timelineContent = getContentByType("timeline") || getContentByRegion("timeline");
-  const statsContent = content?.filter(c => c.type === "stat");
+  const statsContent = normalizedContent.filter(c => c.type === "stat" || c.regionId?.startsWith("stat-"));
   const gridContent = getContentByType("icon-grid") || getContentByRegion("grid");
 
   const mainText = mainContent?.data?.text || (typeof mainContent?.data === 'string' ? mainContent.data : null);
@@ -718,6 +764,58 @@ export function SlideRenderer({
               </div>
             )}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Quote layout - centered quote with attribution
+  if (layoutId === "quote") {
+    const quoteContent = getContentByRegion("quote");
+    const attributionContent = getContentByRegion("attribution");
+    const quoteText = quoteContent?.data?.text || quoteContent?.text || "";
+    const attributionText = attributionContent?.data?.text || attributionContent?.text || "";
+    
+    return (
+      <div className={`font-raleway ${className}`} style={containerStyle}>
+        <div className="flex flex-col h-full justify-center items-center text-center" style={{ padding: sp.padding * 2 }}>
+          {title && (
+            <h2 
+              className="font-bold font-raleway mb-8"
+              style={{ 
+                color: themeColors.foreground,
+                fontSize: fs.title,
+              }}
+            >
+              {title}
+            </h2>
+          )}
+          {quoteText && (
+            <blockquote 
+              className="italic leading-relaxed max-w-4xl"
+              style={{ 
+                color: themeColors.foreground,
+                fontSize: fs.subtitle * 1.2,
+              }}
+            >
+              <MarkdownText 
+                content={`"${quoteText.replace(/^[""]|[""]$/g, '')}"` }
+                style={{ color: themeColors.foreground }}
+                fontSize={fs.subtitle * 1.2}
+              />
+            </blockquote>
+          )}
+          {attributionText && (
+            <p 
+              className="mt-6 opacity-80"
+              style={{ 
+                color: themeColors.primary,
+                fontSize: fs.body,
+              }}
+            >
+              — {attributionText}
+            </p>
+          )}
         </div>
       </div>
     );

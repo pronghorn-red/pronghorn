@@ -344,8 +344,18 @@ export default function Present() {
                 } else if (event === "blackboard") {
                   setLiveBlackboard(prev => [...prev, data]);
                 } else if (event === "slide") {
-                  // Real-time slide streaming
-                  toast.info(`Generated: ${data.title}`);
+                  // Real-time slide update - replace shell with content
+                  setWorkingSlides(prev => {
+                    if (!prev) return [data];
+                    const idx = prev.findIndex(s => s.order === data.order);
+                    if (idx !== -1) {
+                      const updated = [...prev];
+                      updated[idx] = data;
+                      return updated;
+                    }
+                    return [...prev, data].sort((a, b) => a.order - b.order);
+                  });
+                  setGenerationStatus(`Generated: ${data.title}`);
                 } else if (event === "complete") {
                   toast.success(`Generated ${data.slideCount} slides`);
                 } else if (event === "error") {

@@ -380,94 +380,231 @@ async function generateSlideContent(
   blackboard: BlackboardEntry[],
   collectedData: Record<string, any>,
   allSpecs: SlideSpec[],
+  previousSlides: GeneratedSlide[],
   apiKey: string
 ): Promise<GeneratedSlide> {
   const projectName = collectedData.settings?.name || "Project";
   const projectDesc = collectedData.settings?.description || "";
   
-  // Get relevant data based on section
+  // Get comprehensive project summary
+  const blufEntry = blackboard.find(e => e.data?.type === 'bluf');
+  const maturityEntry = blackboard.find(e => e.category === 'estimate');
+  
+  const projectSummary = `
+PROJECT: ${projectName}
+DESCRIPTION: ${projectDesc || 'No description provided'}
+STATUS: ${maturityEntry?.content || 'Unknown maturity'}
+EXECUTIVE SUMMARY: ${blufEntry?.content || 'Project under development'}
+`.trim();
+
+  // Get previous slides content for narrative continuity
+  const prevSlidesContext = previousSlides.slice(-3).map(slide => {
+    const textContent = slide.content?.map(c => 
+      c.data?.text || c.data?.items?.map((i: any) => i.title).join(', ') || ''
+    ).filter(Boolean).join(' ') || '';
+    return `Slide ${slide.order} "${slide.title}": ${textContent.slice(0, 200)}`;
+  }).join('\n');
+  
+  // Get relevant data based on section - WITH ACTUAL CONTENT
   let contextData = "";
   const requirements = collectedData.requirements || [];
   const nodes = collectedData.canvas?.nodes || [];
   const files = collectedData.repoStructure?.files || [];
+  const specs = collectedData.specifications || [];
   
   switch (spec.section) {
     case "Opening":
-      contextData = `Project: ${projectName}\nDescription: ${projectDesc}\nRequirements: ${requirements.length}\nArchitecture components: ${nodes.length}`;
+      contextData = `
+${projectSummary}
+Total Requirements: ${requirements.length}
+Architecture Components: ${nodes.length}
+Code Files: ${files.length}
+Key narrative hooks from analysis:
+${blackboard.filter(e => e.category === "narrative").slice(0, 3).map(e => `- ${e.content}`).join('\n')}`;
       break;
+      
     case "Context":
-      contextData = blackboard
-        .filter(e => e.category === "narrative" || e.category === "observation")
-        .slice(0, 5)
-        .map(e => e.content)
-        .join("\n");
+      const observations = blackboard.filter(e => e.category === "observation" || e.category === "narrative");
+      contextData = `
+PROJECT CONTEXT:
+${projectDesc || 'No description - create compelling context based on project structure'}
+
+KEY OBSERVATIONS:
+${observations.slice(0, 6).map(e => `- ${e.content}`).join('\n')}
+
+PROBLEM INDICATORS:
+- ${requirements.length} requirements defined indicates ${requirements.length > 20 ? 'complex scope' : requirements.length > 5 ? 'well-defined scope' : 'early stage definition'}
+- ${nodes.length} architecture nodes indicates ${nodes.length > 10 ? 'detailed technical design' : 'architectural planning ongoing'}`;
       break;
+      
     case "Solution":
-      contextData = blackboard
-        .filter(e => e.category === "insight")
-        .slice(0, 8)
-        .map(e => e.content)
-        .join("\n");
+      const insights = blackboard.filter(e => e.category === "insight");
+      contextData = `
+SOLUTION OVERVIEW:
+${projectDesc || projectName}
+
+KEY INSIGHTS FROM ANALYSIS:
+${insights.slice(0, 8).map(e => `- ${e.content}`).join('\n')}
+
+TECHNICAL COMPONENTS:
+${nodes.slice(0, 6).map((n: any) => `- ${n.data?.label || n.type}: ${(n.data?.description || '').slice(0, 100)}`).join('\n')}`;
       break;
+      
     case "Requirements":
-      const topReqs = requirements.filter((r: any) => !r.parent_id).slice(0, 8);
-      contextData = topReqs.map((r: any) => `${r.code || ""}: ${r.title} - ${(r.content || "").slice(0, 150)}`).join("\n");
+      const topReqs = requirements.filter((r: any) => !r.parent_id).slice(0, 10);
+      contextData = `
+REQUIREMENTS OVERVIEW (${requirements.length} total):
+
+TOP-LEVEL REQUIREMENTS:
+${topReqs.map((r: any) => `
+**${r.code || 'REQ'}: ${r.title}**
+${(r.content || 'No description').slice(0, 200)}
+Priority: ${r.priority || 'Not set'}
+`).join('\n')}
+
+REQUIREMENT ANALYSIS:
+${blackboard.filter(e => e.source === 'read_requirements').slice(0, 3).map(e => `- ${e.content}`).join('\n')}`;
       break;
+      
     case "Architecture":
-      const keyNodes = nodes.slice(0, 12);
-      contextData = keyNodes.map((n: any) => `${n.type}: ${n.data?.label || n.data?.title || "Component"} - ${(n.data?.description || "").slice(0, 100)}`).join("\n");
+      const keyNodes = nodes.slice(0, 15);
+      const nodesByType: Record<string, any[]> = {};
+      keyNodes.forEach((n: any) => {
+        const type = n.type || 'component';
+        if (!nodesByType[type]) nodesByType[type] = [];
+        nodesByType[type].push(n);
+      });
+      
+      contextData = `
+ARCHITECTURE OVERVIEW (${nodes.length} components):
+
+${Object.entries(nodesByType).map(([type, items]) => `
+${type.toUpperCase()} (${items.length}):
+${items.slice(0, 5).map((n: any) => `- ${n.data?.label || 'Component'}: ${(n.data?.description || '').slice(0, 150)}`).join('\n')}
+`).join('\n')}
+
+ARCHITECTURE INSIGHTS:
+${blackboard.filter(e => e.source === 'read_canvas').slice(0, 3).map(e => `- ${e.content}`).join('\n')}`;
       break;
+      
     case "Status":
       const estimates = blackboard.filter(e => e.category === "estimate" || e.category === "analysis");
-      contextData = estimates.map(e => e.content).join("\n");
+      contextData = `
+PROJECT STATUS:
+${maturityEntry?.content || 'Status being assessed'}
+
+KEY METRICS:
+- Requirements defined: ${requirements.length}
+- Architecture components: ${nodes.length}
+- Code files implemented: ${files.length}
+- Specifications generated: ${specs.length}
+
+STATUS ANALYSIS:
+${estimates.slice(0, 5).map(e => `- ${e.content}`).join('\n')}`;
       break;
+      
     case "Risks":
-      contextData = `Based on project with ${requirements.length} requirements, ${nodes.length} architecture nodes, ${files.length} code files.\n` +
-        blackboard.filter(e => e.category === "question" || e.content.toLowerCase().includes("risk") || e.content.toLowerCase().includes("challeng")).slice(0, 5).map(e => e.content).join("\n");
+      const riskIndicators = blackboard.filter(e => 
+        e.category === "question" || 
+        e.content.toLowerCase().includes("risk") || 
+        e.content.toLowerCase().includes("challeng") ||
+        e.content.toLowerCase().includes("concern")
+      );
+      contextData = `
+RISK ANALYSIS:
+
+PROJECT SCOPE: ${requirements.length} requirements, ${nodes.length} components, ${files.length} files
+
+IDENTIFIED CONCERNS:
+${riskIndicators.slice(0, 6).map(e => `- ${e.content}`).join('\n') || '- No explicit risks identified in analysis'}
+
+CONSIDERATIONS:
+- ${requirements.length === 0 ? 'Requirements not yet documented - scope clarity risk' : 'Requirements documented'}
+- ${nodes.length === 0 ? 'Architecture not yet defined - design risk' : 'Architecture defined'}
+- ${files.length === 0 ? 'Implementation not started - timeline risk' : 'Implementation in progress'}`;
       break;
+      
     case "Next Steps":
-      contextData = blackboard.filter(e => e.category === "decision" || e.category === "narrative").slice(0, 5).map(e => e.content).join("\n");
+      const decisions = blackboard.filter(e => e.category === "decision" || e.category === "narrative");
+      contextData = `
+NEXT STEPS CONTEXT:
+${decisions.slice(0, 5).map(e => `- ${e.content}`).join('\n')}
+
+PROJECT STATE:
+- Requirements: ${requirements.length > 0 ? 'Defined' : 'Needs definition'}
+- Architecture: ${nodes.length > 0 ? 'Designed' : 'Needs design'}
+- Implementation: ${files.length > 0 ? 'In progress' : 'Not started'}
+
+RECOMMENDED FOCUS AREAS:
+${requirements.length === 0 ? '- Define core requirements' : ''}
+${nodes.length === 0 ? '- Design system architecture' : ''}
+${files.length === 0 ? '- Begin implementation' : '- Continue development'}`;
       break;
+      
     default:
-      contextData = blackboard.slice(0, 5).map(e => e.content).join("\n");
+      contextData = blackboard.slice(0, 8).map(e => e.content).join('\n');
   }
   
   // Build previous/next context
   const prevSlides = allSpecs.slice(0, spec.order - 1).slice(-3);
   const nextSlides = allSpecs.slice(spec.order).slice(0, 2);
   
-  const layoutContent = getLayoutRegions(spec.layoutId);
+  const layoutRegions = getLayoutRegions(spec.layoutId);
   
-  const prompt = `Generate content for slide ${spec.order}/${allSpecs.length} of "${projectName}" presentation.
+  const prompt = `Generate SPECIFIC, DATA-RICH content for slide ${spec.order}/${allSpecs.length} of "${projectName}" presentation.
 
-SLIDE SPECIFICATION:
-- Order: ${spec.order}
-- Layout: ${spec.layoutId}
-- Section: ${spec.section}
-- Purpose: ${spec.purpose}
-- Suggested title: "${spec.suggestedTitle}"
+=== SLIDE SPECIFICATION ===
+Order: ${spec.order}
+Layout: ${spec.layoutId}  
+Section: ${spec.section}
+Purpose: ${spec.purpose}
+Suggested title: "${spec.suggestedTitle}"
 
-LAYOUT REGIONS (you must fill these):
-${layoutContent}
+=== LAYOUT REGIONS TO FILL ===
+${layoutRegions}
 
-STORY CONTEXT:
-${prevSlides.length > 0 ? `Previous: ${prevSlides.map(s => s.suggestedTitle).join(" → ")}` : "This is the first slide"}
-${nextSlides.length > 0 ? `Next: ${nextSlides.map(s => s.suggestedTitle).join(" → ")}` : "This is the final slide"}
+=== PROJECT CONTEXT ===
+${projectSummary}
 
-PROJECT DATA FOR THIS SLIDE:
-${contextData || "No specific data - create compelling content based on the slide purpose."}
+=== PREVIOUS SLIDES (for narrative continuity) ===
+${prevSlidesContext || 'This is the first slide'}
 
-CONTENT FORMAT RULES:
-- For "bullets" layout: content array needs { regionId: "bullets", type: "bullets", data: { items: [{ title: "...", description: "..." }] } }
-- For "stats-grid" layout: need stat-1, stat-2, stat-3, stat-4 regions with { value: "number", label: "metric" }
-- For "timeline" layout: { steps: [{ title: "...", description: "..." }] }
-- For "icon-grid": { items: [{ icon: "emoji", title: "...", description: "..." }] }
-- For "two-column": left-content and right-content regions
-- For "quote": { text: "the quote" } and attribution region
-- Use **bold** and *italic* for emphasis - NEVER HTML tags
-${spec.requiresImage ? `\n- Include imagePrompt: a detailed description for AI image generation` : ""}
+=== STORY FLOW ===
+Previous: ${prevSlides.map(s => s.suggestedTitle).join(" → ") || "None"}
+Next: ${nextSlides.map(s => s.suggestedTitle).join(" → ") || "Final slide"}
 
-Return ONLY a JSON object with: id, order, layoutId, title, content (array), notes, ${spec.requiresImage ? "imagePrompt" : ""}`;
+=== PROJECT DATA FOR THIS SLIDE ===
+${contextData}
+
+=== CRITICAL CONTENT RULES ===
+1. Use ACTUAL project data from above - no generic placeholders
+2. Include SPECIFIC numbers, names, and details from the project
+3. Use markdown: **bold**, *italic* - ABSOLUTELY NO HTML tags (<br>, <ul>, etc.)
+4. Content must flow naturally from previous slides
+5. Make content compelling and actionable
+
+=== JSON FORMAT RULES ===
+Return a JSON object with this EXACT structure:
+{
+  "id": "slide-${spec.order}",
+  "order": ${spec.order},
+  "layoutId": "${spec.layoutId}",
+  "title": "Your specific title",
+  "content": [
+    { "regionId": "region-name", "type": "content-type", "data": { ... } }
+  ],
+  "notes": "Speaker notes",
+  ${spec.requiresImage ? '"imagePrompt": "Detailed image description"' : ''}
+}
+
+CONTENT TYPE FORMATS:
+- text/richtext: { "text": "Markdown content here" }
+- bullets: { "items": [{ "title": "Point", "description": "Detail" }] }
+- stat: { "value": "42", "label": "Metric name" }
+- timeline: { "steps": [{ "title": "Step", "description": "Detail" }] }
+- icon-grid: { "items": [{ "icon": "📊", "title": "Item", "description": "Detail" }] }
+
+Return ONLY valid JSON.`;
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
@@ -476,12 +613,12 @@ Return ONLY a JSON object with: id, order, layoutId, title, content (array), not
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         systemInstruction: {
-          parts: [{ text: "You generate professional presentation slide content as JSON. Be specific, use real data. Return only valid JSON." }],
+          parts: [{ text: "You are a presentation content expert. Generate rich, specific slide content using actual project data. Return ONLY valid JSON with no HTML tags - use markdown for formatting. Never use placeholder text like 'TBD' or 'Details to be added'." }],
         },
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
-          maxOutputTokens: 2000,
-          temperature: 0.6,
+          maxOutputTokens: 3000,
+          temperature: 0.5,
           responseMimeType: "application/json",
         },
       }),
@@ -505,7 +642,7 @@ Return ONLY a JSON object with: id, order, layoutId, title, content (array), not
 
   // Build the slide with guaranteed fields
   const slide: GeneratedSlide = {
-    id: parsed.id || generateId(),
+    id: parsed.id || `slide-${spec.order}`,
     order: spec.order,
     layoutId: spec.layoutId,
     title: parsed.title || spec.suggestedTitle,
@@ -518,6 +655,7 @@ Return ONLY a JSON object with: id, order, layoutId, title, content (array), not
     slide.imagePrompt = parsed.imagePrompt || `Professional visualization for: ${spec.purpose}`;
   }
 
+  console.log(`✅ Generated slide ${spec.order}: "${slide.title}" with ${slide.content.length} content items`);
   return slide;
 }
 
@@ -1160,6 +1298,9 @@ serve(async (req) => {
         })));
 
         // ============ PHASE 2: FILL SLIDE CONTENT (LLM) ============
+        // Track generated slides for context passing
+        const generatedSlides: GeneratedSlide[] = [];
+        
         for (let i = 0; i < slideSpecs.length; i++) {
           const spec = slideSpecs[i];
 
@@ -1176,11 +1317,13 @@ serve(async (req) => {
               blackboard,
               collectedData,
               slideSpecs,
+              generatedSlides, // Pass previously generated slides for context
               geminiKey
             );
 
             // Update the slide in our array
             slidesJson[i] = fullSlide;
+            generatedSlides.push(fullSlide);
 
             // Stream the slide to client immediately
             controller.enqueue(encoder.encode(sseMessage("slide", fullSlide)));
@@ -1201,6 +1344,7 @@ serve(async (req) => {
             // Use fallback slide from spec
             const fallbackSlide = createFallbackSlideFromSpec(spec);
             slidesJson[i] = fallbackSlide;
+            generatedSlides.push(fallbackSlide);
             controller.enqueue(encoder.encode(sseMessage("slide", fallbackSlide)));
           }
         }
