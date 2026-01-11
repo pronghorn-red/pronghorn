@@ -50,15 +50,7 @@ interface GeneratedSlide {
   imagePrompt?: string;
 }
 
-// NEW: Slide outline for incremental generation
-interface SlideOutline {
-  order: number;
-  layoutId: string;
-  title: string;
-  purpose: string;
-  imagePrompt?: string;
-  keyContent: string[];
-}
+// SlideSpec is defined below in Phase 1 section
 
 // Generate unique ID
 function generateId(): string {
@@ -200,357 +192,282 @@ function getLayoutRegions(layoutId: string): string {
   return layoutRegions[layoutId] || "title(heading), content(richtext)";
 }
 
-// Get relevant blackboard data for a specific slide
-function getRelevantDataForSlide(
-  outline: SlideOutline,
-  blackboard: BlackboardEntry[],
-  collectedData: Record<string, any>
-): string {
-  const lowerPurpose = outline.purpose.toLowerCase();
-  const lowerTitle = outline.title.toLowerCase();
-  
-  // Find related blackboard entries
-  const relevantEntries = blackboard.filter(e => {
-    const lowerContent = e.content.toLowerCase();
-    return (
-      outline.keyContent.some(kc => lowerContent.includes(kc.toLowerCase())) ||
-      lowerContent.includes(lowerTitle) ||
-      lowerContent.includes(lowerPurpose)
-    );
-  });
+// Context data is built inline in generateSlideContent
 
-  const parts: string[] = [];
-  
-  // Add relevant blackboard entries
-  if (relevantEntries.length > 0) {
-    parts.push("RELATED INSIGHTS:");
-    parts.push(...relevantEntries.slice(0, 5).map(e => `- [${e.category}] ${e.content}`));
-  }
+// ============ PHASE 1: DETERMINISTIC SLIDE STRUCTURE ============
+// Creates exact number of slides with layouts - NO LLM, guaranteed to work
 
-  // Add specific data based on slide purpose
-  if (lowerPurpose.includes("requirement") || lowerTitle.includes("requirement")) {
-    const reqs = (collectedData.requirements || []).filter((r: any) => !r.parent_id).slice(0, 8);
-    if (reqs.length > 0) {
-      parts.push("\nKEY REQUIREMENTS:");
-      parts.push(...reqs.map((r: any) => `- ${r.code || ""} ${r.title}: ${(r.content || "").slice(0, 100)}`));
-    }
-  }
-
-  if (lowerPurpose.includes("architecture") || lowerTitle.includes("architecture")) {
-    const nodes = (collectedData.canvas?.nodes || []).slice(0, 10);
-    if (nodes.length > 0) {
-      parts.push("\nARCHITECTURE COMPONENTS:");
-      parts.push(...nodes.map((n: any) => `- ${n.type}: ${n.data?.label || n.data?.title || "Unnamed"}`));
-    }
-  }
-
-  if (lowerPurpose.includes("status") || lowerPurpose.includes("metric") || lowerTitle.includes("status")) {
-    parts.push("\nPROJECT METRICS:");
-    parts.push(`- Requirements: ${collectedData.requirements?.length || 0}`);
-    parts.push(`- Architecture Components: ${collectedData.canvas?.nodes?.length || 0}`);
-    parts.push(`- Code Files: ${collectedData.repoStructure?.files?.length || 0}`);
-    parts.push(`- Specifications: ${collectedData.specifications?.length || 0}`);
-    parts.push(`- Deployments: ${collectedData.deployments?.length || 0}`);
-  }
-
-  return parts.join("\n") || "Use the slide purpose and key content to create relevant material.";
+interface SlideSpec {
+  order: number;
+  layoutId: string;
+  section: string;
+  purpose: string;
+  suggestedTitle: string;
+  requiresImage: boolean;
 }
 
-// Build structured story arc based on target slides
-function buildStoryStructure(targetSlides: number, mode: string): { section: string; slideCount: number; layouts: string[]; purpose: string }[] {
-  // Define the narrative structure
-  const sections = [
-    { section: "Opening", purpose: "Set the stage and capture attention", minSlides: 2, maxSlides: 3 },
-    { section: "Context & Problem", purpose: "Explain why this project exists", minSlides: 1, maxSlides: 3 },
-    { section: "Solution Overview", purpose: "High-level what we're building", minSlides: 1, maxSlides: 2 },
-    { section: "Requirements Deep Dive", purpose: "Key functional requirements", minSlides: 2, maxSlides: 4 },
-    { section: "Architecture", purpose: "Technical design and components", minSlides: 1, maxSlides: 3 },
-    { section: "Implementation Status", purpose: "Current progress and metrics", minSlides: 1, maxSlides: 2 },
-    { section: "Risks & Challenges", purpose: "What could go wrong and mitigations", minSlides: 1, maxSlides: 2 },
-    { section: "Next Steps", purpose: "Roadmap and call to action", minSlides: 1, maxSlides: 2 },
+function createSlideStructure(
+  targetSlides: number,
+  mode: string,
+  projectName: string,
+  blackboard: BlackboardEntry[]
+): SlideSpec[] {
+  // Define section templates with layout sequences
+  const sectionTemplates = [
+    { 
+      section: "Opening", 
+      minSlides: 2,
+      slides: [
+        { layout: "title-cover", purpose: "Cover slide with project title", titleTemplate: "{project}", requiresImage: true },
+        { layout: "quote", purpose: "Executive summary - key message", titleTemplate: "Executive Summary", requiresImage: false },
+      ]
+    },
+    { 
+      section: "Context", 
+      minSlides: 1,
+      slides: [
+        { layout: "bullets", purpose: "Problem statement and context", titleTemplate: "The Challenge", requiresImage: false },
+        { layout: "image-right", purpose: "Current state visualization", titleTemplate: "Current State", requiresImage: true },
+        { layout: "stats-grid", purpose: "Key metrics driving the need", titleTemplate: "By The Numbers", requiresImage: false },
+      ]
+    },
+    { 
+      section: "Solution", 
+      minSlides: 1,
+      slides: [
+        { layout: "image-left", purpose: "Solution overview", titleTemplate: "Our Solution", requiresImage: true },
+        { layout: "icon-grid", purpose: "Key capabilities", titleTemplate: "Key Capabilities", requiresImage: false },
+      ]
+    },
+    { 
+      section: "Requirements", 
+      minSlides: 2,
+      slides: [
+        { layout: "bullets", purpose: "Primary requirements overview", titleTemplate: "Core Requirements", requiresImage: false },
+        { layout: "two-column", purpose: "Functional vs non-functional", titleTemplate: "Functional Requirements", requiresImage: false },
+        { layout: "comparison", purpose: "Priority breakdown", titleTemplate: "High Priority Items", requiresImage: false },
+        { layout: "bullets", purpose: "Additional requirements", titleTemplate: "Additional Requirements", requiresImage: false },
+      ]
+    },
+    { 
+      section: "Architecture", 
+      minSlides: 1,
+      slides: [
+        { layout: "architecture", purpose: "System architecture diagram", titleTemplate: "System Architecture", requiresImage: true },
+        { layout: "image-left", purpose: "Component details", titleTemplate: "Key Components", requiresImage: true },
+        { layout: "bullets", purpose: "Technology stack", titleTemplate: "Technology Stack", requiresImage: false },
+      ]
+    },
+    { 
+      section: "Status", 
+      minSlides: 1,
+      slides: [
+        { layout: "stats-grid", purpose: "Current progress metrics", titleTemplate: "Project Status", requiresImage: false },
+        { layout: "timeline", purpose: "Milestones achieved", titleTemplate: "Progress Timeline", requiresImage: false },
+      ]
+    },
+    { 
+      section: "Risks", 
+      minSlides: 1,
+      slides: [
+        { layout: "two-column", purpose: "Risks and mitigations", titleTemplate: "Risks & Mitigations", requiresImage: false },
+        { layout: "bullets", purpose: "Challenges identified", titleTemplate: "Key Challenges", requiresImage: false },
+      ]
+    },
+    { 
+      section: "Next Steps", 
+      minSlides: 1,
+      slides: [
+        { layout: "timeline", purpose: "Roadmap and next steps", titleTemplate: "Roadmap", requiresImage: false },
+        { layout: "quote", purpose: "Call to action", titleTemplate: "Call to Action", requiresImage: false },
+      ]
+    },
   ];
 
-  // Distribute slides across sections
-  const result: { section: string; slideCount: number; layouts: string[]; purpose: string }[] = [];
+  const result: SlideSpec[] = [];
+  let slideOrder = 1;
   let remainingSlides = targetSlides;
-  const minTotal = sections.reduce((sum, s) => sum + s.minSlides, 0);
   
-  // First pass: assign minimum slides
-  for (const sec of sections) {
-    const count = Math.min(sec.minSlides, remainingSlides);
-    result.push({ section: sec.section, slideCount: count, layouts: [], purpose: sec.purpose });
-    remainingSlides -= count;
-  }
-
-  // Second pass: distribute remaining slides proportionally
-  while (remainingSlides > 0) {
-    for (let i = 0; i < result.length && remainingSlides > 0; i++) {
-      const maxForSection = sections[i].maxSlides;
-      if (result[i].slideCount < maxForSection) {
-        result[i].slideCount++;
-        remainingSlides--;
+  // Calculate how many slides per section
+  const totalMinSlides = sectionTemplates.reduce((sum, s) => sum + s.minSlides, 0);
+  const extraSlides = Math.max(0, targetSlides - totalMinSlides);
+  
+  // Distribute slides across sections
+  const slideCounts: number[] = sectionTemplates.map(s => s.minSlides);
+  let extra = extraSlides;
+  
+  // Give extra slides to sections that can use them (proportionally)
+  while (extra > 0) {
+    for (let i = 0; i < slideCounts.length && extra > 0; i++) {
+      const maxForSection = sectionTemplates[i].slides.length;
+      if (slideCounts[i] < maxForSection) {
+        slideCounts[i]++;
+        extra--;
       }
     }
-    // Prevent infinite loop
-    if (remainingSlides === targetSlides) break;
+    // If we couldn't distribute any more, break to avoid infinite loop
+    if (extra === extraSlides) break;
   }
-
-  // Assign recommended layouts per section
-  const layoutSuggestions: Record<string, string[]> = {
-    "Opening": ["title-cover", "quote"],
-    "Context & Problem": ["title-content", "image-right", "bullets"],
-    "Solution Overview": ["image-left", "title-content", "stats-grid"],
-    "Requirements Deep Dive": ["bullets", "two-column", "icon-grid", "comparison"],
-    "Architecture": ["architecture", "image-left", "title-content"],
-    "Implementation Status": ["stats-grid", "timeline", "bullets"],
-    "Risks & Challenges": ["two-column", "bullets", "comparison"],
-    "Next Steps": ["timeline", "bullets", "quote"],
-  };
-
-  for (const r of result) {
-    r.layouts = layoutSuggestions[r.section] || ["title-content", "bullets"];
-  }
-
-  return result.filter(s => s.slideCount > 0);
-}
-
-// Generate slide outline (fast, low tokens) - ENFORCES EXACT SLIDE COUNT
-async function generateSlideOutline(
-  blackboard: BlackboardEntry[],
-  targetSlides: number,
-  collectedData: Record<string, any>,
-  mode: string,
-  apiKey: string,
-  initialPrompt?: string
-): Promise<SlideOutline[]> {
-  const projectName = collectedData.settings?.name || "Project";
-  const projectDesc = collectedData.settings?.description || "";
   
-  const reqCount = collectedData.requirements?.length || 0;
-  const nodeCount = collectedData.canvas?.nodes?.length || 0;
-  const fileCount = collectedData.repoStructure?.files?.length || 0;
-  
-  // Build the story structure
-  const storyStructure = buildStoryStructure(targetSlides, mode);
-  
-  // Build structured blackboard summary by category
-  const narrativeEntries = blackboard.filter(e => e.category === "narrative").slice(0, 5);
-  const insightEntries = blackboard.filter(e => e.category === "insight").slice(0, 10);
-  const analysisEntries = blackboard.filter(e => e.category === "analysis").slice(0, 5);
-  const estimateEntries = blackboard.filter(e => e.category === "estimate").slice(0, 3);
-  
-  const blackboardSummary = `
-NARRATIVE HOOKS:
-${narrativeEntries.map(e => `- ${e.content}`).join("\n") || "- No narratives collected"}
-
-KEY INSIGHTS:
-${insightEntries.map(e => `- ${e.content}`).join("\n") || "- No insights collected"}
-
-ANALYSIS:
-${analysisEntries.map(e => `- ${e.content}`).join("\n") || "- No analysis collected"}
-
-STATUS ESTIMATES:
-${estimateEntries.map(e => `- ${e.content}`).join("\n") || "- No estimates"}`;
-
-  // Build the section breakdown instruction
-  const sectionInstructions = storyStructure.map((s, idx) => {
-    const startSlide = storyStructure.slice(0, idx).reduce((sum, x) => sum + x.slideCount, 0) + 1;
-    const endSlide = startSlide + s.slideCount - 1;
-    const slideRange = startSlide === endSlide ? `Slide ${startSlide}` : `Slides ${startSlide}-${endSlide}`;
-    return `${slideRange}: "${s.section}" (${s.slideCount} slides) - ${s.purpose}. Use layouts: ${s.layouts.join(", ")}`;
-  }).join("\n");
-
-  const outlinePrompt = `You are creating a ${mode} presentation about "${projectName}" with EXACTLY ${targetSlides} slides.
-
-PROJECT: ${projectName}
-DESCRIPTION: ${projectDesc}
-STATS: ${reqCount} requirements, ${nodeCount} architecture components, ${fileCount} code files
-${initialPrompt ? `\nUSER FOCUS: ${initialPrompt}` : ""}
-
-BLACKBOARD (collected insights from project data):
-${blackboardSummary}
-
-REQUIRED SLIDE STRUCTURE (YOU MUST FOLLOW THIS EXACTLY):
-${sectionInstructions}
-
-CRITICAL RULES:
-1. Generate EXACTLY ${targetSlides} slides, numbered 1 to ${targetSlides}
-2. Follow the section breakdown above precisely
-3. Each slide must have: order, layoutId, title, purpose, keyContent (2-4 points)
-4. For image layouts (image-left, image-right, architecture), include imagePrompt
-5. Use data from the blackboard to make each slide specific and compelling
-6. Titles should be action-oriented and specific, not generic
-7. The slides must tell a COHESIVE STORY from start to finish
-
-AVAILABLE LAYOUTS: title-cover, section-divider, title-content, two-column, image-left, image-right, stats-grid, bullets, quote, architecture, comparison, timeline, icon-grid
-
-Return a JSON array with EXACTLY ${targetSlides} slide outlines. NO MARKDOWN, ONLY JSON.`;
-
-  console.log(`Generating slide outline for ${targetSlides} slides with Gemini...`);
-  
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: `You are a presentation structure expert. You MUST return EXACTLY ${targetSlides} slides in a JSON array. Do not return more or fewer slides. Each slide tells part of a cohesive story.` }],
-        },
-        contents: [{ role: "user", parts: [{ text: outlinePrompt }] }],
-        generationConfig: {
-          maxOutputTokens: 4000,
-          temperature: 0.4,
-          responseMimeType: "application/json",
-        },
-      }),
+  // If we still have extra slides, add more to requirements/architecture
+  while (extra > 0) {
+    slideCounts[3]++; // Requirements
+    extra--;
+    if (extra > 0) {
+      slideCounts[4]++; // Architecture
+      extra--;
     }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Outline generation failed:", response.status, errorText);
-    throw new Error(`Outline generation failed: ${response.status}`);
   }
 
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  let parsed = parseAgentResponseText(text);
-
-  if (!Array.isArray(parsed)) {
-    console.error("Outline is not an array:", parsed);
-    throw new Error("Invalid outline format");
-  }
-
-  // ENFORCE EXACT SLIDE COUNT
-  if (parsed.length < targetSlides) {
-    console.warn(`LLM returned ${parsed.length} slides, need ${targetSlides}. Padding...`);
-    // Pad with additional slides
-    const existingTitles = new Set(parsed.map((s: SlideOutline) => s.title));
-    const paddingLayouts = ["bullets", "title-content", "image-right", "stats-grid"];
-    const paddingTopics = [
-      { title: "Additional Insights", purpose: "Further observations from the project data", keyContent: ["Project insights", "Key observations"] },
-      { title: "Technical Details", purpose: "More technical context", keyContent: ["Implementation details", "Technical considerations"] },
-      { title: "Stakeholder Benefits", purpose: "Value proposition for stakeholders", keyContent: ["Business value", "User benefits"] },
-      { title: "Quality Assurance", purpose: "Testing and validation approach", keyContent: ["Testing strategy", "Quality metrics"] },
-      { title: "Team & Resources", purpose: "Team composition and resources", keyContent: ["Team structure", "Resource allocation"] },
-      { title: "Future Vision", purpose: "Long-term vision and goals", keyContent: ["Long-term goals", "Future enhancements"] },
-    ];
+  // Build the slide specs
+  for (let sectionIdx = 0; sectionIdx < sectionTemplates.length; sectionIdx++) {
+    const section = sectionTemplates[sectionIdx];
+    const count = slideCounts[sectionIdx];
     
-    while (parsed.length < targetSlides) {
-      const idx = parsed.length;
-      const paddingIdx = idx % paddingTopics.length;
-      let topic = paddingTopics[paddingIdx];
-      // Avoid duplicate titles
-      if (existingTitles.has(topic.title)) {
-        topic = { ...topic, title: `${topic.title} (${idx})` };
-      }
-      existingTitles.add(topic.title);
+    for (let i = 0; i < count; i++) {
+      const slideTemplate = section.slides[i % section.slides.length];
       
-      parsed.push({
-        order: idx + 1,
-        layoutId: paddingLayouts[idx % paddingLayouts.length],
-        title: topic.title,
-        purpose: topic.purpose,
-        keyContent: topic.keyContent,
+      // Generate title from template
+      let title = slideTemplate.titleTemplate.replace("{project}", projectName);
+      if (i > 0 && i >= section.slides.length) {
+        title = `${title} (Part ${Math.floor(i / section.slides.length) + 1})`;
+      }
+      
+      result.push({
+        order: slideOrder++,
+        layoutId: slideTemplate.layout,
+        section: section.section,
+        purpose: slideTemplate.purpose,
+        suggestedTitle: title,
+        requiresImage: slideTemplate.requiresImage,
       });
+      
+      if (slideOrder > targetSlides) break;
     }
-  } else if (parsed.length > targetSlides) {
-    console.warn(`LLM returned ${parsed.length} slides, truncating to ${targetSlides}`);
-    parsed = parsed.slice(0, targetSlides);
+    
+    if (slideOrder > targetSlides) break;
   }
-
-  // Ensure order is correct
-  parsed = parsed.map((s: SlideOutline, i: number) => ({ ...s, order: i + 1 }));
-
-  console.log(`✅ Generated outline with exactly ${parsed.length} slides`);
-  return parsed as SlideOutline[];
+  
+  // Ensure we have exactly the target number
+  while (result.length < targetSlides) {
+    const idx = result.length;
+    result.push({
+      order: idx + 1,
+      layoutId: idx % 2 === 0 ? "bullets" : "two-column",
+      section: "Additional",
+      purpose: "Additional project information",
+      suggestedTitle: `Additional Details ${idx - totalMinSlides + 1}`,
+      requiresImage: false,
+    });
+  }
+  
+  // Trim if somehow over
+  if (result.length > targetSlides) {
+    result.length = targetSlides;
+  }
+  
+  // Re-number
+  result.forEach((s, i) => s.order = i + 1);
+  
+  console.log(`✅ Created ${result.length} slide specs deterministically`);
+  return result;
 }
 
-// Generate a single slide from outline with full context
-async function generateSingleSlide(
-  outline: SlideOutline,
+// ============ PHASE 2: LLM CONTENT GENERATION FOR SINGLE SLIDE ============
+
+async function generateSlideContent(
+  spec: SlideSpec,
   blackboard: BlackboardEntry[],
   collectedData: Record<string, any>,
-  allOutlines: SlideOutline[],
+  allSpecs: SlideSpec[],
   apiKey: string
 ): Promise<GeneratedSlide> {
-  const contextData = getRelevantDataForSlide(outline, blackboard, collectedData);
   const projectName = collectedData.settings?.name || "Project";
   const projectDesc = collectedData.settings?.description || "";
+  
+  // Get relevant data based on section
+  let contextData = "";
+  const requirements = collectedData.requirements || [];
+  const nodes = collectedData.canvas?.nodes || [];
+  const files = collectedData.repoStructure?.files || [];
+  
+  switch (spec.section) {
+    case "Opening":
+      contextData = `Project: ${projectName}\nDescription: ${projectDesc}\nRequirements: ${requirements.length}\nArchitecture components: ${nodes.length}`;
+      break;
+    case "Context":
+      contextData = blackboard
+        .filter(e => e.category === "narrative" || e.category === "observation")
+        .slice(0, 5)
+        .map(e => e.content)
+        .join("\n");
+      break;
+    case "Solution":
+      contextData = blackboard
+        .filter(e => e.category === "insight")
+        .slice(0, 8)
+        .map(e => e.content)
+        .join("\n");
+      break;
+    case "Requirements":
+      const topReqs = requirements.filter((r: any) => !r.parent_id).slice(0, 8);
+      contextData = topReqs.map((r: any) => `${r.code || ""}: ${r.title} - ${(r.content || "").slice(0, 150)}`).join("\n");
+      break;
+    case "Architecture":
+      const keyNodes = nodes.slice(0, 12);
+      contextData = keyNodes.map((n: any) => `${n.type}: ${n.data?.label || n.data?.title || "Component"} - ${(n.data?.description || "").slice(0, 100)}`).join("\n");
+      break;
+    case "Status":
+      const estimates = blackboard.filter(e => e.category === "estimate" || e.category === "analysis");
+      contextData = estimates.map(e => e.content).join("\n");
+      break;
+    case "Risks":
+      contextData = `Based on project with ${requirements.length} requirements, ${nodes.length} architecture nodes, ${files.length} code files.\n` +
+        blackboard.filter(e => e.category === "question" || e.content.toLowerCase().includes("risk") || e.content.toLowerCase().includes("challeng")).slice(0, 5).map(e => e.content).join("\n");
+      break;
+    case "Next Steps":
+      contextData = blackboard.filter(e => e.category === "decision" || e.category === "narrative").slice(0, 5).map(e => e.content).join("\n");
+      break;
+    default:
+      contextData = blackboard.slice(0, 5).map(e => e.content).join("\n");
+  }
+  
+  // Build previous/next context
+  const prevSlides = allSpecs.slice(0, spec.order - 1).slice(-3);
+  const nextSlides = allSpecs.slice(spec.order).slice(0, 2);
+  
+  const layoutContent = getLayoutRegions(spec.layoutId);
+  
+  const prompt = `Generate content for slide ${spec.order}/${allSpecs.length} of "${projectName}" presentation.
 
-  // Build story context - where is this slide in the narrative?
-  const prevSlides = allOutlines.slice(0, outline.order - 1);
-  const nextSlides = allOutlines.slice(outline.order);
-  const storyPosition = outline.order === 1 ? "opening" : 
-    outline.order === allOutlines.length ? "closing" : 
-    outline.order <= 3 ? "introduction" : 
-    outline.order >= allOutlines.length - 2 ? "conclusion" : "body";
+SLIDE SPECIFICATION:
+- Order: ${spec.order}
+- Layout: ${spec.layoutId}
+- Section: ${spec.section}
+- Purpose: ${spec.purpose}
+- Suggested title: "${spec.suggestedTitle}"
 
-  // Get related blackboard entries for this specific slide
-  const relatedInsights = blackboard
-    .filter(e => {
-      const content = e.content.toLowerCase();
-      return outline.keyContent.some(kc => content.includes(kc.toLowerCase())) ||
-             content.includes(outline.title.toLowerCase()) ||
-             content.includes(outline.purpose.toLowerCase());
-    })
-    .slice(0, 5)
-    .map(e => `[${e.category}] ${e.content}`)
-    .join("\n");
+LAYOUT REGIONS (you must fill these):
+${layoutContent}
 
-  const slidePrompt = `Generate slide ${outline.order}/${allOutlines.length} for "${projectName}".
+STORY CONTEXT:
+${prevSlides.length > 0 ? `Previous: ${prevSlides.map(s => s.suggestedTitle).join(" → ")}` : "This is the first slide"}
+${nextSlides.length > 0 ? `Next: ${nextSlides.map(s => s.suggestedTitle).join(" → ")}` : "This is the final slide"}
 
-PROJECT CONTEXT:
-- Name: ${projectName}
-- Description: ${projectDesc}
-- This is the ${storyPosition} of the presentation
+PROJECT DATA FOR THIS SLIDE:
+${contextData || "No specific data - create compelling content based on the slide purpose."}
 
-SLIDE TO GENERATE:
-- Order: ${outline.order}
-- Title: "${outline.title}"
-- Layout: ${outline.layoutId}
-- Purpose: ${outline.purpose}
-- Key points to cover: ${outline.keyContent.join("; ")}
-${outline.imagePrompt ? `- Image to generate: ${outline.imagePrompt}` : ""}
+CONTENT FORMAT RULES:
+- For "bullets" layout: content array needs { regionId: "bullets", type: "bullets", data: { items: [{ title: "...", description: "..." }] } }
+- For "stats-grid" layout: need stat-1, stat-2, stat-3, stat-4 regions with { value: "number", label: "metric" }
+- For "timeline" layout: { steps: [{ title: "...", description: "..." }] }
+- For "icon-grid": { items: [{ icon: "emoji", title: "...", description: "..." }] }
+- For "two-column": left-content and right-content regions
+- For "quote": { text: "the quote" } and attribution region
+- Use **bold** and *italic* for emphasis - NEVER HTML tags
+${spec.requiresImage ? `\n- Include imagePrompt: a detailed description for AI image generation` : ""}
 
-STORY FLOW:
-${prevSlides.length > 0 ? `Previous slides: ${prevSlides.map(o => `${o.order}. ${o.title}`).join(" → ")}` : "This is the first slide."}
-${nextSlides.length > 0 ? `\nNext slides: ${nextSlides.slice(0, 3).map(o => `${o.order}. ${o.title}`).join(" → ")}` : "This is the final slide."}
-
-RELATED PROJECT DATA:
-${relatedInsights || "Use the key points to create compelling content."}
-
-${contextData}
-
-LAYOUT REGIONS FOR "${outline.layoutId}":
-${getLayoutRegions(outline.layoutId)}
-
-CONTENT GENERATION RULES:
-1. Create content that flows naturally from the previous slide and leads into the next
-2. Be SPECIFIC - use actual data, names, numbers from the project
-3. For bullets: use { items: [{ title: "...", description: "..." }, ...] }
-4. For stats: use { value: "number", label: "metric name" }
-5. For timeline: use { steps: [{ title: "...", description: "..." }, ...] }
-6. For icon-grid: use { items: [{ icon: "emoji", title: "...", description: "..." }, ...] }
-7. Use **bold** for emphasis, *italic* for terms
-8. NEVER use HTML tags (<b>, <p>, <ul>, <li>, etc.)
-9. Speaker notes should explain what to emphasize verbally
-
-Return a single JSON object:
-{
-  "id": "${generateId()}",
-  "order": ${outline.order},
-  "layoutId": "${outline.layoutId}",
-  "title": "${outline.title}",
-  "content": [
-    { "regionId": "...", "type": "...", "data": {...} }
-  ],
-  "notes": "2-3 sentence speaker notes"${outline.imagePrompt ? `,
-  "imagePrompt": "${outline.imagePrompt}"` : ""}
-}
-
-ONLY RETURN THE JSON OBJECT, NO EXPLANATION.`;
+Return ONLY a JSON object with: id, order, layoutId, title, content (array), notes, ${spec.requiresImage ? "imagePrompt" : ""}`;
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
@@ -559,9 +476,9 @@ ONLY RETURN THE JSON OBJECT, NO EXPLANATION.`;
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         systemInstruction: {
-          parts: [{ text: `You generate professional presentation slides as JSON. Each slide must be specific to the project data provided, not generic. Return only valid JSON objects, no markdown fences.` }],
+          parts: [{ text: "You generate professional presentation slide content as JSON. Be specific, use real data. Return only valid JSON." }],
         },
-        contents: [{ role: "user", parts: [{ text: slidePrompt }] }],
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
           maxOutputTokens: 2000,
           temperature: 0.6,
@@ -573,8 +490,8 @@ ONLY RETURN THE JSON OBJECT, NO EXPLANATION.`;
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`Slide ${outline.order} generation failed:`, response.status, errorText);
-    throw new Error(`Slide generation failed: ${response.status}`);
+    console.error(`Slide ${spec.order} content generation failed:`, response.status, errorText);
+    throw new Error(`Slide content generation failed: ${response.status}`);
   }
 
   const data = await response.json();
@@ -582,41 +499,79 @@ ONLY RETURN THE JSON OBJECT, NO EXPLANATION.`;
   const parsed = parseAgentResponseText(text);
 
   if (!parsed || typeof parsed !== "object") {
-    throw new Error("Invalid slide format");
+    console.error(`Invalid slide content for ${spec.order}:`, text.slice(0, 500));
+    throw new Error("Invalid slide content format");
   }
 
-  // Ensure required fields
+  // Build the slide with guaranteed fields
   const slide: GeneratedSlide = {
     id: parsed.id || generateId(),
-    order: outline.order,
-    layoutId: outline.layoutId,
-    title: parsed.title || outline.title,
+    order: spec.order,
+    layoutId: spec.layoutId,
+    title: parsed.title || spec.suggestedTitle,
     content: Array.isArray(parsed.content) ? parsed.content : [],
-    notes: parsed.notes || outline.purpose,
-    imagePrompt: outline.imagePrompt || parsed.imagePrompt,
+    notes: parsed.notes || spec.purpose,
   };
 
   if (parsed.subtitle) slide.subtitle = parsed.subtitle;
+  if (parsed.imagePrompt || spec.requiresImage) {
+    slide.imagePrompt = parsed.imagePrompt || `Professional visualization for: ${spec.purpose}`;
+  }
 
   return slide;
 }
 
-// Create fallback slide from outline
-function createFallbackSlide(outline: SlideOutline): GeneratedSlide {
+// Create a fallback slide when LLM fails
+function createFallbackSlideFromSpec(spec: SlideSpec): GeneratedSlide {
+  const contentMap: Record<string, SlideContent[]> = {
+    "title-cover": [
+      { regionId: "title", type: "heading", data: { text: spec.suggestedTitle, level: 1 } },
+      { regionId: "subtitle", type: "text", data: { text: spec.purpose } },
+    ],
+    "quote": [
+      { regionId: "quote", type: "text", data: { text: `"${spec.purpose}"` } },
+      { regionId: "attribution", type: "text", data: { text: "Project Team" } },
+    ],
+    "bullets": [
+      { regionId: "title", type: "heading", data: { text: spec.suggestedTitle, level: 2 } },
+      { regionId: "bullets", type: "bullets", data: { items: [
+        { title: "Key Point 1", description: "Details to be added" },
+        { title: "Key Point 2", description: "Details to be added" },
+        { title: "Key Point 3", description: "Details to be added" },
+      ] } },
+    ],
+    "stats-grid": [
+      { regionId: "title", type: "heading", data: { text: spec.suggestedTitle, level: 2 } },
+      { regionId: "stat-1", type: "stat", data: { value: "—", label: "Metric 1" } },
+      { regionId: "stat-2", type: "stat", data: { value: "—", label: "Metric 2" } },
+      { regionId: "stat-3", type: "stat", data: { value: "—", label: "Metric 3" } },
+      { regionId: "stat-4", type: "stat", data: { value: "—", label: "Metric 4" } },
+    ],
+    "timeline": [
+      { regionId: "title", type: "heading", data: { text: spec.suggestedTitle, level: 2 } },
+      { regionId: "timeline", type: "timeline", data: { steps: [
+        { title: "Step 1", description: "First milestone" },
+        { title: "Step 2", description: "Second milestone" },
+        { title: "Step 3", description: "Third milestone" },
+      ] } },
+    ],
+  };
+
   return {
     id: generateId(),
-    order: outline.order,
-    layoutId: outline.layoutId,
-    title: outline.title,
-    content: [{
-      regionId: "content",
-      type: "richtext",
-      data: { text: outline.keyContent.map(kc => `**${kc}**`).join("\n\n") }
-    }],
-    notes: outline.purpose,
-    imagePrompt: outline.imagePrompt,
+    order: spec.order,
+    layoutId: spec.layoutId,
+    title: spec.suggestedTitle,
+    content: contentMap[spec.layoutId] || [
+      { regionId: "title", type: "heading", data: { text: spec.suggestedTitle, level: 2 } },
+      { regionId: "content", type: "richtext", data: { text: spec.purpose } },
+    ],
+    notes: spec.purpose,
+    imagePrompt: spec.requiresImage ? `Professional visualization for: ${spec.purpose}` : undefined,
   };
 }
+
+// Old generateSingleSlide and createFallbackSlide removed - now using generateSlideContent and createFallbackSlideFromSpec
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -1168,69 +1123,70 @@ serve(async (req) => {
           p_status: "generating_slides",
         });
 
-        // ============ INCREMENTAL SLIDE GENERATION ============
+        // ============ PHASE 1: CREATE SLIDE STRUCTURE (DETERMINISTIC) ============
         controller.enqueue(encoder.encode(sseMessage("status", { 
           phase: "planning", 
-          message: "Planning slide structure..." 
+          message: `Creating ${targetSlides} slide structure...` 
         })));
 
-        let slideOutline: SlideOutline[];
-        try {
-          slideOutline = await generateSlideOutline(
-            blackboard,
-            targetSlides,
-            collectedData,
-            mode,
-            geminiKey,
-            initialPrompt
-          );
-        } catch (outlineError: any) {
-          console.error("Outline generation failed:", outlineError);
-          // Create basic outline fallback
-          slideOutline = [
-            { order: 1, layoutId: "title-cover", title: projectName, purpose: "Cover slide", keyContent: [projectName] },
-            { order: 2, layoutId: "quote", title: "Executive Summary", purpose: "Key takeaways", keyContent: [`${completionScore}% complete`, `${reqCount} requirements`] },
-            { order: 3, layoutId: "stats-grid", title: "Project Status", purpose: "Current metrics", keyContent: ["Requirements", "Architecture", "Code", "Progress"] },
-            { order: 4, layoutId: "bullets", title: "Key Insights", purpose: "Highlights from analysis", keyContent: blackboard.filter(e => e.category === "insight").slice(0, 4).map(e => e.content.slice(0, 50)) },
-          ];
-        }
+        const slideSpecs = createSlideStructure(targetSlides, mode, projectName, blackboard);
+        
+        console.log(`Phase 1 complete: Created ${slideSpecs.length} slide specs`);
+        
+        // Create empty slide shells and save immediately
+        const slidesJson: GeneratedSlide[] = slideSpecs.map(spec => ({
+          id: generateId(),
+          order: spec.order,
+          layoutId: spec.layoutId,
+          title: spec.suggestedTitle,
+          content: [],
+          notes: spec.purpose,
+          imagePrompt: spec.requiresImage ? `Professional visualization for: ${spec.purpose}` : undefined,
+        }));
+
+        // Save the shell structure immediately
+        await supabase.rpc("update_presentation_with_token", {
+          p_presentation_id: presentationId,
+          p_token: shareToken,
+          p_slides: slidesJson,
+          p_status: "generating",
+        });
 
         controller.enqueue(encoder.encode(sseMessage("status", { 
           phase: "generating_slides", 
-          message: `Generating ${slideOutline.length} slides...`,
-          total: slideOutline.length,
+          message: `Generating content for ${slideSpecs.length} slides...`,
+          total: slideSpecs.length,
           current: 0
         })));
 
-        // Generate each slide individually
-        const slidesJson: GeneratedSlide[] = [];
-
-        for (let i = 0; i < slideOutline.length; i++) {
-          const outline = slideOutline[i];
+        // ============ PHASE 2: FILL SLIDE CONTENT (LLM) ============
+        for (let i = 0; i < slideSpecs.length; i++) {
+          const spec = slideSpecs[i];
 
           controller.enqueue(encoder.encode(sseMessage("status", { 
             phase: "generating_slides", 
-            message: `Generating slide ${i + 1}/${slideOutline.length}: "${outline.title}"`,
+            message: `Generating slide ${i + 1}/${slideSpecs.length}: "${spec.suggestedTitle}"`,
             current: i + 1,
-            total: slideOutline.length
+            total: slideSpecs.length
           })));
 
           try {
-            const fullSlide = await generateSingleSlide(
-              outline,
+            const fullSlide = await generateSlideContent(
+              spec,
               blackboard,
               collectedData,
-              slideOutline,
+              slideSpecs,
               geminiKey
             );
 
-            slidesJson.push(fullSlide);
+            // Update the slide in our array
+            slidesJson[i] = fullSlide;
 
             // Stream the slide to client immediately
             controller.enqueue(encoder.encode(sseMessage("slide", fullSlide)));
 
             // Checkpoint save every 3 slides
-            if ((i + 1) % 3 === 0 || i === slideOutline.length - 1) {
+            if ((i + 1) % 3 === 0 || i === slideSpecs.length - 1) {
               await supabase.rpc("update_presentation_with_token", {
                 p_presentation_id: presentationId,
                 p_token: shareToken,
@@ -1240,16 +1196,16 @@ serve(async (req) => {
             }
 
           } catch (slideError: any) {
-            console.error(`Failed to generate slide ${i + 1}:`, slideError);
+            console.error(`Failed to generate content for slide ${i + 1}:`, slideError);
 
-            // Create fallback slide from outline
-            const fallbackSlide = createFallbackSlide(outline);
-            slidesJson.push(fallbackSlide);
+            // Use fallback slide from spec
+            const fallbackSlide = createFallbackSlideFromSpec(spec);
+            slidesJson[i] = fallbackSlide;
             controller.enqueue(encoder.encode(sseMessage("slide", fallbackSlide)));
           }
         }
 
-        console.log(`✅ Generated ${slidesJson.length} slides incrementally`);
+        console.log(`✅ Phase 2 complete: Generated content for ${slidesJson.length} slides`);
 
         // ============ IMAGE GENERATION PHASE ============
         const slidesNeedingImages = slidesJson.filter(
