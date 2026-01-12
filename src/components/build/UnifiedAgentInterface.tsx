@@ -198,9 +198,28 @@ export function UnifiedAgentInterface({
     return () => observer.disconnect();
   }, []);
 
-  // Sync loaded messages with local state
+  // Sync loaded messages with local state, deduplicating optimistic messages
   useEffect(() => {
-    setMessages(loadedMessages);
+    setMessages(prev => {
+      // Get IDs of real messages from database
+      const realMessageIds = new Set(loadedMessages.map(m => m.id));
+      
+      // Keep optimistic messages only if no matching real message exists
+      const optimisticToKeep = prev.filter(optMsg => {
+        if (!optMsg.id.startsWith('temp-')) return false;
+        // Check if a real version exists (same role + content)
+        const hasRealVersion = loadedMessages.some(realMsg => 
+          realMsg.role === optMsg.role && 
+          realMsg.content === optMsg.content
+        );
+        return !hasRealVersion;
+      });
+      
+      // Combine and sort by timestamp
+      return [...loadedMessages, ...optimisticToKeep].sort((a, b) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+    });
   }, [loadedMessages]);
 
   // Scroll to bottom when messages first load
@@ -539,61 +558,87 @@ export function UnifiedAgentInterface({
         let buffer = '';
 
         if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+          let receivedIterationComplete = false;
+          
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
 
-            for (const line of lines) {
-              if (!line.startsWith('data: ')) continue;
-              try {
-                const data = JSON.parse(line.slice(6));
-                switch (data.type) {
-                  case 'session_created':
-                    currentSessionId = data.sessionId;
-                    break;
-                  case 'llm_streaming':
-                    setStreamProgress(p => ({ 
-                      ...p, 
-                      charsReceived: data.charsReceived,
-                      streamingContent: p.streamingContent + (data.delta || '')
-                    }));
-                    // Also update the streaming message for display in chat
-                    setStreamingMessage(prev => ({
-                      content: (prev?.content || '') + (data.delta || ''),
-                      isStreaming: true
-                    }));
-                    break;
-                  case 'operation_start':
-                    setStreamProgress(p => ({ 
-                      ...p, 
-                      currentOperation: data.operation, 
-                      operationIndex: data.operationIndex || 0,
-                      totalOperations: data.totalOperations || 0,
-                      status: 'processing' 
-                    }));
-                    break;
-                  case 'operation_complete':
-                    setStreamProgress(p => ({ ...p, currentOperation: null }));
-                    break;
-                  case 'iteration_complete':
-                    status = data.status;
-                    currentSessionId = data.sessionId;
-                    // Clear streaming message - real message will load from database
-                    setStreamingMessage(null);
-                    break;
-                  case 'error':
-                    throw new Error(data.error);
-                }
-              } catch (e) {
-                if (e instanceof Error && e.message !== 'Unexpected end of JSON input') {
-                  throw e;
+              for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  switch (data.type) {
+                    case 'session_created':
+                      currentSessionId = data.sessionId;
+                      break;
+                    case 'llm_streaming':
+                      setStreamProgress(p => ({ 
+                        ...p, 
+                        charsReceived: data.charsReceived,
+                        streamingContent: p.streamingContent + (data.delta || '')
+                      }));
+                      // Also update the streaming message for display in chat
+                      setStreamingMessage(prev => ({
+                        content: (prev?.content || '') + (data.delta || ''),
+                        isStreaming: true
+                      }));
+                      break;
+                    case 'operation_start':
+                      setStreamProgress(p => ({ 
+                        ...p, 
+                        currentOperation: data.operation, 
+                        operationIndex: data.operationIndex || 0,
+                        totalOperations: data.totalOperations || 0,
+                        status: 'processing' 
+                      }));
+                      break;
+                    case 'operation_complete':
+                      setStreamProgress(p => ({ ...p, currentOperation: null }));
+                      break;
+                    case 'iteration_complete':
+                      status = data.status;
+                      currentSessionId = data.sessionId;
+                      receivedIterationComplete = true;
+                      // Clear streaming message - real message will load from database
+                      setStreamingMessage(null);
+                      break;
+                    case 'error':
+                      throw new Error(data.error);
+                  }
+                } catch (e) {
+                  if (e instanceof Error && e.message !== 'Unexpected end of JSON input') {
+                    throw e;
+                  }
                 }
               }
             }
+          } catch (streamError) {
+            console.error('Stream read error:', streamError);
+            // If we didn't get iteration_complete, treat as incomplete
+            if (!receivedIterationComplete && status === 'in_progress') {
+              console.warn(`Stream interrupted at iteration ${currentIteration}, will retry...`);
+              toast.warning(`Iteration ${currentIteration} interrupted, retrying...`);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              continue; // Retry same iteration
+            }
+            throw streamError;
+          }
+          
+          // Check if stream ended without iteration_complete
+          if (!receivedIterationComplete && status === 'in_progress') {
+            console.warn(`Stream ended without iteration_complete at iteration ${currentIteration}`);
+            if (currentIteration >= 3) {
+              toast.warning('Agent stream interrupted. Session may be incomplete.');
+              break; // Exit loop after multiple failed iterations
+            }
+            // Retry this iteration
+            continue;
           }
         }
 
