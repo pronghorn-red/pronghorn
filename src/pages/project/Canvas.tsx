@@ -58,6 +58,13 @@ const initialEdges: Edge[] = [];
 // Annotation node types that should NOT be affected by Auto Order
 const ANNOTATION_TYPES = ['notes', 'zone', 'label', 'NOTES', 'ZONE', 'LABEL'];
 
+// UUID validation regex
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isValidUUID = (id: string): boolean => {
+  return UUID_REGEX.test(id);
+};
+
 // Helper: Check if a node is fully contained inside a zone
 const isNodeFullyInsideZone = (node: Node, zone: Node): boolean => {
   const nodeWidth = (node.style?.width as number) || (node.data?.style?.width as number) || 150;
@@ -799,14 +806,22 @@ function CanvasFlow() {
   const handleArchitectureGenerated = useCallback(
     async (generatedNodes: any[], generatedEdges: any[]) => {
       try {
-        // Create a map to track generated node UUIDs
-        const nodeIdMap = new Map<string, string>();
+        // Create maps to track node ID mappings
+        const nodeIdMap = new Map<string, string>(); // label -> UUID
+        const originalIdToUUID = new Map<string, string>(); // original AI id -> UUID
         
         // Insert all nodes
         const newNodes: Node[] = [];
         for (const genNode of generatedNodes) {
           const nodeId = crypto.randomUUID();
+          
+          // Map by label (primary lookup)
           nodeIdMap.set(genNode.label, nodeId);
+          
+          // Also map by original AI id if it provided one (for edge source/target lookup)
+          if (genNode.id) {
+            originalIdToUUID.set(genNode.id, nodeId);
+          }
           
           const newNode: Node = {
             id: nodeId,
@@ -827,17 +842,32 @@ function CanvasFlow() {
         // Add nodes to state
         setNodes((nds) => [...nds, ...newNodes]);
         
-        // Create edges based on the mapping
+        // Create edges with robust source/target lookup
         const newEdges: Edge[] = [];
+        let skippedEdges = 0;
         for (const genEdge of generatedEdges) {
-          const sourceId = nodeIdMap.get(genEdge.source);
-          const targetId = nodeIdMap.get(genEdge.target);
+          // Try multiple lookup strategies for source
+          let sourceId = nodeIdMap.get(genEdge.source) // By label
+            || originalIdToUUID.get(genEdge.source) // By original AI id
+            || (isValidUUID(genEdge.source) && newNodes.find(n => n.id === genEdge.source)?.id); // Direct UUID if valid
+          
+          // Try multiple lookup strategies for target
+          let targetId = nodeIdMap.get(genEdge.target)
+            || originalIdToUUID.get(genEdge.target)
+            || (isValidUUID(genEdge.target) && newNodes.find(n => n.id === genEdge.target)?.id);
           
           if (sourceId && targetId) {
+            // Normalize edge type - React Flow uses 'default' for bezier, not 'bezier'
+            let edgeType = genEdge.type || undefined;
+            if (edgeType === 'bezier') {
+              edgeType = 'default';
+            }
+            
             const edge: Edge = {
               id: crypto.randomUUID(),
               source: sourceId,
               target: targetId,
+              type: edgeType, // Use normalized type
               label: genEdge.relationship,
               style: {
                 stroke: 'hsl(var(--primary))',
@@ -858,15 +888,19 @@ function CanvasFlow() {
             
             newEdges.push(edge);
             await saveEdge(edge);
+          } else {
+            console.warn(`[Canvas] Could not resolve edge: ${genEdge.source} -> ${genEdge.target}`);
+            skippedEdges++;
           }
         }
         
         // Add edges to state
         setEdges((eds) => [...eds, ...newEdges]);
         
+        const skippedMsg = skippedEdges > 0 ? ` (${skippedEdges} edges skipped due to unresolvable IDs)` : '';
         toast({
           title: "Architecture created!",
-          description: `Added ${newNodes.length} nodes and ${newEdges.length} connections to canvas.`,
+          description: `Added ${newNodes.length} nodes and ${newEdges.length} connections to canvas.${skippedMsg}`,
         });
       } catch (error) {
         console.error('Error creating architecture:', error);

@@ -134,6 +134,12 @@ export function AIArchitectDialog({
       if (!useCriticFeedback) {
         setOpen(false);
         setDescription("");
+        // Trigger canvas refresh after closing
+        if (onCanvasRefresh) {
+          setTimeout(() => {
+            onCanvasRefresh();
+          }, 100);
+        }
       }
     } catch (error) {
       console.error('Error generating architecture:', error);
@@ -223,7 +229,18 @@ export function AIArchitectDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog 
+      open={open} 
+      onOpenChange={(newOpen) => {
+        setOpen(newOpen);
+        // When closing after having generated, refresh canvas
+        if (!newOpen && onCanvasRefresh) {
+          setTimeout(() => {
+            onCanvasRefresh();
+          }, 100);
+        }
+      }}
+    >
       <DialogContent className="max-w-[95vw] md:max-w-[90vw] h-[90vh] w-full flex flex-col p-3 md:p-6">
         <DialogHeader className="pb-2 md:pb-4">
           <DialogTitle className="text-base md:text-lg">AI Application Architect</DialogTitle>

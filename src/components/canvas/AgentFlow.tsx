@@ -203,7 +203,7 @@ export const AgentFlow = memo(function AgentFlow({ onFlowChange, agentDefinition
         const newEdges = addEdge({ 
           ...connection, 
           animated: true, 
-          type: 'bezier',
+          type: 'default', // 'default' is the bezier curve in React Flow
           markerEnd: {
             type: MarkerType.ArrowClosed,
             width: 20,
@@ -261,7 +261,7 @@ export const AgentFlow = memo(function AgentFlow({ onFlowChange, agentDefinition
   }, [initialNodes, initialEdges, setNodes, setEdges, onEditAgent, onPlayAgent, onDeleteAgent]);
 
   return (
-    <div ref={reactFlowWrapper} className="h-full w-full bg-background">
+    <div ref={reactFlowWrapper} className="h-full w-full min-h-[400px] bg-background">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -276,7 +276,7 @@ export const AgentFlow = memo(function AgentFlow({ onFlowChange, agentDefinition
         fitView
         defaultEdgeOptions={{
           animated: true,
-          type: 'bezier',
+          type: 'default', // 'default' is the bezier curve in React Flow
           markerEnd: {
             type: MarkerType.ArrowClosed,
             width: 20,

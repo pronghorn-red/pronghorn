@@ -122,7 +122,7 @@ export function IterativeEnhancement({
         id: `edge-${Date.now()}-${i}`,
         source: newNodes[i].id,
         target: newNodes[i + 1].id,
-        type: 'bezier',
+        type: 'default', // 'default' is the bezier curve in React Flow
         animated: true,
         markerEnd: {
           type: 'arrowclosed' as any,
@@ -139,7 +139,7 @@ export function IterativeEnhancement({
         id: `edge-loop-${Date.now()}`,
         source: newNodes[newNodes.length - 1].id,
         target: newNodes[0].id,
-        type: 'bezier',
+        type: 'default', // 'default' is the bezier curve in React Flow
         animated: true,
         markerEnd: {
           type: 'arrowclosed' as any,
