@@ -1833,7 +1833,12 @@ serve(async (req) => {
                 break;
               case "read_file":
                 if (Array.isArray(r.data) && r.data[0]) {
-                  summary.summary = `Read ${r.data[0].path} (${r.data[0].total_lines || 'unknown'} lines)`;
+                  const fileData = r.data[0];
+                  summary.summary = `Read ${fileData.path} (${fileData.total_lines || 'unknown'} lines)`;
+                  // Include actual file content so the agent can see it
+                  summary.path = fileData.path;
+                  summary.content = fileData.content;
+                  summary.total_lines = fileData.total_lines;
                 }
                 break;
               case "get_staged_changes":
