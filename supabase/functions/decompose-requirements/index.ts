@@ -85,8 +85,7 @@ function getGrokRequirementsSchema() {
         properties: {
           epics: {
             type: "array",
-            minItems: 3,
-            maxItems: 5,
+            minItems: 1,
             items: {
               type: "object",
               properties: {
@@ -145,13 +144,13 @@ function getGrokRequirementsSchema() {
 function getClaudeRequirementsTool() {
   return {
     name: "return_requirements",
-    description: "Return 3-5 decomposed epics. CRITICAL: Each title max 10 words, descriptions max 40 words. Be CONCISE.",
+    description: "Return decomposed epics. Create one Epic for each major domain or user-defined section in the input. Each title max 10 words, descriptions max 40 words. Be CONCISE.",
     input_schema: {
       type: "object",
       properties: {
         epics: {
           type: "array",
-          description: "Array of 3-5 epics covering different functional domains. NOT 1, NOT 2, exactly 3-5.",
+          description: "Array of epics - one for each distinct functional domain or user-defined section. Match the structure and scope of the input.",
           items: {
             type: "object",
             properties: {
@@ -326,8 +325,13 @@ ALL content MUST be CONCISE:
 
 DO NOT write essays. Be terse and actionable.
 
-=== GENERATION TARGETS ===
-- Generate 3-5 Epics covering major functional areas
+=== EPIC GENERATION ===
+Create one Epic for each major functional domain or user-defined section in the input.
+- If the user explicitly defines sections, categories, or major areas, create an Epic for EACH one.
+- If no explicit structure is provided, identify the natural functional domains in the content.
+- Each Epic must cover a DISTINCT area - do not merge unrelated functionality.
+
+Target per Epic:
 - 2-4 Features per Epic
 - 1-3 User Stories per Feature
 - 1-3 Acceptance Criteria per Story
@@ -553,8 +557,8 @@ serve(async (req) => {
     
     // Add mandatory constraints BEFORE the input
     userMessage += `=== MANDATORY OUTPUT CONSTRAINTS (FAILURE = REJECTION) ===
-1. Generate EXACTLY 3-5 separate Epics (NOT 1, NOT 2, NOT 6+)
-2. Each Epic covers a DIFFERENT functional domain
+1. Create one Epic for EACH major domain or user-defined section - capture them ALL
+2. Each Epic covers a DIFFERENT functional area
 3. All titles: MAX 10 words
 4. All descriptions: MAX 40 words, 1-2 sentences ONLY
 5. User Story/AC descriptions: EMPTY or max 15 words
@@ -567,17 +571,9 @@ DO NOT WRITE PARAGRAPHS. BE TERSE.
     if (text) {
       userMessage += `DECOMPOSE THIS TEXT:\n\n${text}`;
     } else {
-      userMessage += `Based on the attached project context above, generate requirements covering all major functional areas. Create 3-5 Epics with Features, Stories, and Acceptance Criteria.`;
+      userMessage += `Based on the attached project context above, generate requirements covering all major functional areas. Create an Epic for each distinct domain with Features, Stories, and Acceptance Criteria.`;
     }
     
-    // Add constraint reminder at END (where LLMs pay most attention)
-    userMessage += `
-
-=== FINAL REMINDER ===
-You MUST create 3-5 SEPARATE Epics covering different domains.
-Each description: 1-2 sentences MAX. NO paragraphs.
-User story descriptions: LEAVE EMPTY or max 15 words.
-======================`;
 
     // Determine API key and endpoint based on model
     let apiKey: string | undefined;
