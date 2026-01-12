@@ -403,6 +403,7 @@ async function streamLLMResponse(
   let textBuffer = "";
   let fullContent = "";
   let lastReportedChars = 0;
+  let lastStreamedContent = "";
   
   // For Claude tool_use streaming, we need to accumulate the input_json_delta
   let claudeToolInput = "";
@@ -432,6 +433,7 @@ async function streamLLMResponse(
           let text = "";
 
           if (provider === 'gemini') {
+            // Gemini streams content in candidates[0].content.parts[0].text
             text = parsed.candidates?.[0]?.content?.parts?.[0]?.text || "";
           } else if (provider === 'anthropic') {
             // Handle Claude streaming - both text and tool_use input
@@ -440,20 +442,30 @@ async function streamLLMResponse(
                 text = parsed.delta.text || "";
               } else if (parsed.delta?.type === "input_json_delta") {
                 // Tool input streaming - accumulate partial JSON
-                claudeToolInput += parsed.delta.partial_json || "";
-                text = parsed.delta.partial_json || "";
+                const partialJson = parsed.delta.partial_json || "";
+                claudeToolInput += partialJson;
+                text = partialJson;
               }
             }
           } else if (provider === 'grok') {
+            // xAI streams like OpenAI: choices[0].delta.content
             text = parsed.choices?.[0]?.delta?.content || "";
           }
 
           if (text) {
             fullContent += text;
-            // Send progress every ~500 chars
-            if (fullContent.length - lastReportedChars >= 500) {
-              sendSSE('llm_streaming', { iteration, charsReceived: fullContent.length });
+            
+            // Send streaming update every ~200 chars for smooth real-time feedback
+            if (fullContent.length - lastReportedChars >= 200) {
+              // Include the new content delta for optional display
+              const newContent = fullContent.slice(lastStreamedContent.length);
+              sendSSE('llm_streaming', { 
+                iteration, 
+                charsReceived: fullContent.length,
+                delta: newContent
+              });
               lastReportedChars = fullContent.length;
+              lastStreamedContent = fullContent;
             }
           }
         } catch (e) {
@@ -465,9 +477,14 @@ async function streamLLMResponse(
     reader.releaseLock();
   }
 
-  // Final char count update
+  // Final streaming update with remaining content
   if (fullContent.length > lastReportedChars) {
-    sendSSE('llm_streaming', { iteration, charsReceived: fullContent.length });
+    const newContent = fullContent.slice(lastStreamedContent.length);
+    sendSSE('llm_streaming', { 
+      iteration, 
+      charsReceived: fullContent.length,
+      delta: newContent
+    });
   }
 
   // For Claude tool_use, return the accumulated tool input JSON

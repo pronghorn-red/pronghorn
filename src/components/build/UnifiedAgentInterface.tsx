@@ -97,13 +97,21 @@ export function UnifiedAgentInterface({
     maxIterations: number;
     charsReceived: number;
     currentOperation: string | null;
+    operationIndex: number;
+    totalOperations: number;
     status: 'idle' | 'streaming' | 'processing' | 'complete';
+    streamingContent: string;
+    showStreamingContent: boolean;
   }>({
     iteration: 0,
     maxIterations: 100,
     charsReceived: 0,
     currentOperation: null,
+    operationIndex: 0,
+    totalOperations: 0,
     status: 'idle',
+    streamingContent: '',
+    showStreamingContent: false,
   });
   
   // Chat history settings state
@@ -405,7 +413,17 @@ export function UnifiedAgentInterface({
       abortControllerRef.current = new AbortController();
       
       // Reset streaming progress
-      setStreamProgress({ iteration: 0, maxIterations: agentConfig.maxIterations, charsReceived: 0, currentOperation: null, status: 'idle' });
+      setStreamProgress({ 
+        iteration: 0, 
+        maxIterations: agentConfig.maxIterations, 
+        charsReceived: 0, 
+        currentOperation: null, 
+        operationIndex: 0,
+        totalOperations: 0,
+        status: 'idle',
+        streamingContent: '',
+        showStreamingContent: false
+      });
 
       // Use fetch for SSE streaming instead of supabase.functions.invoke
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -473,13 +491,30 @@ export function UnifiedAgentInterface({
               const data = JSON.parse(line.slice(6));
               switch (data.type) {
                 case 'iteration_start':
-                  setStreamProgress(p => ({ ...p, iteration: data.iteration, maxIterations: data.maxIterations, charsReceived: 0, status: 'streaming' }));
+                  setStreamProgress(p => ({ 
+                    ...p, 
+                    iteration: data.iteration, 
+                    maxIterations: data.maxIterations, 
+                    charsReceived: 0, 
+                    streamingContent: '',
+                    status: 'streaming' 
+                  }));
                   break;
                 case 'llm_streaming':
-                  setStreamProgress(p => ({ ...p, charsReceived: data.charsReceived }));
+                  setStreamProgress(p => ({ 
+                    ...p, 
+                    charsReceived: data.charsReceived,
+                    streamingContent: p.streamingContent + (data.delta || '')
+                  }));
                   break;
                 case 'operation_start':
-                  setStreamProgress(p => ({ ...p, currentOperation: data.operation, status: 'processing' }));
+                  setStreamProgress(p => ({ 
+                    ...p, 
+                    currentOperation: data.operation, 
+                    operationIndex: data.operationIndex || 0,
+                    totalOperations: data.totalOperations || 0,
+                    status: 'processing' 
+                  }));
                   break;
                 case 'operation_complete':
                   setStreamProgress(p => ({ ...p, currentOperation: null }));
@@ -1181,6 +1216,48 @@ export function UnifiedAgentInterface({
             >
               Clear
             </button>
+          </div>
+        )}
+
+        {/* Streaming Progress Indicator */}
+        {isSubmitting && streamProgress.status !== 'idle' && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>
+                  Iteration {streamProgress.iteration}/{streamProgress.maxIterations}
+                  {streamProgress.charsReceived > 0 && (
+                    <> • {streamProgress.charsReceived.toLocaleString()} chars</>
+                  )}
+                  {streamProgress.currentOperation && (
+                    <> • {streamProgress.currentOperation}
+                      {streamProgress.totalOperations > 0 && (
+                        <> ({streamProgress.operationIndex + 1}/{streamProgress.totalOperations})</>
+                      )}
+                    </>
+                  )}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs"
+                onClick={() => setStreamProgress(p => ({ ...p, showStreamingContent: !p.showStreamingContent }))}
+              >
+                {streamProgress.showStreamingContent ? 'Hide' : 'Show'} Output
+              </Button>
+            </div>
+            
+            {/* Optional streaming content preview */}
+            {streamProgress.showStreamingContent && streamProgress.streamingContent && (
+              <div className="max-h-32 overflow-y-auto bg-muted/50 rounded border p-2 text-xs font-mono whitespace-pre-wrap">
+                {streamProgress.streamingContent.slice(-2000)}
+                {streamProgress.streamingContent.length > 2000 && (
+                  <span className="text-muted-foreground">...{streamProgress.streamingContent.length - 2000} chars hidden</span>
+                )}
+              </div>
+            )}
           </div>
         )}
 
