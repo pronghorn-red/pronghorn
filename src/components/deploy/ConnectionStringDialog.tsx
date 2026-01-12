@@ -25,7 +25,12 @@ export function ConnectionStringDialog({
   databaseName,
 }: ConnectionStringDialogProps) {
   const [showPassword, setShowPassword] = useState(false);
+  const [showInternalConn, setShowInternalConn] = useState(false);
+  const [showExternalConn, setShowExternalConn] = useState(false);
+  const [showPsqlCommand, setShowPsqlCommand] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const maskValue = (value: string) => '••••••••••••••••';
 
   const handleCopy = async (value: string, fieldName: string) => {
     try {
@@ -114,10 +119,18 @@ export function ConnectionStringDialog({
                 </p>
                 <div className="flex items-center gap-2">
                   <Input
-                    value={internalConnectionString}
+                    value={showInternalConn ? internalConnectionString : maskValue(internalConnectionString)}
                     readOnly
                     className="font-mono text-xs"
                   />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowInternalConn(!showInternalConn)}
+                    className="h-8 w-8 shrink-0"
+                  >
+                    {showInternalConn ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
                   <CopyButton value={internalConnectionString} fieldName="Internal Connection String" />
                 </div>
               </div>
@@ -132,10 +145,18 @@ export function ConnectionStringDialog({
                 </p>
                 <div className="flex items-center gap-2">
                   <Input
-                    value={externalConnectionString}
+                    value={showExternalConn ? externalConnectionString : maskValue(externalConnectionString)}
                     readOnly
                     className="font-mono text-xs"
                   />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowExternalConn(!showExternalConn)}
+                    className="h-8 w-8 shrink-0"
+                  >
+                    {showExternalConn ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
                   <CopyButton value={externalConnectionString} fieldName="External Connection String" />
                 </div>
               </div>
@@ -150,10 +171,18 @@ export function ConnectionStringDialog({
                 </p>
                 <div className="flex items-center gap-2">
                   <Input
-                    value={psqlCommand}
+                    value={showPsqlCommand ? psqlCommand : maskValue(psqlCommand)}
                     readOnly
                     className="font-mono text-xs"
                   />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowPsqlCommand(!showPsqlCommand)}
+                    className="h-8 w-8 shrink-0"
+                  >
+                    {showPsqlCommand ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
                   <CopyButton value={psqlCommand} fieldName="PSQL Command" />
                 </div>
               </div>
