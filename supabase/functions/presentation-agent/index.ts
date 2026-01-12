@@ -748,7 +748,7 @@ Return ONLY valid JSON with no additional text.`;
       },
       body: JSON.stringify({
         model,
-        max_tokens: Math.min(maxTokens, 4096),
+        max_tokens: Math.min(maxTokens, 8192),
         system: systemPrompt,
         messages: [{ role: "user", content: prompt }],
         tools: [{
@@ -1676,7 +1676,12 @@ serve(async (req) => {
           p_status: "generating",
         });
 
-        controller.enqueue(encoder.encode(sseMessage("status", { 
+        // Stream all shell slides immediately so client can display the grid
+        for (const shell of slidesJson) {
+          controller.enqueue(encoder.encode(sseMessage("slide", shell)));
+        }
+
+        controller.enqueue(encoder.encode(sseMessage("status", {
           phase: "generating_slides", 
           message: `Generating content for ${slideSpecs.length} slides...`,
           total: slideSpecs.length,
