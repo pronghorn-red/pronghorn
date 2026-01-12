@@ -936,6 +936,24 @@ export default function Chat() {
                               <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                             )}
                           </div>
+                          <div className="flex justify-end gap-1 mt-3 pt-2 border-t border-border/50">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleCopyMessage(message.content)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleSaveMessageAsArtifact(message.content)}
+                            >
+                              <Archive className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </Card>
                       </div>
                     );
