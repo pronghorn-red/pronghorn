@@ -387,111 +387,8 @@ type SSEEventType =
   | 'task_complete'
   | 'error';
 
-// Helper to parse streaming responses from different LLM providers
-async function streamLLMResponse(
-  provider: 'gemini' | 'anthropic' | 'grok',
-  response: Response,
-  sendSSE: (event: SSEEventType, data: any) => void,
-  iteration: number
-): Promise<string> {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("No response body reader available");
-
-  const decoder = new TextDecoder();
-  let textBuffer = "";
-  let fullContent = "";
-  let lastReportedChars = 0;
-  let lastStreamedContent = "";
-  
-  // For Claude tool_use streaming, we need to accumulate the input_json_delta
-  let claudeToolInput = "";
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      textBuffer += decoder.decode(value, { stream: true });
-
-      // Parse SSE lines
-      let newlineIndex: number;
-      while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-        let line = textBuffer.slice(0, newlineIndex);
-        textBuffer = textBuffer.slice(newlineIndex + 1);
-
-        if (line.endsWith("\r")) line = line.slice(0, -1);
-        if (line.trim() === "" || line.startsWith(':')) continue;
-        if (!line.startsWith('data: ')) continue;
-
-        const jsonStr = line.slice(6).trim();
-        if (!jsonStr || jsonStr === "[DONE]") continue;
-
-        try {
-          const parsed = JSON.parse(jsonStr);
-          let text = "";
-
-          if (provider === 'gemini') {
-            // Gemini streams content in candidates[0].content.parts[0].text
-            text = parsed.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          } else if (provider === 'anthropic') {
-            // Handle Claude streaming - both text and tool_use input
-            if (parsed.type === "content_block_delta") {
-              if (parsed.delta?.type === "text_delta") {
-                text = parsed.delta.text || "";
-              } else if (parsed.delta?.type === "input_json_delta") {
-                // Tool input streaming - accumulate partial JSON
-                const partialJson = parsed.delta.partial_json || "";
-                claudeToolInput += partialJson;
-                text = partialJson;
-              }
-            }
-          } else if (provider === 'grok') {
-            // xAI streams like OpenAI: choices[0].delta.content
-            text = parsed.choices?.[0]?.delta?.content || "";
-          }
-
-          if (text) {
-            fullContent += text;
-            
-            // Send streaming update every ~100 chars for smooth real-time feedback (reduced from 200)
-            if (fullContent.length - lastReportedChars >= 100) {
-              // Include the new content delta for optional display
-              const newContent = fullContent.slice(lastStreamedContent.length);
-              sendSSE('llm_streaming', { 
-                iteration, 
-                charsReceived: fullContent.length,
-                delta: newContent
-              });
-              lastReportedChars = fullContent.length;
-              lastStreamedContent = fullContent;
-            }
-          }
-        } catch (e) {
-          // Ignore parse errors for partial chunks
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  // Final streaming update with remaining content
-  if (fullContent.length > lastReportedChars) {
-    const newContent = fullContent.slice(lastStreamedContent.length);
-    sendSSE('llm_streaming', { 
-      iteration, 
-      charsReceived: fullContent.length,
-      delta: newContent
-    });
-  }
-
-  // For Claude tool_use, return the accumulated tool input JSON
-  if (provider === 'anthropic' && claudeToolInput) {
-    return claudeToolInput;
-  }
-
-  return fullContent;
-}
+// NOTE: streamLLMResponse helper was removed - streaming is now inlined
+// directly in each LLM provider block to enable true real-time SSE forwarding
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -1260,8 +1157,57 @@ Start your response with { and end with }. Nothing else.`
               throw new Error(`Gemini API error: ${errorText}`);
             }
 
-            // Stream the response
-            rawOutputText = await streamLLMResponse('gemini', llmResponse, sendSSE, iteration);
+            // Stream the response - INLINE for true real-time SSE forwarding
+            {
+              const reader = llmResponse.body?.getReader();
+              if (!reader) throw new Error("No response body reader available");
+              const decoder = new TextDecoder();
+              let textBuffer = "";
+              
+              try {
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  
+                  textBuffer += decoder.decode(value, { stream: true });
+                  
+                  // Parse SSE lines immediately as they arrive
+                  let newlineIndex: number;
+                  while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+                    let line = textBuffer.slice(0, newlineIndex);
+                    textBuffer = textBuffer.slice(newlineIndex + 1);
+                    
+                    if (line.endsWith("\r")) line = line.slice(0, -1);
+                    if (line.trim() === "" || line.startsWith(':')) continue;
+                    if (!line.startsWith('data: ')) continue;
+                    
+                    const jsonStr = line.slice(6).trim();
+                    if (!jsonStr || jsonStr === "[DONE]") continue;
+                    
+                    try {
+                      const parsed = JSON.parse(jsonStr);
+                      const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                      
+                      if (text) {
+                        const prevLength = rawOutputText.length;
+                        rawOutputText += text;
+                        
+                        // IMMEDIATELY forward each chunk to client - no batching
+                        sendSSE('llm_streaming', { 
+                          iteration, 
+                          charsReceived: rawOutputText.length,
+                          delta: text
+                        });
+                      }
+                    } catch (e) {
+                      // Ignore parse errors for partial chunks
+                    }
+                  }
+                }
+              } finally {
+                reader.releaseLock();
+              }
+            }
             
           } else if (selectedModel.startsWith("claude")) {
             // Anthropic API with streaming enabled
@@ -1313,8 +1259,75 @@ Start your response with { and end with }. Nothing else.`
               throw new Error(`Claude API error: ${errorText}`);
             }
 
-            // Stream the response - Claude returns tool input as JSON streamed
-            rawOutputText = await streamLLMResponse('anthropic', llmResponse, sendSSE, iteration);
+            // Stream the response - INLINE for true real-time SSE forwarding
+            // Claude returns tool input as JSON streamed via input_json_delta
+            {
+              const reader = llmResponse.body?.getReader();
+              if (!reader) throw new Error("No response body reader available");
+              const decoder = new TextDecoder();
+              let textBuffer = "";
+              let claudeToolInput = "";
+              
+              try {
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  
+                  textBuffer += decoder.decode(value, { stream: true });
+                  
+                  // Parse SSE lines immediately as they arrive
+                  let newlineIndex: number;
+                  while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+                    let line = textBuffer.slice(0, newlineIndex);
+                    textBuffer = textBuffer.slice(newlineIndex + 1);
+                    
+                    if (line.endsWith("\r")) line = line.slice(0, -1);
+                    if (line.trim() === "" || line.startsWith(':')) continue;
+                    if (!line.startsWith('data: ')) continue;
+                    
+                    const jsonStr = line.slice(6).trim();
+                    if (!jsonStr || jsonStr === "[DONE]") continue;
+                    
+                    try {
+                      const parsed = JSON.parse(jsonStr);
+                      let text = "";
+                      
+                      // Handle Claude streaming - both text and tool_use input
+                      if (parsed.type === "content_block_delta") {
+                        if (parsed.delta?.type === "text_delta") {
+                          text = parsed.delta.text || "";
+                        } else if (parsed.delta?.type === "input_json_delta") {
+                          // Tool input streaming - accumulate partial JSON
+                          const partialJson = parsed.delta.partial_json || "";
+                          claudeToolInput += partialJson;
+                          text = partialJson;
+                        }
+                      }
+                      
+                      if (text) {
+                        rawOutputText += text;
+                        
+                        // IMMEDIATELY forward each chunk to client - no batching
+                        sendSSE('llm_streaming', { 
+                          iteration, 
+                          charsReceived: rawOutputText.length,
+                          delta: text
+                        });
+                      }
+                    } catch (e) {
+                      // Ignore parse errors for partial chunks
+                    }
+                  }
+                }
+              } finally {
+                reader.releaseLock();
+              }
+              
+              // For Claude tool_use, use the accumulated tool input JSON
+              if (claudeToolInput) {
+                rawOutputText = claudeToolInput;
+              }
+            }
             
           } else if (selectedModel.startsWith("grok")) {
             // xAI API with streaming enabled
@@ -1366,8 +1379,56 @@ Start your response with { and end with }. Nothing else.`
               throw new Error(`Grok API error: ${errorText}`);
             }
 
-            // Stream the response
-            rawOutputText = await streamLLMResponse('grok', llmResponse, sendSSE, iteration);
+            // Stream the response - INLINE for true real-time SSE forwarding
+            {
+              const reader = llmResponse.body?.getReader();
+              if (!reader) throw new Error("No response body reader available");
+              const decoder = new TextDecoder();
+              let textBuffer = "";
+              
+              try {
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  
+                  textBuffer += decoder.decode(value, { stream: true });
+                  
+                  // Parse SSE lines immediately as they arrive
+                  let newlineIndex: number;
+                  while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+                    let line = textBuffer.slice(0, newlineIndex);
+                    textBuffer = textBuffer.slice(newlineIndex + 1);
+                    
+                    if (line.endsWith("\r")) line = line.slice(0, -1);
+                    if (line.trim() === "" || line.startsWith(':')) continue;
+                    if (!line.startsWith('data: ')) continue;
+                    
+                    const jsonStr = line.slice(6).trim();
+                    if (!jsonStr || jsonStr === "[DONE]") continue;
+                    
+                    try {
+                      const parsed = JSON.parse(jsonStr);
+                      const text = parsed.choices?.[0]?.delta?.content || "";
+                      
+                      if (text) {
+                        rawOutputText += text;
+                        
+                        // IMMEDIATELY forward each chunk to client - no batching
+                        sendSSE('llm_streaming', { 
+                          iteration, 
+                          charsReceived: rawOutputText.length,
+                          delta: text
+                        });
+                      }
+                    } catch (e) {
+                      // Ignore parse errors for partial chunks
+                    }
+                  }
+                }
+              } finally {
+                reader.releaseLock();
+              }
+            }
           }
 
           // Send LLM complete event
