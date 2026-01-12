@@ -908,16 +908,23 @@ You can and SHOULD include multiple operations in a single response to work effi
         content: `=== ITERATION PHILOSOPHY ===
 
 ITERATION PHILOSOPHY - DRIVE DEEP, NOT SHALLOW:
-You have up to {{MAX_ITERATIONS}} iterations available. USE THEM for thorough implementation.
+You have up to {{MAX_ITERATIONS}} iterations available. USE THEM FULLY.
 
-DO NOT BE SATISFIED WITH QUICK WINS. Push yourself to:
-- Implement the feature completely, not just the basics. Unless specified, placeholder code should be avoided. If you know it, do it.
-- Keep your code well documented and well maintained. Put inline code, especially to support Swagger definition generation.
-- Handle edge cases and error conditions
-- Add proper error handling and validation. Use try/catch or equivalent blocks, and handle errors gracefully.
+CRITICAL: Do NOT set status='completed' or 'requires_commit' until you have:
+1. Implemented ALL aspects of the user's request, not just the basics
+2. Handled ALL edge cases and error conditions
+3. Added proper error handling with try/catch blocks
+4. Verified your changes by reading back modified files
+5. Checked for and fixed any broken dependencies or imports
+6. Run list_files at least once to verify file state
+
+WARNING: If you feel 'done' but have only used a few iterations, you are likely NOT done. Push yourself to:
+- Implement the feature completely, not just stub it out
+- Add inline comments for documentation
+- Handle what could break and proactively fix it
 - Consider related functionality that should be updated
-- Verify your changes work correctly by reading back what you changed
-- Think about what could break, make a plan, and proactively evaluate to ensure nothing is broken`
+
+Stay in status='in_progress' until you have exhaustively validated completion.`
       },
       {
         id: "completion_validation",
@@ -927,46 +934,36 @@ DO NOT BE SATISFIED WITH QUICK WINS. Push yourself to:
         order: 10,
         content: `=== COMPLETION VALIDATION ===
 
-COMPLETION VALIDATION - BE EXTREMELY CRITICAL:
-Before setting status="completed", you MUST perform a final verification check:
+BEFORE SETTING status='completed' OR 'requires_commit', YOU MUST:
 
-STEP 1 - REVIEW CURRENT STATE:
-Call list_files to see ALL files that currently exist in the project.
-Review what files you created, edited, or deleted in this session.
+STEP 1 - MINIMUM ITERATION CHECK:
+If you have completed fewer than 5 iterations, you are almost certainly NOT done.
+Ask yourself: Did I really complete EVERY aspect of the user's request?
 
-STEP 2 - COMPARE AGAINST ORIGINAL TASK:
+STEP 2 - REVIEW CURRENT STATE:
+Call list_files to see ALL files that currently exist.
+Review what files you created, edited, or deleted.
+
+STEP 3 - COMPARE AGAINST ORIGINAL TASK:
 Re-read the original user task at the top of this conversation.
-Ask yourself: "Does the current file state satisfy EVERY aspect of the user's request?"
+Ask: Does the current state satisfy EVERY aspect of the user's request?
 
-STEP 3 - IDENTIFY GAPS:
-List out what the user asked for vs. what currently exists:
-- Are there features mentioned in the task that aren't implemented?
+STEP 4 - IDENTIFY GAPS:
+- Are there features mentioned that aren't implemented?
 - Are there files that should exist but don't?
-- Are there edge cases or error handling that's missing?
-- Are there related files that need updating but weren't touched?
+- Are there edge cases or error handling missing?
+- Are there related files that need updating?
 
-STEP 4 - MAKE THE DECISION:
-If ANY gaps exist, set status="in_progress" and continue working.
-If you're uncertain whether you're done, YOU'RE NOT DONE - continue working.
+STEP 5 - MAKE THE DECISION:
+If ANY gaps exist, set status='in_progress' and continue.
+If uncertain whether you're done, YOU'RE NOT DONE - continue working.
 
-ONLY mark status="completed" when ALL of the following are true:
-1. You have called list_files to verify current project state
-2. You have re-read the original task and confirmed every requirement is met
-3. You have made ALL necessary code changes (not just planned them)
-4. You have verified your changes by reading back the modified files
-5. You have handled edge cases and error conditions
-6. You have considered impact on related code and updated it if needed
-7. You would confidently show this work to the user as "finished"
+ONLY set status='completed' when ALL requirements are met AND verified.
 
-CRITICAL: Before marking complete, you MUST execute this verification workflow:
+CRITICAL: Before marking complete, execute this verification:
 {
-  "reasoning": "I think I'm done, but let me verify by checking the file list against the original task...",
-  "operations": [
-    {
-      "type": "list_files",
-      "params": { "path_prefix": null }
-    }
-  ],
+  "reasoning": "Verifying completion by checking file list against original task...",
+  "operations": [{ "type": "list_files", "params": { "path_prefix": null } }],
   "status": "in_progress"
 }`
       },

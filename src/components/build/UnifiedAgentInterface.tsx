@@ -111,7 +111,7 @@ export function UnifiedAgentInterface({
   const [isAgentConfigOpen, setIsAgentConfigOpen] = useState(false);
   const [agentConfig, setAgentConfig] = useState<AgentConfiguration>({
     exposeProject: false,
-    maxIterations: 30,
+    maxIterations: 100,
   });
   
   const scrollViewportRef = useRef<HTMLDivElement>(null);

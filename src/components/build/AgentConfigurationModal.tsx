@@ -89,7 +89,7 @@ export function AgentConfigurationModal({
               className="w-32"
             />
             <p className="text-xs text-muted-foreground">
-              Maximum number of agent iterations before stopping (1-500). Default is 30.
+              Maximum number of agent iterations before stopping (1-500). Default is 100.
               Higher values allow for more complex multi-step tasks.
             </p>
           </div>
