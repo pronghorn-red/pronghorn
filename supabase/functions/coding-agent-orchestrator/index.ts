@@ -746,6 +746,11 @@ serve(async (req) => {
   let conversationHistory: Array<{ role: string; content: string }> = [];
   
   if (!isNewSession) {
+    // CRITICAL: First add the original task from the session so the LLM knows the context
+    if (session?.task_description) {
+      conversationHistory.push({ role: "user", content: `Task: ${session.task_description}` });
+    }
+    
     // Load previous messages from DB to rebuild conversation
     const { data: previousMessages } = await supabase.rpc("get_agent_messages_with_token", {
       p_session_id: sessionId,
@@ -765,7 +770,7 @@ serve(async (req) => {
         }
       }
     }
-    console.log(`Loaded ${conversationHistory.length} messages from DB for continuation`);
+    console.log(`Loaded ${conversationHistory.length} messages from DB for continuation (including task)`);
   } else {
     // For new sessions, start with task description
     conversationHistory.push({ role: "user", content: `Task: ${taskDescription || ""}` });
