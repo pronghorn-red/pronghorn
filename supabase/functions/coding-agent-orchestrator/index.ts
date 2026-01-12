@@ -210,7 +210,7 @@ function generateResponseSchemaText(manifest: ToolsManifest, exposeProject: bool
     "entry_type": "planning" | "progress" | "decision" | "reasoning" | "next_steps" | "reflection",
     "content": "Your memory/reflection for this step"
   },
-  "status": "in_progress" | "completed" | "requires_commit"
+  "status": "in_progress" | "completed"
 }
 
 Available operation types: ${allToolNames.join(", ")}`;
@@ -287,7 +287,7 @@ function generateGrokSchema(manifest: ToolsManifest, exposeProject: boolean) {
           },
           status: {
             type: "string",
-            enum: ["in_progress", "completed", "requires_commit"],
+            enum: ["in_progress", "completed"],
           },
         },
         required: ["reasoning", "operations", "status", "blackboard_entry"],
@@ -366,7 +366,7 @@ function generateClaudeSchema(manifest: ToolsManifest, exposeProject: boolean) {
         },
         status: {
           type: "string",
-          enum: ["in_progress", "completed", "requires_commit"],
+          enum: ["in_progress", "completed"],
         },
       },
       required: ["reasoning", "operations", "status", "blackboard_entry"],
@@ -826,8 +826,7 @@ WORKFLOW:
 
 STATUS VALUES:
 11. "in_progress" - need more operations
-12. "requires_commit" - changes ready for review
-13. "completed" - ONLY after exhaustive validation`
+12. "completed" - ONLY after exhaustive validation`
       },
       {
         id: "project_context",
@@ -910,7 +909,7 @@ You can and SHOULD include multiple operations in a single response to work effi
 ITERATION PHILOSOPHY - DRIVE DEEP, NOT SHALLOW:
 You have up to {{MAX_ITERATIONS}} iterations available. USE THEM FULLY.
 
-CRITICAL: Do NOT set status='completed' or 'requires_commit' until you have:
+CRITICAL: Do NOT set status='completed' until you have:
 1. Implemented ALL aspects of the user's request, not just the basics
 2. Handled ALL edge cases and error conditions
 3. Added proper error handling with try/catch blocks
@@ -934,7 +933,7 @@ Stay in status='in_progress' until you have exhaustively validated completion.`
         order: 10,
         content: `=== COMPLETION VALIDATION ===
 
-BEFORE SETTING status='completed' OR 'requires_commit', YOU MUST:
+BEFORE SETTING status='completed', YOU MUST:
 
 STEP 1 - MINIMUM ITERATION CHECK:
 If you have completed fewer than 5 iterations, you are almost certainly NOT done.
@@ -2291,9 +2290,9 @@ Start your response with { and end with }. Nothing else.`
       ephemeralContext = operationResults;
 
       // Check status to determine if we should continue
-      if (agentResponse.status === "completed" || agentResponse.status === "requires_commit") {
-        finalStatus = agentResponse.status === "completed" ? "completed" : "pending_commit";
-        console.log(`Agent signaled completion with status: ${agentResponse.status}`);
+      if (agentResponse.status === "completed") {
+        finalStatus = "completed";
+        console.log(`Agent signaled completion with status: completed`);
         break;
       }
 

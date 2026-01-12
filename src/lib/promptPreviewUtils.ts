@@ -70,7 +70,7 @@ export function generateResponseSchemaText(manifest: ToolsManifest | null): stri
     "entry_type": "planning" | "progress" | "decision" | "reasoning" | "next_steps" | "reflection",
     "content": "Your memory/reflection for this step"
   },
-  "status": "in_progress" | "completed" | "requires_commit"
+  "status": "in_progress" | "completed"
 }
 
 Available operation types: ${allToolNames.join(", ")}`;
