@@ -514,18 +514,16 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   );
 
   const ResultsPanel = () => <div className="h-full bg-background">{activeTab === 'table' && tableData ? <QueryResultsViewer columns={tableData.columns} rows={tableData.rows} totalRows={tableData.totalRows} limit={tableLimit} offset={tableData.offset} onPageChange={(o) => { if (selectedTable) handleTableSelect(selectedTable.schema, selectedTable.table, o); }} onExport={handleExport} /> : activeTab === 'structure' && tableStructure && selectedTable ? <TableStructureViewer schema={selectedTable.schema} table={selectedTable.table} columns={tableStructure.columns} indexes={tableStructure.indexes} /> : queryResults ? <QueryResultsViewer columns={queryResults.columns} rows={queryResults.rows} totalRows={queryResults.totalRows} executionTime={queryResults.executionTime} onExport={handleExportQueryResults} /> : <div className="flex items-center justify-center h-full text-muted-foreground"><p className="text-sm">Run a query or select a table to see results</p></div>}</div>;
-  const AgentPanel = () => (
-    <DatabaseAgentInterface
-      projectId={database?.project_id || externalConnection?.project_id || ''}
-      databaseId={databaseId}
-      connectionId={connectionId}
-      shareToken={shareToken}
-      schemas={schemas}
-      onSchemaRefresh={() => loadSchema(true)}
-      onMigrationRefresh={loadMigrations}
-      onCollapse={isMobile ? undefined : () => setIsAgentPanelCollapsed(true)}
-    />
-  );
+  // Agent panel props (shared between mobile and desktop)
+  const agentPanelProps = {
+    projectId: database?.project_id || externalConnection?.project_id || '',
+    databaseId,
+    connectionId,
+    shareToken,
+    schemas,
+    onSchemaRefresh: () => loadSchema(true),
+    onMigrationRefresh: loadMigrations,
+  };
 
   if (isMobile) {
     return (
@@ -539,7 +537,7 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
           <TabsContent value="schema" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "schema" ? "active" : "inactive"}><div className={mobileActiveTab === "schema" ? "h-full" : "hidden"}><SchemaTreePanel /></div></TabsContent>
           <TabsContent value="query" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "query" ? "active" : "inactive"}><div className={mobileActiveTab === "query" ? "h-full" : "hidden"}><SqlQueryEditor query={currentQuery} onQueryChange={setCurrentQuery} onExecute={handleExecuteQuery} isExecuting={isExecuting} onSaveQuery={handleOpenSaveDialog} /></div></TabsContent>
           <TabsContent value="results" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "results" ? "active" : "inactive"}><div className={mobileActiveTab === "results" ? "h-full" : "hidden"}><ResultsPanel /></div></TabsContent>
-          <TabsContent value="agent" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "agent" ? "active" : "inactive"}><div className={mobileActiveTab === "agent" ? "h-full" : "hidden"}><AgentPanel /></div></TabsContent>
+          <TabsContent value="agent" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "agent" ? "active" : "inactive"}><div className={mobileActiveTab === "agent" ? "h-full" : "hidden"}><DatabaseAgentInterface {...agentPanelProps} /></div></TabsContent>
         </Tabs>
         <SaveQueryDialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen} onSave={handleSaveQuery} sqlContent={pendingSqlToSave} editingQuery={editingQuery} />
         <DatabaseImportWizard
@@ -571,7 +569,7 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
           <ResizablePanel defaultSize={20} minSize={15} maxSize={35}><SchemaTreePanel /></ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={isAgentPanelCollapsed ? 80 : 55} minSize={35}><QueryEditorPanel /></ResizablePanel>
-          {!isAgentPanelCollapsed && (<><ResizableHandle withHandle /><ResizablePanel defaultSize={25} minSize={20} maxSize={40}><AgentPanel /></ResizablePanel></>)}
+          {!isAgentPanelCollapsed && (<><ResizableHandle withHandle /><ResizablePanel defaultSize={25} minSize={20} maxSize={40}><DatabaseAgentInterface {...agentPanelProps} onCollapse={() => setIsAgentPanelCollapsed(true)} /></ResizablePanel></>)}
         </ResizablePanelGroup>
       </div>
       <SaveQueryDialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen} onSave={handleSaveQuery} sqlContent={pendingSqlToSave} editingQuery={editingQuery} />
