@@ -71,6 +71,18 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
 
   // Debounce ref to prevent rapid refetches
   const refetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Ref to hold latest loadInitialMessages without causing subscription recreation
+  const loadInitialMessagesRef = useRef(loadInitialMessages);
+  useEffect(() => {
+    loadInitialMessagesRef.current = loadInitialMessages;
+  }, [loadInitialMessages]);
+  
+  // Ref for loading state to avoid stale closure in subscription callback
+  const loadingRef = useRef(loading);
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
 
   // Real-time subscription for new messages across all sessions
   useEffect(() => {
@@ -90,25 +102,25 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
         (payload) => {
           console.log("[AgentMessages] Postgres change received:", payload);
           // Skip if already loading to prevent overlapping fetches
-          if (loading) return;
+          if (loadingRef.current) return;
           // Debounce refetches to prevent flickering
           if (refetchTimeoutRef.current) {
             clearTimeout(refetchTimeoutRef.current);
           }
           refetchTimeoutRef.current = setTimeout(() => {
-            loadInitialMessages();
+            loadInitialMessagesRef.current();
           }, 500);
         }
       )
       // Broadcast listener for immediate updates from orchestrator
       .on("broadcast", { event: "agent_message_refresh" }, (payload) => {
         console.log("[AgentMessages] Broadcast received:", payload);
-        if (loading) return;
+        if (loadingRef.current) return;
         if (refetchTimeoutRef.current) {
           clearTimeout(refetchTimeoutRef.current);
         }
         refetchTimeoutRef.current = setTimeout(() => {
-          loadInitialMessages();
+          loadInitialMessagesRef.current();
         }, 500);
       })
       .subscribe((status) => {
@@ -122,7 +134,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
       }
       supabase.removeChannel(channel);
     };
-  }, [projectId, loadInitialMessages]);
+  }, [projectId]); // Only recreate subscription when projectId changes
 
   const loadMore = useCallback(async () => {
     if (!projectId || loading || !hasMore) return;
