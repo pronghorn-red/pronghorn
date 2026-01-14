@@ -470,7 +470,8 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
 
   const handleCloseTable = () => { setSelectedTable(null); setTableData(null); setTableStructure(null); setActiveTab('query'); };
 
-  const SchemaTreePanel = () => (
+  // Schema tree panel JSX (inlined to prevent remounting)
+  const schemaTreePanelJsx = (
     <div className="h-full flex flex-col bg-[#1e1e1e]">
       <div className="p-2 border-b border-[#3e3e42] bg-[#252526] flex items-center justify-between">
         <div className="flex items-center gap-2"><Database className="h-4 w-4 text-primary" /><span className="text-sm font-semibold text-[#cccccc]">Schema</span></div>
@@ -488,7 +489,8 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
     </div>
   );
 
-  const QueryEditorPanel = () => (
+  // Query editor panel JSX (inlined to prevent remounting)
+  const queryEditorPanelJsx = (
     <div className="h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full flex flex-col">
         <div className="border-b border-border px-2 flex items-center justify-between bg-background">
@@ -513,7 +515,9 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
     </div>
   );
 
-  const ResultsPanel = () => <div className="h-full bg-background">{activeTab === 'table' && tableData ? <QueryResultsViewer columns={tableData.columns} rows={tableData.rows} totalRows={tableData.totalRows} limit={tableLimit} offset={tableData.offset} onPageChange={(o) => { if (selectedTable) handleTableSelect(selectedTable.schema, selectedTable.table, o); }} onExport={handleExport} /> : activeTab === 'structure' && tableStructure && selectedTable ? <TableStructureViewer schema={selectedTable.schema} table={selectedTable.table} columns={tableStructure.columns} indexes={tableStructure.indexes} /> : queryResults ? <QueryResultsViewer columns={queryResults.columns} rows={queryResults.rows} totalRows={queryResults.totalRows} executionTime={queryResults.executionTime} onExport={handleExportQueryResults} /> : <div className="flex items-center justify-center h-full text-muted-foreground"><p className="text-sm">Run a query or select a table to see results</p></div>}</div>;
+  // Results panel JSX (inlined to prevent remounting)
+  const resultsPanelJsx = <div className="h-full bg-background">{activeTab === 'table' && tableData ? <QueryResultsViewer columns={tableData.columns} rows={tableData.rows} totalRows={tableData.totalRows} limit={tableLimit} offset={tableData.offset} onPageChange={(o) => { if (selectedTable) handleTableSelect(selectedTable.schema, selectedTable.table, o); }} onExport={handleExport} /> : activeTab === 'structure' && tableStructure && selectedTable ? <TableStructureViewer schema={selectedTable.schema} table={selectedTable.table} columns={tableStructure.columns} indexes={tableStructure.indexes} /> : queryResults ? <QueryResultsViewer columns={queryResults.columns} rows={queryResults.rows} totalRows={queryResults.totalRows} executionTime={queryResults.executionTime} onExport={handleExportQueryResults} /> : <div className="flex items-center justify-center h-full text-muted-foreground"><p className="text-sm">Run a query or select a table to see results</p></div>}</div>;
+
   // Agent panel props (shared between mobile and desktop)
   const agentPanelProps = {
     projectId: database?.project_id || externalConnection?.project_id || '',
@@ -534,9 +538,9 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
         </div>
         <Tabs value={mobileActiveTab} onValueChange={setMobileActiveTab} className="flex-1 flex flex-col min-h-0">
           <TabsList className="w-full h-10 rounded-none border-b grid grid-cols-4"><TabsTrigger value="schema" className="text-xs">Schema</TabsTrigger><TabsTrigger value="query" className="text-xs">Query</TabsTrigger><TabsTrigger value="results" className="text-xs">Results</TabsTrigger><TabsTrigger value="agent" className="text-xs">Agent</TabsTrigger></TabsList>
-          <TabsContent value="schema" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "schema" ? "active" : "inactive"}><div className={mobileActiveTab === "schema" ? "h-full" : "hidden"}><SchemaTreePanel /></div></TabsContent>
+          <TabsContent value="schema" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "schema" ? "active" : "inactive"}><div className={mobileActiveTab === "schema" ? "h-full" : "hidden"}>{schemaTreePanelJsx}</div></TabsContent>
           <TabsContent value="query" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "query" ? "active" : "inactive"}><div className={mobileActiveTab === "query" ? "h-full" : "hidden"}><SqlQueryEditor query={currentQuery} onQueryChange={setCurrentQuery} onExecute={handleExecuteQuery} isExecuting={isExecuting} onSaveQuery={handleOpenSaveDialog} /></div></TabsContent>
-          <TabsContent value="results" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "results" ? "active" : "inactive"}><div className={mobileActiveTab === "results" ? "h-full" : "hidden"}><ResultsPanel /></div></TabsContent>
+          <TabsContent value="results" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "results" ? "active" : "inactive"}><div className={mobileActiveTab === "results" ? "h-full" : "hidden"}>{resultsPanelJsx}</div></TabsContent>
           <TabsContent value="agent" className="flex-1 m-0 min-h-0" forceMount data-state={mobileActiveTab === "agent" ? "active" : "inactive"}><div className={mobileActiveTab === "agent" ? "h-full" : "hidden"}><DatabaseAgentInterface {...agentPanelProps} /></div></TabsContent>
         </Tabs>
         <SaveQueryDialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen} onSave={handleSaveQuery} sqlContent={pendingSqlToSave} editingQuery={editingQuery} />
@@ -566,9 +570,9 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
       </div>
       <div className="flex-1 min-h-0">
         <ResizablePanelGroup direction="horizontal">
-          <ResizablePanel defaultSize={20} minSize={15} maxSize={35}><SchemaTreePanel /></ResizablePanel>
+          <ResizablePanel defaultSize={20} minSize={15} maxSize={35}>{schemaTreePanelJsx}</ResizablePanel>
           <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={isAgentPanelCollapsed ? 80 : 55} minSize={35}><QueryEditorPanel /></ResizablePanel>
+          <ResizablePanel defaultSize={isAgentPanelCollapsed ? 80 : 55} minSize={35}>{queryEditorPanelJsx}</ResizablePanel>
           {!isAgentPanelCollapsed && (<><ResizableHandle withHandle /><ResizablePanel defaultSize={25} minSize={20} maxSize={40}><DatabaseAgentInterface {...agentPanelProps} onCollapse={() => setIsAgentPanelCollapsed(true)} /></ResizablePanel></>)}
         </ResizablePanelGroup>
       </div>
