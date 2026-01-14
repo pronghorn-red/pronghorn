@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -46,7 +46,7 @@ interface DatabaseAgentInterfaceProps {
   onCollapse?: () => void;
 }
 
-export function DatabaseAgentInterface({
+function DatabaseAgentInterfaceInner({
   projectId,
   databaseId,
   connectionId,
@@ -61,7 +61,7 @@ export function DatabaseAgentInterface({
   const [messages, setMessages] = useState<any[]>([]);
   const [taskInput, setTaskInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
+  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'prompt' | 'logs'>('chat');
   
   // SSE streaming progress state
@@ -193,31 +193,7 @@ export function DatabaseAgentInterface({
     }
   }, [streamingMessage?.content, streamingMessage?.isStreaming, isAutoScrollEnabled]);
   
-  // Scroll position preservation after message updates
-  useEffect(() => {
-    if (anchorIdBeforeLoad.current) {
-      const anchorId = anchorIdBeforeLoad.current;
-      const savedOffset = anchorOffsetBeforeLoad.current;
-      
-      setTimeout(() => {
-        const viewport = scrollViewportRef.current?.querySelector(
-          '[data-radix-scroll-area-viewport]'
-        ) as HTMLElement;
-        const anchorElement = scrollViewportRef.current?.querySelector(
-          `[data-timeline-id="${anchorId}"]`
-        ) as HTMLElement;
-        
-        if (anchorElement && viewport) {
-          const viewportRect = viewport.getBoundingClientRect();
-          const anchorRect = anchorElement.getBoundingClientRect();
-          const currentOffset = anchorRect.top - viewportRect.top;
-          const adjustment = currentOffset - savedOffset;
-          viewport.scrollTop += adjustment;
-        }
-        anchorIdBeforeLoad.current = null;
-      }, 50);
-    }
-  }, [messages.length]);
+  // Removed aggressive scroll position preservation - was causing unwanted scrolling
   
   const handleSubmit = async () => {
     if (!taskInput.trim() || isSubmitting) return;
@@ -725,3 +701,15 @@ export function DatabaseAgentInterface({
     </div>
   );
 }
+
+// Wrap with React.memo to prevent unnecessary re-renders when props haven't changed
+export const DatabaseAgentInterface = memo(DatabaseAgentInterfaceInner, (prev, next) => {
+  // Only re-render if key props actually changed
+  return (
+    prev.projectId === next.projectId &&
+    prev.databaseId === next.databaseId &&
+    prev.connectionId === next.connectionId &&
+    prev.shareToken === next.shareToken &&
+    JSON.stringify(prev.schemas) === JSON.stringify(next.schemas)
+  );
+});

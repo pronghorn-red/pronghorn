@@ -124,7 +124,13 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
     setSchemaError(null);
     try {
       const result = await invokeManageDatabase("get_schema");
-      setSchemas(result.schemas || []);
+      const newSchemas = result.schemas || [];
+      // Only update if schemas actually changed (deep compare to prevent remounting)
+      setSchemas(prev => {
+        const prevJson = JSON.stringify(prev);
+        const newJson = JSON.stringify(newSchemas);
+        return prevJson === newJson ? prev : newSchemas;
+      });
     } catch (error: any) {
       setSchemaError(error.message);
       if (!silent) toast.error("Failed to load schema: " + error.message);

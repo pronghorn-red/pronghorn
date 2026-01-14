@@ -109,7 +109,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
           }
           refetchTimeoutRef.current = setTimeout(() => {
             loadInitialMessagesRef.current();
-          }, 500);
+          }, 1000); // Increased debounce to reduce flickering
         }
       )
       // Broadcast listener for immediate updates from orchestrator
@@ -121,7 +121,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
         }
         refetchTimeoutRef.current = setTimeout(() => {
           loadInitialMessagesRef.current();
-        }, 500);
+        }, 1000); // Increased debounce to reduce flickering
       })
       .subscribe((status) => {
         console.log(`[AgentMessages] Subscription status: ${status}`);
