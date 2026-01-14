@@ -227,7 +227,23 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
     setLoadingTable(true);
     try {
       const result = await invokeManageDatabase("get_table_data", { schema, table, limit: tableLimit, offset });
-      setTableData({ columns: result.columns || [], rows: result.rows || [], totalRows: result.totalRows, offset });
+      const rows = result.rows || [];
+      
+      // If no data returned, fall back to showing table structure
+      if (rows.length === 0 && offset === 0) {
+        setActiveTab('structure');
+        const [colResult, indexResult] = await Promise.all([
+          invokeManageDatabase("get_table_columns", { schema, table }),
+          invokeManageDatabase("get_schema").then(r => {
+            const s = r.schemas?.find((s: any) => s.name === schema);
+            return s?.indexes?.filter((i: any) => i.table === table) || [];
+          }),
+        ]);
+        setTableStructure({ columns: colResult.columns || [], indexes: indexResult });
+        toast.info("Table is empty - showing structure instead");
+      } else {
+        setTableData({ columns: result.columns || [], rows, totalRows: result.totalRows, offset });
+      }
       if (isMobile) setMobileActiveTab("results");
     } catch (error: any) {
       toast.error("Failed to load table data: " + error.message);
