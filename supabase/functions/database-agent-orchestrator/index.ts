@@ -1269,32 +1269,43 @@ ${blackboardContent}`;
         }
 
         // Log operation results as system message for context
+        // IMPORTANT: Include full data for discovery operations so agent can see results
         const summarizedResults = operationResults.map((r: any) => {
           const summary: any = { type: r.type, success: r.success };
           if (r.error) summary.error = r.error;
           if (r.success && r.data) {
             switch (r.type) {
               case "read_database_schema":
-                summary.summary = `Retrieved schema with ${r.data?.schemas?.length || 0} schemas`;
-                if (r.data?.schemas) {
-                  summary.schemas = r.data.schemas.map((s: any) => ({
-                    name: s.name,
-                    tables: s.tables?.length || 0,
-                    views: s.views?.length || 0,
-                  }));
-                }
+                // Include FULL schema data so agent can see table names
+                summary.schemas = r.data?.schemas?.map((s: any) => ({
+                  name: s.name,
+                  tables: s.tables?.map((t: any) => t.name || t) || [],
+                  views: s.views?.map((v: any) => v.name || v) || [],
+                  functions: s.functions?.map((f: any) => f.name || f) || [],
+                })) || [];
                 break;
               case "execute_sql":
-                summary.summary = `Executed SQL: ${r.data?.rowCount || 0} rows affected`;
+                summary.result = {
+                  rowCount: r.data?.rowCount || 0,
+                  rows: r.data?.rows?.slice(0, 10) || [], // First 10 rows
+                  message: r.data?.message || "Executed successfully"
+                };
                 break;
               case "get_table_data":
-                summary.summary = `Retrieved ${r.data?.rows?.length || 0} rows`;
+                summary.result = {
+                  rowCount: r.data?.rows?.length || 0,
+                  columns: r.data?.columns || [],
+                  rows: r.data?.rows?.slice(0, 10) || [] // First 10 rows
+                };
                 break;
               case "get_table_structure":
-                summary.summary = `Retrieved ${r.data?.columns?.length || 0} columns`;
+                summary.columns = r.data?.columns || [];
+                break;
+              case "get_definition":
+                summary.definition = r.data?.definition || r.data;
                 break;
               default:
-                summary.summary = "Completed";
+                summary.data = r.data;
             }
           }
           return summary;

@@ -351,9 +351,8 @@ export function DatabaseAgentInterface({
                       break;
                     case 'operation_complete':
                       setStreamProgress(p => ({ ...p, currentOperation: null }));
-                      // Refresh schema after operations complete
-                      onSchemaRefresh();
-                      if (onMigrationRefresh) onMigrationRefresh();
+                      // DON'T refresh schema during stream - defer to after iteration completes
+                      // to prevent connection drops
                       break;
                     case 'iteration_complete':
                       status = data.status;
