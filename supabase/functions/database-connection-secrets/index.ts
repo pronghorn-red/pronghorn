@@ -118,6 +118,12 @@ function isEncrypted(value: string): boolean {
   return false;
 }
 
+// Validate PEM certificate format
+function isValidPemCertificate(content: string): boolean {
+  return content.includes('-----BEGIN CERTIFICATE-----') && 
+         content.includes('-----END CERTIFICATE-----');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -136,7 +142,14 @@ serve(async (req) => {
       global: { headers: authHeader ? { Authorization: authHeader } : {} }
     });
 
-    const { action, connectionId, shareToken, connectionString } = await req.json();
+    const { 
+      action, 
+      connectionId, 
+      shareToken, 
+      connectionString,
+      caCertificateUrl,
+      caCertificateContent 
+    } = await req.json();
     
     console.log(`[database-connection-secrets] Action: ${action}, Connection: ${connectionId}`);
 
@@ -171,19 +184,30 @@ serve(async (req) => {
     const connRecord = connection[0];
 
     if (action === 'get') {
-      // Get the encrypted connection string via RPC
-      const { data: encryptedConnString, error: getError } = await supabase.rpc(
-        'get_db_connection_string_with_token',
+      // Get the connection string and CA certificate via RPC
+      const { data: secrets, error: getError } = await supabase.rpc(
+        'get_db_connection_secrets_with_token',
         { p_connection_id: connectionId, p_token: shareToken || null }
       );
 
       if (getError) {
-        console.error('[database-connection-secrets] Get connection string failed:', getError.message);
+        console.error('[database-connection-secrets] Get secrets failed:', getError.message);
         return new Response(
-          JSON.stringify({ error: 'Failed to get connection string: ' + getError.message }),
+          JSON.stringify({ error: 'Failed to get secrets: ' + getError.message }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+
+      if (!secrets || secrets.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'No secrets found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const secretsRecord = secrets[0];
+      const encryptedConnString = secretsRecord.connection_string;
+      const caCertificate = secretsRecord.ca_certificate;
 
       if (!encryptedConnString) {
         return new Response(
@@ -210,7 +234,10 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ connectionString: decryptedConnectionString }),
+        JSON.stringify({ 
+          connectionString: decryptedConnectionString,
+          caCertificate: caCertificate || null
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
 
@@ -222,6 +249,50 @@ serve(async (req) => {
         );
       }
 
+      // Process CA certificate if provided
+      let caCertificate: string | null = null;
+      
+      if (caCertificateUrl) {
+        // Fetch CA certificate from URL
+        console.log(`[database-connection-secrets] Fetching CA certificate from URL: ${caCertificateUrl}`);
+        try {
+          const certResponse = await fetch(caCertificateUrl);
+          if (!certResponse.ok) {
+            throw new Error(`HTTP ${certResponse.status}: ${certResponse.statusText}`);
+          }
+          caCertificate = await certResponse.text();
+          
+          // Validate PEM format
+          if (!isValidPemCertificate(caCertificate)) {
+            return new Response(
+              JSON.stringify({ error: 'Invalid certificate format. Expected PEM-encoded certificate.' }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          console.log(`[database-connection-secrets] Successfully fetched CA certificate (${caCertificate.length} bytes)`);
+        } catch (fetchError: unknown) {
+          const errorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+          console.error('[database-connection-secrets] Failed to fetch CA certificate:', errorMsg);
+          return new Response(
+            JSON.stringify({ error: `Failed to fetch CA certificate: ${errorMsg}` }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } else if (caCertificateContent) {
+        // Use directly uploaded certificate content
+        const uploadedCert = caCertificateContent as string;
+        
+        // Validate PEM format
+        if (!isValidPemCertificate(uploadedCert)) {
+          return new Response(
+            JSON.stringify({ error: 'Invalid certificate format. Expected PEM-encoded certificate.' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        caCertificate = uploadedCert;
+        console.log(`[database-connection-secrets] Using uploaded CA certificate (${uploadedCert.length} bytes)`);
+      }
+
       // Encrypt the connection string
       const encryptedConnectionString = await encrypt(connectionString);
       console.log('[database-connection-secrets] Encrypted connection string');
@@ -229,12 +300,19 @@ serve(async (req) => {
       // Update using service role (access already validated above)
       const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
       
+      const updateData: Record<string, unknown> = { 
+        connection_string: encryptedConnectionString,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Only update ca_certificate if it was provided (either URL or content)
+      if (caCertificateUrl || caCertificateContent) {
+        updateData.ca_certificate = caCertificate;
+      }
+
       const { error: updateError } = await serviceClient
         .from('project_database_connections')
-        .update({ 
-          connection_string: encryptedConnectionString,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', connectionId);
 
       if (updateError) {
@@ -245,7 +323,8 @@ serve(async (req) => {
         );
       }
 
-      console.log('[database-connection-secrets] Successfully updated encrypted connection string');
+      console.log('[database-connection-secrets] Successfully updated encrypted connection string' + 
+        (caCertificate ? ' and CA certificate' : ''));
       return new Response(
         JSON.stringify({ success: true }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

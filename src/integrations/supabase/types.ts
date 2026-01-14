@@ -6791,8 +6791,8 @@ export type Database = {
       }
       update_db_connection_with_token: {
         Args: {
+          p_ca_certificate?: string
           p_connection_id: string
-          p_connection_string?: string
           p_database_name?: string
           p_description?: string
           p_host?: string

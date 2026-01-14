@@ -64,41 +64,6 @@ function extractSslMode(connectionString: string): string {
   }
 }
 
-/**
- * Detect if a hostname is an AWS RDS or Lightsail database.
- * AWS hostnames typically contain:
- * - .rds.amazonaws.com (RDS)
- * - .db.amazonlightsail.com (Lightsail managed DB)
- * - .lightsail.com (older Lightsail)
- */
-function isAwsDatabase(hostname: string): boolean {
-  const awsPatterns = [
-    '.rds.amazonaws.com',
-    '.db.amazonlightsail.com',
-    '.lightsail.com',
-    '.amazonaws.com'
-  ];
-  const lowerHost = hostname.toLowerCase();
-  return awsPatterns.some(pattern => lowerHost.includes(pattern));
-}
-
-// Cache the CA bundle after first load
-let awsCaBundle: string | null = null;
-
-/**
- * Load the AWS RDS global CA bundle from the bundled file.
- * Returns the PEM certificate string for use with TLS caCertificates.
- */
-async function getAwsCaBundle(): Promise<string> {
-  if (awsCaBundle === null) {
-    // Read the bundled CA file - use relative path from the function
-    const bundlePath = new URL('./aws-rds-global-bundle.pem', import.meta.url);
-    awsCaBundle = await Deno.readTextFile(bundlePath);
-    console.log('[manage-database] Loaded AWS RDS CA bundle');
-  }
-  return awsCaBundle;
-}
-
 interface TlsOptions {
   enabled: boolean;
   enforce: boolean;
@@ -106,29 +71,26 @@ interface TlsOptions {
 }
 
 /**
- * Get TLS options for deno-postgres based on sslmode and hostname.
- * For AWS databases, includes the RDS CA bundle for proper certificate verification.
+ * Get TLS options for deno-postgres based on sslmode and optional CA certificate.
+ * If a CA certificate is provided, uses strict verification.
  */
-async function getTlsOptions(sslMode: string, hostname: string): Promise<TlsOptions | undefined> {
-  const isAws = isAwsDatabase(hostname);
-  
+function getTlsOptions(sslMode: string, caCertificate?: string | null): TlsOptions | undefined {
   switch (sslMode) {
     case 'disable':
       return { enabled: false, enforce: false };
     
     case 'prefer':
     case 'require':
-      if (isAws) {
-        // AWS database: use CA bundle for proper certificate verification
-        const caBundle = await getAwsCaBundle();
-        console.log(`[manage-database] Using AWS RDS CA bundle for ${hostname}`);
+      if (caCertificate) {
+        // User provided a CA certificate - use strict verification
+        console.log('[manage-database] Using user-provided CA certificate for TLS verification');
         return { 
           enabled: true, 
           enforce: true, 
-          caCertificates: [caBundle] 
+          caCertificates: [caCertificate] 
         };
       } else {
-        // Non-AWS: try TLS without strict verification
+        // No certificate - try TLS without strict verification
         return { enabled: true, enforce: false };
       }
     
@@ -139,15 +101,15 @@ async function getTlsOptions(sslMode: string, hostname: string): Promise<TlsOpti
 
 /**
  * Create a postgres Client with proper TLS configuration.
- * For AWS databases, includes the RDS CA bundle for certificate verification.
+ * Uses user-provided CA certificate if available for verification.
  */
-async function createDbClient(connectionString: string): Promise<Client> {
+function createDbClient(connectionString: string, caCertificate?: string | null): Client {
   const sslMode = extractSslMode(connectionString);
   const url = new URL(connectionString.replace(/^postgres:\/\//, 'postgresql://'));
   const hostname = url.hostname;
   
-  const tlsOptions = await getTlsOptions(sslMode, hostname);
-  console.log(`[manage-database] Creating client for ${hostname} with sslmode=${sslMode}, tls=${JSON.stringify(tlsOptions)}`);
+  const tlsOptions = getTlsOptions(sslMode, caCertificate);
+  console.log(`[manage-database] Creating client for ${hostname} with sslmode=${sslMode}, tls=${JSON.stringify({ ...tlsOptions, caCertificates: tlsOptions?.caCertificates ? '[provided]' : undefined })}`);
   
   return new Client({
     user: decodeURIComponent(url.username),
@@ -231,6 +193,8 @@ interface ManageDatabaseRequest {
   connectionId?: string;
   // Direct connection string for testing before saving
   connectionString?: string;
+  // Direct CA certificate for testing before saving
+  caCertificate?: string;
   shareToken?: string;
   // For execute_sql
   sql?: string;
@@ -274,7 +238,7 @@ Deno.serve(async (req) => {
         const safeConnectionString = ensurePasswordEncoded(body.connectionString);
         console.log("[manage-database] Connection string password encoded for testing");
         
-        const client = await createDbClient(safeConnectionString);
+        const client = createDbClient(safeConnectionString, body.caCertificate);
         await client.connect();
         await client.queryObject("SELECT 1");
         await client.end();
@@ -292,6 +256,7 @@ Deno.serve(async (req) => {
     }
 
     let connectionString: string;
+    let caCertificate: string | null = null;
     let projectId: string;
     let role: string;
 
@@ -300,16 +265,20 @@ Deno.serve(async (req) => {
       // External database connection - owner only
       console.log("[manage-database] Using external connection");
       
-      // Get connection string via secure RPC (owner only)
-      const { data: connString, error: connError } = await supabase.rpc("get_db_connection_string_with_token", {
+      // Get connection string AND CA certificate via secure RPC
+      const { data: secrets, error: connError } = await supabase.rpc("get_db_connection_secrets_with_token", {
         p_connection_id: connectionId,
         p_token: shareToken || null,
       });
 
-      if (connError || !connString) {
-        console.error("[manage-database] Connection string fetch error:", connError);
+      if (connError || !secrets || secrets.length === 0) {
+        console.error("[manage-database] Connection secrets fetch error:", connError);
         throw new Error(connError?.message || "Connection not found or access denied");
       }
+
+      const secretsRecord = secrets[0];
+      const connString = secretsRecord.connection_string;
+      caCertificate = secretsRecord.ca_certificate || null;
 
       // Decrypt connection string if it's encrypted
       if (isEncrypted(connString)) {
@@ -344,7 +313,7 @@ Deno.serve(async (req) => {
       // Handle test_connection action
       if (action === 'test_connection') {
         try {
-          const client = await createDbClient(connectionString);
+          const client = createDbClient(connectionString, caCertificate);
           await client.connect();
           await client.queryObject("SELECT 1");
           await client.end();

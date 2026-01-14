@@ -16,6 +16,7 @@ export interface ExternalDatabaseConnection {
   created_at: string;
   created_by: string | null;
   updated_at: string;
+  ca_certificate: string | null;
 }
 
 export const useRealtimeExternalDatabases = (
