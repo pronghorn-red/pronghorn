@@ -195,6 +195,8 @@ interface ManageDatabaseRequest {
   connectionString?: string;
   // Direct CA certificate for testing before saving
   caCertificate?: string;
+  // URL to fetch CA certificate from (e.g., AWS RDS bundle URL)
+  caCertificateUrl?: string;
   shareToken?: string;
   // For execute_sql
   sql?: string;
@@ -208,6 +210,24 @@ interface ManageDatabaseRequest {
   orderDir?: 'asc' | 'desc';
   // For export_table
   format?: 'json' | 'csv' | 'sql';
+}
+
+/**
+ * Fetch CA certificate from a URL (e.g., AWS RDS bundle).
+ * Validates that the response is a valid PEM certificate.
+ */
+async function fetchCaCertificate(url: string): Promise<string> {
+  console.log(`[manage-database] Fetching CA certificate from: ${url}`);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch CA certificate: ${response.status} ${response.statusText}`);
+  }
+  const content = await response.text();
+  if (!content.includes('-----BEGIN CERTIFICATE-----')) {
+    throw new Error('Invalid PEM certificate format: missing BEGIN CERTIFICATE header');
+  }
+  console.log(`[manage-database] Successfully fetched CA certificate (${content.length} bytes)`);
+  return content;
 }
 
 Deno.serve(async (req) => {
@@ -238,7 +258,13 @@ Deno.serve(async (req) => {
         const safeConnectionString = ensurePasswordEncoded(body.connectionString);
         console.log("[manage-database] Connection string password encoded for testing");
         
-        const client = createDbClient(safeConnectionString, body.caCertificate);
+        // Resolve CA certificate: use provided content, or fetch from URL
+        let caCert: string | undefined = body.caCertificate;
+        if (!caCert && body.caCertificateUrl) {
+          caCert = await fetchCaCertificate(body.caCertificateUrl);
+        }
+        
+        const client = createDbClient(safeConnectionString, caCert);
         await client.connect();
         await client.queryObject("SELECT 1");
         await client.end();
