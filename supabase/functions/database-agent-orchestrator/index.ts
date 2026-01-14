@@ -773,7 +773,13 @@ ${blackboardContent}`;
   const stream = new ReadableStream({
     async start(controller) {
       const sendSSE = (event: SSEEventType, data: any) => {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        // Match coding-agent-orchestrator format: embed type in data payload
+        const message = `data: ${JSON.stringify({ type: event, ...data })}\n\n`;
+        try {
+          controller.enqueue(encoder.encode(message));
+        } catch (e) {
+          console.error("Failed to send SSE event:", e);
+        }
       };
 
       const heartbeatInterval = setInterval(() => {
@@ -816,6 +822,22 @@ ${blackboardContent}`;
 
           if (!llmResponse.ok) {
             const errorText = await llmResponse.text();
+            console.error("Gemini API error:", llmResponse.status, errorText);
+            
+            // Log failed API call for debugging
+            await supabase.rpc("insert_agent_llm_log_with_token", {
+              p_session_id: sessionId,
+              p_project_id: projectId,
+              p_token: shareToken,
+              p_iteration: iteration,
+              p_model: selectedModel,
+              p_input_prompt: fullInputPrompt,
+              p_output_raw: errorText,
+              p_was_parse_success: false,
+              p_parse_error_message: `API error: ${llmResponse.status}`,
+              p_api_response_status: llmResponse.status,
+            });
+            
             throw new Error(`Gemini API error: ${errorText}`);
           }
 
@@ -872,6 +894,22 @@ ${blackboardContent}`;
 
           if (!llmResponse.ok) {
             const errorText = await llmResponse.text();
+            console.error("Claude API error:", llmResponse.status, errorText);
+            
+            // Log failed API call for debugging
+            await supabase.rpc("insert_agent_llm_log_with_token", {
+              p_session_id: sessionId,
+              p_project_id: projectId,
+              p_token: shareToken,
+              p_iteration: iteration,
+              p_model: selectedModel,
+              p_input_prompt: fullInputPrompt,
+              p_output_raw: errorText,
+              p_was_parse_success: false,
+              p_parse_error_message: `API error: ${llmResponse.status}`,
+              p_api_response_status: llmResponse.status,
+            });
+            
             throw new Error(`Claude API error: ${errorText}`);
           }
 
@@ -937,6 +975,22 @@ ${blackboardContent}`;
 
           if (!llmResponse.ok) {
             const errorText = await llmResponse.text();
+            console.error("Grok API error:", llmResponse.status, errorText);
+            
+            // Log failed API call for debugging
+            await supabase.rpc("insert_agent_llm_log_with_token", {
+              p_session_id: sessionId,
+              p_project_id: projectId,
+              p_token: shareToken,
+              p_iteration: iteration,
+              p_model: selectedModel,
+              p_input_prompt: fullInputPrompt,
+              p_output_raw: errorText,
+              p_was_parse_success: false,
+              p_parse_error_message: `API error: ${llmResponse.status}`,
+              p_api_response_status: llmResponse.status,
+            });
+            
             throw new Error(`Grok API error: ${errorText}`);
           }
 

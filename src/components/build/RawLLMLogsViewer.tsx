@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 interface RawLLMLogsViewerProps {
   projectId: string;
   shareToken: string | null;
+  agentType?: 'coding' | 'database';
 }
 
 interface AgentSession {
@@ -58,7 +59,7 @@ interface LLMLog {
   created_at: string;
 }
 
-export function RawLLMLogsViewer({ projectId, shareToken }: RawLLMLogsViewerProps) {
+export function RawLLMLogsViewer({ projectId, shareToken, agentType }: RawLLMLogsViewerProps) {
   const [sessions, setSessions] = useState<AgentSession[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [logs, setLogs] = useState<LLMLog[]>([]);
@@ -75,6 +76,7 @@ export function RawLLMLogsViewer({ projectId, shareToken }: RawLLMLogsViewerProp
         const { data, error } = await supabase.rpc('get_agent_sessions_with_token', {
           p_project_id: projectId,
           p_token: shareToken,
+          p_agent_type: agentType || null,
         });
         
         if (error) throw error;
@@ -93,7 +95,7 @@ export function RawLLMLogsViewer({ projectId, shareToken }: RawLLMLogsViewerProp
     };
     
     loadSessions();
-  }, [projectId, shareToken]);
+  }, [projectId, shareToken, agentType]);
 
   // Load logs when session changes
   useEffect(() => {

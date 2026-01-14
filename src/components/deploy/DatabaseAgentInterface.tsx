@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { useInfiniteAgentMessages } from '@/hooks/useInfiniteAgentMessages';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AgentPromptEditor } from '@/components/build/AgentPromptEditor';
+import { RawLLMLogsViewer } from '@/components/build/RawLLMLogsViewer';
 
 interface SchemaInfo {
   name: string;
@@ -61,7 +62,7 @@ export function DatabaseAgentInterface({
   const [taskInput, setTaskInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
-  const [activeTab, setActiveTab] = useState<'chat' | 'prompt'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'prompt' | 'logs'>('chat');
   
   // SSE streaming progress state
   const [streamProgress, setStreamProgress] = useState<{
@@ -499,8 +500,14 @@ export function DatabaseAgentInterface({
         </div>
       </div>
       
-      {activeTab === 'chat' ? (
-        <>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'chat' | 'prompt' | 'logs')} className="flex-1 flex flex-col overflow-hidden">
+        <TabsList className="mx-3 mb-2 grid w-auto grid-cols-3">
+          <TabsTrigger value="chat">Chat</TabsTrigger>
+          <TabsTrigger value="prompt">Prompt</TabsTrigger>
+          <TabsTrigger value="logs">Raw Logs</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="chat" className="flex-1 flex flex-col overflow-hidden m-0">
           <ScrollArea className="flex-1" ref={scrollViewportRef}>
             <div className="min-h-full">
               {messagesLoading ? (
@@ -609,16 +616,24 @@ export function DatabaseAgentInterface({
               </div>
             )}
           </div>
-        </>
-      ) : (
-        <div className="flex-1 overflow-hidden">
+        </TabsContent>
+        
+        <TabsContent value="prompt" className="flex-1 overflow-hidden m-0">
           <AgentPromptEditor
             projectId={projectId}
             shareToken={shareToken}
             agentType="database-agent-orchestrator"
           />
-        </div>
-      )}
+        </TabsContent>
+        
+        <TabsContent value="logs" className="flex-1 overflow-hidden m-0 p-3">
+          <RawLLMLogsViewer
+            projectId={projectId}
+            shareToken={shareToken}
+            agentType="database"
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
