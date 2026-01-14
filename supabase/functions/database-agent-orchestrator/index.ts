@@ -716,9 +716,9 @@ serve(async (req) => {
         } else if (msg.role === 'assistant' || msg.role === 'agent') {
           // Include agent responses with full content
           conversationHistory.push({ role: "assistant", content: msg.content });
-        } else if (msg.role === 'system' && msg.metadata?.type === 'operation_results') {
-          // Include operation results as user context so LLM sees them (like coding agent)
-          conversationHistory.push({ role: "user", content: msg.content });
+        } else if (msg.role === 'system' && msg.metadata?.operation_results) {
+          // Include operation results as user context so LLM sees them
+          conversationHistory.push({ role: "user", content: `[Tool Results]: ${msg.content}` });
         }
       }
     }
