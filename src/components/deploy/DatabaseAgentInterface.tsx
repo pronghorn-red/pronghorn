@@ -20,7 +20,11 @@ import {
   Code,
   FileText,
   Settings,
-  Sliders
+  Sliders,
+  Paperclip,
+  BookOpen,
+  Download,
+  X
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -29,6 +33,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AgentPromptEditor } from '@/components/build/AgentPromptEditor';
 import { RawLLMLogsViewer } from '@/components/build/RawLLMLogsViewer';
 import { AgentConfigurationModal, AgentConfiguration } from '@/components/build/AgentConfigurationModal';
+import { ProjectSelector, ProjectSelectionResult } from '@/components/project/ProjectSelector';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 interface SchemaInfo {
   name: string;
@@ -69,6 +77,23 @@ export function DatabaseAgentInterface({
   const [agentConfig, setAgentConfig] = useState<AgentConfiguration>({
     exposeProject: false,
     maxIterations: 50,
+  });
+  
+  // ProjectSelector state
+  const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
+  const [attachedContext, setAttachedContext] = useState<ProjectSelectionResult | null>(null);
+  
+  // Chat history settings state
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDownloadingHistory, setIsDownloadingHistory] = useState(false);
+  const [chatHistorySettings, setChatHistorySettings] = useState<{
+    includeHistory: boolean;
+    durationType: 'time' | 'messages';
+    durationValue: number;
+  }>({
+    includeHistory: false,
+    durationType: 'time',
+    durationValue: 20,
   });
   
   // SSE streaming progress state
@@ -205,6 +230,61 @@ export function DatabaseAgentInterface({
     }
   }, [streamingMessage?.content, streamingMessage?.isStreaming, isAutoScrollEnabled]);
   
+  // Calculate total attached items
+  const totalAttachments = attachedContext 
+    ? (attachedContext.artifacts?.length || 0) +
+      (attachedContext.requirements?.length || 0) +
+      (attachedContext.standards?.length || 0) +
+      (attachedContext.techStacks?.length || 0) +
+      (attachedContext.canvasNodes?.length || 0) +
+      (attachedContext.files?.length || 0) +
+      (attachedContext.databases?.length || 0)
+    : 0;
+  
+  // Handle context attachment
+  const handleContextAttachment = (selection: ProjectSelectionResult) => {
+    setAttachedContext(selection);
+    setIsProjectSelectorOpen(false);
+    const count = 
+      (selection.artifacts?.length || 0) +
+      (selection.requirements?.length || 0) +
+      (selection.standards?.length || 0) +
+      (selection.techStacks?.length || 0) +
+      (selection.canvasNodes?.length || 0) +
+      (selection.files?.length || 0) +
+      (selection.databases?.length || 0);
+    toast.success(`Attached ${count} context items`);
+  };
+  
+  // Download chat history
+  const handleDownloadChatHistory = async () => {
+    setIsDownloadingHistory(true);
+    try {
+      const { data, error } = await supabase.rpc('get_agent_messages_with_token', {
+        p_project_id: projectId,
+        p_token: shareToken,
+        p_limit: 1000,
+        p_offset: 0,
+        p_since: null,
+        p_agent_type: 'database',
+      });
+      if (error) throw error;
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `database-agent-history-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Chat history downloaded');
+    } catch (error: any) {
+      toast.error(`Download failed: ${error.message}`);
+    } finally {
+      setIsDownloadingHistory(false);
+    }
+  };
+  
   // Removed aggressive scroll position preservation - was causing unwanted scrolling
   
   const handleSubmit = async () => {
@@ -301,6 +381,21 @@ export function DatabaseAgentInterface({
             views: s.views,
             functions: s.functions
           }));
+          // Include attached project context
+          if (attachedContext) {
+            requestBody.projectContext = {
+              projectMetadata: attachedContext.projectMetadata || null,
+              artifacts: attachedContext.artifacts?.length > 0 ? attachedContext.artifacts : undefined,
+              requirements: attachedContext.requirements?.length > 0 ? attachedContext.requirements : undefined,
+              standards: attachedContext.standards?.length > 0 ? attachedContext.standards : undefined,
+              techStacks: attachedContext.techStacks?.length > 0 ? attachedContext.techStacks : undefined,
+              canvasNodes: attachedContext.canvasNodes?.length > 0 ? attachedContext.canvasNodes : undefined,
+              canvasEdges: attachedContext.canvasEdges?.length > 0 ? attachedContext.canvasEdges : undefined,
+              files: attachedContext.files?.length > 0 ? attachedContext.files : undefined,
+              databases: attachedContext.databases?.length > 0 ? attachedContext.databases : undefined,
+              chatSessions: attachedContext.chatSessions?.length > 0 ? attachedContext.chatSessions : undefined,
+            };
+          }
         }
         
         const response = await fetch(`${supabaseUrl}/functions/v1/database-agent-orchestrator`, {
@@ -571,15 +666,6 @@ export function DatabaseAgentInterface({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setIsAgentConfigOpen(true)}
-            className="h-6 w-6"
-            title="Agent Configuration"
-          >
-            <Sliders className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
             onClick={() => setActiveTab(activeTab === 'chat' ? 'prompt' : 'chat')}
             className="h-6 w-6"
             title="Configure Prompt"
@@ -660,46 +746,88 @@ export function DatabaseAgentInterface({
             </div>
           </ScrollArea>
           
-          {/* Input area */}
-          <div className="p-3 border-t border-border">
-            <div className="flex gap-2">
-              <Textarea
-                placeholder="Describe what you want to do with the database..."
-                value={taskInput}
-                onChange={(e) => setTaskInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSubmit();
-                  }
-                }}
-                disabled={isSubmitting}
-                className="min-h-[60px] max-h-[120px] resize-none text-sm"
-              />
-              <div className="flex flex-col gap-1">
-                {isSubmitting ? (
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    onClick={handleStop}
-                    className="h-8 w-8"
-                  >
-                    <Square className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    size="icon"
-                    onClick={handleSubmit}
-                    disabled={!taskInput.trim() || (!databaseId && !connectionId)}
-                    className="h-8 w-8"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
-                )}
+          {/* Input area - Stacked Layout */}
+          <div className="p-3 border-t border-border space-y-2">
+            {/* Context Attachment Display */}
+            {attachedContext && totalAttachments > 0 && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/30 px-2 py-1 rounded">
+                <Paperclip className="h-4 w-4" />
+                <span>{totalAttachments} context item(s) attached</span>
+                <button
+                  onClick={() => setAttachedContext(null)}
+                  className="ml-auto hover:text-destructive"
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </div>
+            )}
+
+            {/* Button Row */}
+            <div className="flex justify-between items-center">
+              {/* Left buttons: History, Attach, Config */}
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setIsSettingsOpen(true)}
+                  disabled={isSubmitting}
+                  title="Chat History Settings"
+                  className={`h-8 w-8 ${chatHistorySettings.includeHistory ? "border-primary text-primary" : ""}`}
+                >
+                  <BookOpen className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setIsProjectSelectorOpen(true)}
+                  disabled={isSubmitting}
+                  title="Attach Context"
+                  className={`h-8 w-8 ${totalAttachments > 0 ? "border-primary text-primary" : ""}`}
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setIsAgentConfigOpen(true)}
+                  disabled={isSubmitting}
+                  title="Agent Configuration"
+                  className={`h-8 w-8 ${agentConfig.exposeProject ? "border-primary text-primary" : ""}`}
+                >
+                  <Sliders className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Right button: Send/Stop */}
+              <Button
+                onClick={isSubmitting ? handleStop : handleSubmit}
+                disabled={!isSubmitting && (!taskInput.trim() || (!databaseId && !connectionId))}
+                size="icon"
+                variant={isSubmitting ? "destructive" : "default"}
+                className="h-8 w-8"
+              >
+                {isSubmitting ? <Square className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+              </Button>
             </div>
+
+            {/* Full-width textarea */}
+            <Textarea
+              placeholder="Describe what you want to do with the database..."
+              value={taskInput}
+              onChange={(e) => setTaskInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
+              disabled={isSubmitting}
+              className="min-h-[60px] w-full resize-none text-sm"
+            />
+
+            {/* Stream progress indicator */}
             {streamProgress.status !== 'idle' && (
-              <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 {streamProgress.status === 'streaming' && (
                   <>
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -741,6 +869,68 @@ export function DatabaseAgentInterface({
         config={agentConfig}
         onConfigChange={setAgentConfig}
       />
+      
+      {/* Project Selector Dialog */}
+      <ProjectSelector
+        open={isProjectSelectorOpen}
+        onClose={() => setIsProjectSelectorOpen(false)}
+        onConfirm={handleContextAttachment}
+        projectId={projectId}
+        shareToken={shareToken}
+      />
+
+      {/* Chat History Settings Dialog */}
+      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Chat History Settings</DialogTitle>
+            <DialogDescription>
+              Configure how chat history is included and download agent logs.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="flex items-center gap-2">
+              <Checkbox 
+                id="include-history" 
+                checked={chatHistorySettings.includeHistory}
+                onCheckedChange={(checked) => 
+                  setChatHistorySettings(prev => ({ ...prev, includeHistory: checked as boolean }))
+                }
+              />
+              <Label htmlFor="include-history" className="text-sm font-medium">
+                Include recent chat history with submissions
+              </Label>
+            </div>
+            
+            {/* Download section */}
+            <div className="pt-4 border-t">
+              <Label className="text-sm font-medium">Download Chat History</Label>
+              <p className="text-sm text-muted-foreground mb-2">
+                Export complete agent chat history for review.
+              </p>
+              <Button 
+                variant="outline" 
+                onClick={handleDownloadChatHistory}
+                disabled={isDownloadingHistory}
+                className="w-full"
+              >
+                {isDownloadingHistory ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Downloading...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download History (JSON)
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
