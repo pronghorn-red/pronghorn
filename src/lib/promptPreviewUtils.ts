@@ -4,46 +4,60 @@ import { ToolsManifest, AgentPromptSection } from '@/hooks/useProjectAgent';
 export function generateToolsListText(manifest: ToolsManifest | null): string {
   if (!manifest) return "{{TOOLS_LIST}}";
   
-  // NOTE: No header here - the section title "Available Tools" already provides the header
   const lines: string[] = [];
   
-  // File Operations
-  lines.push("## FILE OPERATIONS\n");
-  for (const [name, tool] of Object.entries(manifest.file_operations)) {
-    if (!tool.enabled) continue;
-    lines.push(`**${name}** [${tool.category}]`);
-    lines.push(`  ${tool.description}`);
-    if (Object.keys(tool.params).length > 0) {
-      lines.push(`  Parameters:`);
-      for (const [paramName, param] of Object.entries(tool.params)) {
-        const required = param.required ? "(required)" : "(optional)";
-        lines.push(`    - ${paramName}: ${param.type} ${required} - ${param.description}`);
-      }
+  // Helper to render a category of tools
+  const renderToolCategory = (title: string, toolsObj: Record<string, any> | undefined, description?: string) => {
+    if (!toolsObj) return;
+    
+    lines.push(`## ${title}\n`);
+    if (description) {
+      lines.push(`${description}\n`);
     }
-    lines.push("");
+    
+    for (const [name, tool] of Object.entries(toolsObj)) {
+      if (!tool.enabled) continue;
+      lines.push(`**${name}** [${tool.category}]`);
+      lines.push(`  ${tool.description}`);
+      if (tool.params && Object.keys(tool.params).length > 0) {
+        lines.push(`  Parameters:`);
+        for (const [paramName, param] of Object.entries(tool.params as Record<string, any>)) {
+          const required = param.required ? "(required)" : "(optional)";
+          lines.push(`    - ${paramName}: ${param.type} ${required} - ${param.description}`);
+        }
+      }
+      lines.push("");
+    }
+  };
+  
+  // Handle coding agent manifest structure
+  if (manifest.file_operations) {
+    renderToolCategory("FILE OPERATIONS", manifest.file_operations);
+  }
+  if (manifest.project_exploration_tools) {
+    renderToolCategory(
+      "PROJECT EXPLORATION TOOLS (READ-ONLY)",
+      manifest.project_exploration_tools,
+      "You have READ-ONLY access to explore the entire project via these additional tools:"
+    );
+    lines.push("\nPROJECT EXPLORATION WORKFLOW:");
+    lines.push("1. Start with project_inventory to see counts and previews of all categories");
+    lines.push("2. Use project_category to load full details of categories you need");
+    lines.push("3. Use project_elements to fetch specific items by ID");
+    lines.push("\nThese tools are READ-ONLY. Use them to understand context and inform your file operations.");
   }
   
-  // Project Exploration Tools
-  lines.push("\n## PROJECT EXPLORATION TOOLS (READ-ONLY)\n");
-  lines.push("You have READ-ONLY access to explore the entire project via these additional tools:\n");
-  for (const [name, tool] of Object.entries(manifest.project_exploration_tools)) {
-    if (!tool.enabled) continue;
-    lines.push(`**${name}** [${tool.category}]`);
-    lines.push(`  ${tool.description}`);
-    if (Object.keys(tool.params).length > 0) {
-      lines.push(`  Parameters:`);
-      for (const [paramName, param] of Object.entries(tool.params)) {
-        const required = param.required ? "(required)" : "(optional)";
-        lines.push(`    - ${paramName}: ${param.type} ${required} - ${param.description}`);
-      }
-    }
-    lines.push("");
+  // Handle database agent manifest structure
+  if (manifest.database_operations) {
+    renderToolCategory("DATABASE OPERATIONS", manifest.database_operations);
   }
-  lines.push("\nPROJECT EXPLORATION WORKFLOW:");
-  lines.push("1. Start with project_inventory to see counts and previews of all categories");
-  lines.push("2. Use project_category to load full details of categories you need");
-  lines.push("3. Use project_elements to fetch specific items by ID");
-  lines.push("\nThese tools are READ-ONLY. Use them to understand context and inform your file operations.");
+  if (manifest.project_context_tools) {
+    renderToolCategory(
+      "PROJECT CONTEXT TOOLS (READ-ONLY)",
+      manifest.project_context_tools,
+      "You have READ-ONLY access to explore the project context via these tools:"
+    );
+  }
   
   return lines.join("\n");
 }
@@ -52,9 +66,12 @@ export function generateToolsListText(manifest: ToolsManifest | null): string {
 export function generateResponseSchemaText(manifest: ToolsManifest | null): string {
   if (!manifest) return "{{RESPONSE_SCHEMA}}";
   
+  // Collect tool names from whichever categories exist
   const allToolNames = [
-    ...Object.keys(manifest.file_operations),
-    ...Object.keys(manifest.project_exploration_tools)
+    ...Object.keys(manifest.file_operations || {}),
+    ...Object.keys(manifest.project_exploration_tools || {}),
+    ...Object.keys(manifest.database_operations || {}),
+    ...Object.keys(manifest.project_context_tools || {}),
   ];
   
   return `When responding, structure your response as:

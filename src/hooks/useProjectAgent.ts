@@ -33,8 +33,12 @@ export interface ToolsManifest {
   name: string;
   version: string;
   description: string;
-  file_operations: Record<string, ToolOperation>;
-  project_exploration_tools: Record<string, ToolOperation>;
+  // Coding agent tools
+  file_operations?: Record<string, ToolOperation>;
+  project_exploration_tools?: Record<string, ToolOperation>;
+  // Database agent tools
+  database_operations?: Record<string, ToolOperation>;
+  project_context_tools?: Record<string, ToolOperation>;
 }
 
 export interface CustomToolDescriptions {
