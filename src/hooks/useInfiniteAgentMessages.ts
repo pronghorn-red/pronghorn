@@ -25,10 +25,12 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
     
     try {
       const { data, error } = await supabase.rpc("get_agent_messages_with_token", {
-        p_project_id: projectId,
         p_token: shareToken || null,
+        p_project_id: projectId,
+        p_session_id: null,
         p_limit: LIMIT,
         p_offset: 0,
+        p_since: null,
         p_agent_type: agentType,
       });
 
@@ -109,10 +111,12 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
     
     try {
       const { data, error } = await supabase.rpc("get_agent_messages_with_token", {
-        p_project_id: projectId,
         p_token: shareToken || null,
+        p_project_id: projectId,
+        p_session_id: null,
         p_limit: LIMIT,
         p_offset: offset,
+        p_since: null,
         p_agent_type: agentType,
       });
 

@@ -3351,10 +3351,9 @@ export type Database = {
       create_agent_session_with_token:
         | {
             Args: {
-              p_agent_type?: string
               p_mode: string
               p_project_id: string
-              p_task_description: string
+              p_task_description?: string
               p_token: string
             }
             Returns: {
@@ -3380,9 +3379,10 @@ export type Database = {
           }
         | {
             Args: {
+              p_agent_type?: string
               p_mode: string
               p_project_id: string
-              p_task_description?: string
+              p_task_description: string
               p_token: string
             }
             Returns: {
@@ -3666,35 +3666,31 @@ export type Database = {
       get_agent_messages_with_token:
         | {
             Args: {
-              p_agent_type?: string
-              p_limit?: number
-              p_offset?: number
-              p_project_id: string
-              p_token: string
-            }
-            Returns: {
-              content: string
-              created_at: string
-              id: string
-              metadata: Json | null
-              role: string
-              session_id: string
-            }[]
-            SetofOptions: {
-              from: "*"
-              to: "agent_messages"
-              isOneToOne: false
-              isSetofReturn: true
-            }
-          }
-        | {
-            Args: {
               p_limit?: number
               p_offset?: number
               p_project_id?: string
               p_session_id?: string
               p_since?: string
               p_token?: string
+            }
+            Returns: {
+              content: string
+              created_at: string
+              id: string
+              metadata: Json
+              role: string
+              session_id: string
+            }[]
+          }
+        | {
+            Args: {
+              p_agent_type?: string
+              p_limit?: number
+              p_offset?: number
+              p_project_id: string
+              p_session_id?: string
+              p_since?: string
+              p_token: string
             }
             Returns: {
               content: string

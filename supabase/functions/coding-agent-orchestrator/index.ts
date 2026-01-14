@@ -516,9 +516,9 @@ serve(async (req) => {
     try {
       const { data, error: sessionError } = await supabase.rpc("create_agent_session_with_token", {
         p_project_id: projectId,
+        p_token: shareToken,
         p_mode: mode,
         p_task_description: taskDescription || "",
-        p_token: shareToken,
         p_agent_type: "coding",
       });
       if (sessionError) throw sessionError;
