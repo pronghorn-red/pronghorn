@@ -264,6 +264,7 @@ export type Database = {
       agent_sessions: {
         Row: {
           abort_requested: boolean | null
+          agent_type: string
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -277,6 +278,7 @@ export type Database = {
         }
         Insert: {
           abort_requested?: boolean | null
+          agent_type?: string
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -290,6 +292,7 @@ export type Database = {
         }
         Update: {
           abort_requested?: boolean | null
+          agent_type?: string
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -3345,33 +3348,64 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      create_agent_session_with_token: {
-        Args: {
-          p_mode: string
-          p_project_id: string
-          p_task_description?: string
-          p_token: string
-        }
-        Returns: {
-          abort_requested: boolean | null
-          completed_at: string | null
-          created_at: string
-          created_by: string | null
-          id: string
-          mode: string
-          project_id: string
-          started_at: string
-          status: string
-          task_description: string | null
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "agent_sessions"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      create_agent_session_with_token:
+        | {
+            Args: {
+              p_agent_type?: string
+              p_mode: string
+              p_project_id: string
+              p_task_description: string
+              p_token: string
+            }
+            Returns: {
+              abort_requested: boolean | null
+              agent_type: string
+              completed_at: string | null
+              created_at: string
+              created_by: string | null
+              id: string
+              mode: string
+              project_id: string
+              started_at: string
+              status: string
+              task_description: string | null
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "agent_sessions"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_mode: string
+              p_project_id: string
+              p_task_description?: string
+              p_token: string
+            }
+            Returns: {
+              abort_requested: boolean | null
+              agent_type: string
+              completed_at: string | null
+              created_at: string
+              created_by: string | null
+              id: string
+              mode: string
+              project_id: string
+              started_at: string
+              status: string
+              task_description: string | null
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "agent_sessions"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       create_artifact_collaboration_with_token: {
         Args: {
           p_artifact_id: string
@@ -3629,24 +3663,48 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      get_agent_messages_with_token: {
-        Args: {
-          p_limit?: number
-          p_offset?: number
-          p_project_id?: string
-          p_session_id?: string
-          p_since?: string
-          p_token?: string
-        }
-        Returns: {
-          content: string
-          created_at: string
-          id: string
-          metadata: Json
-          role: string
-          session_id: string
-        }[]
-      }
+      get_agent_messages_with_token:
+        | {
+            Args: {
+              p_agent_type?: string
+              p_limit?: number
+              p_offset?: number
+              p_project_id: string
+              p_token: string
+            }
+            Returns: {
+              content: string
+              created_at: string
+              id: string
+              metadata: Json | null
+              role: string
+              session_id: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "agent_messages"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
+        | {
+            Args: {
+              p_limit?: number
+              p_offset?: number
+              p_project_id?: string
+              p_session_id?: string
+              p_since?: string
+              p_token?: string
+            }
+            Returns: {
+              content: string
+              created_at: string
+              id: string
+              metadata: Json
+              role: string
+              session_id: string
+            }[]
+          }
       get_agent_operations_by_project_with_token: {
         Args: {
           p_limit?: number
@@ -3690,6 +3748,7 @@ export type Database = {
         Args: { p_session_id: string; p_token: string }
         Returns: {
           abort_requested: boolean | null
+          agent_type: string
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -3712,6 +3771,7 @@ export type Database = {
         Args: { p_project_id: string; p_token: string }
         Returns: {
           abort_requested: boolean | null
+          agent_type: string
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -5330,6 +5390,35 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      insert_agent_session_with_token: {
+        Args: {
+          p_agent_type?: string
+          p_mode: string
+          p_project_id: string
+          p_task_description: string
+          p_token: string
+        }
+        Returns: {
+          abort_requested: boolean | null
+          agent_type: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          mode: string
+          project_id: string
+          started_at: string
+          status: string
+          task_description: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       insert_artifact_with_token: {
         Args: {
           p_ai_title?: string
@@ -6224,6 +6313,7 @@ export type Database = {
         Args: { p_session_id: string; p_token: string }
         Returns: {
           abort_requested: boolean | null
+          agent_type: string
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -6579,6 +6669,7 @@ export type Database = {
         }
         Returns: {
           abort_requested: boolean | null
+          agent_type: string
           completed_at: string | null
           created_at: string
           created_by: string | null

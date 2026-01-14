@@ -519,6 +519,7 @@ serve(async (req) => {
         p_mode: mode,
         p_task_description: taskDescription || "",
         p_token: shareToken,
+        p_agent_type: "coding",
       });
       if (sessionError) throw sessionError;
       if (!data) throw new Error("Failed to create session");
