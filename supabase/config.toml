@@ -75,6 +75,9 @@ verify_jwt = false
 [functions.coding-agent-orchestrator]
 verify_jwt = false
 
+[functions.database-agent-orchestrator]
+verify_jwt = false
+
 [functions.render-service]
 verify_jwt = false
 

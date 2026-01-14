@@ -92,10 +92,26 @@ export function useProjectAgent(
   const [hasCustomConfig, setHasCustomConfig] = useState(false);
   const [defaultTemplate, setDefaultTemplate] = useState<AgentDefinition | null>(null);
 
+  // Determine which manifest/template files to use based on agent type
+  const getManifestPath = useCallback(() => {
+    if (agentType === 'database-agent-orchestrator') {
+      return '/data/databaseAgentToolsManifest.json';
+    }
+    return '/data/codingAgentToolsManifest.json';
+  }, [agentType]);
+
+  const getTemplatePath = useCallback(() => {
+    if (agentType === 'database-agent-orchestrator') {
+      return '/data/databaseAgentPromptTemplate.json';
+    }
+    return '/data/codingAgentPromptTemplate.json';
+  }, [agentType]);
+
   // Load the default tools manifest from JSON file
   const loadDefaultToolsManifest = useCallback(async (): Promise<ToolsManifest | null> => {
     try {
-      const response = await fetch('/data/codingAgentToolsManifest.json');
+      const manifestPath = getManifestPath();
+      const response = await fetch(manifestPath);
       if (!response.ok) throw new Error('Failed to load tools manifest');
       const manifest = await response.json();
       setToolsManifest(manifest);
@@ -104,12 +120,13 @@ export function useProjectAgent(
       console.error('Error loading tools manifest:', error);
       return null;
     }
-  }, []);
+  }, [getManifestPath]);
 
   // Load the default template from JSON file
   const loadDefaultTemplate = useCallback(async (): Promise<AgentDefinition | null> => {
     try {
-      const response = await fetch('/data/codingAgentPromptTemplate.json');
+      const templatePath = getTemplatePath();
+      const response = await fetch(templatePath);
       if (!response.ok) throw new Error('Failed to load default template');
       const template = await response.json();
       setDefaultTemplate(template);
@@ -119,7 +136,7 @@ export function useProjectAgent(
       toast.error('Failed to load default agent template');
       return null;
     }
-  }, []);
+  }, [getTemplatePath]);
 
   // Load agent configuration from database or use defaults
   const loadAgentConfig = useCallback(async () => {

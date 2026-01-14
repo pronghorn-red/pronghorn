@@ -31,6 +31,7 @@ import { TreeItemContextType } from "./DatabaseTreeContextMenu";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { extractDDLStatements } from "@/lib/sqlParser";
 import DatabaseImportWizard from "./DatabaseImportWizard";
+import { DatabaseAgentInterface } from "./DatabaseAgentInterface";
 
 interface SchemaInfo {
   name: string;
@@ -513,7 +514,18 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   );
 
   const ResultsPanel = () => <div className="h-full bg-background">{activeTab === 'table' && tableData ? <QueryResultsViewer columns={tableData.columns} rows={tableData.rows} totalRows={tableData.totalRows} limit={tableLimit} offset={tableData.offset} onPageChange={(o) => { if (selectedTable) handleTableSelect(selectedTable.schema, selectedTable.table, o); }} onExport={handleExport} /> : activeTab === 'structure' && tableStructure && selectedTable ? <TableStructureViewer schema={selectedTable.schema} table={selectedTable.table} columns={tableStructure.columns} indexes={tableStructure.indexes} /> : queryResults ? <QueryResultsViewer columns={queryResults.columns} rows={queryResults.rows} totalRows={queryResults.totalRows} executionTime={queryResults.executionTime} onExport={handleExportQueryResults} /> : <div className="flex items-center justify-center h-full text-muted-foreground"><p className="text-sm">Run a query or select a table to see results</p></div>}</div>;
-  const AgentPanel = () => <div className="h-full flex flex-col bg-card"><div className="p-3 border-b border-border flex items-center justify-between"><div className="flex items-center gap-2"><Bot className="h-4 w-4 text-primary" /><span className="text-sm font-semibold">Database Agent</span></div>{!isMobile && <Button variant="ghost" size="icon" onClick={() => setIsAgentPanelCollapsed(true)} className="h-6 w-6"><ChevronRight className="h-4 w-4" /></Button>}</div><div className="flex-1 flex items-center justify-center p-4 text-center"><div className="space-y-2"><Bot className="h-12 w-12 mx-auto text-muted-foreground/50" /><p className="text-sm text-muted-foreground">Database Agent coming soon</p></div></div></div>;
+  const AgentPanel = () => (
+    <DatabaseAgentInterface
+      projectId={database?.project_id || externalConnection?.project_id || ''}
+      databaseId={databaseId}
+      connectionId={connectionId}
+      shareToken={shareToken}
+      schemas={schemas}
+      onSchemaRefresh={() => loadSchema(true)}
+      onMigrationRefresh={loadMigrations}
+      onCollapse={isMobile ? undefined : () => setIsAgentPanelCollapsed(true)}
+    />
+  );
 
   if (isMobile) {
     return (

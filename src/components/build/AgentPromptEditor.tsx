@@ -76,9 +76,10 @@ import { generatePromptPreview } from '@/lib/promptPreviewUtils';
 interface AgentPromptEditorProps {
   projectId: string;
   shareToken: string | null;
+  agentType?: string;
 }
 
-export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorProps) {
+export function AgentPromptEditor({ projectId, shareToken, agentType = 'coding-agent-orchestrator' }: AgentPromptEditorProps) {
   const {
     agentDefinition,
     sections,
@@ -99,7 +100,7 @@ export function AgentPromptEditor({ projectId, shareToken }: AgentPromptEditorPr
     getEffectiveToolDescription,
     exportDefinition,
     importDefinition,
-  } = useProjectAgent(projectId, 'coding-agent-orchestrator', shareToken);
+  } = useProjectAgent(projectId, agentType, shareToken);
 
   // Sort sections by order for display
   const sortedSections = [...sections].sort((a, b) => a.order - b.order);
