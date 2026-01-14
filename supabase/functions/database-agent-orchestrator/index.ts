@@ -692,33 +692,30 @@ serve(async (req) => {
       conversationHistory.push({ role: "user", content: `Task: ${session.task_description}` });
     }
     
+    // Match coding-agent-orchestrator RPC call signature exactly
     const { data: previousMessages } = await supabase.rpc("get_agent_messages_with_token", {
-      p_token: shareToken,
-      p_project_id: projectId,
       p_session_id: sessionId,
+      p_token: shareToken,
       p_limit: 50,
       p_offset: 0,
-      p_since: null,
-      p_agent_type: "database",
     });
 
     if (previousMessages && previousMessages.length > 0) {
+      // Sort oldest first (messages are returned DESC by default)
       const sortedMessages = [...previousMessages].reverse();
       for (const msg of sortedMessages) {
         if (msg.role === 'user') {
           conversationHistory.push({ role: "user", content: msg.content });
-        } else if (msg.role === 'system') {
-          conversationHistory.push({ role: "user", content: `[System]: ${msg.content}` });
-        } else {
-          try {
-            const parsed = JSON.parse(msg.content);
-            conversationHistory.push({ role: "assistant", content: parsed.reasoning || msg.content });
-          } catch {
-            conversationHistory.push({ role: "assistant", content: msg.content });
-          }
+        } else if (msg.role === 'assistant' || msg.role === 'agent') {
+          // Include agent responses with full content
+          conversationHistory.push({ role: "assistant", content: msg.content });
+        } else if (msg.role === 'system' && msg.metadata?.type === 'operation_results') {
+          // Include operation results as user context so LLM sees them (like coding agent)
+          conversationHistory.push({ role: "user", content: msg.content });
         }
       }
     }
+    console.log(`Loaded ${conversationHistory.length} messages from DB for continuation (including task and operation results)`);
   }
 
   // Load blackboard

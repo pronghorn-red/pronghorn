@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
@@ -518,16 +518,19 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   // Results panel JSX (inlined to prevent remounting)
   const resultsPanelJsx = <div className="h-full bg-background">{activeTab === 'table' && tableData ? <QueryResultsViewer columns={tableData.columns} rows={tableData.rows} totalRows={tableData.totalRows} limit={tableLimit} offset={tableData.offset} onPageChange={(o) => { if (selectedTable) handleTableSelect(selectedTable.schema, selectedTable.table, o); }} onExport={handleExport} /> : activeTab === 'structure' && tableStructure && selectedTable ? <TableStructureViewer schema={selectedTable.schema} table={selectedTable.table} columns={tableStructure.columns} indexes={tableStructure.indexes} /> : queryResults ? <QueryResultsViewer columns={queryResults.columns} rows={queryResults.rows} totalRows={queryResults.totalRows} executionTime={queryResults.executionTime} onExport={handleExportQueryResults} /> : <div className="flex items-center justify-center h-full text-muted-foreground"><p className="text-sm">Run a query or select a table to see results</p></div>}</div>;
 
-  // Agent panel props (shared between mobile and desktop)
-  const agentPanelProps = {
+  // Memoized callback handlers for agent panel to prevent remounting
+  const handleSchemaRefresh = useCallback(() => loadSchema(true), [loadSchema]);
+
+  // Agent panel props (memoized to prevent remounting)
+  const agentPanelProps = useMemo(() => ({
     projectId: database?.project_id || externalConnection?.project_id || '',
     databaseId,
     connectionId,
     shareToken,
     schemas,
-    onSchemaRefresh: () => loadSchema(true),
+    onSchemaRefresh: handleSchemaRefresh,
     onMigrationRefresh: loadMigrations,
-  };
+  }), [database?.project_id, externalConnection?.project_id, databaseId, connectionId, shareToken, schemas, handleSchemaRefresh, loadMigrations]);
 
   if (isMobile) {
     return (
