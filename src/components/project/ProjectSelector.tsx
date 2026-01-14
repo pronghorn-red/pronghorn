@@ -76,10 +76,27 @@ export interface FileItem {
   content: string;
 }
 
+export interface ChatMessageItem {
+  id: string;
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+export interface ChatSessionItem {
+  id: string;
+  title: string | null;
+  ai_title: string | null;
+  ai_summary: string | null;
+  created_at: string;
+  updated_at: string;
+  messages: ChatMessageItem[];
+}
+
 export interface ProjectSelectionResult {
   projectMetadata: any | null;
   artifacts: any[];
-  chatSessions: any[];
+  chatSessions: ChatSessionItem[];
   requirements: any[];
   standards: any[];
   techStacks: any[];
@@ -190,7 +207,7 @@ export function ProjectSelector({
     new Set(initialSelection?.artifacts ?? [])
   );
   const [selectedChats, setSelectedChats] = useState<Set<string>>(
-    new Set(initialSelection?.chatSessions ?? [])
+    new Set((initialSelection?.chatSessions ?? []).map(c => typeof c === 'string' ? c : c.id))
   );
   const [selectedRequirements, setSelectedRequirements] = useState<Set<string>>(
     new Set(initialSelection?.requirements ?? [])
@@ -382,15 +399,44 @@ export function ProjectSelector({
         artifacts.push(...(data || []).filter((a: any) => selectedArtifacts.has(a.id)));
       }
 
-      // Fetch chat sessions
-      const chatSessions = [];
+      // Fetch chat sessions with their full message history
+      const chatSessions: ChatSessionItem[] = [];
       if (selectedChats.size > 0) {
-        const { data, error } = await supabase.rpc("get_chat_sessions_with_token", {
+        const { data: sessionsData, error } = await supabase.rpc("get_chat_sessions_with_token", {
           p_project_id: projectId,
           p_token: shareToken || null
         });
         if (error) throw error;
-        chatSessions.push(...(data || []).filter((c: any) => selectedChats.has(c.id)));
+        
+        // Filter to selected sessions
+        const selectedSessions = (sessionsData || []).filter((c: any) => selectedChats.has(c.id));
+        
+        // Fetch messages for each selected session in parallel
+        const sessionsWithMessages = await Promise.all(
+          selectedSessions.map(async (session: any) => {
+            const { data: messagesData } = await supabase.rpc("get_chat_messages_with_token", {
+              p_chat_session_id: session.id,
+              p_token: shareToken || null
+            });
+            
+            return {
+              id: session.id,
+              title: session.title,
+              ai_title: session.ai_title,
+              ai_summary: session.ai_summary,
+              created_at: session.created_at,
+              updated_at: session.updated_at,
+              messages: (messagesData || []).map((msg: any) => ({
+                id: msg.id,
+                role: msg.role,
+                content: msg.content,
+                created_at: msg.created_at
+              }))
+            };
+          })
+        );
+        
+        chatSessions.push(...sessionsWithMessages);
       }
 
       // Fetch requirements
