@@ -1,0 +1,121 @@
+{
+  "id": "database-agent-tools",
+  "name": "Database Agent Tools Manifest",
+  "version": "1.0.0",
+  "description": "Database operation tools for the autonomous database agent",
+  "updatedAt": "2025-01-14T00:00:00Z",
+
+  "database_operations": {
+    "read_database_schema": {
+      "description": "Retrieve complete schema structure including tables, columns, types, constraints, indexes, foreign keys, views, functions, triggers, and sequences. Use this FIRST to understand database structure before executing any SQL. Essential for planning DDL changes.",
+      "category": "discovery",
+      "enabled": true,
+      "params": {
+        "schemas": {
+          "type": "array",
+          "required": false,
+          "description": "Filter to specific schema names (default: all non-system schemas like 'public')"
+        }
+      }
+    },
+    "execute_sql": {
+      "description": "Execute SQL queries on the database. Supports ALL PostgreSQL statements: SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, GRANT, etc. Multiple statements can be separated by semicolons and executed sequentially. DDL changes (CREATE, ALTER, DROP) are AUTOMATICALLY captured as migrations - no manual tracking needed.",
+      "category": "execute",
+      "enabled": true,
+      "params": {
+        "sql": {
+          "type": "string",
+          "required": true,
+          "description": "SQL query or queries to execute. Separate multiple statements with semicolons."
+        }
+      }
+    },
+    "get_table_data": {
+      "description": "Retrieve sample data from a specific table for analysis. Use to understand data patterns and validate schema designs.",
+      "category": "read",
+      "enabled": true,
+      "params": {
+        "schema": {
+          "type": "string",
+          "required": true,
+          "description": "Schema name (e.g., 'public')"
+        },
+        "table": {
+          "type": "string",
+          "required": true,
+          "description": "Table name"
+        },
+        "limit": {
+          "type": "integer",
+          "required": false,
+          "description": "Row limit (default: 100, max: 1000)"
+        },
+        "offset": {
+          "type": "integer",
+          "required": false,
+          "description": "Offset for pagination (default: 0)"
+        }
+      }
+    },
+    "get_table_structure": {
+      "description": "Get detailed column information for a table including data types, constraints, defaults, nullability, and indexes.",
+      "category": "read",
+      "enabled": true,
+      "params": {
+        "schema": {
+          "type": "string",
+          "required": true,
+          "description": "Schema name (e.g., 'public')"
+        },
+        "table": {
+          "type": "string",
+          "required": true,
+          "description": "Table name"
+        }
+      }
+    },
+    "get_definition": {
+      "description": "Get the CREATE statement or definition for database objects like tables, views, functions, triggers, sequences, or types.",
+      "category": "read",
+      "enabled": true,
+      "params": {
+        "object_type": {
+          "type": "string",
+          "required": true,
+          "description": "Type of object: 'table', 'view', 'function', 'trigger', 'sequence', 'type', 'index'"
+        },
+        "schema": {
+          "type": "string",
+          "required": true,
+          "description": "Schema name"
+        },
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "Object name"
+        }
+      }
+    }
+  },
+
+  "project_context_tools": {
+    "project_inventory": {
+      "description": "Returns counts and brief previews for ALL project elements (requirements, artifacts, canvas, etc.) to understand context when designing database schemas.",
+      "category": "project",
+      "enabled": true,
+      "params": {}
+    },
+    "project_category": {
+      "description": "Load ALL items from a specific category with full details. Categories: requirements, artifacts, standards, tech_stacks, canvas_nodes.",
+      "category": "project",
+      "enabled": true,
+      "params": {
+        "category": {
+          "type": "string",
+          "required": true,
+          "description": "Category name: requirements, artifacts, standards, tech_stacks, canvas_nodes"
+        }
+      }
+    }
+  }
+}
