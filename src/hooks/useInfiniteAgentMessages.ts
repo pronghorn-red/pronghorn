@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface AgentMessage {
@@ -43,7 +43,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
         if (msg.metadata?.hidden) return false;
         if (msg.metadata?.type === 'operation_results') return false;
         return true;
-      });
+      }).reverse(); // Reverse to show oldest first (RPC returns DESC order)
       
       setMessages(filteredData);
       setHasMore((data || []).length === LIMIT);
@@ -69,6 +69,9 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
     loadInitialMessages();
   }, [projectId, shareToken, loadInitialMessages]);
 
+  // Debounce ref to prevent rapid refetches
+  const refetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Real-time subscription for new messages across all sessions
   useEffect(() => {
     if (!projectId) return;
@@ -86,13 +89,24 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
         },
         (payload) => {
           console.log("[AgentMessages] Postgres change received:", payload);
-          loadInitialMessages();
+          // Debounce refetches to prevent flickering
+          if (refetchTimeoutRef.current) {
+            clearTimeout(refetchTimeoutRef.current);
+          }
+          refetchTimeoutRef.current = setTimeout(() => {
+            loadInitialMessages();
+          }, 300);
         }
       )
       // Broadcast listener for immediate updates from orchestrator
       .on("broadcast", { event: "agent_message_refresh" }, (payload) => {
         console.log("[AgentMessages] Broadcast received:", payload);
-        loadInitialMessages();
+        if (refetchTimeoutRef.current) {
+          clearTimeout(refetchTimeoutRef.current);
+        }
+        refetchTimeoutRef.current = setTimeout(() => {
+          loadInitialMessages();
+        }, 300);
       })
       .subscribe((status) => {
         console.log(`[AgentMessages] Subscription status: ${status}`);
@@ -100,6 +114,9 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
 
     return () => {
       console.log(`[AgentMessages] Cleaning up subscription for project ${projectId}`);
+      if (refetchTimeoutRef.current) {
+        clearTimeout(refetchTimeoutRef.current);
+      }
       supabase.removeChannel(channel);
     };
   }, [projectId, loadInitialMessages]);
@@ -128,7 +145,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
         if (msg.metadata?.hidden) return false;
         if (msg.metadata?.type === 'operation_results') return false;
         return true;
-      });
+      }).reverse(); // Reverse to show oldest first
       setMessages((prev) => [...prev, ...newMessages]);
       setHasMore(newMessages.length === LIMIT);
       setOffset((prev) => prev + LIMIT);

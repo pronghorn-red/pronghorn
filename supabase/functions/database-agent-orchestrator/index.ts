@@ -693,10 +693,13 @@ serve(async (req) => {
     }
     
     const { data: previousMessages } = await supabase.rpc("get_agent_messages_with_token", {
-      p_session_id: sessionId,
       p_token: shareToken,
+      p_project_id: projectId,
+      p_session_id: sessionId,
       p_limit: 50,
       p_offset: 0,
+      p_since: null,
+      p_agent_type: "database",
     });
 
     if (previousMessages && previousMessages.length > 0) {

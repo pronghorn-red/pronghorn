@@ -3663,44 +3663,25 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      get_agent_messages_with_token:
-        | {
-            Args: {
-              p_limit?: number
-              p_offset?: number
-              p_project_id?: string
-              p_session_id?: string
-              p_since?: string
-              p_token?: string
-            }
-            Returns: {
-              content: string
-              created_at: string
-              id: string
-              metadata: Json
-              role: string
-              session_id: string
-            }[]
-          }
-        | {
-            Args: {
-              p_agent_type?: string
-              p_limit?: number
-              p_offset?: number
-              p_project_id: string
-              p_session_id?: string
-              p_since?: string
-              p_token: string
-            }
-            Returns: {
-              content: string
-              created_at: string
-              id: string
-              metadata: Json
-              role: string
-              session_id: string
-            }[]
-          }
+      get_agent_messages_with_token: {
+        Args: {
+          p_agent_type?: string
+          p_limit?: number
+          p_offset?: number
+          p_project_id: string
+          p_session_id?: string
+          p_since?: string
+          p_token: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          metadata: Json
+          role: string
+          session_id: string
+        }[]
+      }
       get_agent_operations_by_project_with_token: {
         Args: {
           p_limit?: number
