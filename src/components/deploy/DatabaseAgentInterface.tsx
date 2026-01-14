@@ -55,7 +55,7 @@ export function DatabaseAgentInterface({
   onMigrationRefresh,
   onCollapse
 }: DatabaseAgentInterfaceProps) {
-  const { messages: loadedMessages, loading: messagesLoading, refetch: refetchMessages } = useInfiniteAgentMessages(projectId, shareToken);
+  const { messages: loadedMessages, loading: messagesLoading, refetch: refetchMessages } = useInfiniteAgentMessages(projectId, shareToken, "database");
   
   const [messages, setMessages] = useState<any[]>([]);
   const [taskInput, setTaskInput] = useState('');

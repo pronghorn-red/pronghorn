@@ -10,7 +10,7 @@ interface AgentMessage {
   created_at: string;
 }
 
-export function useInfiniteAgentMessages(projectId: string | null, shareToken: string | null) {
+export function useInfiniteAgentMessages(projectId: string | null, shareToken: string | null, agentType: string = "coding") {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -29,6 +29,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
         p_token: shareToken || null,
         p_limit: LIMIT,
         p_offset: 0,
+        p_agent_type: agentType,
       });
 
       if (error) throw error;
@@ -52,7 +53,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
     } finally {
       setLoading(false);
     }
-  }, [projectId, shareToken]);
+  }, [projectId, shareToken, agentType]);
 
   // Load initial messages
   useEffect(() => {
@@ -112,6 +113,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
         p_token: shareToken || null,
         p_limit: LIMIT,
         p_offset: offset,
+        p_agent_type: agentType,
       });
 
       if (error) throw error;
@@ -132,7 +134,7 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
     } finally {
       setLoading(false);
     }
-  }, [projectId, shareToken, offset, loading, hasMore]);
+  }, [projectId, shareToken, offset, loading, hasMore, agentType]);
 
   return { messages, loading, hasMore, loadMore, refetch: loadInitialMessages };
 }
