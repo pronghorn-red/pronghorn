@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -46,7 +46,7 @@ interface DatabaseAgentInterfaceProps {
   onCollapse?: () => void;
 }
 
-function DatabaseAgentInterfaceInner({
+export function DatabaseAgentInterface({
   projectId,
   databaseId,
   connectionId,
@@ -701,15 +701,3 @@ function DatabaseAgentInterfaceInner({
     </div>
   );
 }
-
-// Wrap with React.memo to prevent unnecessary re-renders when props haven't changed
-export const DatabaseAgentInterface = memo(DatabaseAgentInterfaceInner, (prev, next) => {
-  // Only re-render if key props actually changed
-  return (
-    prev.projectId === next.projectId &&
-    prev.databaseId === next.databaseId &&
-    prev.connectionId === next.connectionId &&
-    prev.shareToken === next.shareToken &&
-    JSON.stringify(prev.schemas) === JSON.stringify(next.schemas)
-  );
-});
