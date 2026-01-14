@@ -65,20 +65,73 @@ function extractSslMode(connectionString: string): string {
 }
 
 /**
- * Get TLS options for deno-postgres based on sslmode.
- * deno-postgres doesn't parse sslmode from URL, so we pass explicit tls config.
- * Using enforce: false allows TLS without CA certificate verification (works with AWS RDS/Lightsail).
+ * Detect if a hostname is an AWS RDS or Lightsail database.
+ * AWS hostnames typically contain:
+ * - .rds.amazonaws.com (RDS)
+ * - .db.amazonlightsail.com (Lightsail managed DB)
+ * - .lightsail.com (older Lightsail)
  */
-function getTlsOptions(sslMode: string): { enabled: boolean; enforce: boolean } | undefined {
+function isAwsDatabase(hostname: string): boolean {
+  const awsPatterns = [
+    '.rds.amazonaws.com',
+    '.db.amazonlightsail.com',
+    '.lightsail.com',
+    '.amazonaws.com'
+  ];
+  const lowerHost = hostname.toLowerCase();
+  return awsPatterns.some(pattern => lowerHost.includes(pattern));
+}
+
+// Cache the CA bundle after first load
+let awsCaBundle: string | null = null;
+
+/**
+ * Load the AWS RDS global CA bundle from the bundled file.
+ * Returns the PEM certificate string for use with TLS caCertificates.
+ */
+async function getAwsCaBundle(): Promise<string> {
+  if (awsCaBundle === null) {
+    // Read the bundled CA file - use relative path from the function
+    const bundlePath = new URL('./aws-rds-global-bundle.pem', import.meta.url);
+    awsCaBundle = await Deno.readTextFile(bundlePath);
+    console.log('[manage-database] Loaded AWS RDS CA bundle');
+  }
+  return awsCaBundle;
+}
+
+interface TlsOptions {
+  enabled: boolean;
+  enforce: boolean;
+  caCertificates?: string[];
+}
+
+/**
+ * Get TLS options for deno-postgres based on sslmode and hostname.
+ * For AWS databases, includes the RDS CA bundle for proper certificate verification.
+ */
+async function getTlsOptions(sslMode: string, hostname: string): Promise<TlsOptions | undefined> {
+  const isAws = isAwsDatabase(hostname);
+  
   switch (sslMode) {
     case 'disable':
       return { enabled: false, enforce: false };
+    
     case 'prefer':
-      // Try TLS but don't verify certificate - compatible with AWS
-      return { enabled: true, enforce: false };
     case 'require':
-      // Force TLS but don't verify certificate - compatible with AWS
-      return { enabled: true, enforce: false };
+      if (isAws) {
+        // AWS database: use CA bundle for proper certificate verification
+        const caBundle = await getAwsCaBundle();
+        console.log(`[manage-database] Using AWS RDS CA bundle for ${hostname}`);
+        return { 
+          enabled: true, 
+          enforce: true, 
+          caCertificates: [caBundle] 
+        };
+      } else {
+        // Non-AWS: try TLS without strict verification
+        return { enabled: true, enforce: false };
+      }
+    
     default:
       return { enabled: true, enforce: false };
   }
@@ -86,23 +139,22 @@ function getTlsOptions(sslMode: string): { enabled: boolean; enforce: boolean } 
 
 /**
  * Create a postgres Client with proper TLS configuration.
- * deno-postgres Client accepts ClientOptions object with connection property.
+ * For AWS databases, includes the RDS CA bundle for certificate verification.
  */
-function createDbClient(connectionString: string): Client {
+async function createDbClient(connectionString: string): Promise<Client> {
   const sslMode = extractSslMode(connectionString);
-  const tlsOptions = getTlsOptions(sslMode);
-  console.log(`[manage-database] Creating client with sslmode=${sslMode}, tls=${JSON.stringify(tlsOptions)}`);
-  
-  // Parse connection string into ClientOptions format
-  // deno-postgres expects a single ClientOptions object
   const url = new URL(connectionString.replace(/^postgres:\/\//, 'postgresql://'));
+  const hostname = url.hostname;
+  
+  const tlsOptions = await getTlsOptions(sslMode, hostname);
+  console.log(`[manage-database] Creating client for ${hostname} with sslmode=${sslMode}, tls=${JSON.stringify(tlsOptions)}`);
   
   return new Client({
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
-    hostname: url.hostname,
+    hostname: hostname,
     port: url.port ? parseInt(url.port) : 5432,
-    database: url.pathname.slice(1) || 'postgres', // Remove leading /
+    database: url.pathname.slice(1) || 'postgres',
     tls: tlsOptions,
   });
 }
@@ -222,7 +274,7 @@ Deno.serve(async (req) => {
         const safeConnectionString = ensurePasswordEncoded(body.connectionString);
         console.log("[manage-database] Connection string password encoded for testing");
         
-        const client = createDbClient(safeConnectionString);
+        const client = await createDbClient(safeConnectionString);
         await client.connect();
         await client.queryObject("SELECT 1");
         await client.end();
@@ -292,7 +344,7 @@ Deno.serve(async (req) => {
       // Handle test_connection action
       if (action === 'test_connection') {
         try {
-          const client = createDbClient(connectionString);
+          const client = await createDbClient(connectionString);
           await client.connect();
           await client.queryObject("SELECT 1");
           await client.end();
@@ -544,7 +596,7 @@ Deno.serve(async (req) => {
 });
 
 async function getSchema(connectionString: string) {
-  const client = createDbClient(connectionString);
+  const client = await createDbClient(connectionString);
   await client.connect();
 
   try {
