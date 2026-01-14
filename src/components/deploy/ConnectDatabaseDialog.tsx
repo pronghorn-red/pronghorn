@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Link, CheckCircle, XCircle, Eye, EyeOff } from "lucide-react";
+import { Loader2, Link, CheckCircle, XCircle, Eye, EyeOff, Upload, ExternalLink, ShieldCheck, FileText, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { setDatabaseConnectionString } from "@/lib/databaseConnectionSecrets";
@@ -28,6 +28,11 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface ConnectDatabaseDialogProps {
   open: boolean;
@@ -44,6 +49,7 @@ interface ConnectDatabaseDialogProps {
     port: number;
     database_name: string | null;
     ssl_mode: string | null;
+    ca_certificate?: string | null;
   };
 }
 
@@ -122,7 +128,16 @@ export function ConnectDatabaseDialog({
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<"success" | "failed" | null>(null);
 
+  // SSL Certificate state
+  const [certMode, setCertMode] = useState<"none" | "url" | "upload">("none");
+  const [caCertificateUrl, setCaCertificateUrl] = useState("");
+  const [caCertificateContent, setCaCertificateContent] = useState("");
+  const [certFileName, setCertFileName] = useState("");
+  const [certSectionOpen, setCertSectionOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const isEditing = !!editConnection;
+  const hasCertConfigured = editConnection?.ca_certificate ? true : false;
 
   // Reset form when dialog opens/closes
   useEffect(() => {
@@ -140,6 +155,12 @@ export function ConnectDatabaseDialog({
         });
         setSslMode(editConnection.ssl_mode || "require");
         setInputMode("fields");
+        // Reset cert fields
+        setCertMode("none");
+        setCaCertificateUrl("");
+        setCaCertificateContent("");
+        setCertFileName("");
+        setCertSectionOpen(!!editConnection.ca_certificate);
       } else {
         setName("");
         setDescription("");
@@ -153,6 +174,12 @@ export function ConnectDatabaseDialog({
         });
         setSslMode("require");
         setInputMode("fields");
+        // Reset cert fields
+        setCertMode("none");
+        setCaCertificateUrl("");
+        setCaCertificateContent("");
+        setCertFileName("");
+        setCertSectionOpen(false);
       }
       setTestResult(null);
       setShowPassword(false);
@@ -229,6 +256,44 @@ export function ConnectDatabaseDialog({
     return null;
   };
 
+  // Get effective certificate for testing/saving
+  const getEffectiveCertificate = (): { url?: string; content?: string } => {
+    if (certMode === "url" && caCertificateUrl.trim()) {
+      return { url: caCertificateUrl.trim() };
+    }
+    if (certMode === "upload" && caCertificateContent) {
+      return { content: caCertificateContent };
+    }
+    return {};
+  };
+
+  // Handle file upload
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.pem') && !file.name.endsWith('.crt')) {
+      toast.error("Please upload a .pem or .crt certificate file");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (!content.includes('-----BEGIN CERTIFICATE-----')) {
+        toast.error("Invalid certificate file format");
+        return;
+      }
+      setCaCertificateContent(content);
+      setCertFileName(file.name);
+      toast.success(`Loaded certificate: ${file.name}`);
+    };
+    reader.onerror = () => {
+      toast.error("Failed to read certificate file");
+    };
+    reader.readAsText(file);
+  };
+
   const handleTestConnection = async () => {
     const effectiveConnStr = getEffectiveConnectionString();
     if (!effectiveConnStr) {
@@ -240,11 +305,14 @@ export function ConnectDatabaseDialog({
     setTestResult(null);
 
     try {
+      const cert = getEffectiveCertificate();
       const { data, error } = await supabase.functions.invoke("manage-database", {
         body: {
           action: "test_connection",
           connectionString: effectiveConnStr,
           shareToken,
+          caCertificate: cert.content,
+          caCertificateUrl: cert.url,
         },
       });
 
@@ -277,6 +345,7 @@ export function ConnectDatabaseDialog({
 
     setIsLoading(true);
     const parsedInfo = getParsedInfo();
+    const cert = getEffectiveCertificate();
 
     try {
       if (isEditing) {
@@ -295,7 +364,22 @@ export function ConnectDatabaseDialog({
 
         // If user provided a new connection string, encrypt and store it separately
         if (effectiveConnStr) {
-          await setDatabaseConnectionString(editConnection.id, shareToken, effectiveConnStr);
+          await setDatabaseConnectionString(
+            editConnection.id, 
+            shareToken, 
+            effectiveConnStr,
+            cert.url,
+            cert.content
+          );
+        } else if (cert.url || cert.content) {
+          // Just update the certificate without changing connection string
+          await setDatabaseConnectionString(
+            editConnection.id, 
+            shareToken, 
+            "", // Empty string means keep existing
+            cert.url,
+            cert.content
+          );
         }
 
         toast.success("Connection updated successfully");
@@ -320,7 +404,13 @@ export function ConnectDatabaseDialog({
           throw new Error("Failed to get connection ID from insert");
         }
 
-        await setDatabaseConnectionString(connectionId, shareToken, effectiveConnStr);
+        await setDatabaseConnectionString(
+          connectionId, 
+          shareToken, 
+          effectiveConnStr,
+          cert.url,
+          cert.content
+        );
         toast.success("Database connection added successfully");
       }
 
@@ -336,7 +426,7 @@ export function ConnectDatabaseDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px]">
+      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link className="h-5 w-5 text-primary" />
@@ -518,10 +608,117 @@ export function ConnectDatabaseDialog({
                 <SelectItem value="require">Require (TLS required)</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
-              <strong>Tip:</strong> For AWS RDS/Lightsail, use "Prefer" mode. It establishes TLS encryption without requiring CA certificate verification.
-            </p>
           </div>
+
+          {/* SSL Certificate Section */}
+          <Collapsible open={certSectionOpen} onOpenChange={setCertSectionOpen}>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full justify-between">
+                <span className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4" />
+                  SSL Certificate (Optional)
+                  {hasCertConfigured && (
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+                      Configured
+                    </span>
+                  )}
+                  {(certMode !== "none" && (caCertificateUrl || caCertificateContent)) && (
+                    <span className="text-xs bg-green-500/10 text-green-600 px-2 py-0.5 rounded">
+                      New
+                    </span>
+                  )}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {certSectionOpen ? "Hide" : "Show"}
+                </span>
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-3 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Provide a CA certificate for strict TLS verification. Required for some cloud databases like AWS RDS.{" "}
+                <a
+                  href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html#UsingWithRDS.SSL.CertificatesAllRegions"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline inline-flex items-center gap-1"
+                >
+                  Find AWS RDS certificates <ExternalLink className="h-3 w-3" />
+                </a>
+              </p>
+
+              <Tabs value={certMode} onValueChange={(v) => setCertMode(v as "none" | "url" | "upload")}>
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="none">None</TabsTrigger>
+                  <TabsTrigger value="url">From URL</TabsTrigger>
+                  <TabsTrigger value="upload">Upload File</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="none" className="mt-3">
+                  <p className="text-xs text-muted-foreground">
+                    No CA certificate will be used. TLS will still be attempted based on SSL mode, but without strict certificate verification.
+                  </p>
+                </TabsContent>
+
+                <TabsContent value="url" className="mt-3 space-y-2">
+                  <Label htmlFor="certUrl">Certificate Bundle URL</Label>
+                  <Input
+                    id="certUrl"
+                    placeholder="https://truststore.pki.rds.amazonaws.com/us-west-2/us-west-2-bundle.pem"
+                    value={caCertificateUrl}
+                    onChange={(e) => setCaCertificateUrl(e.target.value)}
+                    className="font-mono text-xs"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    For AWS RDS, use your region-specific bundle URL (e.g., <code className="bg-muted px-1 rounded">us-west-2-bundle.pem</code>).
+                  </p>
+                </TabsContent>
+
+                <TabsContent value="upload" className="mt-3 space-y-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pem,.crt"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  {caCertificateContent ? (
+                    <div className="flex items-center gap-2 p-3 border rounded-md bg-muted/50">
+                      <FileText className="h-4 w-4 text-primary" />
+                      <span className="text-sm flex-1 truncate">{certFileName}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => {
+                          setCaCertificateContent("");
+                          setCertFileName("");
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = "";
+                          }
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload .pem or .crt file
+                    </Button>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Upload a PEM-encoded CA certificate bundle from your database provider.
+                  </p>
+                </TabsContent>
+              </Tabs>
+            </CollapsibleContent>
+          </Collapsible>
 
           {/* Test Connection Button */}
           {hasValidConnection() && (
