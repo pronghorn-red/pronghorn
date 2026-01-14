@@ -438,7 +438,7 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case 'get_schema':
-        result = await getSchema(connectionString);
+        result = await getSchema(connectionString, caCertificate);
         break;
       case 'execute_sql':
         // Require editor role for SQL execution
@@ -462,7 +462,7 @@ Deno.serve(async (req) => {
           throw new Error("Destructive queries (DROP, TRUNCATE, DELETE without WHERE) require owner role");
         }
         
-        result = await executeSql(connectionString, sqlQuery);
+        result = await executeSql(connectionString, sqlQuery, caCertificate);
         break;
       case 'get_table_data':
         if (!body.schema || !body.table) {
@@ -475,14 +475,15 @@ Deno.serve(async (req) => {
           body.limit || 100,
           body.offset || 0,
           body.orderBy,
-          body.orderDir
+          body.orderDir,
+          caCertificate
         );
         break;
       case 'get_table_columns':
         if (!body.schema || !body.table) {
           throw new Error("Schema and table are required");
         }
-        result = await getTableColumns(connectionString, body.schema, body.table);
+        result = await getTableColumns(connectionString, body.schema, body.table, caCertificate);
         break;
       case 'export_table':
         if (!body.schema || !body.table) {
@@ -492,56 +493,57 @@ Deno.serve(async (req) => {
           connectionString,
           body.schema,
           body.table,
-          body.format || 'json'
+          body.format || 'json',
+          caCertificate
         );
         break;
       case 'get_table_definition':
         if (!body.schema || !body.table) {
           throw new Error("Schema and table are required");
         }
-        result = await getTableDefinition(connectionString, body.schema, body.table);
+        result = await getTableDefinition(connectionString, body.schema, body.table, caCertificate);
         break;
       case 'get_view_definition':
         if (!body.schema || !body.name) {
           throw new Error("Schema and view name are required");
         }
-        result = await getViewDefinition(connectionString, body.schema, body.name);
+        result = await getViewDefinition(connectionString, body.schema, body.name, caCertificate);
         break;
       case 'get_function_definition':
         if (!body.schema || !body.name) {
           throw new Error("Schema and function name are required");
         }
-        result = await getFunctionDefinition(connectionString, body.schema, body.name);
+        result = await getFunctionDefinition(connectionString, body.schema, body.name, caCertificate);
         break;
       case 'get_trigger_definition':
         if (!body.schema || !body.name) {
           throw new Error("Schema and trigger name are required");
         }
-        result = await getTriggerDefinition(connectionString, body.schema, body.name);
+        result = await getTriggerDefinition(connectionString, body.schema, body.name, caCertificate);
         break;
       case 'get_index_definition':
         if (!body.schema || !body.name) {
           throw new Error("Schema and index name are required");
         }
-        result = await getIndexDefinition(connectionString, body.schema, body.name);
+        result = await getIndexDefinition(connectionString, body.schema, body.name, caCertificate);
         break;
       case 'get_sequence_info':
         if (!body.schema || !body.name) {
           throw new Error("Schema and sequence name are required");
         }
-        result = await getSequenceInfo(connectionString, body.schema, body.name);
+        result = await getSequenceInfo(connectionString, body.schema, body.name, caCertificate);
         break;
       case 'get_type_definition':
         if (!body.schema || !body.name) {
           throw new Error("Schema and type name are required");
         }
-        result = await getTypeDefinition(connectionString, body.schema, body.name);
+        result = await getTypeDefinition(connectionString, body.schema, body.name, caCertificate);
         break;
       case 'get_table_structure':
         if (!body.schema || !body.table) {
           throw new Error("Schema and table are required");
         }
-        result = await getTableStructure(connectionString, body.schema, body.table);
+        result = await getTableStructure(connectionString, body.schema, body.table, caCertificate);
         break;
       case 'execute_sql_batch':
         // Require editor role for SQL batch execution
@@ -555,7 +557,8 @@ Deno.serve(async (req) => {
         const batchResult = await executeSqlBatch(
           connectionString, 
           body.statements, 
-          body.wrapInTransaction !== false
+          body.wrapInTransaction !== false,
+          caCertificate
         );
         // Return batch result directly - it already has success field
         // If batch failed, return 400 status so client knows it failed
@@ -590,8 +593,8 @@ Deno.serve(async (req) => {
   }
 });
 
-async function getSchema(connectionString: string) {
-  const client = await createDbClient(connectionString);
+async function getSchema(connectionString: string, caCertificate?: string | null) {
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
@@ -724,9 +727,10 @@ async function getSchema(connectionString: string) {
 async function executeSqlBatch(
   connectionString: string, 
   statements: { sql: string; description: string }[],
-  wrapInTransaction: boolean = true
+  wrapInTransaction: boolean = true,
+  caCertificate?: string | null
 ) {
-  const client = new Client(connectionString);
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
   
   const results: {
@@ -823,8 +827,8 @@ async function executeSqlBatch(
   }
 }
 
-async function executeSql(connectionString: string, sql: string) {
-  const client = new Client(connectionString);
+async function executeSql(connectionString: string, sql: string, caCertificate?: string | null) {
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
@@ -850,9 +854,10 @@ async function getTableData(
   limit: number,
   offset: number,
   orderBy?: string,
-  orderDir?: 'asc' | 'desc'
+  orderDir?: 'asc' | 'desc',
+  caCertificate?: string | null
 ) {
-  const client = new Client(connectionString);
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
@@ -894,8 +899,8 @@ async function getTableData(
   }
 }
 
-async function getTableColumns(connectionString: string, schema: string, table: string) {
-  const client = new Client(connectionString);
+async function getTableColumns(connectionString: string, schema: string, table: string, caCertificate?: string | null) {
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
@@ -930,9 +935,10 @@ async function exportTable(
   connectionString: string,
   schema: string,
   table: string,
-  format: 'json' | 'csv' | 'sql'
+  format: 'json' | 'csv' | 'sql',
+  caCertificate?: string | null
 ) {
-  const client = new Client(connectionString);
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
@@ -994,8 +1000,8 @@ async function exportTable(
   }
 }
 
-async function getTableDefinition(connectionString: string, schema: string, table: string) {
-  const client = new Client(connectionString);
+async function getTableDefinition(connectionString: string, schema: string, table: string, caCertificate?: string | null) {
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
@@ -1055,8 +1061,8 @@ async function getTableDefinition(connectionString: string, schema: string, tabl
   }
 }
 
-async function getViewDefinition(connectionString: string, schema: string, viewName: string) {
-  const client = new Client(connectionString);
+async function getViewDefinition(connectionString: string, schema: string, viewName: string, caCertificate?: string | null) {
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
@@ -1079,8 +1085,8 @@ async function getViewDefinition(connectionString: string, schema: string, viewN
   }
 }
 
-async function getFunctionDefinition(connectionString: string, schema: string, funcName: string) {
-  const client = new Client(connectionString);
+async function getFunctionDefinition(connectionString: string, schema: string, funcName: string, caCertificate?: string | null) {
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
@@ -1102,8 +1108,8 @@ async function getFunctionDefinition(connectionString: string, schema: string, f
   }
 }
 
-async function getTriggerDefinition(connectionString: string, schema: string, triggerName: string) {
-  const client = new Client(connectionString);
+async function getTriggerDefinition(connectionString: string, schema: string, triggerName: string, caCertificate?: string | null) {
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
@@ -1132,8 +1138,8 @@ async function getTriggerDefinition(connectionString: string, schema: string, tr
   }
 }
 
-async function getIndexDefinition(connectionString: string, schema: string, indexName: string) {
-  const client = new Client(connectionString);
+async function getIndexDefinition(connectionString: string, schema: string, indexName: string, caCertificate?: string | null) {
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
@@ -1153,8 +1159,8 @@ async function getIndexDefinition(connectionString: string, schema: string, inde
   }
 }
 
-async function getSequenceInfo(connectionString: string, schema: string, seqName: string) {
-  const client = new Client(connectionString);
+async function getSequenceInfo(connectionString: string, schema: string, seqName: string, caCertificate?: string | null) {
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
@@ -1187,8 +1193,8 @@ async function getSequenceInfo(connectionString: string, schema: string, seqName
   }
 }
 
-async function getTypeDefinition(connectionString: string, schema: string, typeName: string) {
-  const client = new Client(connectionString);
+async function getTypeDefinition(connectionString: string, schema: string, typeName: string, caCertificate?: string | null) {
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
@@ -1230,8 +1236,8 @@ async function getTypeDefinition(connectionString: string, schema: string, typeN
   }
 }
 
-async function getTableStructure(connectionString: string, schema: string, table: string) {
-  const client = new Client(connectionString);
+async function getTableStructure(connectionString: string, schema: string, table: string, caCertificate?: string | null) {
+  const client = createDbClient(connectionString, caCertificate);
   await client.connect();
 
   try {
