@@ -22,6 +22,12 @@ import { Loader2, Link, CheckCircle, XCircle, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { setDatabaseConnectionString } from "@/lib/databaseConnectionSecrets";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 interface ConnectDatabaseDialogProps {
   open: boolean;
@@ -41,25 +47,49 @@ interface ConnectDatabaseDialogProps {
   };
 }
 
-// Parse connection string to extract display info (NOT credentials)
-function parseConnectionString(connStr: string): {
+interface ConnectionParts {
   host: string;
-  port: number;
-  database_name: string;
-  ssl_mode: string;
-} | null {
+  port: string;
+  username: string;
+  password: string;
+  database: string;
+}
+
+// Parse connection string to extract all parts (including credentials)
+function parseConnectionStringFull(connStr: string): ConnectionParts | null {
   try {
     // Handle postgresql:// or postgres:// URLs
     const url = new URL(connStr.replace(/^postgres:/, "postgresql:"));
     return {
       host: url.hostname || "",
-      port: parseInt(url.port) || 5432,
-      database_name: url.pathname.slice(1) || "",
-      ssl_mode: url.searchParams.get("sslmode") || "require",
+      port: url.port || "5432",
+      username: url.username || "",
+      // The password might be URL-encoded, decode it for display
+      password: url.password ? decodeURIComponent(url.password) : "",
+      database: url.pathname.slice(1) || "",
     };
   } catch {
     return null;
   }
+}
+
+// Build connection string from parts (password will be URL-encoded by backend)
+function buildConnectionString(parts: ConnectionParts, sslMode: string): string {
+  const { host, port, username, password, database } = parts;
+  if (!host || !username || !password) return "";
+  
+  // Build URL - password is NOT encoded here, backend will handle it
+  let connStr = `postgresql://${username}:${password}@${host}`;
+  if (port && port !== "5432") {
+    connStr += `:${port}`;
+  }
+  if (database) {
+    connStr += `/${database}`;
+  }
+  if (sslMode && sslMode !== "disable") {
+    connStr += `?sslmode=${sslMode}`;
+  }
+  return connStr;
 }
 
 export function ConnectDatabaseDialog({
@@ -72,14 +102,18 @@ export function ConnectDatabaseDialog({
 }: ConnectDatabaseDialogProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [inputMode, setInputMode] = useState<"string" | "fields">("fields");
   const [connectionString, setConnectionString] = useState("");
+  const [connectionParts, setConnectionParts] = useState<ConnectionParts>({
+    host: "",
+    port: "5432",
+    username: "",
+    password: "",
+    database: "",
+  });
   const [sslMode, setSslMode] = useState("require");
+  const [showPassword, setShowPassword] = useState(false);
   const [showConnectionString, setShowConnectionString] = useState(false);
-  const [parsedInfo, setParsedInfo] = useState<{
-    host: string;
-    port: number;
-    database_name: string;
-  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<"success" | "failed" | null>(null);
@@ -92,43 +126,97 @@ export function ConnectDatabaseDialog({
       if (editConnection) {
         setName(editConnection.name);
         setDescription(editConnection.description || "");
-        setConnectionString(""); // Never pre-fill connection string
+        setConnectionString("");
+        setConnectionParts({
+          host: editConnection.host || "",
+          port: editConnection.port?.toString() || "5432",
+          username: "",
+          password: "",
+          database: editConnection.database_name || "",
+        });
         setSslMode(editConnection.ssl_mode || "require");
-        setParsedInfo(
-          editConnection.host
-            ? {
-                host: editConnection.host,
-                port: editConnection.port,
-                database_name: editConnection.database_name || "",
-              }
-            : null
-        );
+        setInputMode("fields");
       } else {
         setName("");
         setDescription("");
         setConnectionString("");
+        setConnectionParts({
+          host: "",
+          port: "5432",
+          username: "",
+          password: "",
+          database: "",
+        });
         setSslMode("require");
-        setParsedInfo(null);
+        setInputMode("fields");
       }
       setTestResult(null);
+      setShowPassword(false);
       setShowConnectionString(false);
     }
   }, [open, editConnection]);
 
-  // Parse connection string as user types
+  // When connection string changes, try to parse it and update fields
   useEffect(() => {
-    if (connectionString) {
-      const parsed = parseConnectionString(connectionString);
-      setParsedInfo(parsed);
-      if (parsed?.ssl_mode) {
-        setSslMode(parsed.ssl_mode);
+    if (inputMode === "string" && connectionString) {
+      const parsed = parseConnectionStringFull(connectionString);
+      if (parsed) {
+        setConnectionParts(parsed);
+        // Extract SSL mode from connection string if present
+        try {
+          const url = new URL(connectionString.replace(/^postgres:/, "postgresql:"));
+          const ssl = url.searchParams.get("sslmode");
+          if (ssl) setSslMode(ssl);
+        } catch {
+          // Ignore parsing errors
+        }
       }
     }
-  }, [connectionString]);
+  }, [connectionString, inputMode]);
+
+  // Get the effective connection string (either from input or built from parts)
+  const getEffectiveConnectionString = (): string => {
+    if (inputMode === "string") {
+      return connectionString;
+    }
+    return buildConnectionString(connectionParts, sslMode);
+  };
+
+  // Check if we have enough info to test/save
+  const hasValidConnection = (): boolean => {
+    if (inputMode === "string") {
+      return !!connectionString.trim();
+    }
+    return !!(connectionParts.host && connectionParts.username && connectionParts.password);
+  };
+
+  // Get parsed info for display
+  const getParsedInfo = () => {
+    if (inputMode === "string" && connectionString) {
+      const parsed = parseConnectionStringFull(connectionString);
+      if (parsed) {
+        return {
+          host: parsed.host,
+          port: parseInt(parsed.port) || 5432,
+          database_name: parsed.database,
+        };
+      }
+      return null;
+    }
+    if (connectionParts.host) {
+      return {
+        host: connectionParts.host,
+        port: parseInt(connectionParts.port) || 5432,
+        database_name: connectionParts.database,
+      };
+    }
+    return null;
+  };
 
   const handleTestConnection = async () => {
-    if (!connectionString) {
-      toast.error("Please enter a connection string");
+    const effectiveConnStr = getEffectiveConnectionString();
+    if (!effectiveConnStr) {
+      toast.error("Please enter connection details");
       return;
     }
 
@@ -139,7 +227,7 @@ export function ConnectDatabaseDialog({
       const { data, error } = await supabase.functions.invoke("manage-database", {
         body: {
           action: "test_connection",
-          connectionString,
+          connectionString: effectiveConnStr,
           shareToken,
         },
       });
@@ -165,12 +253,14 @@ export function ConnectDatabaseDialog({
       return;
     }
 
-    if (!isEditing && !connectionString) {
-      toast.error("Please enter a connection string");
+    const effectiveConnStr = getEffectiveConnectionString();
+    if (!isEditing && !effectiveConnStr) {
+      toast.error("Please enter connection details");
       return;
     }
 
     setIsLoading(true);
+    const parsedInfo = getParsedInfo();
 
     try {
       if (isEditing) {
@@ -181,26 +271,25 @@ export function ConnectDatabaseDialog({
           p_name: name.trim(),
           p_description: description.trim() || null,
           p_ssl_mode: sslMode,
-          p_host: connectionString && parsedInfo ? parsedInfo.host : undefined,
-          p_port: connectionString && parsedInfo ? parsedInfo.port : undefined,
-          p_database_name: connectionString && parsedInfo ? parsedInfo.database_name : undefined,
+          p_host: effectiveConnStr && parsedInfo ? parsedInfo.host : undefined,
+          p_port: effectiveConnStr && parsedInfo ? parsedInfo.port : undefined,
+          p_database_name: effectiveConnStr && parsedInfo ? parsedInfo.database_name : undefined,
         });
         if (error) throw error;
 
         // If user provided a new connection string, encrypt and store it separately
-        if (connectionString) {
-          await setDatabaseConnectionString(editConnection.id, shareToken, connectionString);
+        if (effectiveConnStr) {
+          await setDatabaseConnectionString(editConnection.id, shareToken, effectiveConnStr);
         }
 
         toast.success("Connection updated successfully");
       } else {
         // Create new connection with placeholder connection_string
-        // The actual connection string will be encrypted and stored via edge function
         const { data: newConnection, error } = await supabase.rpc("insert_db_connection_with_token", {
           p_project_id: projectId,
           p_token: shareToken,
           p_name: name.trim(),
-          p_connection_string: "__PENDING_ENCRYPTION__", // Placeholder - will be replaced by encrypted value
+          p_connection_string: "__PENDING_ENCRYPTION__",
           p_description: description.trim() || null,
           p_host: parsedInfo?.host || null,
           p_port: parsedInfo?.port || 5432,
@@ -210,14 +299,12 @@ export function ConnectDatabaseDialog({
 
         if (error) throw error;
 
-        // Now encrypt and store the actual connection string
-        // The RPC returns the connection ID as a string
         const connectionId = newConnection as unknown as string;
         if (!connectionId) {
           throw new Error("Failed to get connection ID from insert");
         }
 
-        await setDatabaseConnectionString(connectionId, shareToken, connectionString);
+        await setDatabaseConnectionString(connectionId, shareToken, effectiveConnStr);
         toast.success("Database connection added successfully");
       }
 
@@ -233,7 +320,7 @@ export function ConnectDatabaseDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[550px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link className="h-5 w-5 text-primary" />
@@ -241,8 +328,8 @@ export function ConnectDatabaseDialog({
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Update the connection details. Leave connection string empty to keep the existing one."
-              : "Enter your PostgreSQL connection string to connect to an existing database."}
+              ? "Update the connection details. Leave credentials empty to keep the existing ones."
+              : "Enter your PostgreSQL connection details to connect to an existing database."}
           </DialogDescription>
         </DialogHeader>
 
@@ -264,52 +351,144 @@ export function ConnectDatabaseDialog({
               placeholder="Optional description..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="h-20"
+              className="h-16"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="connectionString">
-              Connection String {!isEditing && "*"}
-              {isEditing && (
-                <span className="text-xs text-muted-foreground ml-2">
-                  (leave empty to keep existing)
-                </span>
-              )}
-            </Label>
-            <div className="relative">
-              <Input
-                id="connectionString"
-                type={showConnectionString ? "text" : "password"}
-                placeholder="postgresql://user:password@host:5432/database"
-                value={connectionString}
-                onChange={(e) => {
-                  setConnectionString(e.target.value);
-                  setTestResult(null);
-                }}
-                className="pr-10 font-mono text-sm"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-0 top-0 h-full px-3"
-                onClick={() => setShowConnectionString(!showConnectionString)}
-              >
-                {showConnectionString ? (
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <Eye className="h-4 w-4 text-muted-foreground" />
-                )}
-              </Button>
-            </div>
-            {parsedInfo && (
-              <div className="text-xs text-muted-foreground mt-1 p-2 bg-muted rounded">
-                <span className="font-medium">Detected:</span> {parsedInfo.host}:
-                {parsedInfo.port}/{parsedInfo.database_name}
+          <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as "string" | "fields")}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="fields">Individual Fields</TabsTrigger>
+              <TabsTrigger value="string">Connection String</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="fields" className="space-y-3 mt-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="host">Host *</Label>
+                  <Input
+                    id="host"
+                    placeholder="db.example.com"
+                    value={connectionParts.host}
+                    onChange={(e) => {
+                      setConnectionParts({ ...connectionParts, host: e.target.value });
+                      setTestResult(null);
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="port">Port</Label>
+                  <Input
+                    id="port"
+                    placeholder="5432"
+                    value={connectionParts.port}
+                    onChange={(e) => {
+                      setConnectionParts({ ...connectionParts, port: e.target.value });
+                      setTestResult(null);
+                    }}
+                  />
+                </div>
               </div>
-            )}
-          </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="username">Username *</Label>
+                  <Input
+                    id="username"
+                    placeholder="postgres"
+                    value={connectionParts.username}
+                    onChange={(e) => {
+                      setConnectionParts({ ...connectionParts, username: e.target.value });
+                      setTestResult(null);
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="password">Password *</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={connectionParts.password}
+                      onChange={(e) => {
+                        setConnectionParts({ ...connectionParts, password: e.target.value });
+                        setTestResult(null);
+                      }}
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="database">Database Name</Label>
+                <Input
+                  id="database"
+                  placeholder="mydb (optional)"
+                  value={connectionParts.database}
+                  onChange={(e) => {
+                    setConnectionParts({ ...connectionParts, database: e.target.value });
+                    setTestResult(null);
+                  }}
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="string" className="space-y-3 mt-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="connectionString">
+                  Connection String {!isEditing && "*"}
+                  {isEditing && (
+                    <span className="text-xs text-muted-foreground ml-2">
+                      (leave empty to keep existing)
+                    </span>
+                  )}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="connectionString"
+                    type={showConnectionString ? "text" : "password"}
+                    placeholder="postgresql://user:password@host:5432/database"
+                    value={connectionString}
+                    onChange={(e) => {
+                      setConnectionString(e.target.value);
+                      setTestResult(null);
+                    }}
+                    className="pr-10 font-mono text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3"
+                    onClick={() => setShowConnectionString(!showConnectionString)}
+                  >
+                    {showConnectionString ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Paste a connection string and it will be parsed into individual fields automatically.
+                </p>
+              </div>
+            </TabsContent>
+          </Tabs>
 
           <div className="space-y-2">
             <Label htmlFor="sslMode">SSL Mode</Label>
@@ -326,10 +505,13 @@ export function ConnectDatabaseDialog({
                 <SelectItem value="verify-full">Verify Full</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              For AWS RDS/Lightsail, use "Require" or higher.
+            </p>
           </div>
 
           {/* Test Connection Button */}
-          {connectionString && (
+          {hasValidConnection() && (
             <div className="flex items-center gap-2">
               <Button
                 type="button"

@@ -11,6 +11,41 @@ const ENCRYPTION_KEY = Deno.env.get('SECRETS_ENCRYPTION_KEY');
 
 // ============== Encryption/Decryption Helpers ==============
 
+/**
+ * Ensure the password in a connection string is properly URL-encoded.
+ * Assumes the password is NOT already encoded (raw password with special characters).
+ * This handles passwords with special chars like ^, >, %, }, ], etc.
+ */
+function ensurePasswordEncoded(connectionString: string): string {
+  try {
+    // Parse the URL - convert postgres: to postgresql: for URL parsing
+    const urlString = connectionString.replace(/^postgres:\/\//, 'postgresql://');
+    const url = new URL(urlString);
+    
+    // If there's a password, we need to re-encode it properly
+    // The URL constructor will have decoded any existing encoding, but we're assuming
+    // the user provided a raw password (not encoded), so we take what's there and encode it
+    if (url.password) {
+      // The password from URL might have been partially decoded by URL constructor
+      // We'll encode it fresh, treating it as the raw password
+      const rawPassword = url.password;
+      const encodedPassword = encodeURIComponent(rawPassword);
+      url.password = encodedPassword;
+    }
+    
+    // Return the fixed connection string (convert back to postgres:// if needed)
+    let result = url.toString();
+    if (connectionString.startsWith('postgres://')) {
+      result = result.replace(/^postgresql:\/\//, 'postgres://');
+    }
+    return result;
+  } catch (error) {
+    console.warn('[manage-database] Could not parse connection string for encoding:', error);
+    // Return original if parsing fails
+    return connectionString;
+  }
+}
+
 // Convert hex string to Uint8Array
 function hexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
@@ -122,7 +157,11 @@ Deno.serve(async (req) => {
     if (action === 'test_connection' && body.connectionString) {
       console.log("[manage-database] Testing direct connection string");
       try {
-        const client = new Client(body.connectionString);
+        // Ensure password is properly URL-encoded
+        const safeConnectionString = ensurePasswordEncoded(body.connectionString);
+        console.log("[manage-database] Connection string password encoded for testing");
+        
+        const client = new Client(safeConnectionString);
         await client.connect();
         await client.queryObject("SELECT 1");
         await client.end();
@@ -131,6 +170,7 @@ Deno.serve(async (req) => {
         });
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error("[manage-database] Connection test failed:", errorMessage);
         return new Response(JSON.stringify({ success: false, error: errorMessage }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -162,15 +202,17 @@ Deno.serve(async (req) => {
       if (isEncrypted(connString)) {
         try {
           connectionString = await decrypt(connString);
-          console.log("[manage-database] Successfully decrypted connection string");
+          // Ensure password is properly URL-encoded after decryption
+          connectionString = ensurePasswordEncoded(connectionString);
+          console.log("[manage-database] Successfully decrypted and encoded connection string");
         } catch (decryptError) {
           console.error("[manage-database] Failed to decrypt connection string:", decryptError);
           throw new Error("Failed to decrypt connection string. Ensure SECRETS_ENCRYPTION_KEY is configured.");
         }
       } else {
-        // Legacy plaintext connection string
+        // Legacy plaintext connection string - also encode password
         console.log("[manage-database] Using plaintext connection string (legacy)");
-        connectionString = connString;
+        connectionString = ensurePasswordEncoded(connString);
       }
 
       // Get connection details for project_id
