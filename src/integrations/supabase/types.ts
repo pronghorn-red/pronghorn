@@ -1590,6 +1590,7 @@ export type Database = {
       }
       project_database_connections: {
         Row: {
+          ca_certificate: string | null
           connection_string: string
           created_at: string
           created_by: string | null
@@ -1607,6 +1608,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ca_certificate?: string | null
           connection_string: string
           created_at?: string
           created_by?: string | null
@@ -1624,6 +1626,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ca_certificate?: string | null
           connection_string?: string
           created_at?: string
           created_by?: string | null
@@ -4340,6 +4343,13 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_db_connection_secrets_with_token: {
+        Args: { p_connection_id: string; p_token: string }
+        Returns: {
+          ca_certificate: string
+          connection_string: string
+        }[]
       }
       get_db_connection_string_with_token: {
         Args: { p_connection_id: string; p_token?: string }
