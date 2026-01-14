@@ -692,13 +692,20 @@ serve(async (req) => {
       conversationHistory.push({ role: "user", content: `Task: ${session.task_description}` });
     }
     
-    // Match coding-agent-orchestrator RPC call signature exactly
-    const { data: previousMessages } = await supabase.rpc("get_agent_messages_with_token", {
+    // Must pass all required params: p_project_id is required!
+    const { data: previousMessages, error: historyError } = await supabase.rpc("get_agent_messages_with_token", {
+      p_project_id: projectId,
       p_session_id: sessionId,
       p_token: shareToken,
       p_limit: 50,
       p_offset: 0,
+      p_since: null,
+      p_agent_type: "database",
     });
+    
+    if (historyError) {
+      console.error("Failed to load message history:", historyError);
+    }
 
     if (previousMessages && previousMessages.length > 0) {
       // Sort oldest first (messages are returned DESC by default)
