@@ -1147,9 +1147,9 @@ ${blackboardContent}`;
           p_metadata: { reasoning: agentResponse.reasoning, status: agentResponse.status, iteration },
         });
 
-        // Broadcast message refresh for real-time UI updates
+        // Broadcast message refresh to database-specific channel
         try {
-          await supabase.channel(`agent-messages-project-${projectId}`).send({
+          await supabase.channel(`agent-messages-project-${projectId}-database`).send({
             type: 'broadcast',
             event: 'agent_message_refresh',
             payload: { sessionId, iteration, projectId }

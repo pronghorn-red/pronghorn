@@ -1258,8 +1258,8 @@ serve(async (req) => {
           console.log("[AGENT] Agent message saved successfully, id:", agentMsgResult.data?.id);
         }
 
-        // Broadcast message refresh
-        await supabase.channel(`agent-messages-project-${projectId}`).send({
+        // Broadcast message refresh to coding-specific channel
+        await supabase.channel(`agent-messages-project-${projectId}-coding`).send({
           type: 'broadcast',
           event: 'agent_message_refresh',
           payload: { sessionId, iteration }

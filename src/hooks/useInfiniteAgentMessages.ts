@@ -75,82 +75,28 @@ export function useInfiniteAgentMessages(projectId: string | null, shareToken: s
     loadingRef.current = loading;
   }, [loading]);
 
-  // Real-time subscription for new messages across all sessions
+  // Real-time subscription for agent-type-specific broadcast channel
   useEffect(() => {
     if (!projectId) return;
 
-    console.log(`[AgentMessages] Setting up subscription for project ${projectId}`);
+    console.log(`[AgentMessages] Setting up broadcast subscription for project ${projectId}, type ${agentType}`);
 
     const channel = supabase
-      .channel(`agent-messages-project-${projectId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "agent_messages",
-        },
-        (payload) => {
-          console.log("[AgentMessages] INSERT received:", payload);
-          const newMsg = payload.new as AgentMessage;
-          
-          // Filter out internal system messages
-          if (newMsg.role === 'system') return;
-          if (newMsg.metadata?.hidden) return;
-          if (newMsg.metadata?.type === 'operation_results') return;
-          
-          // Merge new message without refetching everything
-          setMessages(prev => {
-            // Check if message already exists
-            if (prev.some(m => m.id === newMsg.id)) return prev;
-            // Add and sort chronologically
-            return [...prev, newMsg].sort((a, b) => 
-              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-            );
-          });
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "agent_messages",
-        },
-        (payload) => {
-          console.log("[AgentMessages] UPDATE received:", payload);
-          const updatedMsg = payload.new as AgentMessage;
-          
-          // Update in place without refetching
-          setMessages(prev => 
-            prev.map(m => m.id === updatedMsg.id ? updatedMsg : m)
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "agent_messages",
-        },
-        (payload) => {
-          console.log("[AgentMessages] DELETE received:", payload);
-          const deletedId = (payload.old as any)?.id;
-          if (deletedId) {
-            setMessages(prev => prev.filter(m => m.id !== deletedId));
-          }
-        }
-      )
+      .channel(`agent-messages-project-${projectId}-${agentType}`)
+      .on('broadcast', { event: 'agent_message_refresh' }, (payload) => {
+        console.log(`[AgentMessages] Received refresh broadcast for ${agentType}:`, payload);
+        // Reload messages when we receive a broadcast from our agent type
+        loadInitialMessages();
+      })
       .subscribe((status) => {
-        console.log(`[AgentMessages] Subscription status: ${status}`);
+        console.log(`[AgentMessages] Broadcast subscription status: ${status}`);
       });
 
     return () => {
-      console.log(`[AgentMessages] Cleaning up subscription for project ${projectId}`);
+      console.log(`[AgentMessages] Cleaning up broadcast subscription for project ${projectId}, type ${agentType}`);
       supabase.removeChannel(channel);
     };
-  }, [projectId]); // Only recreate subscription when projectId changes
+  }, [projectId, agentType, loadInitialMessages]);
 
   const loadMore = useCallback(async () => {
     if (!projectId || loading || !hasMore) return;
