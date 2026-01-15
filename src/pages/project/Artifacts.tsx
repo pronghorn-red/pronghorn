@@ -596,7 +596,7 @@ ${artifact.content}`;
                     <ArtifactFolderSidebar
                       artifacts={artifacts}
                       selectedFolderId={selectedFolderId}
-                      onSelectFolder={setSelectedFolderId}
+                      onSelectFolder={(id) => { setSelectedFolderId(id); setViewingArtifact(null); }}
                       onCreateFolder={(parentId) => { setCreateFolderParentId(parentId); setIsCreateFolderOpen(true); }}
                       onDropArtifact={handleDropArtifact}
                       onRenameFolder={(folderId, newName) => renameFolder(folderId, newName)}
