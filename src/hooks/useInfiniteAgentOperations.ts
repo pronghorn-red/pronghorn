@@ -13,7 +13,11 @@ interface AgentOperation {
   completed_at: string | null;
 }
 
-export function useInfiniteAgentOperations(projectId: string | null, shareToken: string | null) {
+export function useInfiniteAgentOperations(
+  projectId: string | null, 
+  shareToken: string | null,
+  agentType: string = "coding"
+) {
   const [operations, setOperations] = useState<AgentOperation[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -32,6 +36,7 @@ export function useInfiniteAgentOperations(projectId: string | null, shareToken:
         p_token: shareToken || null,
         p_limit: LIMIT,
         p_offset: 0,
+        p_agent_type: agentType,
       });
 
       if (error) throw error;
@@ -46,7 +51,7 @@ export function useInfiniteAgentOperations(projectId: string | null, shareToken:
     } finally {
       setLoading(false);
     }
-  }, [projectId, shareToken]);
+  }, [projectId, shareToken, agentType]);
 
   // Load initial operations
   useEffect(() => {
@@ -58,42 +63,29 @@ export function useInfiniteAgentOperations(projectId: string | null, shareToken:
     }
 
     loadInitialOperations();
-  }, [projectId, shareToken, loadInitialOperations]);
+  }, [projectId, shareToken, agentType, loadInitialOperations]);
 
-  // Real-time subscription for new operations across all sessions
+  // Real-time subscription for agent-type-specific broadcast channel
   useEffect(() => {
     if (!projectId) return;
 
-    console.log(`[AgentOperations] Setting up subscription for project ${projectId}`);
+    console.log(`[AgentOperations] Setting up broadcast subscription for project ${projectId}, type ${agentType}`);
 
     const channel = supabase
-      .channel(`agent-operations-project-${projectId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "agent_file_operations",
-        },
-        (payload) => {
-          console.log("[AgentOperations] Postgres change received:", payload);
-          loadInitialOperations();
-        }
-      )
-      // Broadcast listener for immediate updates from orchestrator
-      .on("broadcast", { event: "agent_operation_refresh" }, (payload) => {
-        console.log("[AgentOperations] Broadcast received:", payload);
+      .channel(`agent-operations-project-${projectId}-${agentType}`)
+      .on('broadcast', { event: 'agent_operation_refresh' }, (payload) => {
+        console.log(`[AgentOperations] Received refresh broadcast for ${agentType}:`, payload);
         loadInitialOperations();
       })
       .subscribe((status) => {
-        console.log(`[AgentOperations] Subscription status: ${status}`);
+        console.log(`[AgentOperations] Broadcast subscription status: ${status}`);
       });
 
     return () => {
-      console.log(`[AgentOperations] Cleaning up subscription for project ${projectId}`);
+      console.log(`[AgentOperations] Cleaning up broadcast subscription for project ${projectId}, type ${agentType}`);
       supabase.removeChannel(channel);
     };
-  }, [projectId, loadInitialOperations]);
+  }, [projectId, agentType, loadInitialOperations]);
 
   const loadMore = useCallback(async () => {
     if (!projectId || loading || !hasMore) return;
@@ -106,6 +98,7 @@ export function useInfiniteAgentOperations(projectId: string | null, shareToken:
         p_token: shareToken || null,
         p_limit: LIMIT,
         p_offset: offset,
+        p_agent_type: agentType,
       });
 
       if (error) throw error;
@@ -120,7 +113,7 @@ export function useInfiniteAgentOperations(projectId: string | null, shareToken:
     } finally {
       setLoading(false);
     }
-  }, [projectId, shareToken, offset, loading, hasMore]);
+  }, [projectId, shareToken, agentType, offset, loading, hasMore]);
 
   return { operations, loading, hasMore, loadMore, refetch: loadInitialOperations };
 }

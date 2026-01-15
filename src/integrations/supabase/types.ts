@@ -3684,6 +3684,7 @@ export type Database = {
       }
       get_agent_operations_by_project_with_token: {
         Args: {
+          p_agent_type?: string
           p_limit?: number
           p_offset?: number
           p_project_id: string

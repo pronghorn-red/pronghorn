@@ -1336,7 +1336,7 @@ serve(async (req) => {
             p_token: shareToken,
           });
 
-          await supabase.channel(`agent-operations-project-${projectId}`).send({
+          await supabase.channel(`agent-operations-project-${projectId}-coding`).send({
             type: 'broadcast',
             event: 'agent_operation_refresh',
             payload: { sessionId, operationId: logEntry?.id, status: 'in_progress' }
@@ -1819,7 +1819,7 @@ serve(async (req) => {
               p_token: shareToken,
             });
 
-            await supabase.channel(`agent-operations-project-${projectId}`).send({
+            await supabase.channel(`agent-operations-project-${projectId}-coding`).send({
               type: 'broadcast',
               event: 'agent_operation_refresh',
               payload: { sessionId, operationId: logEntry.id, status: 'completed' }
@@ -1846,7 +1846,7 @@ serve(async (req) => {
               p_token: shareToken,
             });
 
-            await supabase.channel(`agent-operations-project-${projectId}`).send({
+            await supabase.channel(`agent-operations-project-${projectId}-coding`).send({
               type: 'broadcast',
               event: 'agent_operation_refresh',
               payload: { sessionId, operationId: logEntry.id, status: 'failed' }

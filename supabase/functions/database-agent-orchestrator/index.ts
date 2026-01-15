@@ -1182,7 +1182,7 @@ ${blackboardContent}`;
 
           // Broadcast operation start for real-time UI
           try {
-            await supabase.channel(`agent-operations-project-${projectId}`).send({
+            await supabase.channel(`agent-operations-project-${projectId}-database`).send({
               type: 'broadcast',
               event: 'agent_operation_refresh',
               payload: { sessionId, operationId: logEntry?.id, status: 'in_progress', operation: op.type }
@@ -1348,7 +1348,7 @@ ${blackboardContent}`;
 
             // Broadcast operation completed
             try {
-              await supabase.channel(`agent-operations-project-${projectId}`).send({
+              await supabase.channel(`agent-operations-project-${projectId}-database`).send({
                 type: 'broadcast',
                 event: 'agent_operation_refresh',
                 payload: { sessionId, operationId: logEntry?.id, status: 'completed', operation: op.type }
@@ -1372,7 +1372,7 @@ ${blackboardContent}`;
 
             // Broadcast operation failed
             try {
-              await supabase.channel(`agent-operations-project-${projectId}`).send({
+              await supabase.channel(`agent-operations-project-${projectId}-database`).send({
                 type: 'broadcast',
                 event: 'agent_operation_refresh',
                 payload: { sessionId, operationId: logEntry?.id, status: 'failed', operation: op.type, error: errorMessage }
