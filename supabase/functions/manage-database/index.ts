@@ -891,25 +891,32 @@ async function executeSql(connectionString: string, sql: string, caCertificate?:
   try {
     const startTime = Date.now();
     
-    // v0.19.5 from JSR properly handles BIGINT and other types
-    const result = await client.queryObject(sql);
+    // Use queryArray instead of queryObject to avoid driver validation issues
+    // queryArray is more reliable for arbitrary SQL including complex SELECTs
+    const result = await client.queryArray(sql);
     const executionTime = Date.now() - startTime;
     
-    // Get column names
-    const columns: string[] = result.columns || [];
+    // Extract column names from rowDescription
+    const columns: string[] = [];
+    if (result.rowDescription?.columns) {
+      for (const col of result.rowDescription.columns) {
+        columns.push(col.name);
+      }
+    }
     
-    // Process rows to convert BigInt to Number for JSON serialization
-    const rows = (result.rows || []).map((row: unknown) => {
-      if (row && typeof row === 'object') {
-        const processed: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(row as Record<string, unknown>)) {
+    // Convert array rows to objects, handling BigInt conversion
+    const rows = result.rows.map((row) => {
+      if (Array.isArray(row) && columns.length > 0) {
+        const obj: Record<string, unknown> = {};
+        for (let i = 0; i < columns.length; i++) {
+          let value = row[i];
+          // Convert BigInt to Number for JSON serialization
           if (typeof value === 'bigint') {
-            processed[key] = Number(value);
-          } else {
-            processed[key] = value;
+            value = Number(value);
           }
+          obj[columns[i]] = value;
         }
-        return processed;
+        return obj;
       }
       return row;
     });
@@ -920,6 +927,10 @@ async function executeSql(connectionString: string, sql: string, caCertificate?:
       columns,
       executionTime,
     };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[manage-database] executeSql error: ${errorMsg}`);
+    throw error;
   } finally {
     await client.end();
   }
