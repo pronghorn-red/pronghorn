@@ -644,22 +644,24 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
                       // Multiple result sets - show tabbed view
                       <Tabs value={multiResultTab} onValueChange={setMultiResultTab} className="h-full flex flex-col">
                         <div className="flex items-center gap-2 px-2 py-1 border-b bg-muted/30">
-                          <TabsList className="h-8">
-                            {queryResults.multi.map((result, idx) => (
-                              <TabsTrigger 
-                                key={idx} 
-                                value={String(idx)}
-                                className={`text-xs gap-1 ${result.error ? "text-destructive" : ""}`}
-                              >
-                                Query {idx + 1}
-                                <Badge variant="outline" className="ml-1 h-4 px-1 text-[10px]">
-                                  {result.error ? "Error" : `${result.rowCount}`}
-                                </Badge>
-                              </TabsTrigger>
-                            ))}
-                          </TabsList>
+                          <div className="flex-1 overflow-x-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+                            <TabsList className="h-8 w-max">
+                              {queryResults.multi.map((result, idx) => (
+                                <TabsTrigger 
+                                  key={idx} 
+                                  value={String(idx)}
+                                  className={`text-xs gap-1 ${result.error ? "text-destructive" : ""}`}
+                                >
+                                  Query {idx + 1}
+                                  <Badge variant="outline" className="ml-1 h-4 px-1 text-[10px]">
+                                    {result.error ? "Error" : `${result.rowCount}`}
+                                  </Badge>
+                                </TabsTrigger>
+                              ))}
+                            </TabsList>
+                          </div>
                           {queryResults.totalExecutionTime && (
-                            <Badge variant="secondary" className="ml-auto text-xs">
+                            <Badge variant="secondary" className="ml-auto text-xs shrink-0">
                               Total: {queryResults.totalExecutionTime}ms
                             </Badge>
                           )}
