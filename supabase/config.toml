@@ -1,5 +1,8 @@
 project_id = "obkzdksfayygnrzdqoam"
 
+[edge_runtime]
+deno_version = 2
+
 [functions.clone-project]
 verify_jwt = false
 
