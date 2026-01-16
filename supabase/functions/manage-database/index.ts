@@ -217,6 +217,215 @@ function serializeBigInts(obj: unknown): unknown {
 
 // ============== End BigInt Serialization Helper ==============
 
+// ============== SQL Statement Splitting ==============
+
+/**
+ * Split SQL into individual statements, handling:
+ * - String literals ('...')
+ * - Dollar-quoted strings ($$...$$, $tag$...$tag$)
+ * - Line comments (--)
+ * - Block comments
+ */
+function splitSqlStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let current = '';
+  let i = 0;
+  
+  while (i < sql.length) {
+    const char = sql[i];
+    const next = sql[i + 1];
+    
+    // Check for line comment
+    if (char === '-' && next === '-') {
+      current += char;
+      i++;
+      while (i < sql.length && sql[i] !== '\n') {
+        current += sql[i];
+        i++;
+      }
+      if (i < sql.length) {
+        current += sql[i];
+        i++;
+      }
+      continue;
+    }
+    
+    // Check for block comment
+    if (char === '/' && next === '*') {
+      let depth = 1;
+      current += '/*';
+      i += 2;
+      while (i < sql.length && depth > 0) {
+        if (sql[i] === '/' && sql[i + 1] === '*') {
+          depth++;
+          current += '/*';
+          i += 2;
+        } else if (sql[i] === '*' && sql[i + 1] === '/') {
+          depth--;
+          current += '*/';
+          i += 2;
+        } else {
+          current += sql[i];
+          i++;
+        }
+      }
+      continue;
+    }
+    
+    // Check for dollar quote
+    if (char === '$') {
+      const dollarMatch = sql.slice(i).match(/^\$([a-zA-Z_][a-zA-Z0-9_]*)?\$/);
+      if (dollarMatch) {
+        const tag = dollarMatch[0];
+        current += tag;
+        i += tag.length;
+        const closeIndex = sql.indexOf(tag, i);
+        if (closeIndex !== -1) {
+          current += sql.slice(i, closeIndex + tag.length);
+          i = closeIndex + tag.length;
+        } else {
+          current += sql.slice(i);
+          i = sql.length;
+        }
+        continue;
+      }
+    }
+    
+    // Check for string literal
+    if (char === "'") {
+      current += char;
+      i++;
+      while (i < sql.length) {
+        if (sql[i] === "'") {
+          if (sql[i + 1] === "'") {
+            current += "''";
+            i += 2;
+          } else {
+            current += sql[i];
+            i++;
+            break;
+          }
+        } else {
+          current += sql[i];
+          i++;
+        }
+      }
+      continue;
+    }
+    
+    // Check for double-quoted identifier
+    if (char === '"') {
+      current += char;
+      i++;
+      while (i < sql.length) {
+        if (sql[i] === '"') {
+          if (sql[i + 1] === '"') {
+            current += '""';
+            i += 2;
+          } else {
+            current += sql[i];
+            i++;
+            break;
+          }
+        } else {
+          current += sql[i];
+          i++;
+        }
+      }
+      continue;
+    }
+    
+    // Check for semicolon (statement separator)
+    if (char === ';') {
+      const stmt = current.trim();
+      if (stmt) {
+        statements.push(stmt);
+      }
+      current = '';
+      i++;
+      continue;
+    }
+    
+    current += char;
+    i++;
+  }
+  
+  // Don't forget trailing statement without semicolon
+  const last = current.trim();
+  if (last) {
+    statements.push(last);
+  }
+  
+  return statements;
+}
+
+// ============== End SQL Statement Splitting ==============
+
+// ============== Multi-Query Execution ==============
+
+interface MultiQueryResult {
+  statementIndex: number;
+  sql: string;
+  columns: string[];
+  rows: Record<string, unknown>[];
+  rowCount: number;
+  executionTime: number;
+  error?: string;
+}
+
+async function executeSqlMulti(
+  connectionString: string, 
+  sql: string, 
+  caCertificate?: string | null
+): Promise<{ results: MultiQueryResult[]; totalExecutionTime: number }> {
+  const statements = splitSqlStatements(sql);
+  
+  const client = createDbClient(connectionString, caCertificate);
+  await client.connect();
+  
+  const results: MultiQueryResult[] = [];
+  const overallStart = Date.now();
+  
+  try {
+    for (let i = 0; i < statements.length; i++) {
+      const stmt = statements[i].trim();
+      if (!stmt) continue;
+      
+      const startTime = Date.now();
+      try {
+        const result = await client.queryObject(stmt);
+        results.push({
+          statementIndex: i,
+          sql: stmt,
+          columns: (result.columns || []) as string[],
+          rows: result.rows as Record<string, unknown>[],
+          rowCount: result.rows.length,
+          executionTime: Date.now() - startTime
+        });
+      } catch (stmtError: unknown) {
+        results.push({
+          statementIndex: i,
+          sql: stmt,
+          columns: ['Error'],
+          rows: [{ Error: stmtError instanceof Error ? stmtError.message : String(stmtError) }],
+          rowCount: 0,
+          executionTime: Date.now() - startTime,
+          error: stmtError instanceof Error ? stmtError.message : String(stmtError)
+        });
+      }
+    }
+    
+    return {
+      results,
+      totalExecutionTime: Date.now() - overallStart
+    };
+  } finally {
+    await client.end();
+  }
+}
+
+// ============== End Multi-Query Execution ==============
+
 interface ManageDatabaseRequest {
   action: 'get_schema' | 'execute_sql' | 'execute_sql_batch' | 'get_table_data' | 'get_table_columns' | 'export_table' 
     | 'get_table_definition' | 'get_view_definition' | 'get_function_definition' 
@@ -477,7 +686,7 @@ Deno.serve(async (req) => {
       case 'get_schema':
         result = await getSchema(connectionString, caCertificate);
         break;
-      case 'execute_sql':
+      case 'execute_sql': {
         // Require editor role for SQL execution
         if (role !== 'owner' && role !== 'editor') {
           throw new Error("Editor or owner role required for SQL execution");
@@ -499,8 +708,35 @@ Deno.serve(async (req) => {
           throw new Error("Destructive queries (DROP, TRUNCATE, DELETE without WHERE) require owner role");
         }
         
-        result = await executeSql(connectionString, sqlQuery, caCertificate);
-        break;
+        // Check if there are multiple statements
+        const statements = splitSqlStatements(sqlQuery);
+        
+        if (statements.length > 1) {
+          // Multiple statements - use multi-query execution
+          console.log(`[manage-database] Executing ${statements.length} statements individually`);
+          const multiResult = await executeSqlMulti(connectionString, sqlQuery, caCertificate);
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              isMultiResult: true,
+              results: serializeBigInts(multiResult.results),
+              totalExecutionTime: multiResult.totalExecutionTime
+            }
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        } else {
+          // Single statement - use existing logic for backward compatibility
+          result = await executeSql(connectionString, sqlQuery, caCertificate);
+          const serializedResult = serializeBigInts(result) as Record<string, unknown>;
+          // Add isMultiResult: false for consistency
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              isMultiResult: false,
+              ...serializedResult
+            }
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
       case 'get_table_data':
         if (!body.schema || !body.table) {
           throw new Error("Schema and table are required");
