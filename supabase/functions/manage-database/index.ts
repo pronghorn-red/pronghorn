@@ -891,41 +891,33 @@ async function executeSql(connectionString: string, sql: string, caCertificate?:
   try {
     const startTime = Date.now();
     
-    // Always use queryArray to avoid type conversion issues with BIGINT, etc.
-    // The deno-postgres queryObject has issues with certain PostgreSQL types
-    const result = await client.queryArray(sql);
+    // Use simple query protocol which avoids the type parsing bug in deno-postgres v0.19.3
+    // The bug occurs when decoding BIGINT columns with queryArray/queryObject
+    // Simple query returns results as strings, which we can safely parse
+    const result = await client.queryObject({
+      text: sql,
+      args: [],
+    });
     const executionTime = Date.now() - startTime;
     
-    // Get column names from rowDescription if available
-    const columns: string[] = [];
-    if (result.rowDescription && result.rowDescription.columns) {
-      for (const col of result.rowDescription.columns) {
-        columns.push(col.name);
-      }
-    }
+    // Get column names
+    const columns: string[] = result.columns || [];
     
-    // Convert array rows to objects if we have column info
-    let rows: unknown[];
-    if (columns.length > 0 && result.rows.length > 0) {
-      rows = result.rows.map(row => {
-        if (Array.isArray(row)) {
-          const obj: Record<string, unknown> = {};
-          for (let i = 0; i < columns.length; i++) {
-            // Handle BigInt values explicitly
-            let value = row[i];
-            if (typeof value === 'bigint') {
-              value = Number(value);
-            }
-            obj[columns[i]] = value;
+    // Process rows to handle BigInt and other special types
+    const rows = (result.rows || []).map((row: unknown) => {
+      if (row && typeof row === 'object') {
+        const processed: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(row as Record<string, unknown>)) {
+          if (typeof value === 'bigint') {
+            processed[key] = Number(value);
+          } else {
+            processed[key] = value;
           }
-          return obj;
         }
-        return row;
-      });
-    } else {
-      // For DML/DDL or queries without results, return as-is
-      rows = result.rows || [];
-    }
+        return processed;
+      }
+      return row;
+    });
     
     return {
       rows,
@@ -933,6 +925,55 @@ async function executeSql(connectionString: string, sql: string, caCertificate?:
       columns,
       executionTime,
     };
+  } catch (error) {
+    // If there's a format error in the driver, try a fallback approach
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[manage-database] executeSql error: ${errorMsg}`);
+    
+    // Check if this is the known BigInt parsing bug
+    if (errorMsg.includes("Cannot read properties of undefined (reading 'format')")) {
+      // Try using simple protocol with explicit text mode
+      try {
+        const startTime = Date.now();
+        // Execute as simple query which returns all values as strings
+        const simpleResult = await client.queryArray`${sql}`;
+        const executionTime = Date.now() - startTime;
+        
+        const columns: string[] = [];
+        if (simpleResult.rowDescription?.columns) {
+          for (const col of simpleResult.rowDescription.columns) {
+            columns.push(col.name);
+          }
+        }
+        
+        const rows = simpleResult.rows.map(row => {
+          if (Array.isArray(row) && columns.length > 0) {
+            const obj: Record<string, unknown> = {};
+            for (let i = 0; i < columns.length; i++) {
+              let value = row[i];
+              if (typeof value === 'bigint') {
+                value = Number(value);
+              }
+              obj[columns[i]] = value;
+            }
+            return obj;
+          }
+          return row;
+        });
+        
+        return {
+          rows,
+          rowCount: simpleResult.rowCount ?? rows.length,
+          columns,
+          executionTime,
+        };
+      } catch (fallbackError) {
+        console.error(`[manage-database] fallback also failed: ${fallbackError}`);
+        throw error; // Throw original error
+      }
+    }
+    
+    throw error;
   } finally {
     await client.end();
   }
