@@ -112,11 +112,8 @@ serve(async (req) => {
 
       if (contextParts.length > 0) {
         const jsonString = JSON.stringify(attachedContext, null, 2);
-        const truncatedJson = jsonString.length > 50000
-          ? jsonString.slice(0, 50000) + "\n...[truncated for length]"
-          : jsonString;
 
-        enrichedSystemPrompt = `${systemPrompt}\n\n===== ATTACHED PROJECT CONTEXT =====\n${contextParts.join("\n")}\n\n===== FULL CONTEXT DATA =====\n${truncatedJson}\n\nPlease use the above context to inform your responses. The context includes full object data with all properties and content.`;
+        enrichedSystemPrompt = `${systemPrompt}\n\n===== ATTACHED PROJECT CONTEXT =====\n${contextParts.join("\n")}\n\n===== FULL CONTEXT DATA =====\n${jsonString}\n\nPlease use the above context to inform your responses. The context includes full object data with all properties and content.`;
       }
     }
 
