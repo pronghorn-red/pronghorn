@@ -891,9 +891,15 @@ async function executeSql(connectionString: string, sql: string, caCertificate?:
   try {
     const startTime = Date.now();
     
-    // Use simple query mode by wrapping SQL - this avoids the BIGINT decoder bug
-    // that occurs with extended query protocol in deno-postgres
-    const result = await client.queryArray({ text: sql, args: [] });
+    // Use createQueryable to access the underlying connection for simple query mode
+    // The simple query protocol returns all values as strings, avoiding type parsing bugs
+    const transaction = client.createTransaction("simple_query");
+    await transaction.begin();
+    
+    // Execute using simple query which returns strings - avoiding BIGINT decoder bug
+    const result = await transaction.queryArray(sql);
+    await transaction.commit();
+    
     const executionTime = Date.now() - startTime;
     
     // Extract column names from rowDescription
@@ -904,8 +910,8 @@ async function executeSql(connectionString: string, sql: string, caCertificate?:
       }
     }
     
-    // Convert array rows to objects, handling BigInt conversion
-    const rows = result.rows.map((row) => {
+    // Convert array rows to objects, handling any BigInt and numeric string parsing
+    const rows = result.rows.map((row: unknown[]) => {
       if (Array.isArray(row) && columns.length > 0) {
         const obj: Record<string, unknown> = {};
         for (let i = 0; i < columns.length; i++) {
