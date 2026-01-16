@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { Client } from "jsr:@db/postgres@0.19.5";
+import { Client } from "https://deno.land/x/postgres@v0.19.3/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -200,34 +200,14 @@ function serializeBigInts(obj: unknown): unknown {
     return obj.toString();
   }
   
-  // Handle Date objects
-  if (obj instanceof Date) {
-    return obj.toISOString();
-  }
-  
-  // Handle Buffer/Uint8Array
-  if (obj instanceof Uint8Array) {
-    return Array.from(obj);
-  }
-  
   if (Array.isArray(obj)) {
     return obj.map(serializeBigInts);
   }
   
   if (typeof obj === 'object') {
-    // Handle objects with toJSON method (like some postgres types)
-    if ('toJSON' in obj && typeof (obj as any).toJSON === 'function') {
-      return (obj as any).toJSON();
-    }
-    
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
-      try {
-        result[key] = serializeBigInts(value);
-      } catch (e) {
-        // If serialization fails, convert to string
-        result[key] = String(value);
-      }
+      result[key] = serializeBigInts(value);
     }
     return result;
   }
@@ -890,53 +870,15 @@ async function executeSql(connectionString: string, sql: string, caCertificate?:
 
   try {
     const startTime = Date.now();
-    
-    // Use createQueryable to access the underlying connection for simple query mode
-    // The simple query protocol returns all values as strings, avoiding type parsing bugs
-    const transaction = client.createTransaction("simple_query");
-    await transaction.begin();
-    
-    // Execute using simple query which returns strings - avoiding BIGINT decoder bug
-    const result = await transaction.queryArray(sql);
-    await transaction.commit();
-    
+    const result = await client.queryObject(sql);
     const executionTime = Date.now() - startTime;
-    
-    // Extract column names from rowDescription
-    const columns: string[] = [];
-    if (result.rowDescription?.columns) {
-      for (const col of result.rowDescription.columns) {
-        columns.push(col.name);
-      }
-    }
-    
-    // Convert array rows to objects, handling any BigInt and numeric string parsing
-    const rows = result.rows.map((row: unknown[]) => {
-      if (Array.isArray(row) && columns.length > 0) {
-        const obj: Record<string, unknown> = {};
-        for (let i = 0; i < columns.length; i++) {
-          let value = row[i];
-          // Convert BigInt to Number for JSON serialization
-          if (typeof value === 'bigint') {
-            value = Number(value);
-          }
-          obj[columns[i]] = value;
-        }
-        return obj;
-      }
-      return row;
-    });
-    
+
     return {
-      rows,
-      rowCount: result.rowCount ?? rows.length,
-      columns,
+      rows: result.rows,
+      rowCount: result.rows.length,
+      columns: result.columns || [],
       executionTime,
     };
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[manage-database] executeSql error: ${errorMsg}`);
-    throw error;
   } finally {
     await client.end();
   }
