@@ -7,6 +7,7 @@ import {
   ResizablePanel, 
   ResizablePanelGroup 
 } from "@/components/ui/resizable";
+import { Badge } from "@/components/ui/badge";
 import { 
   Database, 
   RefreshCw, 
@@ -83,12 +84,31 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   const [currentQuery, setCurrentQuery] = useState("SELECT 1;");
   const [isExecuting, setIsExecuting] = useState(false);
   
-  const [queryResults, setQueryResults] = useState<{
+  // Multi-result support for multiple SQL statements
+  interface SingleQueryResult {
     columns: string[];
     rows: any[];
     executionTime?: number;
     totalRows?: number;
+  }
+  
+  interface MultiQueryResultItem {
+    statementIndex: number;
+    sql: string;
+    columns: string[];
+    rows: any[];
+    rowCount: number;
+    executionTime: number;
+    error?: string;
+  }
+  
+  const [queryResults, setQueryResults] = useState<{
+    isMultiResult: boolean;
+    single?: SingleQueryResult;
+    multi?: MultiQueryResultItem[];
+    totalExecutionTime?: number;
   } | null>(null);
+  const [multiResultTab, setMultiResultTab] = useState("0");
   
   const [selectedTable, setSelectedTable] = useState<{ schema: string; table: string } | null>(null);
   const [tableData, setTableData] = useState<{ columns: string[]; rows: any[]; totalRows: number; offset: number; } | null>(null);
@@ -200,10 +220,33 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   const handleExecuteQuery = async (sql: string) => {
     setIsExecuting(true);
     setQueryResults(null);
+    setMultiResultTab("0");
     try {
       const result = await invokeManageDatabase("execute_sql", { sql });
-      setQueryResults({ columns: result.columns || [], rows: result.rows || [], executionTime: result.executionTime, totalRows: result.rowCount });
-      toast.success(`Query executed: ${result.rowCount} rows`);
+      
+      if (result.isMultiResult) {
+        // Multiple result sets
+        setQueryResults({
+          isMultiResult: true,
+          multi: result.results,
+          totalExecutionTime: result.totalExecutionTime
+        });
+        const successCount = (result.results as MultiQueryResultItem[]).filter((r) => !r.error).length;
+        const totalRows = (result.results as MultiQueryResultItem[]).reduce((sum, r) => sum + r.rowCount, 0);
+        toast.success(`Executed ${result.results.length} queries (${successCount} successful, ${totalRows} total rows)`);
+      } else {
+        // Single result set (backward compatible)
+        setQueryResults({
+          isMultiResult: false,
+          single: {
+            columns: result.columns || [],
+            rows: result.rows || [],
+            executionTime: result.executionTime,
+            totalRows: result.rowCount
+          }
+        });
+        toast.success(`Query executed: ${result.rowCount} rows`);
+      }
       
       // Auto-capture DDL statements as migrations (for both Render and external databases)
       if (databaseId || connectionId) {
@@ -232,7 +275,10 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
       if (isMobile) setMobileActiveTab("results");
     } catch (error: any) {
       toast.error("Query failed: " + error.message);
-      setQueryResults({ columns: ['Error'], rows: [{ Error: error.message }] });
+      setQueryResults({ 
+        isMultiResult: false, 
+        single: { columns: ['Error'], rows: [{ Error: error.message }] } 
+      });
     } finally {
       setIsExecuting(false);
     }
@@ -542,11 +588,16 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
 
   const handleExportQueryResults = async (format: 'json' | 'csv' | 'sql') => {
     if (!queryResults) return;
-    const content = format === 'json' ? JSON.stringify(queryResults.rows, null, 2) : format === 'csv' ? [queryResults.columns.join(','), ...queryResults.rows.map(row => queryResults.columns.map(col => JSON.stringify(row[col] ?? '')).join(','))].join('\n') : queryResults.rows.map(row => `INSERT INTO query_result (${queryResults.columns.join(', ')}) VALUES (${queryResults.columns.map(col => { const v = row[col]; return v === null ? 'NULL' : typeof v === 'string' ? `'${v.replace(/'/g, "''")}'` : v; }).join(', ')});`).join('\n');
+    
+    // Get the rows and columns from single or first multi result
+    const rows = queryResults.single?.rows || queryResults.multi?.[0]?.rows || [];
+    const columns = queryResults.single?.columns || queryResults.multi?.[0]?.columns || [];
+    
+    const content = format === 'json' ? JSON.stringify(rows, null, 2) : format === 'csv' ? [columns.join(','), ...rows.map(row => columns.map(col => JSON.stringify(row[col] ?? '')).join(','))].join('\n') : rows.map(row => `INSERT INTO query_result (${columns.join(', ')}) VALUES (${columns.map(col => { const v = row[col]; return v === null ? 'NULL' : typeof v === 'string' ? `'${v.replace(/'/g, "''")}'` : v; }).join(', ')});`).join('\n');
     const blob = new Blob([content], { type: format === 'json' ? 'application/json' : format === 'csv' ? 'text/csv' : 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `query_results.${format}`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-    toast.success(`Exported ${queryResults.rows.length} rows as ${format.toUpperCase()}`);
+    toast.success(`Exported ${rows.length} rows as ${format.toUpperCase()}`);
   };
 
   const handleCloseTable = () => { setSelectedTable(null); setTableData(null); setTableStructure(null); setActiveTab('query'); };
@@ -586,7 +637,67 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
             <ResizablePanelGroup direction="vertical">
               <ResizablePanel defaultSize={40} minSize={20}><SqlQueryEditor query={currentQuery} onQueryChange={setCurrentQuery} onExecute={handleExecuteQuery} isExecuting={isExecuting} onSaveQuery={handleOpenSaveDialog} /></ResizablePanel>
               <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={60} minSize={20}><div className="h-full bg-background">{queryResults ? <QueryResultsViewer columns={queryResults.columns} rows={queryResults.rows} totalRows={queryResults.totalRows} executionTime={queryResults.executionTime} onExport={handleExportQueryResults} /> : <div className="flex items-center justify-center h-full text-muted-foreground"><p className="text-sm">Run a query to see results</p></div>}</div></ResizablePanel>
+              <ResizablePanel defaultSize={60} minSize={20}>
+                <div className="h-full bg-background">
+                  {queryResults ? (
+                    queryResults.isMultiResult && queryResults.multi && queryResults.multi.length > 1 ? (
+                      // Multiple result sets - show tabbed view
+                      <Tabs value={multiResultTab} onValueChange={setMultiResultTab} className="h-full flex flex-col">
+                        <div className="flex items-center gap-2 px-2 py-1 border-b bg-muted/30">
+                          <TabsList className="h-8">
+                            {queryResults.multi.map((result, idx) => (
+                              <TabsTrigger 
+                                key={idx} 
+                                value={String(idx)}
+                                className={`text-xs gap-1 ${result.error ? "text-destructive" : ""}`}
+                              >
+                                Query {idx + 1}
+                                <Badge variant="outline" className="ml-1 h-4 px-1 text-[10px]">
+                                  {result.error ? "Error" : `${result.rowCount}`}
+                                </Badge>
+                              </TabsTrigger>
+                            ))}
+                          </TabsList>
+                          {queryResults.totalExecutionTime && (
+                            <Badge variant="secondary" className="ml-auto text-xs">
+                              Total: {queryResults.totalExecutionTime}ms
+                            </Badge>
+                          )}
+                        </div>
+                        {queryResults.multi.map((result, idx) => (
+                          <TabsContent key={idx} value={String(idx)} className="flex-1 m-0 mt-0 min-h-0 flex flex-col">
+                            <div className="text-xs text-muted-foreground px-2 py-1 font-mono bg-muted/20 border-b truncate">
+                              {result.sql.length > 150 ? result.sql.substring(0, 150) + '...' : result.sql}
+                            </div>
+                            <div className="flex-1 min-h-0">
+                              <QueryResultsViewer
+                                columns={result.columns}
+                                rows={result.rows}
+                                totalRows={result.rowCount}
+                                executionTime={result.executionTime}
+                                onExport={handleExportQueryResults}
+                              />
+                            </div>
+                          </TabsContent>
+                        ))}
+                      </Tabs>
+                    ) : (
+                      // Single result or single-item multi (backward compatible)
+                      <QueryResultsViewer 
+                        columns={queryResults.single?.columns || queryResults.multi?.[0]?.columns || []} 
+                        rows={queryResults.single?.rows || queryResults.multi?.[0]?.rows || []} 
+                        totalRows={queryResults.single?.totalRows || queryResults.multi?.[0]?.rowCount} 
+                        executionTime={queryResults.single?.executionTime || queryResults.multi?.[0]?.executionTime} 
+                        onExport={handleExportQueryResults} 
+                      />
+                    )
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      <p className="text-sm">Run a query to see results</p>
+                    </div>
+                  )}
+                </div>
+              </ResizablePanel>
             </ResizablePanelGroup>
           )}
         </TabsContent>
@@ -596,8 +707,80 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
     </div>
   );
 
-  // Results panel JSX (inlined to prevent remounting)
-  const resultsPanelJsx = <div className="h-full bg-background">{activeTab === 'table' && tableData ? <QueryResultsViewer columns={tableData.columns} rows={tableData.rows} totalRows={tableData.totalRows} limit={tableLimit} offset={tableData.offset} onPageChange={(o) => { if (selectedTable) handleTableSelect(selectedTable.schema, selectedTable.table, o); }} onExport={handleExport} /> : activeTab === 'structure' && tableStructure && selectedTable ? <TableStructureViewer schema={selectedTable.schema} table={selectedTable.table} columns={tableStructure.columns} indexes={tableStructure.indexes} /> : queryResults ? <QueryResultsViewer columns={queryResults.columns} rows={queryResults.rows} totalRows={queryResults.totalRows} executionTime={queryResults.executionTime} onExport={handleExportQueryResults} /> : <div className="flex items-center justify-center h-full text-muted-foreground"><p className="text-sm">Run a query or select a table to see results</p></div>}</div>;
+  // Results panel JSX (inlined to prevent remounting) - for mobile view
+  const resultsPanelJsx = (
+    <div className="h-full bg-background">
+      {activeTab === 'table' && tableData ? (
+        <QueryResultsViewer 
+          columns={tableData.columns} 
+          rows={tableData.rows} 
+          totalRows={tableData.totalRows} 
+          limit={tableLimit} 
+          offset={tableData.offset} 
+          onPageChange={(o) => { if (selectedTable) handleTableSelect(selectedTable.schema, selectedTable.table, o); }} 
+          onExport={handleExport} 
+        />
+      ) : activeTab === 'structure' && tableStructure && selectedTable ? (
+        <TableStructureViewer 
+          schema={selectedTable.schema} 
+          table={selectedTable.table} 
+          columns={tableStructure.columns} 
+          indexes={tableStructure.indexes} 
+        />
+      ) : queryResults ? (
+        queryResults.isMultiResult && queryResults.multi && queryResults.multi.length > 1 ? (
+          // Multiple result sets - show tabbed view
+          <Tabs value={multiResultTab} onValueChange={setMultiResultTab} className="h-full flex flex-col">
+            <div className="flex items-center gap-2 px-2 py-1 border-b bg-muted/30 overflow-x-auto">
+              <TabsList className="h-8">
+                {queryResults.multi.map((result, idx) => (
+                  <TabsTrigger 
+                    key={idx} 
+                    value={String(idx)}
+                    className={`text-xs gap-1 ${result.error ? "text-destructive" : ""}`}
+                  >
+                    Q{idx + 1}
+                    <Badge variant="outline" className="ml-1 h-4 px-1 text-[10px]">
+                      {result.error ? "Err" : result.rowCount}
+                    </Badge>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+            {queryResults.multi.map((result, idx) => (
+              <TabsContent key={idx} value={String(idx)} className="flex-1 m-0 mt-0 min-h-0 flex flex-col">
+                <div className="text-xs text-muted-foreground px-2 py-1 font-mono bg-muted/20 border-b truncate">
+                  {result.sql.length > 80 ? result.sql.substring(0, 80) + '...' : result.sql}
+                </div>
+                <div className="flex-1 min-h-0">
+                  <QueryResultsViewer
+                    columns={result.columns}
+                    rows={result.rows}
+                    totalRows={result.rowCount}
+                    executionTime={result.executionTime}
+                    onExport={handleExportQueryResults}
+                  />
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
+        ) : (
+          // Single result
+          <QueryResultsViewer 
+            columns={queryResults.single?.columns || queryResults.multi?.[0]?.columns || []} 
+            rows={queryResults.single?.rows || queryResults.multi?.[0]?.rows || []} 
+            totalRows={queryResults.single?.totalRows || queryResults.multi?.[0]?.rowCount} 
+            executionTime={queryResults.single?.executionTime || queryResults.multi?.[0]?.executionTime} 
+            onExport={handleExportQueryResults} 
+          />
+        )
+      ) : (
+        <div className="flex items-center justify-center h-full text-muted-foreground">
+          <p className="text-sm">Run a query or select a table to see results</p>
+        </div>
+      )}
+    </div>
+  );
 
   // Memoized callback handlers for agent panel to prevent remounting
   const handleSchemaRefresh = useCallback(() => loadSchema(true), [loadSchema]);
