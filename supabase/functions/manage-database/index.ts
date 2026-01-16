@@ -891,51 +891,48 @@ async function executeSql(connectionString: string, sql: string, caCertificate?:
   try {
     const startTime = Date.now();
     
-    // Detect if this is a DML/DDL statement that may not return structured results
-    // Strip SQL comments and whitespace to find the actual first statement
-    const sqlWithoutComments = sql
-      .replace(/--[^\n]*/g, '')           // Remove single-line comments
-      .replace(/\/\*[\s\S]*?\*\//g, '')   // Remove multi-line comments
-      .trim()
-      .toUpperCase();
+    // Always use queryArray to avoid type conversion issues with BIGINT, etc.
+    // The deno-postgres queryObject has issues with certain PostgreSQL types
+    const result = await client.queryArray(sql);
+    const executionTime = Date.now() - startTime;
     
-    console.log(`[manage-database] executeSql first 100 chars (no comments): ${sqlWithoutComments.slice(0, 100)}`);
-    
-    // Check if it's a DML/DDL statement (including WITH for CTEs that modify data)
-    const isDmlOrDdl = /^(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|SET|BEGIN|COMMIT|ROLLBACK|WITH)\b/.test(sqlWithoutComments) 
-                    || !/^SELECT\b/.test(sqlWithoutComments); // If it's not SELECT, assume DML/DDL
-    
-    console.log(`[manage-database] isDmlOrDdl: ${isDmlOrDdl}`);
-    
-    if (isDmlOrDdl) {
-      // Use queryArray for DML/DDL to avoid result structure matching issues
-      const result = await client.queryArray(sql);
-      const executionTime = Date.now() - startTime;
-      
-      // Safely handle the result - DML statements may not return rows
-      const rows = result.rows || [];
-      const rowCount = result.rowCount ?? rows.length;
-      
-      return {
-        rows: rows.map(row => 
-          Array.isArray(row) ? row : (row != null ? [row] : [])
-        ),
-        rowCount,
-        columns: [],
-        executionTime,
-      };
-    } else {
-      // Use queryObject for SELECT queries to get named columns
-      const result = await client.queryObject(sql);
-      const executionTime = Date.now() - startTime;
-
-      return {
-        rows: result.rows,
-        rowCount: result.rows.length,
-        columns: result.columns || [],
-        executionTime,
-      };
+    // Get column names from rowDescription if available
+    const columns: string[] = [];
+    if (result.rowDescription && result.rowDescription.columns) {
+      for (const col of result.rowDescription.columns) {
+        columns.push(col.name);
+      }
     }
+    
+    // Convert array rows to objects if we have column info
+    let rows: unknown[];
+    if (columns.length > 0 && result.rows.length > 0) {
+      rows = result.rows.map(row => {
+        if (Array.isArray(row)) {
+          const obj: Record<string, unknown> = {};
+          for (let i = 0; i < columns.length; i++) {
+            // Handle BigInt values explicitly
+            let value = row[i];
+            if (typeof value === 'bigint') {
+              value = Number(value);
+            }
+            obj[columns[i]] = value;
+          }
+          return obj;
+        }
+        return row;
+      });
+    } else {
+      // For DML/DDL or queries without results, return as-is
+      rows = result.rows || [];
+    }
+    
+    return {
+      rows,
+      rowCount: result.rowCount ?? rows.length,
+      columns,
+      executionTime,
+    };
   } finally {
     await client.end();
   }
