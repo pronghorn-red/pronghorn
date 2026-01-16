@@ -872,8 +872,20 @@ async function executeSql(connectionString: string, sql: string, caCertificate?:
     const startTime = Date.now();
     
     // Detect if this is a DML/DDL statement that may not return structured results
-    const trimmedSql = sql.trim().toUpperCase();
-    const isDmlOrDdl = /^(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|SET|BEGIN|COMMIT|ROLLBACK)\b/.test(trimmedSql);
+    // Strip SQL comments and whitespace to find the actual first statement
+    const sqlWithoutComments = sql
+      .replace(/--[^\n]*/g, '')           // Remove single-line comments
+      .replace(/\/\*[\s\S]*?\*\//g, '')   // Remove multi-line comments
+      .trim()
+      .toUpperCase();
+    
+    console.log(`[manage-database] executeSql first 100 chars (no comments): ${sqlWithoutComments.slice(0, 100)}`);
+    
+    // Check if it's a DML/DDL statement (including WITH for CTEs that modify data)
+    const isDmlOrDdl = /^(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|SET|BEGIN|COMMIT|ROLLBACK|WITH)\b/.test(sqlWithoutComments) 
+                    || !/^SELECT\b/.test(sqlWithoutComments); // If it's not SELECT, assume DML/DDL
+    
+    console.log(`[manage-database] isDmlOrDdl: ${isDmlOrDdl}`);
     
     if (isDmlOrDdl) {
       // Use queryArray for DML/DDL to avoid result structure matching issues
