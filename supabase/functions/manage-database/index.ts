@@ -200,14 +200,34 @@ function serializeBigInts(obj: unknown): unknown {
     return obj.toString();
   }
   
+  // Handle Date objects
+  if (obj instanceof Date) {
+    return obj.toISOString();
+  }
+  
+  // Handle Buffer/Uint8Array
+  if (obj instanceof Uint8Array) {
+    return Array.from(obj);
+  }
+  
   if (Array.isArray(obj)) {
     return obj.map(serializeBigInts);
   }
   
   if (typeof obj === 'object') {
+    // Handle objects with toJSON method (like some postgres types)
+    if ('toJSON' in obj && typeof (obj as any).toJSON === 'function') {
+      return (obj as any).toJSON();
+    }
+    
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
-      result[key] = serializeBigInts(value);
+      try {
+        result[key] = serializeBigInts(value);
+      } catch (e) {
+        // If serialization fails, convert to string
+        result[key] = String(value);
+      }
     }
     return result;
   }
@@ -892,11 +912,15 @@ async function executeSql(connectionString: string, sql: string, caCertificate?:
       const result = await client.queryArray(sql);
       const executionTime = Date.now() - startTime;
       
+      // Safely handle the result - DML statements may not return rows
+      const rows = result.rows || [];
+      const rowCount = result.rowCount ?? rows.length;
+      
       return {
-        rows: result.rows.map(row => 
-          Array.isArray(row) ? row : [row]
+        rows: rows.map(row => 
+          Array.isArray(row) ? row : (row != null ? [row] : [])
         ),
-        rowCount: result.rowCount ?? result.rows.length,
+        rowCount,
         columns: [],
         executionTime,
       };
