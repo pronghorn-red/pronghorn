@@ -684,10 +684,11 @@ export function AddArtifactModal({
           if (pptxExportOptions.mergeText) {
             // Single merged text artifact
             try {
-              const mergedText = selectedSlides
-                .map((slide, i) => {
+            const mergedText = selectedSlides
+                .map((slide) => {
                   const slideHeader = `--- Slide ${slide.index + 1}${slide.title ? `: ${slide.title}` : ""} ---`;
-                  return `${slideHeader}\n${slide.mergedText}`;
+                  const slideText = getOverriddenText('pptx', slide.index, slide.mergedText);
+                  return `${slideHeader}\n${slideText}`;
                 })
                 .join("\n\n");
               await addArtifact(mergedText, "pptx-text");
@@ -700,7 +701,8 @@ export function AddArtifactModal({
             // Separate text artifact per slide
             for (const slide of selectedSlides) {
               try {
-                const slideContent = `# Slide ${slide.index + 1}${slide.title ? `: ${slide.title}` : ""}\n\n${slide.mergedText}`;
+                const slideText = getOverriddenText('pptx', slide.index, slide.mergedText);
+                const slideContent = `# Slide ${slide.index + 1}${slide.title ? `: ${slide.title}` : ""}\n\n${slideText}`;
                 await addArtifact(slideContent, "pptx-slide-text");
                 successCount++;
               } catch (err) {
@@ -802,7 +804,8 @@ export function AddArtifactModal({
             try {
               const mergedText = selectedPageIndices
                 .map((pageIdx) => {
-                  const pageText = pdfData.pagesText[pageIdx] || "";
+                  const originalText = pdfData.pagesText[pageIdx] || "";
+                  const pageText = getOverriddenText('pdf', pageIdx, originalText);
                   return `--- Page ${pageIdx + 1} ---\n${pageText}`;
                 })
                 .join("\n\n");
@@ -816,7 +819,8 @@ export function AddArtifactModal({
             // Separate text artifact per page
             for (const pageIdx of selectedPageIndices) {
               try {
-                const pageText = pdfData.pagesText[pageIdx] || "";
+                const originalText = pdfData.pagesText[pageIdx] || "";
+                const pageText = getOverriddenText('pdf', pageIdx, originalText);
                 const pageContent = `# Page ${pageIdx + 1}\n\n${pageText}`;
                 await addArtifact(pageContent, "pdf-page-text");
                 successCount++;
@@ -922,7 +926,21 @@ export function AddArtifactModal({
         // Text extraction
         if (docxExportOptions.mode === "text" || docxExportOptions.mode === "both") {
           try {
-            const textContent = getTextContent(docxData, docxExportOptions.outputFormat);
+            // Check if we have VR overrides for DOCX pages
+            const docxOverrides: string[] = [];
+            const pageCount = docxExportOptions.rasterizedPageCount || 1;
+            for (let i = 0; i < pageCount; i++) {
+              const override = vrOverriddenContent.get(`docx-${i}`);
+              if (override) {
+                docxOverrides.push(`# Page ${i + 1}\n\n${override}`);
+              }
+            }
+            
+            // Use VR overrides if available, otherwise fall back to extracted text
+            const textContent = docxOverrides.length > 0 
+              ? docxOverrides.join("\n\n---\n\n")
+              : getTextContent(docxData, docxExportOptions.outputFormat);
+            
             const sourceType = docxExportOptions.outputFormat === "markdown" ? "docx-markdown" :
                                docxExportOptions.outputFormat === "html" ? "docx-html" : "docx-text";
             await addArtifact(textContent, sourceType);
