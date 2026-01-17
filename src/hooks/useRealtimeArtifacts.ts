@@ -198,7 +198,14 @@ export const useRealtimeArtifacts = (
     sourceType?: string, 
     sourceId?: string, 
     imageUrl?: string,
-    parentId?: string
+    parentId?: string,
+    options?: {
+      title?: string;
+      provenanceId?: string;
+      provenancePath?: string;
+      provenancePage?: number;
+      provenanceTotalPages?: number;
+    }
   ) => {
     if (!projectId) return;
 
@@ -207,7 +214,7 @@ export const useRealtimeArtifacts = (
       id: tempId,
       project_id: projectId,
       content,
-      ai_title: null,
+      ai_title: options?.title || null,
       ai_summary: null,
       source_type: sourceType || null,
       source_id: sourceId || null,
@@ -215,10 +222,10 @@ export const useRealtimeArtifacts = (
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       created_by: null,
-      provenance_id: null,
-      provenance_path: null,
-      provenance_page: null,
-      provenance_total_pages: null,
+      provenance_id: options?.provenanceId || null,
+      provenance_path: options?.provenancePath || null,
+      provenance_page: options?.provenancePage || null,
+      provenance_total_pages: options?.provenanceTotalPages || null,
       parent_id: parentId || null,
       is_folder: false,
     };
@@ -233,6 +240,11 @@ export const useRealtimeArtifacts = (
         p_source_type: sourceType || null,
         p_source_id: sourceId || null,
         p_image_url: imageUrl || null,
+        p_ai_title: options?.title || null,
+        p_provenance_id: options?.provenanceId || null,
+        p_provenance_path: options?.provenancePath || null,
+        p_provenance_page: options?.provenancePage || null,
+        p_provenance_total_pages: options?.provenanceTotalPages || null,
       });
 
       if (error) throw error;

@@ -46,7 +46,7 @@ interface AddArtifactModalProps {
   projectId: string;
   shareToken: string | null;
   onArtifactsCreated: () => void;
-  addArtifact: (content: string, sourceType?: string, sourceId?: string, imageUrl?: string) => Promise<any>;
+  addArtifact: (content: string, sourceType?: string, sourceId?: string, imageUrl?: string, parentId?: string, options?: { title?: string; provenanceId?: string; provenancePath?: string; provenancePage?: number; provenanceTotalPages?: number; }) => Promise<any>;
   broadcastRefresh: (action?: string, id?: string) => void;
 }
 
@@ -684,14 +684,19 @@ export function AddArtifactModal({
           if (pptxExportOptions.mergeText) {
             // Single merged text artifact
             try {
-            const mergedText = selectedSlides
+              const mergedText = selectedSlides
                 .map((slide) => {
                   const slideHeader = `--- Slide ${slide.index + 1}${slide.title ? `: ${slide.title}` : ""} ---`;
                   const slideText = getOverriddenText('pptx', slide.index, slide.mergedText);
                   return `${slideHeader}\n${slideText}`;
                 })
                 .join("\n\n");
-              await addArtifact(mergedText, "pptx-text");
+              await addArtifact(mergedText, "pptx-text", undefined, undefined, undefined, {
+                title: `${pptxData.filename} - Text Content`,
+                provenanceId,
+                provenancePath: pptxData.filename,
+                provenanceTotalPages: totalSlides,
+              });
               successCount++;
             } catch (err) {
               console.error("Failed to create merged PPTX text artifact:", err);
@@ -703,7 +708,13 @@ export function AddArtifactModal({
               try {
                 const slideText = getOverriddenText('pptx', slide.index, slide.mergedText);
                 const slideContent = `# Slide ${slide.index + 1}${slide.title ? `: ${slide.title}` : ""}\n\n${slideText}`;
-                await addArtifact(slideContent, "pptx-slide-text");
+                await addArtifact(slideContent, "pptx-slide-text", undefined, undefined, undefined, {
+                  title: `${pptxData.filename} - Slide ${slide.index + 1}`,
+                  provenanceId,
+                  provenancePath: pptxData.filename,
+                  provenancePage: slide.index + 1,
+                  provenanceTotalPages: totalSlides,
+                });
                 successCount++;
               } catch (err) {
                 console.error(`Failed to create text artifact for slide ${slide.index + 1}:`, err);
@@ -809,7 +820,12 @@ export function AddArtifactModal({
                   return `--- Page ${pageIdx + 1} ---\n${pageText}`;
                 })
                 .join("\n\n");
-              await addArtifact(mergedText, "pdf-text");
+              await addArtifact(mergedText, "pdf-text", undefined, undefined, undefined, {
+                title: `${pdfData.filename} - Text Content`,
+                provenanceId,
+                provenancePath: pdfData.filename,
+                provenanceTotalPages: totalPages,
+              });
               successCount++;
             } catch (err) {
               console.error("Failed to create merged PDF text artifact:", err);
@@ -822,7 +838,13 @@ export function AddArtifactModal({
                 const originalText = pdfData.pagesText[pageIdx] || "";
                 const pageText = getOverriddenText('pdf', pageIdx, originalText);
                 const pageContent = `# Page ${pageIdx + 1}\n\n${pageText}`;
-                await addArtifact(pageContent, "pdf-page-text");
+                await addArtifact(pageContent, "pdf-page-text", undefined, undefined, undefined, {
+                  title: `${pdfData.filename} - Page ${pageIdx + 1}`,
+                  provenanceId,
+                  provenancePath: pdfData.filename,
+                  provenancePage: pageIdx + 1,
+                  provenanceTotalPages: totalPages,
+                });
                 successCount++;
               } catch (err) {
                 console.error(`Failed to create text artifact for page ${pageIdx + 1}:`, err);
@@ -943,7 +965,12 @@ export function AddArtifactModal({
             
             const sourceType = docxExportOptions.outputFormat === "markdown" ? "docx-markdown" :
                                docxExportOptions.outputFormat === "html" ? "docx-html" : "docx-text";
-            await addArtifact(textContent, sourceType);
+            await addArtifact(textContent, sourceType, undefined, undefined, undefined, {
+              title: `${docxData.filename} - Text Content`,
+              provenanceId,
+              provenancePath: docxData.filename,
+              provenanceTotalPages: totalPages,
+            });
             successCount++;
           } catch (err) {
             console.error("Failed to create DOCX text artifact:", err);
