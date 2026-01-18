@@ -180,14 +180,15 @@ function isEncrypted(value: string): boolean {
 
 // ============== End Encryption/Decryption Helpers ==============
 
-// ============== BigInt Serialization Helper ==============
+// ============== Special Types Serialization Helper ==============
 
 /**
- * Recursively convert BigInt values to Numbers (or Strings for very large values).
- * This is needed because JSON.stringify cannot serialize BigInt natively.
- * PostgreSQL BIGINT/BIGSERIAL columns return JavaScript BigInt values.
+ * Recursively convert special PostgreSQL types for JSON serialization:
+ * - BigInt → Number (or String for very large values)
+ * - Date (TIMESTAMPTZ, TIMESTAMP) → ISO 8601 string
+ * This is needed because JSON.stringify cannot serialize these natively.
  */
-function serializeBigInts(obj: unknown): unknown {
+function serializeSpecialTypes(obj: unknown): unknown {
   if (obj === null || obj === undefined) {
     return obj;
   }
@@ -200,14 +201,19 @@ function serializeBigInts(obj: unknown): unknown {
     return obj.toString();
   }
   
+  // Handle Date objects (TIMESTAMPTZ, TIMESTAMP columns) - convert to ISO string
+  if (obj instanceof Date) {
+    return obj.toISOString();
+  }
+  
   if (Array.isArray(obj)) {
-    return obj.map(serializeBigInts);
+    return obj.map(serializeSpecialTypes);
   }
   
   if (typeof obj === 'object') {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
-      result[key] = serializeBigInts(value);
+      result[key] = serializeSpecialTypes(value);
     }
     return result;
   }
@@ -215,7 +221,7 @@ function serializeBigInts(obj: unknown): unknown {
   return obj;
 }
 
-// ============== End BigInt Serialization Helper ==============
+// ============== End Special Types Serialization Helper ==============
 
 // ============== SQL Statement Splitting ==============
 
@@ -719,14 +725,14 @@ Deno.serve(async (req) => {
             success: true,
             data: {
               isMultiResult: true,
-              results: serializeBigInts(multiResult.results),
+              results: serializeSpecialTypes(multiResult.results),
               totalExecutionTime: multiResult.totalExecutionTime
             }
           }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         } else {
           // Single statement - use existing logic for backward compatibility
           result = await executeSql(connectionString, sqlQuery, caCertificate);
-          const serializedResult = serializeBigInts(result) as Record<string, unknown>;
+          const serializedResult = serializeSpecialTypes(result) as Record<string, unknown>;
           // Add isMultiResult: false for consistency
           return new Response(JSON.stringify({
             success: true,
@@ -837,13 +843,13 @@ Deno.serve(async (req) => {
         // If batch failed, return 400 status so client knows it failed
         if (!batchResult.success) {
           console.error(`[manage-database] Batch execution failed at statement ${batchResult.failedIndex}: ${batchResult.error}`);
-          return new Response(JSON.stringify(serializeBigInts(batchResult)), {
+          return new Response(JSON.stringify(serializeSpecialTypes(batchResult)), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         // Success - return with 200
-        return new Response(JSON.stringify(serializeBigInts(batchResult)), {
+        return new Response(JSON.stringify(serializeSpecialTypes(batchResult)), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       case 'test_connection':
@@ -853,7 +859,7 @@ Deno.serve(async (req) => {
         throw new Error(`Unknown action: ${action}`);
     }
 
-    return new Response(JSON.stringify({ success: true, data: serializeBigInts(result) }), {
+    return new Response(JSON.stringify({ success: true, data: serializeSpecialTypes(result) }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {

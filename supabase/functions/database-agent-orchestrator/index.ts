@@ -1,5 +1,22 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
+import { createClient, FunctionsHttpError } from "https://esm.sh/@supabase/supabase-js@2.81.1";
+
+/**
+ * Extract the actual error message from a supabase.functions.invoke error.
+ * FunctionsHttpError contains the response body in error.context.json().
+ */
+async function extractFunctionError(error: unknown): Promise<string> {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const errorBody = await error.context.json();
+      // The manage-database function returns { success: false, error: "message" }
+      return errorBody?.error || errorBody?.message || JSON.stringify(errorBody);
+    } catch {
+      return error.message || "Unknown function error";
+    }
+  }
+  return error instanceof Error ? error.message : String(error);
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1204,7 +1221,13 @@ ${blackboardContent}`;
                     shareToken,
                   },
                 });
-                if (error) throw error;
+                if (error) {
+                  const errorMessage = await extractFunctionError(error);
+                  throw new Error(errorMessage);
+                }
+                if (data && !data.success && data.error) {
+                  throw new Error(data.error);
+                }
                 result = data;
                 break;
               }
@@ -1220,7 +1243,13 @@ ${blackboardContent}`;
                     sql: sqlContent,
                   },
                 });
-                if (error) throw error;
+                if (error) {
+                  const errorMessage = await extractFunctionError(error);
+                  throw new Error(errorMessage);
+                }
+                if (data && !data.success && data.error) {
+                  throw new Error(data.error);
+                }
                 result = data;
 
                 // Auto-capture DDL as migrations
@@ -1261,7 +1290,13 @@ ${blackboardContent}`;
                     offset: op.params.offset || 0,
                   },
                 });
-                if (error) throw error;
+                if (error) {
+                  const errorMessage = await extractFunctionError(error);
+                  throw new Error(errorMessage);
+                }
+                if (data && !data.success && data.error) {
+                  throw new Error(data.error);
+                }
                 result = data;
                 break;
               }
@@ -1277,7 +1312,13 @@ ${blackboardContent}`;
                     table: op.params.table,
                   },
                 });
-                if (error) throw error;
+                if (error) {
+                  const errorMessage = await extractFunctionError(error);
+                  throw new Error(errorMessage);
+                }
+                if (data && !data.success && data.error) {
+                  throw new Error(data.error);
+                }
                 result = data;
                 break;
               }
@@ -1304,7 +1345,13 @@ ${blackboardContent}`;
                     table: op.params.name,
                   },
                 });
-                if (error) throw error;
+                if (error) {
+                  const errorMessage = await extractFunctionError(error);
+                  throw new Error(errorMessage);
+                }
+                if (data && !data.success && data.error) {
+                  throw new Error(data.error);
+                }
                 result = data;
                 break;
               }
