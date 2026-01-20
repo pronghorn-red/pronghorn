@@ -540,14 +540,22 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
 
   const handleConfirmDeleteAllMigrations = async () => {
     if (pendingDeleteAllMigrations.length === 0) return;
+    const projectId = database?.project_id || externalConnection?.project_id;
+    if (!projectId) {
+      toast.error("Could not determine project ID");
+      setDeleteAllMigrationsConfirmOpen(false);
+      setPendingDeleteAllMigrations([]);
+      return;
+    }
     try {
-      for (const migration of pendingDeleteAllMigrations) {
-        await supabase.rpc("delete_migration_with_token", { 
-          p_migration_id: migration.id, 
-          p_token: shareToken || null 
-        });
-      }
-      toast.success(`Deleted ${pendingDeleteAllMigrations.length} migrations`);
+      const { data: deletedCount, error } = await supabase.rpc("delete_all_migrations_with_token", { 
+        p_project_id: projectId,
+        p_database_id: databaseId || null,
+        p_connection_id: connectionId || null,
+        p_token: shareToken || null 
+      });
+      if (error) throw error;
+      toast.success(`Deleted ${deletedCount ?? pendingDeleteAllMigrations.length} migrations`);
       loadMigrations();
     } catch (error: any) {
       toast.error("Failed to delete migrations: " + error.message);

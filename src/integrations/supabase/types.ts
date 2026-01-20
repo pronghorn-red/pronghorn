@@ -3528,6 +3528,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      delete_all_migrations_with_token: {
+        Args: {
+          p_connection_id?: string
+          p_database_id?: string
+          p_project_id: string
+          p_token?: string
+        }
+        Returns: number
+      }
       delete_artifact_collaboration_with_token: {
         Args: { p_collaboration_id: string; p_token: string }
         Returns: undefined
