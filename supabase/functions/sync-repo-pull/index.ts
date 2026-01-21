@@ -12,6 +12,22 @@ interface PullRequest {
   commitSha?: string; // Optional: pull specific commit (for rollback)
 }
 
+// Process items in batches to avoid memory limits
+async function processBatches<T, R>(
+  items: T[],
+  batchSize: number,
+  processor: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(items.length / batchSize)} (${batch.length} items)`);
+    const batchResults = await Promise.all(batch.map(processor));
+    results.push(...batchResults);
+  }
+  return results;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -187,83 +203,94 @@ Deno.serve(async (req) => {
 
     console.log(`Found ${files.length} files to pull`);
 
-    // Fetch content for each file
-    const fileContents = await Promise.all(
-      files.map(async (file: any) => {
-        const blobUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/blobs/${file.sha}`;
-        const blobResponse = await fetch(blobUrl, {
-          headers: {
-            'Authorization': `token ${pat}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': 'Pronghorn-Sync',
-          },
-        });
+    // Fetch content for each file in batches to avoid memory limits
+    const FETCH_BATCH_SIZE = 15; // Process 15 files at a time
+    console.log(`Fetching ${files.length} files in batches of ${FETCH_BATCH_SIZE}`);
 
-        if (!blobResponse.ok) {
-          console.error(`Failed to get blob for ${file.path}`);
-          return null;
-        }
+    const fileContents = await processBatches(files, FETCH_BATCH_SIZE, async (file: any) => {
+      const blobUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/blobs/${file.sha}`;
+      const blobResponse = await fetch(blobUrl, {
+        headers: {
+          'Authorization': `token ${pat}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'Pronghorn-Sync',
+        },
+      });
 
-        const blobData = await blobResponse.json();
-        
-        // Check if file is binary by extension
-        const ext = file.path.toLowerCase().substring(file.path.lastIndexOf('.'));
-        const isBinary = binaryExtensions.includes(ext);
-        
-        let content = blobData.content;
-        if (blobData.encoding === 'base64') {
-          if (isBinary) {
-            // Keep binary files as base64 encoded
-            content = blobData.content.replace(/\n/g, '');
-          } else {
-            // Decode text files to plain text with proper UTF-8 handling
-            try {
-              const base64Clean = blobData.content.replace(/\n/g, '');
-              const bytes = Uint8Array.from(atob(base64Clean), c => c.charCodeAt(0));
-              content = new TextDecoder('utf-8').decode(bytes);
-            } catch (e) {
-              // If decode fails, treat as binary
-              console.log(`Treating ${file.path} as binary due to decode error`);
-              return {
-                path: file.path,
-                content: blobData.content.replace(/\n/g, ''),
-                commit_sha: targetSha,
-                is_binary: true,
-              };
-            }
+      if (!blobResponse.ok) {
+        console.error(`Failed to get blob for ${file.path}`);
+        return null;
+      }
+
+      const blobData = await blobResponse.json();
+      
+      // Check if file is binary by extension
+      const ext = file.path.toLowerCase().substring(file.path.lastIndexOf('.'));
+      const isBinary = binaryExtensions.includes(ext);
+      
+      let content = blobData.content;
+      if (blobData.encoding === 'base64') {
+        if (isBinary) {
+          // Keep binary files as base64 encoded
+          content = blobData.content.replace(/\n/g, '');
+        } else {
+          // Decode text files to plain text with proper UTF-8 handling
+          try {
+            const base64Clean = blobData.content.replace(/\n/g, '');
+            const bytes = Uint8Array.from(atob(base64Clean), c => c.charCodeAt(0));
+            content = new TextDecoder('utf-8').decode(bytes);
+          } catch (e) {
+            // If decode fails, treat as binary
+            console.log(`Treating ${file.path} as binary due to decode error`);
+            return {
+              path: file.path,
+              content: blobData.content.replace(/\n/g, ''),
+              commit_sha: targetSha,
+              is_binary: true,
+            };
           }
         }
+      }
 
-        return {
-          path: file.path,
-          content: content,
-          commit_sha: targetSha,
-          is_binary: isBinary,
-        };
-      })
-    );
+      return {
+        path: file.path,
+        content: content,
+        commit_sha: targetSha,
+        is_binary: isBinary,
+      };
+    });
 
     // Filter out null results (failed fetches)
     const validFiles = fileContents.filter((f) => f !== null);
 
     console.log(`Successfully fetched ${validFiles.length} files`);
 
-    // Batch upsert files to database
-    const { data: result, error: upsertError } = await supabaseClient.rpc(
-      'upsert_files_batch_with_token',
-      {
-        p_repo_id: repoId,
-        p_files: validFiles,
-        p_token: shareToken,
-      }
-    );
+    // Batch upsert files to database (in chunks of 100 for very large repos)
+    const DB_BATCH_SIZE = 100;
+    let totalUpdated = 0;
 
-    if (upsertError) {
-      console.error('Failed to upsert files:', upsertError);
-      return new Response(JSON.stringify({ error: 'Failed to update database' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    for (let i = 0; i < validFiles.length; i += DB_BATCH_SIZE) {
+      const batch = validFiles.slice(i, i + DB_BATCH_SIZE);
+      console.log(`Upserting DB batch ${Math.floor(i / DB_BATCH_SIZE) + 1}/${Math.ceil(validFiles.length / DB_BATCH_SIZE)} (${batch.length} files)`);
+      
+      const { data: result, error: upsertError } = await supabaseClient.rpc(
+        'upsert_files_batch_with_token',
+        {
+          p_repo_id: repoId,
+          p_files: batch,
+          p_token: shareToken,
+        }
+      );
+
+      if (upsertError) {
+        console.error('Failed to upsert files batch:', upsertError);
+        return new Response(JSON.stringify({ error: 'Failed to update database' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      totalUpdated += result?.[0]?.files_updated || batch.length;
     }
 
     console.log(`Successfully pulled and synced ${validFiles.length} files`);
@@ -289,7 +316,7 @@ Deno.serve(async (req) => {
         success: true,
         commitSha: targetSha,
         filesCount: validFiles.length,
-        filesUpdated: result[0]?.files_updated || 0,
+        filesUpdated: totalUpdated,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
