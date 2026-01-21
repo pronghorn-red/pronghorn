@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Requirement } from "@/components/requirements/RequirementsTree";
+import { Requirement, RequirementStatus } from "@/components/requirements/RequirementsTree";
 
 export function useRealtimeRequirements(
   projectId: string,
@@ -30,6 +30,8 @@ export function useRealtimeRequirements(
         type: item.type,
         title: item.title,
         content: item.content,
+        status: item.status as RequirementStatus | null,
+        notes: item.notes,
         parentId: item.parent_id,
         children: [],
       });
@@ -123,6 +125,8 @@ export function useRealtimeRequirements(
                         type: payload.new.type,
                         title: payload.new.title,
                         content: payload.new.content,
+                        status: payload.new.status as RequirementStatus | null,
+                        notes: payload.new.notes,
                         parentId: payload.new.parent_id,
                         children: [],
                       };
@@ -143,6 +147,8 @@ export function useRealtimeRequirements(
                   type: payload.new.type,
                   title: payload.new.title,
                   content: payload.new.content,
+                  status: payload.new.status as RequirementStatus | null,
+                  notes: payload.new.notes,
                   parentId: null,
                   children: [],
                 };
@@ -160,6 +166,8 @@ export function useRealtimeRequirements(
                       code: payload.new.code,
                       title: payload.new.title,
                       content: payload.new.content,
+                      status: payload.new.status as RequirementStatus | null,
+                      notes: payload.new.notes,
                     };
                   }
                   if (item.children?.length) {
@@ -346,7 +354,9 @@ export function useRealtimeRequirements(
         p_id: id,
         p_token: shareToken || null,
         p_title: updates.title || "",
-        p_content: updates.content || ""
+        p_content: updates.content || "",
+        p_status: updates.status ?? null,
+        p_notes: updates.notes ?? null
       });
 
       if (error) throw error;
