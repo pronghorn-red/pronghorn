@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { ChevronRight, ChevronDown, Plus, Trash2, Edit2, FileText, ListTodo, CheckSquare, FileCheck, Sparkles, Link as LinkIcon, Loader2, Paperclip } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Trash2, Edit2, FileText, ListTodo, CheckSquare, FileCheck, Sparkles, Link as LinkIcon, Loader2, Paperclip, StickyNote, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { RequirementStandardsBadges } from "./RequirementStandardsBadges";
@@ -12,6 +13,7 @@ import { SourceRequirementsUpload } from "./SourceRequirementsUpload";
 import { useRequirementFiles } from "@/hooks/useRequirementFiles";
 
 export type RequirementType = "EPIC" | "FEATURE" | "STORY" | "ACCEPTANCE_CRITERIA";
+export type RequirementStatus = "pending" | "in_progress" | "under_review" | "partially_completed" | "completed" | "cancelled";
 
 export interface Requirement {
   id: string;
@@ -19,6 +21,8 @@ export interface Requirement {
   type: RequirementType;
   title: string;
   content?: string;
+  status?: RequirementStatus | null;
+  notes?: string | null;
   children?: Requirement[];
   parentId?: string;
 }
@@ -43,6 +47,24 @@ const typeColors = {
   ACCEPTANCE_CRITERIA: "bg-orange-500/10 text-orange-700 border-orange-500/20",
 };
 
+const statusColors: Record<string, string> = {
+  pending: "bg-gray-500/10 text-gray-700 border-gray-500/20 dark:text-gray-300",
+  in_progress: "bg-blue-500/10 text-blue-700 border-blue-500/20 dark:text-blue-300",
+  under_review: "bg-yellow-500/10 text-yellow-700 border-yellow-500/20 dark:text-yellow-300",
+  partially_completed: "bg-orange-500/10 text-orange-700 border-orange-500/20 dark:text-orange-300",
+  completed: "bg-green-500/10 text-green-700 border-green-500/20 dark:text-green-300",
+  cancelled: "bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-300",
+};
+
+const statusLabels: Record<string, string> = {
+  pending: "Pending",
+  in_progress: "In Progress",
+  under_review: "Under Review",
+  partially_completed: "Partial",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
 function getNextType(type: RequirementType): RequirementType | null {
   const map = { EPIC: "FEATURE", FEATURE: "STORY", STORY: "ACCEPTANCE_CRITERIA" };
   return (map[type] as RequirementType) || null;
@@ -59,11 +81,15 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, expand
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(requirement.title);
   const [editContent, setEditContent] = useState(requirement.content || "");
+  const [editStatus, setEditStatus] = useState(requirement.status || "pending");
+  const [editNotes, setEditNotes] = useState(requirement.notes || "");
+  const [showNotes, setShowNotes] = useState(false);
   const [isExpanding, setIsExpanding] = useState(false);
   const { fileCount, refresh: refreshFiles } = useRequirementFiles(requirement.id);
   const [openFileModal, setOpenFileModal] = useState(false);
   const Icon = typeIcons[requirement.type];
   const hasChildren = requirement.children?.length > 0;
+  const currentStatus = requirement.status || "pending";
 
   const handleAIExpand = async () => {
     if (requirement.type === "ACCEPTANCE_CRITERIA") return toast.error("Cannot expand further");
@@ -118,7 +144,31 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, expand
           <Textarea 
             value={editContent} 
             onChange={(e) => setEditContent(e.target.value)} 
-            rows={4} 
+            rows={3} 
+            placeholder="Description/content"
+            className="text-sm md:text-base"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs text-muted-foreground">Status:</label>
+            <Select value={editStatus} onValueChange={setEditStatus}>
+              <SelectTrigger className="h-8 w-40 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="under_review">Under Review</SelectItem>
+                <SelectItem value="partially_completed">Partially Completed</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Textarea 
+            value={editNotes} 
+            onChange={(e) => setEditNotes(e.target.value)} 
+            rows={2} 
+            placeholder="Notes (progress, blockers, decisions...)"
             className="text-sm md:text-base"
           />
           <div className="flex flex-wrap gap-2">
@@ -127,7 +177,12 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, expand
                className="flex-1 min-w-[80px]"
                onClick={async () => { 
                  try {
-                   await onUpdate?.(requirement.id, { title: editTitle, content: editContent });
+                   await onUpdate?.(requirement.id, { 
+                     title: editTitle, 
+                     content: editContent,
+                     status: editStatus,
+                     notes: editNotes
+                   });
                    toast.success("Changes saved");
                    setIsEditing(false);
                  } catch (error) {
@@ -180,13 +235,42 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, expand
                 <p className="text-xs text-muted-foreground mb-2 break-words">{requirement.content}</p>
               )}
               
-              {/* Badges, file count, and action buttons in one row */}
+              {/* Badges, status, file count, and action buttons in one row */}
               <div className="flex flex-wrap items-center gap-1.5">
                 {requirement.code && (
                   <Badge variant="outline" className="font-mono text-xs font-semibold flex-shrink-0">
                     {requirement.code}
                   </Badge>
                 )}
+                
+                {/* Status badge with inline select */}
+                <Select 
+                  value={currentStatus} 
+                  onValueChange={async (val) => {
+                    try {
+                      await onUpdate?.(requirement.id, { 
+                        title: requirement.title, 
+                        content: requirement.content,
+                        status: val,
+                        notes: requirement.notes
+                      });
+                    } catch (error) {
+                      toast.error("Failed to update status");
+                    }
+                  }}
+                >
+                  <SelectTrigger className={`h-6 w-28 text-xs border ${statusColors[currentStatus] || statusColors.pending}`}>
+                    <SelectValue>{statusLabels[currentStatus] || "Pending"}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="under_review">Under Review</SelectItem>
+                    <SelectItem value="partially_completed">Partial</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
                 
                 <RequirementStandardsBadges requirementId={requirement.id} shareToken={shareToken} />
                 
@@ -202,6 +286,23 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, expand
                     <Paperclip className="h-3 w-3" />
                     {fileCount} {fileCount === 1 ? "file" : "files"}
                   </Badge>
+                )}
+                
+                {/* Notes toggle button */}
+                {requirement.notes && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6 flex-shrink-0"
+                        onClick={() => setShowNotes(!showNotes)}
+                      >
+                        <StickyNote className="h-3.5 w-3.5 text-yellow-600" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Toggle notes</TooltipContent>
+                  </Tooltip>
                 )}
                 
                 {/* Action buttons inline */}
@@ -290,6 +391,17 @@ function RequirementNode({ requirement, level = 0, projectId, shareToken, expand
                    </div>
                  </TooltipProvider>
                </div>
+               
+               {/* Notes display */}
+               {showNotes && requirement.notes && (
+                 <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-md border border-yellow-200 dark:border-yellow-800">
+                   <div className="flex items-center gap-1 mb-1">
+                     <StickyNote className="h-3 w-3 text-yellow-600" />
+                     <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">Notes</span>
+                   </div>
+                   <p className="text-xs text-yellow-800 dark:text-yellow-300 whitespace-pre-wrap">{requirement.notes}</p>
+                 </div>
+               )}
              </div>
            </div>
          </div>

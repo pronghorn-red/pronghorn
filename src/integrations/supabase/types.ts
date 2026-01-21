@@ -2723,9 +2723,11 @@ export type Database = {
           content: string | null
           created_at: string
           id: string
+          notes: string | null
           order_index: number
           parent_id: string | null
           project_id: string
+          status: string | null
           title: string
           type: Database["public"]["Enums"]["requirement_type"]
           updated_at: string
@@ -2735,9 +2737,11 @@ export type Database = {
           content?: string | null
           created_at?: string
           id?: string
+          notes?: string | null
           order_index?: number
           parent_id?: string | null
           project_id: string
+          status?: string | null
           title: string
           type: Database["public"]["Enums"]["requirement_type"]
           updated_at?: string
@@ -2747,9 +2751,11 @@ export type Database = {
           content?: string | null
           created_at?: string
           id?: string
+          notes?: string | null
           order_index?: number
           parent_id?: string | null
           project_id?: string
+          status?: string | null
           title?: string
           type?: Database["public"]["Enums"]["requirement_type"]
           updated_at?: string
@@ -5164,9 +5170,11 @@ export type Database = {
           content: string | null
           created_at: string
           id: string
+          notes: string | null
           order_index: number
           parent_id: string | null
           project_id: string
+          status: string | null
           title: string
           type: Database["public"]["Enums"]["requirement_type"]
           updated_at: string
@@ -6097,9 +6105,11 @@ export type Database = {
           content: string | null
           created_at: string
           id: string
+          notes: string | null
           order_index: number
           parent_id: string | null
           project_id: string
+          status: string | null
           title: string
           type: Database["public"]["Enums"]["requirement_type"]
           updated_at: string
@@ -6608,9 +6618,11 @@ export type Database = {
           content: string | null
           created_at: string
           id: string
+          notes: string | null
           order_index: number
           parent_id: string | null
           project_id: string
+          status: string | null
           title: string
           type: Database["public"]["Enums"]["requirement_type"]
           updated_at: string
@@ -7290,6 +7302,8 @@ export type Database = {
         Args: {
           p_content: string
           p_id: string
+          p_notes?: string
+          p_status?: string
           p_title: string
           p_token: string
         }
@@ -7298,9 +7312,11 @@ export type Database = {
           content: string | null
           created_at: string
           id: string
+          notes: string | null
           order_index: number
           parent_id: string | null
           project_id: string
+          status: string | null
           title: string
           type: Database["public"]["Enums"]["requirement_type"]
           updated_at: string
