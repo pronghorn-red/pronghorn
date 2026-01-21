@@ -103,7 +103,7 @@ function getGrokExpandSchema() {
   };
 }
 
-// Claude tool schema for expand requirement
+// Claude tool schema for expand requirement - with strict additionalProperties enforcement
 function getClaudeExpandTool() {
   return {
     name: "return_sub_requirements",
@@ -123,11 +123,13 @@ function getClaudeExpandTool() {
                 enum: ["FEATURE", "STORY", "ACCEPTANCE_CRITERIA"]
               }
             },
-            required: ["title", "content", "type"]
+            required: ["title", "content", "type"],
+            additionalProperties: false
           }
         }
       },
-      required: ["sub_requirements"]
+      required: ["sub_requirements"],
+      additionalProperties: false
     }
   };
 }
@@ -351,13 +353,14 @@ Return your response using the return_sub_requirements tool with a sub_requireme
       const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
       if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY not configured");
 
-      console.log("Calling Claude API with strict tool use...");
+      console.log("Calling Claude API with strict structured outputs...");
       llmResponse = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-api-key": anthropicKey,
           "anthropic-version": "2023-06-01",
+          "anthropic-beta": "structured-outputs-2025-11-13",
         },
         body: JSON.stringify({
           model: selectedModel,
@@ -383,18 +386,38 @@ Return your response using the return_sub_requirements tool with a sub_requireme
         blockTypes: claudeData.content?.map((b: any) => b.type)
       }));
       
+      // Explicit refusal handling
+      if (claudeData.stop_reason === "refusal") {
+        console.warn("Claude refused to complete - content may have triggered moderation");
+      }
+      
       const toolUseBlock = claudeData.content?.find((block: any) => block.type === "tool_use");
       if (toolUseBlock) {
         console.log("Claude tool_use block:", JSON.stringify({
           name: toolUseBlock.name,
           inputKeys: Object.keys(toolUseBlock.input || {}),
-          inputValue: toolUseBlock.input
+          inputType: typeof toolUseBlock.input?.sub_requirements
         }));
       }
       
       if (toolUseBlock && toolUseBlock.input) {
-        suggestions = toolUseBlock.input.sub_requirements || [];
-        console.log("Claude strict tool use response parsed, sub_requirements count:", suggestions.length);
+        let rawSubReqs = toolUseBlock.input.sub_requirements;
+        
+        // Handle case where Claude returns stringified JSON instead of array
+        if (typeof rawSubReqs === 'string') {
+          console.log("sub_requirements is a string, attempting to parse...");
+          try {
+            rawSubReqs = JSON.parse(rawSubReqs);
+          } catch (e) {
+            console.warn("Failed to parse stringified sub_requirements:", (e as Error).message);
+            // Try parseExpandResponse as fallback for truncated JSON
+            const parsed = parseExpandResponse(rawSubReqs);
+            rawSubReqs = parsed.sub_requirements || parsed || [];
+          }
+        }
+        
+        suggestions = Array.isArray(rawSubReqs) ? rawSubReqs : [];
+        console.log("Claude tool use parsed, sub_requirements count:", suggestions.length);
       } else {
         const textBlock = claudeData.content?.find((block: any) => block.type === "text");
         const text = textBlock?.text || JSON.stringify(claudeData.content);
@@ -521,6 +544,7 @@ Return your response using the return_sub_requirements tool with a sub_requireme
       console.log("No requirements inserted, including raw LLM response in debug payload");
       responsePayload.debug = {
         rawResponse: rawLlmResponse,
+        stopReason: rawLlmResponse.stop_reason || rawLlmResponse.choices?.[0]?.finish_reason,
         suggestionsCount: suggestions?.length || 0,
         suggestionsType: typeof suggestions,
         suggestionsValue: suggestions
