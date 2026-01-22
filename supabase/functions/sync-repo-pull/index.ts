@@ -15,7 +15,7 @@ interface PullRequest {
 
 // Configuration for two-phase sync
 const SMALL_FILE_THRESHOLD = 3 * 1024 * 1024; // 3MB - files below this go in Phase 1
-const ABSOLUTE_MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB - skip files larger than this
+const ABSOLUTE_MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB - skip files larger than this (40MB file = 130MB memory usage)
 const MAX_BATCH_BYTES = 8 * 1024 * 1024; // 8MB per batch for small files
 const MAX_FILES_PER_BATCH = 10; // Max concurrent fetches per batch
 
