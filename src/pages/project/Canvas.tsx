@@ -31,7 +31,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image, ChevronRight, Wrench, Sparkles, FileSearch, AlignLeft, AlignVerticalJustifyStart, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Grid3x3, ImagePlus, Eye, Trash2 } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Camera, Lasso as LassoIcon, Image, ChevronRight, Wrench, Sparkles, FileSearch, AlignLeft, AlignVerticalJustifyStart, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Grid3x3, ImagePlus, Eye, Trash2, Download, Upload } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { AIArchitectDialog } from "@/components/canvas/AIArchitectDialog";
 import { InfographicDialog } from "@/components/canvas/InfographicDialog";
@@ -182,6 +182,9 @@ function CanvasFlow() {
   const [isAIArchitectOpen, setIsAIArchitectOpen] = useState(false);
   const [isInfographicOpen, setIsInfographicOpen] = useState(false);
   const [isClearCanvasOpen, setIsClearCanvasOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [pendingImport, setPendingImport] = useState<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -1355,6 +1358,242 @@ function CanvasFlow() {
     setIsClearCanvasOpen(false);
   }, [nodes, edges, layers, token, deleteLayer, setNodes, setEdges, toast]);
 
+  // Export canvas to JSON
+  const handleExportCanvas = useCallback(() => {
+    const exportData = {
+      _meta: {
+        version: "1.0.0",
+        exportedAt: new Date().toISOString(),
+        projectId: projectId || "",
+        description: "Pronghorn.RED Canvas Export - contains architecture diagram nodes, edges, and layers. This file can be imported back to recreate the canvas."
+      },
+      
+      _documentation: {
+        overview: "This JSON file represents a visual architecture canvas. An AI or human can interpret this structure to understand or recreate the diagram.",
+        nodeStructure: {
+          description: "Each node represents an architectural element on the canvas",
+          fields: {
+            id: "Unique UUID identifier for the node",
+            type: "React Flow node type: 'custom' (standard architecture nodes), 'notes' (sticky notes with markdown), 'zone' (grouping containers), 'label' (text labels)",
+            position: "X,Y coordinates on the canvas (origin is top-left)",
+            "data.type": "Semantic node type from nodeTypes list (e.g., 'PAGE', 'COMPONENT', 'DATABASE', 'API_SERVICE')",
+            "data.label": "Primary display text / node title",
+            "data.subtitle": "Optional secondary descriptive text",
+            "data.content": "For notes nodes, contains markdown content",
+            style: "Optional CSS-like styling object (width, height, backgroundColor)"
+          }
+        },
+        edgeStructure: {
+          description: "Edges represent connections/relationships between nodes (arrows)",
+          fields: {
+            id: "Unique UUID identifier for the edge",
+            source: "ID of the source node (where arrow starts)",
+            target: "ID of the target node (where arrow ends)",
+            label: "Optional connection label (e.g., 'uses', 'calls', 'depends on')",
+            type: "Edge routing style: 'default' (curved bezier), 'straight', 'step' (right angles), 'smoothstep'",
+            style: "Optional styling (stroke color, strokeWidth)"
+          }
+        },
+        layerStructure: {
+          description: "Layers organize nodes into toggleable visibility groups",
+          fields: {
+            id: "Unique UUID identifier for the layer",
+            name: "Display name for the layer",
+            node_ids: "Array of node IDs belonging to this layer",
+            visible: "Whether the layer is currently visible (true/false)"
+          }
+        },
+        connectionRules: "The connectionRules section defines valid source->target relationships and the left-to-right flow hierarchy for node types"
+      },
+      
+      nodeTypes: (allNodeTypes || []).map(nt => ({
+        system_name: nt.system_name,
+        display_label: nt.display_label,
+        description: nt.description,
+        category: nt.category,
+        color_class: nt.color_class,
+        order_score: nt.order_score
+      })),
+      
+      connectionRules: {
+        description: "Valid connections follow a left-to-right flow hierarchy. Lower levels appear on the left, higher levels on the right.",
+        flowHierarchy: connectionLogic.flowHierarchy.levels,
+        validConnections: connectionLogic.validConnections
+      },
+      
+      nodes: nodes.map(n => ({
+        id: n.id,
+        type: n.type || 'custom',
+        position: n.position,
+        data: n.data,
+        ...(n.style && Object.keys(n.style).length > 0 ? { style: n.style } : {})
+      })),
+      
+      edges: edges.map(e => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        ...(e.label ? { label: e.label } : {}),
+        type: e.type || 'default',
+        ...(e.style && Object.keys(e.style).length > 0 ? { style: e.style } : {})
+      })),
+      
+      layers: layers.map(l => ({
+        id: l.id,
+        name: l.name,
+        node_ids: l.node_ids,
+        visible: l.visible
+      }))
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `canvas-export-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    toast({ 
+      title: "Canvas Exported", 
+      description: `Exported ${nodes.length} nodes, ${edges.length} edges, ${layers.length} layers` 
+    });
+  }, [nodes, edges, layers, allNodeTypes, projectId, toast]);
+
+  // Handle file selection for import
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        
+        // Validate basic structure
+        if (!data.nodes || !Array.isArray(data.nodes)) {
+          throw new Error("Invalid canvas export: missing nodes array");
+        }
+        
+        setPendingImport(data);
+        setIsImportDialogOpen(true);
+      } catch (err) {
+        toast({ 
+          title: "Import Failed", 
+          description: err instanceof Error ? err.message : "Invalid JSON file",
+          variant: "destructive"
+        });
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset input so same file can be selected again
+    e.target.value = '';
+  }, [toast]);
+
+  // Execute import (add or replace mode)
+  const handleImport = useCallback(async (mode: 'add' | 'replace') => {
+    if (!pendingImport || !projectId) return;
+    
+    try {
+      // Generate new UUIDs for all imported elements to avoid conflicts
+      const idMap = new Map<string, string>();
+      
+      // Create ID mappings
+      pendingImport.nodes.forEach((n: any) => {
+        idMap.set(n.id, crypto.randomUUID());
+      });
+      (pendingImport.edges || []).forEach((e: any) => {
+        idMap.set(e.id, crypto.randomUUID());
+      });
+      (pendingImport.layers || []).forEach((l: any) => {
+        idMap.set(l.id, crypto.randomUUID());
+      });
+      
+      // Transform nodes with new IDs
+      const importedNodes: Node[] = pendingImport.nodes.map((n: any) => ({
+        id: idMap.get(n.id)!,
+        type: n.type || 'custom',
+        position: n.position,
+        data: n.data,
+        style: n.style,
+        selected: true  // Select all imported nodes for easy repositioning
+      }));
+      
+      // Transform edges with remapped source/target IDs
+      const importedEdges: Edge[] = (pendingImport.edges || [])
+        .filter((e: any) => idMap.has(e.source) && idMap.has(e.target))
+        .map((e: any) => ({
+          id: idMap.get(e.id)!,
+          source: idMap.get(e.source)!,
+          target: idMap.get(e.target)!,
+          label: e.label,
+          type: e.type || 'default',
+          style: e.style || {
+            stroke: 'hsl(var(--primary))',
+            strokeWidth: 2,
+          },
+          labelStyle: { 
+            fill: '#000000',
+            fontSize: 12,
+            fontWeight: 500,
+          },
+          labelBgStyle: { 
+            fill: '#ffffff',
+            fillOpacity: 0.9,
+          },
+          labelBgPadding: [8, 4] as [number, number],
+          labelBgBorderRadius: 4,
+        }));
+      
+      // Transform layers with remapped node IDs
+      const importedLayers = (pendingImport.layers || []).map((l: any) => ({
+        id: idMap.get(l.id)!,
+        project_id: projectId,
+        name: l.name,
+        node_ids: l.node_ids.map((nid: string) => idMap.get(nid)).filter(Boolean),
+        visible: l.visible
+      }));
+      
+      if (mode === 'replace') {
+        // Clear existing canvas first
+        await handleClearCanvas();
+      } else {
+        // Deselect existing nodes before adding
+        setNodes(nds => nds.map(n => ({ ...n, selected: false })));
+      }
+      
+      // Add imported nodes (selected for easy repositioning)
+      setNodes(nds => mode === 'replace' ? importedNodes : [...nds, ...importedNodes]);
+      setEdges(eds => mode === 'replace' ? importedEdges : [...eds, ...importedEdges]);
+      
+      // Save to database
+      for (const node of importedNodes) {
+        await saveNode(node, true, false);
+      }
+      for (const edge of importedEdges) {
+        await saveEdge(edge);
+      }
+      for (const layer of importedLayers) {
+        await saveLayer(layer);
+      }
+      
+      setIsImportDialogOpen(false);
+      setPendingImport(null);
+      
+      toast({
+        title: "Canvas Imported",
+        description: `${mode === 'replace' ? 'Replaced with' : 'Added'} ${importedNodes.length} nodes, ${importedEdges.length} edges, ${importedLayers.length} layers. Imported nodes are selected - drag to reposition.`
+      });
+    } catch (err) {
+      toast({
+        title: "Import Failed",
+        description: err instanceof Error ? err.message : "Failed to import canvas",
+        variant: "destructive"
+      });
+    }
+  }, [pendingImport, projectId, saveNode, saveEdge, saveLayer, setNodes, setEdges, handleClearCanvas, toast]);
+
   // Show token recovery message if token is missing
   if (tokenMissing) {
     return (
@@ -1482,6 +1721,14 @@ function CanvasFlow() {
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
                           Clear Canvas
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleExportCanvas}>
+                          <Download className="h-4 w-4 mr-2" />
+                          Export JSON
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Import JSON
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -1676,6 +1923,51 @@ function CanvasFlow() {
                   )}
                 </div>
               )}
+              
+              {/* Second row - JSON Import/Export buttons */}
+              {!isAIArchitectOpen && !isMobile && (
+                <div className="absolute top-16 left-4 z-10 flex gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={handleExportCanvas}
+                        size="sm"
+                        variant="outline"
+                        className="bg-card/80 h-8 w-8 p-0"
+                      >
+                        <Download className="w-3 h-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p>Export JSON</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => fileInputRef.current?.click()}
+                        size="sm"
+                        variant="outline"
+                        className="bg-card/80 h-8 w-8 p-0"
+                      >
+                        <Upload className="w-3 h-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p>Import JSON</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+              
+              {/* Hidden file input for JSON import (shared by mobile and desktop) */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".json"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
             </TooltipProvider>
 
             {/* Clear Canvas Confirmation Dialog */}
@@ -1694,6 +1986,43 @@ function CanvasFlow() {
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
                     Clear Canvas
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Import Canvas Dialog */}
+            <AlertDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Import Canvas</AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div>
+                      {pendingImport && (
+                        <>
+                          <p className="mb-2">
+                            Found <strong>{pendingImport.nodes?.length || 0}</strong> nodes, <strong>{pendingImport.edges?.length || 0}</strong> edges, 
+                            and <strong>{pendingImport.layers?.length || 0}</strong> layers.
+                          </p>
+                          <p className="mb-2">
+                            <strong>Add to Canvas:</strong> Merge with existing elements. New elements will be selected 
+                            so you can drag them to avoid overlaps.
+                          </p>
+                          <p>
+                            <strong>Replace Canvas:</strong> Clear all existing elements and import fresh.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="flex gap-2 sm:justify-end">
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <Button variant="outline" onClick={() => handleImport('add')}>
+                    Add to Canvas
+                  </Button>
+                  <AlertDialogAction onClick={() => handleImport('replace')}>
+                    Replace Canvas
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
