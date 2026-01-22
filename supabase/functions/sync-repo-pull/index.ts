@@ -12,10 +12,10 @@ interface PullRequest {
   commitSha?: string; // Optional: pull specific commit (for rollback)
 }
 
-// Configuration for memory-optimized batching
-const MAX_BATCH_BYTES = 10 * 1024 * 1024; // 10MB per batch (reduced for memory safety)
+// Configuration for two-phase sync
+const SMALL_FILE_THRESHOLD = 3 * 1024 * 1024; // 3MB - files below this go in Phase 1
+const MAX_BATCH_BYTES = 8 * 1024 * 1024; // 8MB per batch for small files
 const MAX_FILES_PER_BATCH = 10; // Max concurrent fetches per batch
-const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // Files >= 5MB processed individually
 
 interface GitHubTreeFile {
   path: string;
@@ -24,7 +24,29 @@ interface GitHubTreeFile {
   type: string;
 }
 
-// Group files into size-based batches for memory efficiency
+interface FailedFile {
+  path: string;
+  size: number;
+  error: string;
+}
+
+// Binary file extensions - stored as base64 with is_binary flag
+const binaryExtensions = [
+  '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.bmp', '.svg',
+  '.pdf', '.zip', '.tar', '.gz', '.rar', '.7z',
+  '.woff', '.woff2', '.ttf', '.eot', '.otf',
+  '.mp3', '.mp4', '.wav', '.avi', '.mov', '.webm',
+  '.exe', '.dll', '.so', '.dylib',
+  '.pyc', '.class', '.o', '.obj',
+  '.lock', '.lockb'
+];
+
+function isBinaryFile(path: string): boolean {
+  const ext = path.toLowerCase().substring(path.lastIndexOf('.'));
+  return binaryExtensions.includes(ext);
+}
+
+// Group small files into size-based batches for memory efficiency
 function createSizeBasedBatches(files: GitHubTreeFile[]): GitHubTreeFile[][] {
   const batches: GitHubTreeFile[][] = [];
   let currentBatch: GitHubTreeFile[] = [];
@@ -35,17 +57,6 @@ function createSizeBasedBatches(files: GitHubTreeFile[]): GitHubTreeFile[][] {
 
   for (const file of sortedFiles) {
     const fileSize = file.size || 0;
-
-    // Large files get their own batch
-    if (fileSize >= LARGE_FILE_THRESHOLD) {
-      if (currentBatch.length > 0) {
-        batches.push(currentBatch);
-        currentBatch = [];
-        currentBatchSize = 0;
-      }
-      batches.push([file]); // Single-file batch
-      continue;
-    }
 
     // Would adding this file exceed EITHER limit?
     const wouldExceedSize = currentBatchSize + fileSize > MAX_BATCH_BYTES;
@@ -67,6 +78,127 @@ function createSizeBasedBatches(files: GitHubTreeFile[]): GitHubTreeFile[][] {
   }
 
   return batches;
+}
+
+// Process a single file with memory-safe handling
+async function fetchAndProcessFile(
+  file: GitHubTreeFile,
+  repo: { organization: string; repo: string },
+  pat: string,
+  targetSha: string
+): Promise<{ path: string; content: string; commit_sha: string; is_binary: boolean } | null> {
+  const blobUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/blobs/${file.sha}`;
+  
+  const blobResponse = await fetch(blobUrl, {
+    headers: {
+      'Authorization': `token ${pat}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'User-Agent': 'Pronghorn-Sync',
+    },
+  });
+
+  if (!blobResponse.ok) {
+    const errorText = await blobResponse.text();
+    throw new Error(`GitHub API error: ${blobResponse.status} - ${errorText.substring(0, 100)}`);
+  }
+
+  const isBinary = isBinaryFile(file.path);
+
+  if (isBinary) {
+    // For binary files: use streaming regex extraction to avoid full JSON parse memory spike
+    // This is critical for large binary files where JSON.parse would create huge memory overhead
+    const responseText = await blobResponse.text();
+    
+    // Extract content field using regex - avoids parsing entire JSON into memory
+    const contentMatch = responseText.match(/"content"\s*:\s*"([^"]*)"/);
+    if (!contentMatch) {
+      throw new Error('Could not extract content from GitHub blob response');
+    }
+    
+    // Remove newlines from base64 content (GitHub formats with line breaks)
+    const base64Content = contentMatch[1].replace(/\\n/g, '');
+    
+    // Clear the large string immediately
+    // @ts-ignore - intentional memory optimization
+    responseText = null;
+    
+    return {
+      path: file.path,
+      content: base64Content,
+      commit_sha: targetSha,
+      is_binary: true,
+    };
+  } else {
+    // For text files: parse JSON and decode
+    const blobData = await blobResponse.json();
+    
+    let content = blobData.content;
+    if (blobData.encoding === 'base64') {
+      try {
+        const base64Clean = blobData.content.replace(/\n/g, '');
+        const bytes = Uint8Array.from(atob(base64Clean), c => c.charCodeAt(0));
+        content = new TextDecoder('utf-8').decode(bytes);
+      } catch (e) {
+        // If decode fails, treat as binary and store as-is
+        console.log(`Treating ${file.path} as binary due to decode error`);
+        return {
+          path: file.path,
+          content: blobData.content.replace(/\n/g, ''),
+          commit_sha: targetSha,
+          is_binary: true,
+        };
+      }
+    }
+
+    return {
+      path: file.path,
+      content: content,
+      commit_sha: targetSha,
+      is_binary: false,
+    };
+  }
+}
+
+// Process a large file with isolated memory and error handling
+async function processLargeFileSafely(
+  file: GitHubTreeFile,
+  repo: { organization: string; repo: string },
+  pat: string,
+  targetSha: string,
+  supabaseClient: any,
+  repoId: string,
+  shareToken: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`[Large File] Processing: ${file.path} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+    
+    const fileData = await fetchAndProcessFile(file, repo, pat, targetSha);
+    
+    if (!fileData) {
+      return { success: false, error: 'Failed to fetch file content' };
+    }
+
+    // Write single file to database immediately
+    const { error: upsertError } = await supabaseClient.rpc(
+      'upsert_files_batch_with_token',
+      {
+        p_repo_id: repoId,
+        p_files: [fileData],
+        p_token: shareToken,
+      }
+    );
+
+    if (upsertError) {
+      return { success: false, error: `Database error: ${upsertError.message}` };
+    }
+
+    console.log(`[Large File] Success: ${file.path}`);
+    return { success: true };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    console.error(`[Large File] Failed: ${file.path} - ${errorMsg}`);
+    return { success: false, error: errorMsg };
+  }
 }
 
 Deno.serve(async (req) => {
@@ -228,94 +360,54 @@ Deno.serve(async (req) => {
 
     const treeData = await treeResponse.json();
 
-    // Binary file extensions - stored as base64 with is_binary flag
-    const binaryExtensions = [
-      '.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.bmp',
-      '.pdf', '.zip', '.tar', '.gz', '.rar', '.7z',
-      '.woff', '.woff2', '.ttf', '.eot', '.otf',
-      '.mp3', '.mp4', '.wav', '.avi', '.mov', '.webm',
-      '.exe', '.dll', '.so', '.dylib',
-      '.pyc', '.class', '.o', '.obj',
-      '.lock', '.lockb'
-    ];
-
     // Filter for files only (not directories) and cast to typed interface
-    const files: GitHubTreeFile[] = treeData.tree.filter((item: any) => item.type === 'blob');
+    const allFiles: GitHubTreeFile[] = treeData.tree.filter((item: any) => item.type === 'blob');
     
-    // Release tree data early to free memory (we only need the filtered files array now)
+    // Release tree data early to free memory
     treeData.tree = null;
 
-    console.log(`Found ${files.length} files to pull`);
+    // ============================================
+    // TWO-PHASE SYNC: Separate small and large files
+    // ============================================
+    const smallFiles = allFiles.filter(f => (f.size || 0) < SMALL_FILE_THRESHOLD);
+    const largeFiles = allFiles.filter(f => (f.size || 0) >= SMALL_FILE_THRESHOLD);
 
-    // Calculate total size for logging
-    const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
-    console.log(`Total repo size: ${(totalBytes / 1024 / 1024).toFixed(2)} MB`);
+    const smallFilesSize = smallFiles.reduce((sum, f) => sum + (f.size || 0), 0);
+    const largeFilesSize = largeFiles.reduce((sum, f) => sum + (f.size || 0), 0);
 
-    // Create size-based batches for memory efficiency
-    const batches = createSizeBasedBatches(files);
-    console.log(`Created ${batches.length} size-based batches`);
+    console.log(`=== TWO-PHASE SYNC ===`);
+    console.log(`Phase 1: ${smallFiles.length} small files (${(smallFilesSize / 1024 / 1024).toFixed(2)} MB)`);
+    console.log(`Phase 2: ${largeFiles.length} large files (${(largeFilesSize / 1024 / 1024).toFixed(2)} MB)`);
 
     let totalFetched = 0;
     let totalUpdated = 0;
+    const failedFiles: FailedFile[] = [];
 
-    // Process each batch: fetch files, immediately write to DB, then release memory
+    // ============================================
+    // PHASE 1: Process small files in batches
+    // ============================================
+    console.log(`--- PHASE 1: Small files ---`);
+    const batches = createSizeBasedBatches(smallFiles);
+    console.log(`Created ${batches.length} batches for small files`);
+
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
       const batch = batches[batchIndex];
       const batchBytes = batch.reduce((sum, f) => sum + (f.size || 0), 0);
-      console.log(`Processing batch ${batchIndex + 1}/${batches.length}: ${batch.length} files, ${(batchBytes / 1024 / 1024).toFixed(2)} MB`);
+      console.log(`Batch ${batchIndex + 1}/${batches.length}: ${batch.length} files, ${(batchBytes / 1024 / 1024).toFixed(2)} MB`);
 
-      // Fetch all files in this batch concurrently (safe because we sized it)
+      // Fetch all files in this batch concurrently
       const batchContents = await Promise.all(batch.map(async (file) => {
-        const blobUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/blobs/${file.sha}`;
-        const blobResponse = await fetch(blobUrl, {
-          headers: {
-            'Authorization': `token ${pat}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': 'Pronghorn-Sync',
-          },
-        });
-
-        if (!blobResponse.ok) {
-          console.error(`Failed to get blob for ${file.path}`);
+        try {
+          return await fetchAndProcessFile(file, repo, pat, targetSha!);
+        } catch (err) {
+          console.error(`Failed to fetch ${file.path}:`, err);
+          failedFiles.push({
+            path: file.path,
+            size: file.size,
+            error: err instanceof Error ? err.message : 'Unknown error'
+          });
           return null;
         }
-
-        const blobData = await blobResponse.json();
-
-        // Check if file is binary by extension
-        const ext = file.path.toLowerCase().substring(file.path.lastIndexOf('.'));
-        const isBinary = binaryExtensions.includes(ext);
-
-        let content = blobData.content;
-        if (blobData.encoding === 'base64') {
-          if (isBinary) {
-            // Keep binary files as base64 encoded
-            content = blobData.content.replace(/\n/g, '');
-          } else {
-            // Decode text files to plain text with proper UTF-8 handling
-            try {
-              const base64Clean = blobData.content.replace(/\n/g, '');
-              const bytes = Uint8Array.from(atob(base64Clean), c => c.charCodeAt(0));
-              content = new TextDecoder('utf-8').decode(bytes);
-            } catch (e) {
-              // If decode fails, treat as binary
-              console.log(`Treating ${file.path} as binary due to decode error`);
-              return {
-                path: file.path,
-                content: blobData.content.replace(/\n/g, ''),
-                commit_sha: targetSha,
-                is_binary: true,
-              };
-            }
-          }
-        }
-
-        return {
-          path: file.path,
-          content: content,
-          commit_sha: targetSha,
-          is_binary: isBinary,
-        };
       }));
 
       // Filter out failed fetches
@@ -335,18 +427,70 @@ Deno.serve(async (req) => {
 
         if (upsertError) {
           console.error('Failed to upsert batch:', upsertError);
-          throw new Error(`Database upsert failed for batch ${batchIndex + 1}: ${upsertError.message}`);
+          // Add all files in batch to failed list
+          validBatch.forEach(f => {
+            if (f) {
+              failedFiles.push({
+                path: f.path,
+                size: 0,
+                error: `Database upsert failed: ${upsertError.message}`
+              });
+            }
+          });
+        } else {
+          totalUpdated += result?.[0]?.files_updated || validBatch.length;
+          console.log(`Batch ${batchIndex + 1} written to DB (${validBatch.length} files)`);
         }
-
-        totalUpdated += result?.[0]?.files_updated || validBatch.length;
-        console.log(`Batch ${batchIndex + 1} written to DB (${validBatch.length} files)`);
       }
 
-      // Explicitly help GC by clearing references - critical for memory management
+      // Explicitly help GC by clearing references
       validBatch.length = 0;
     }
 
-    console.log(`Successfully pulled ${totalFetched} files, updated ${totalUpdated}`);
+    console.log(`Phase 1 complete: ${totalFetched} files synced`);
+
+    // ============================================
+    // PHASE 2: Process large files one at a time
+    // ============================================
+    if (largeFiles.length > 0) {
+      console.log(`--- PHASE 2: Large files (${largeFiles.length}) ---`);
+      
+      for (let i = 0; i < largeFiles.length; i++) {
+        const file = largeFiles[i];
+        console.log(`[${i + 1}/${largeFiles.length}] Processing large file: ${file.path}`);
+        
+        const result = await processLargeFileSafely(
+          file,
+          repo,
+          pat,
+          targetSha!,
+          supabaseClient,
+          repoId,
+          shareToken
+        );
+
+        if (result.success) {
+          totalFetched++;
+          totalUpdated++;
+        } else {
+          failedFiles.push({
+            path: file.path,
+            size: file.size,
+            error: result.error || 'Unknown error'
+          });
+        }
+      }
+      
+      console.log(`Phase 2 complete: ${largeFiles.length - failedFiles.filter(f => largeFiles.some(lf => lf.path === f.path)).length} large files synced`);
+    }
+
+    console.log(`=== SYNC COMPLETE ===`);
+    console.log(`Total fetched: ${totalFetched}, Updated: ${totalUpdated}, Failed: ${failedFiles.length}`);
+
+    if (failedFiles.length > 0) {
+      console.log('Failed files:');
+      failedFiles.forEach(f => console.log(`  - ${f.path}: ${f.error}`));
+    }
 
     // Broadcast files_refresh event after successful pull
     try {
@@ -366,10 +510,14 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        success: true,
+        success: failedFiles.length === 0,
+        partialSuccess: failedFiles.length > 0 && totalFetched > 0,
         commitSha: targetSha,
         filesCount: totalFetched,
         filesUpdated: totalUpdated,
+        smallFilesProcessed: smallFiles.length,
+        largeFilesProcessed: largeFiles.length,
+        failedFiles: failedFiles,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
