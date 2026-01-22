@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, XCircle, Loader2, FileWarning, HardDrive } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, FileWarning, HardDrive, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -15,7 +15,7 @@ export interface PendingLargeFile {
 interface LargeFileStatus {
   path: string;
   size: number;
-  status: 'pending' | 'processing' | 'success' | 'error';
+  status: 'pending' | 'processing' | 'success' | 'error' | 'skipped';
   error?: string;
 }
 
@@ -101,6 +101,11 @@ export function LargeFileTracker({
         setFileStatuses(prev => prev.map((f, i) => 
           i === currentIndex ? { ...f, status: 'success' } : f
         ));
+      } else if (result.skipped) {
+        // File was skipped due to size limit
+        setFileStatuses(prev => prev.map((f, i) => 
+          i === currentIndex ? { ...f, status: 'skipped', error: result.error } : f
+        ));
       } else {
         setFileStatuses(prev => prev.map((f, i) => 
           i === currentIndex ? { ...f, status: 'error', error: result.error } : f
@@ -141,7 +146,8 @@ export function LargeFileTracker({
     return `${(bytes / 1024).toFixed(0)} KB`;
   };
 
-  const completedCount = fileStatuses.filter(f => f.status === 'success' || f.status === 'error').length;
+  const completedCount = fileStatuses.filter(f => f.status === 'success' || f.status === 'error' || f.status === 'skipped').length;
+  const skippedCount = fileStatuses.filter(f => f.status === 'skipped').length;
   const progressPercent = pendingFiles.length > 0 ? (completedCount / pendingFiles.length) * 100 : 0;
 
   return (
@@ -152,6 +158,7 @@ export function LargeFileTracker({
           Processing Large Files
           <span className="text-sm font-normal text-muted-foreground ml-2">
             ({completedCount}/{pendingFiles.length})
+            {skippedCount > 0 && <span className="text-warning ml-1">({skippedCount} too large)</span>}
           </span>
         </CardTitle>
       </CardHeader>
@@ -165,7 +172,8 @@ export function LargeFileTracker({
               className={`flex items-center gap-3 p-2 rounded text-sm ${
                 file.status === 'processing' ? 'bg-primary/10' :
                 file.status === 'success' ? 'bg-success/10' :
-                file.status === 'error' ? 'bg-destructive/10' : 'bg-muted/50'
+                file.status === 'error' ? 'bg-destructive/10' :
+                file.status === 'skipped' ? 'bg-warning/10' : 'bg-muted/50'
               }`}
             >
               <div className="flex-shrink-0">
@@ -180,6 +188,9 @@ export function LargeFileTracker({
                 )}
                 {file.status === 'error' && (
                   <XCircle className="h-4 w-4 text-destructive" />
+                )}
+                {file.status === 'skipped' && (
+                  <AlertTriangle className="h-4 w-4 text-warning" />
                 )}
               </div>
               

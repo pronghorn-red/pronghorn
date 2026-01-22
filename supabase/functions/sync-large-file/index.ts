@@ -6,6 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// HARD LIMIT: 15MB max for this function (150MB env / ~10x overhead = 15MB safe)
+const MAX_FILE_SIZE = 15 * 1024 * 1024;
+
 interface LargeFileRequest {
   repoId: string;
   projectId: string;
@@ -16,7 +19,7 @@ interface LargeFileRequest {
     rawUrl: string;
     commitSha: string;
   };
-  pat: string; // PAT is passed from client (already fetched during sync-repo-pull)
+  pat: string;
 }
 
 // Binary file extensions
@@ -54,6 +57,22 @@ Deno.serve(async (req) => {
     const { repoId, projectId, shareToken, file, pat }: LargeFileRequest = await req.json();
 
     console.log(`[sync-large-file] Processing: ${file.path} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+
+    // CHECK SIZE LIMIT FIRST - before any expensive operations
+    if (file.size > MAX_FILE_SIZE) {
+      const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+      const limitMB = (MAX_FILE_SIZE / 1024 / 1024).toFixed(0);
+      console.log(`[sync-large-file] SKIPPED: ${file.path} (${sizeMB}MB > ${limitMB}MB limit)`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          skipped: true,
+          path: file.path,
+          error: `File too large (${sizeMB}MB). Maximum supported size is ${limitMB}MB. Use local git clone for large binaries.`,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Validate project access - requires editor role
     const { data: accessRole, error: accessError } = await supabaseClient.rpc('authorize_project_access', {
