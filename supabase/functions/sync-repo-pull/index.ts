@@ -12,20 +12,57 @@ interface PullRequest {
   commitSha?: string; // Optional: pull specific commit (for rollback)
 }
 
-// Process items in batches to avoid memory limits
-async function processBatches<T, R>(
-  items: T[],
-  batchSize: number,
-  processor: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = [];
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(items.length / batchSize)} (${batch.length} items)`);
-    const batchResults = await Promise.all(batch.map(processor));
-    results.push(...batchResults);
+// Configuration for size-based batching
+const MAX_BATCH_BYTES = 25 * 1024 * 1024; // 25MB per batch
+const LARGE_FILE_THRESHOLD = 25 * 1024 * 1024; // Files >= 25MB processed individually
+
+interface GitHubTreeFile {
+  path: string;
+  sha: string;
+  size: number;
+  type: string;
+}
+
+// Group files into size-based batches for memory efficiency
+function createSizeBasedBatches(files: GitHubTreeFile[]): GitHubTreeFile[][] {
+  const batches: GitHubTreeFile[][] = [];
+  let currentBatch: GitHubTreeFile[] = [];
+  let currentBatchSize = 0;
+
+  // Sort files by size (smallest first) to optimize batch packing
+  const sortedFiles = [...files].sort((a, b) => (a.size || 0) - (b.size || 0));
+
+  for (const file of sortedFiles) {
+    const fileSize = file.size || 0;
+
+    // Large files get their own batch
+    if (fileSize >= LARGE_FILE_THRESHOLD) {
+      if (currentBatch.length > 0) {
+        batches.push(currentBatch);
+        currentBatch = [];
+        currentBatchSize = 0;
+      }
+      batches.push([file]); // Single-file batch
+      continue;
+    }
+
+    // Would adding this file exceed the limit?
+    if (currentBatchSize + fileSize > MAX_BATCH_BYTES && currentBatch.length > 0) {
+      batches.push(currentBatch);
+      currentBatch = [];
+      currentBatchSize = 0;
+    }
+
+    currentBatch.push(file);
+    currentBatchSize += fileSize;
   }
-  return results;
+
+  // Don't forget the last batch
+  if (currentBatch.length > 0) {
+    batches.push(currentBatch);
+  }
+
+  return batches;
 }
 
 Deno.serve(async (req) => {
@@ -198,102 +235,110 @@ Deno.serve(async (req) => {
       '.lock', '.lockb'
     ];
 
-    // Filter for files only (not directories)
-    const files = treeData.tree.filter((item: any) => item.type === 'blob');
+    // Filter for files only (not directories) and cast to typed interface
+    const files: GitHubTreeFile[] = treeData.tree.filter((item: any) => item.type === 'blob');
 
     console.log(`Found ${files.length} files to pull`);
 
-    // Fetch content for each file in batches to avoid memory limits
-    const FETCH_BATCH_SIZE = 15; // Process 15 files at a time
-    console.log(`Fetching ${files.length} files in batches of ${FETCH_BATCH_SIZE}`);
+    // Calculate total size for logging
+    const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
+    console.log(`Total repo size: ${(totalBytes / 1024 / 1024).toFixed(2)} MB`);
 
-    const fileContents = await processBatches(files, FETCH_BATCH_SIZE, async (file: any) => {
-      const blobUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/blobs/${file.sha}`;
-      const blobResponse = await fetch(blobUrl, {
-        headers: {
-          'Authorization': `token ${pat}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'Pronghorn-Sync',
-        },
-      });
+    // Create size-based batches for memory efficiency
+    const batches = createSizeBasedBatches(files);
+    console.log(`Created ${batches.length} size-based batches`);
 
-      if (!blobResponse.ok) {
-        console.error(`Failed to get blob for ${file.path}`);
-        return null;
-      }
-
-      const blobData = await blobResponse.json();
-      
-      // Check if file is binary by extension
-      const ext = file.path.toLowerCase().substring(file.path.lastIndexOf('.'));
-      const isBinary = binaryExtensions.includes(ext);
-      
-      let content = blobData.content;
-      if (blobData.encoding === 'base64') {
-        if (isBinary) {
-          // Keep binary files as base64 encoded
-          content = blobData.content.replace(/\n/g, '');
-        } else {
-          // Decode text files to plain text with proper UTF-8 handling
-          try {
-            const base64Clean = blobData.content.replace(/\n/g, '');
-            const bytes = Uint8Array.from(atob(base64Clean), c => c.charCodeAt(0));
-            content = new TextDecoder('utf-8').decode(bytes);
-          } catch (e) {
-            // If decode fails, treat as binary
-            console.log(`Treating ${file.path} as binary due to decode error`);
-            return {
-              path: file.path,
-              content: blobData.content.replace(/\n/g, ''),
-              commit_sha: targetSha,
-              is_binary: true,
-            };
-          }
-        }
-      }
-
-      return {
-        path: file.path,
-        content: content,
-        commit_sha: targetSha,
-        is_binary: isBinary,
-      };
-    });
-
-    // Filter out null results (failed fetches)
-    const validFiles = fileContents.filter((f) => f !== null);
-
-    console.log(`Successfully fetched ${validFiles.length} files`);
-
-    // Batch upsert files to database (in chunks of 100 for very large repos)
-    const DB_BATCH_SIZE = 100;
+    let totalFetched = 0;
     let totalUpdated = 0;
 
-    for (let i = 0; i < validFiles.length; i += DB_BATCH_SIZE) {
-      const batch = validFiles.slice(i, i + DB_BATCH_SIZE);
-      console.log(`Upserting DB batch ${Math.floor(i / DB_BATCH_SIZE) + 1}/${Math.ceil(validFiles.length / DB_BATCH_SIZE)} (${batch.length} files)`);
-      
-      const { data: result, error: upsertError } = await supabaseClient.rpc(
-        'upsert_files_batch_with_token',
-        {
-          p_repo_id: repoId,
-          p_files: batch,
-          p_token: shareToken,
-        }
-      );
+    // Process each batch: fetch files, immediately write to DB, then release memory
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      const batchBytes = batch.reduce((sum, f) => sum + (f.size || 0), 0);
+      console.log(`Processing batch ${batchIndex + 1}/${batches.length}: ${batch.length} files, ${(batchBytes / 1024 / 1024).toFixed(2)} MB`);
 
-      if (upsertError) {
-        console.error('Failed to upsert files batch:', upsertError);
-        return new Response(JSON.stringify({ error: 'Failed to update database' }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      // Fetch all files in this batch concurrently (safe because we sized it)
+      const batchContents = await Promise.all(batch.map(async (file) => {
+        const blobUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/blobs/${file.sha}`;
+        const blobResponse = await fetch(blobUrl, {
+          headers: {
+            'Authorization': `token ${pat}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'Pronghorn-Sync',
+          },
         });
+
+        if (!blobResponse.ok) {
+          console.error(`Failed to get blob for ${file.path}`);
+          return null;
+        }
+
+        const blobData = await blobResponse.json();
+
+        // Check if file is binary by extension
+        const ext = file.path.toLowerCase().substring(file.path.lastIndexOf('.'));
+        const isBinary = binaryExtensions.includes(ext);
+
+        let content = blobData.content;
+        if (blobData.encoding === 'base64') {
+          if (isBinary) {
+            // Keep binary files as base64 encoded
+            content = blobData.content.replace(/\n/g, '');
+          } else {
+            // Decode text files to plain text with proper UTF-8 handling
+            try {
+              const base64Clean = blobData.content.replace(/\n/g, '');
+              const bytes = Uint8Array.from(atob(base64Clean), c => c.charCodeAt(0));
+              content = new TextDecoder('utf-8').decode(bytes);
+            } catch (e) {
+              // If decode fails, treat as binary
+              console.log(`Treating ${file.path} as binary due to decode error`);
+              return {
+                path: file.path,
+                content: blobData.content.replace(/\n/g, ''),
+                commit_sha: targetSha,
+                is_binary: true,
+              };
+            }
+          }
+        }
+
+        return {
+          path: file.path,
+          content: content,
+          commit_sha: targetSha,
+          is_binary: isBinary,
+        };
+      }));
+
+      // Filter out failed fetches
+      const validBatch = batchContents.filter((f) => f !== null);
+      totalFetched += validBatch.length;
+
+      // IMMEDIATELY write this batch to database to free memory
+      if (validBatch.length > 0) {
+        const { data: result, error: upsertError } = await supabaseClient.rpc(
+          'upsert_files_batch_with_token',
+          {
+            p_repo_id: repoId,
+            p_files: validBatch,
+            p_token: shareToken,
+          }
+        );
+
+        if (upsertError) {
+          console.error('Failed to upsert batch:', upsertError);
+          throw new Error(`Database upsert failed for batch ${batchIndex + 1}: ${upsertError.message}`);
+        }
+
+        totalUpdated += result?.[0]?.files_updated || validBatch.length;
+        console.log(`Batch ${batchIndex + 1} written to DB (${validBatch.length} files)`);
       }
-      
-      totalUpdated += result?.[0]?.files_updated || batch.length;
+
+      // Memory is freed here as batchContents goes out of scope
     }
 
-    console.log(`Successfully pulled and synced ${validFiles.length} files`);
+    console.log(`Successfully pulled ${totalFetched} files, updated ${totalUpdated}`);
 
     // Broadcast files_refresh event after successful pull
     try {
@@ -315,7 +360,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         commitSha: targetSha,
-        filesCount: validFiles.length,
+        filesCount: totalFetched,
         filesUpdated: totalUpdated,
       }),
       {
