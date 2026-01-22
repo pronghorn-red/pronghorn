@@ -15,9 +15,17 @@ interface PullRequest {
 
 // Configuration for two-phase sync
 const SMALL_FILE_THRESHOLD = 3 * 1024 * 1024; // 3MB - files below this go in Phase 1
-const ABSOLUTE_MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB - skip files larger than this (streaming should handle 40MB)
+const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10MB - files over this are returned for separate processing
+const ABSOLUTE_MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB - absolute limit
 const MAX_BATCH_BYTES = 8 * 1024 * 1024; // 8MB per batch for small files
 const MAX_FILES_PER_BATCH = 10; // Max concurrent fetches per batch
+
+interface PendingLargeFile {
+  path: string;
+  size: number;
+  rawUrl: string;
+  commitSha: string;
+}
 
 interface GitHubTreeFile {
   path: string;
@@ -376,24 +384,43 @@ Deno.serve(async (req) => {
     treeData.tree = null;
 
     // ============================================
-    // TWO-PHASE SYNC: Separate small, large, and oversized files
+    // THREE-TIER SYNC: Small (in-process), Medium (in-process one-by-one), Large (return for client processing)
     // ============================================
     const oversizedFiles = allFiles.filter(f => (f.size || 0) >= ABSOLUTE_MAX_FILE_SIZE);
     const syncableFiles = allFiles.filter(f => (f.size || 0) < ABSOLUTE_MAX_FILE_SIZE);
+    
+    // Small files: process in batches (< 3MB)
     const smallFiles = syncableFiles.filter(f => (f.size || 0) < SMALL_FILE_THRESHOLD);
-    const largeFiles = syncableFiles.filter(f => (f.size || 0) >= SMALL_FILE_THRESHOLD);
+    
+    // Medium files: process one-by-one in this function (3MB - 10MB)
+    const mediumFiles = syncableFiles.filter(f => 
+      (f.size || 0) >= SMALL_FILE_THRESHOLD && (f.size || 0) < LARGE_FILE_THRESHOLD
+    );
+    
+    // Large files: return to client for separate sync-large-file calls (>= 10MB)
+    const largeFilesForClient = syncableFiles.filter(f => (f.size || 0) >= LARGE_FILE_THRESHOLD);
 
     const smallFilesSize = smallFiles.reduce((sum, f) => sum + (f.size || 0), 0);
-    const largeFilesSize = largeFiles.reduce((sum, f) => sum + (f.size || 0), 0);
+    const mediumFilesSize = mediumFiles.reduce((sum, f) => sum + (f.size || 0), 0);
+    const largeFilesSize = largeFilesForClient.reduce((sum, f) => sum + (f.size || 0), 0);
 
-    console.log(`=== TWO-PHASE SYNC (Raw API) ===`);
-    console.log(`Phase 1: ${smallFiles.length} small files (${(smallFilesSize / 1024 / 1024).toFixed(2)} MB)`);
-    console.log(`Phase 2: ${largeFiles.length} large files (${(largeFilesSize / 1024 / 1024).toFixed(2)} MB)`);
+    console.log(`=== THREE-TIER SYNC ===`);
+    console.log(`Phase 1: ${smallFiles.length} small files (${(smallFilesSize / 1024 / 1024).toFixed(2)} MB) - batched`);
+    console.log(`Phase 2: ${mediumFiles.length} medium files (${(mediumFilesSize / 1024 / 1024).toFixed(2)} MB) - one-by-one`);
+    console.log(`Pending: ${largeFilesForClient.length} large files (${(largeFilesSize / 1024 / 1024).toFixed(2)} MB) - returned to client`);
     console.log(`Skipped: ${oversizedFiles.length} oversized files (>${ABSOLUTE_MAX_FILE_SIZE / 1024 / 1024}MB limit)`);
 
     let totalFetched = 0;
     let totalUpdated = 0;
     const failedFiles: FailedFile[] = [];
+    
+    // Build pending large files array with raw URLs
+    const pendingLargeFiles: PendingLargeFile[] = largeFilesForClient.map(file => ({
+      path: file.path,
+      size: file.size,
+      rawUrl: `https://raw.githubusercontent.com/${repo.organization}/${repo.repo}/${targetSha}/${encodeURIComponent(file.path).replace(/%2F/g, '/')}`,
+      commitSha: targetSha!,
+    }));
 
     // Add oversized files to failed list immediately
     for (const file of oversizedFiles) {
@@ -472,14 +499,14 @@ Deno.serve(async (req) => {
     console.log(`Phase 1 complete: ${totalFetched} files synced`);
 
     // ============================================
-    // PHASE 2: Process large files one at a time
+    // PHASE 2: Process medium files one at a time (3MB - 10MB)
     // ============================================
-    if (largeFiles.length > 0) {
-      console.log(`--- PHASE 2: Large files (${largeFiles.length}) ---`);
+    if (mediumFiles.length > 0) {
+      console.log(`--- PHASE 2: Medium files (${mediumFiles.length}) ---`);
       
-      for (let i = 0; i < largeFiles.length; i++) {
-        const file = largeFiles[i];
-        console.log(`[${i + 1}/${largeFiles.length}] Processing large file: ${file.path}`);
+      for (let i = 0; i < mediumFiles.length; i++) {
+        const file = mediumFiles[i];
+        console.log(`[${i + 1}/${mediumFiles.length}] Processing medium file: ${file.path}`);
         
         const result = await processLargeFileSafely(
           file,
@@ -503,7 +530,13 @@ Deno.serve(async (req) => {
         }
       }
       
-      console.log(`Phase 2 complete: ${largeFiles.length - failedFiles.filter(f => largeFiles.some(lf => lf.path === f.path)).length} large files synced`);
+      console.log(`Phase 2 complete: ${mediumFiles.length - failedFiles.filter(f => mediumFiles.some(mf => mf.path === f.path)).length} medium files synced`);
+    }
+    
+    // Log pending large files that will be processed by client
+    if (pendingLargeFiles.length > 0) {
+      console.log(`--- PENDING: ${pendingLargeFiles.length} large files to be synced via sync-large-file ---`);
+      pendingLargeFiles.forEach(f => console.log(`  - ${f.path} (${(f.size / 1024 / 1024).toFixed(2)} MB)`));
     }
 
     console.log(`=== SYNC COMPLETE ===`);
@@ -538,6 +571,10 @@ Deno.serve(async (req) => {
         totalUpdated,
         commitSha: targetSha,
         failedFiles: failedFiles.length > 0 ? failedFiles : undefined,
+        // Return pending large files for client to process via sync-large-file
+        pendingLargeFiles: pendingLargeFiles.length > 0 ? pendingLargeFiles : undefined,
+        // Return PAT for client to use (encrypted in transit via HTTPS)
+        pat: pendingLargeFiles.length > 0 ? pat : undefined,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

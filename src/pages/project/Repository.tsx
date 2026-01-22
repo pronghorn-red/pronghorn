@@ -12,6 +12,7 @@ import { CreateRepoDialog } from "@/components/repository/CreateRepoDialog";
 import { ManagePATDialog } from "@/components/repository/ManagePATDialog";
 import { IDEModal } from "@/components/repository/IDEModal";
 import { SyncDialog, SyncConfig } from "@/components/repository/SyncDialog";
+import { LargeFileTracker, PendingLargeFile } from "@/components/repository/LargeFileTracker";
 import { CommitLog } from "@/components/repository/CommitLog";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
 import { GitBranch, Database, Menu, FilePlus, FolderPlus, Maximize2, FileArchive, Upload, Loader2, CheckCircle, XCircle, Shield } from "lucide-react";
@@ -61,6 +62,11 @@ export default function Repository() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [zipUploadStatus, setZipUploadStatus] = useState<'idle' | 'extracting' | 'staging' | 'complete' | 'error'>('idle');
   const [zipUploadProgress, setZipUploadProgress] = useState<{ current: number; total: number; currentFile: string }>({ current: 0, total: 0, currentFile: '' });
+  const [largeFileSync, setLargeFileSync] = useState<{
+    pendingFiles: PendingLargeFile[];
+    repoId: string;
+    pat: string;
+  } | null>(null);
   const zipInputRef = useRef<HTMLInputElement>(null);
 
   const { repos, loading, refetch } = useRealtimeRepos(projectId, shareToken);
@@ -530,10 +536,23 @@ export default function Repository() {
           setSyncStatus({ [primeRepo.id]: 'success' });
           setLastSyncTime({ [primeRepo.id]: new Date() });
           
-          toast({
-            title: "Pull complete",
-            description: `Pulled from Prime: ${primeRepo.organization}/${primeRepo.repo}`,
-          });
+          // Check if there are pending large files to process
+          if (data?.pendingLargeFiles && data.pendingLargeFiles.length > 0 && data.pat) {
+            setLargeFileSync({
+              pendingFiles: data.pendingLargeFiles,
+              repoId: primeRepo.id,
+              pat: data.pat,
+            });
+            toast({
+              title: "Pull in progress",
+              description: `Pulled ${data.totalFetched} files. ${data.pendingLargeFiles.length} large files need separate processing.`,
+            });
+          } else {
+            toast({
+              title: "Pull complete",
+              description: `Pulled from Prime: ${primeRepo.organization}/${primeRepo.repo}`,
+            });
+          }
 
           loadFileStructure();
         } catch (err: any) {
@@ -897,6 +916,33 @@ export default function Repository() {
                 </div>
               </div>
             </div>
+
+            {/* Large File Sync Tracker */}
+            {largeFileSync && projectId && (
+              <LargeFileTracker
+                pendingFiles={largeFileSync.pendingFiles}
+                repoId={largeFileSync.repoId}
+                projectId={projectId}
+                shareToken={shareToken}
+                pat={largeFileSync.pat}
+                onComplete={(results) => {
+                  setLargeFileSync(null);
+                  loadFileStructure();
+                  toast({
+                    title: results.failed === 0 ? "Large files synced" : "Large file sync complete",
+                    description: `${results.success} succeeded${results.failed > 0 ? `, ${results.failed} failed` : ''}`,
+                    variant: results.failed > 0 ? "destructive" : "default",
+                  });
+                }}
+                onCancel={() => {
+                  setLargeFileSync(null);
+                  toast({
+                    title: "Sync cancelled",
+                    description: "Large file sync was cancelled. Some files may not have been synced.",
+                  });
+                }}
+              />
+            )}
 
             <Tabs defaultValue="repos" className="space-y-6">
               <TabsList>
