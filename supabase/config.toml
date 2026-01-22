@@ -170,3 +170,6 @@ verify_jwt = false
 
 [functions.update-signup-validated]
 verify_jwt = false
+
+[functions.sync-large-file]
+verify_jwt = false
