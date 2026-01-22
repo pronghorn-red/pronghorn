@@ -12,10 +12,10 @@ interface PullRequest {
   commitSha?: string; // Optional: pull specific commit (for rollback)
 }
 
-// Configuration for size-based batching
-const MAX_BATCH_BYTES = 25 * 1024 * 1024; // 25MB per batch
-const MAX_FILES_PER_BATCH = 15; // Max concurrent fetches per batch
-const LARGE_FILE_THRESHOLD = 25 * 1024 * 1024; // Files >= 25MB processed individually
+// Configuration for memory-optimized batching
+const MAX_BATCH_BYTES = 10 * 1024 * 1024; // 10MB per batch (reduced for memory safety)
+const MAX_FILES_PER_BATCH = 10; // Max concurrent fetches per batch
+const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // Files >= 5MB processed individually
 
 interface GitHubTreeFile {
   path: string;
@@ -241,6 +241,9 @@ Deno.serve(async (req) => {
 
     // Filter for files only (not directories) and cast to typed interface
     const files: GitHubTreeFile[] = treeData.tree.filter((item: any) => item.type === 'blob');
+    
+    // Release tree data early to free memory (we only need the filtered files array now)
+    treeData.tree = null;
 
     console.log(`Found ${files.length} files to pull`);
 
@@ -339,7 +342,8 @@ Deno.serve(async (req) => {
         console.log(`Batch ${batchIndex + 1} written to DB (${validBatch.length} files)`);
       }
 
-      // Memory is freed here as batchContents goes out of scope
+      // Explicitly help GC by clearing references - critical for memory management
+      validBatch.length = 0;
     }
 
     console.log(`Successfully pulled ${totalFetched} files, updated ${totalUpdated}`);
