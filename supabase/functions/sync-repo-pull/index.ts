@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { encodeBase64 } from 'https://deno.land/std@0.208.0/encoding/base64.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,6 +15,7 @@ interface PullRequest {
 
 // Configuration for two-phase sync
 const SMALL_FILE_THRESHOLD = 3 * 1024 * 1024; // 3MB - files below this go in Phase 1
+const ABSOLUTE_MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB - skip files larger than this
 const MAX_BATCH_BYTES = 8 * 1024 * 1024; // 8MB per batch for small files
 const MAX_FILES_PER_BATCH = 10; // Max concurrent fetches per batch
 
@@ -80,47 +82,35 @@ function createSizeBasedBatches(files: GitHubTreeFile[]): GitHubTreeFile[][] {
   return batches;
 }
 
-// Process a single file with memory-safe handling
-async function fetchAndProcessFile(
+// Fetch file using GitHub Raw Content API - NO JSON PARSING!
+async function fetchFileViaRawApi(
   file: GitHubTreeFile,
   repo: { organization: string; repo: string },
   pat: string,
   targetSha: string
 ): Promise<{ path: string; content: string; commit_sha: string; is_binary: boolean } | null> {
-  const blobUrl = `https://api.github.com/repos/${repo.organization}/${repo.repo}/git/blobs/${file.sha}`;
+  // Use raw.githubusercontent.com - returns file content directly, no JSON wrapper
+  const rawUrl = `https://raw.githubusercontent.com/${repo.organization}/${repo.repo}/${targetSha}/${encodeURIComponent(file.path).replace(/%2F/g, '/')}`;
   
-  const blobResponse = await fetch(blobUrl, {
+  const response = await fetch(rawUrl, {
     headers: {
       'Authorization': `token ${pat}`,
-      'Accept': 'application/vnd.github.v3+json',
       'User-Agent': 'Pronghorn-Sync',
     },
   });
 
-  if (!blobResponse.ok) {
-    const errorText = await blobResponse.text();
-    throw new Error(`GitHub API error: ${blobResponse.status} - ${errorText.substring(0, 100)}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`GitHub Raw API error: ${response.status} - ${errorText.substring(0, 100)}`);
   }
 
   const isBinary = isBinaryFile(file.path);
 
   if (isBinary) {
-    // For binary files: use streaming regex extraction to avoid full JSON parse memory spike
-    // This is critical for large binary files where JSON.parse would create huge memory overhead
-    const responseText = await blobResponse.text();
-    
-    // Extract content field using regex - avoids parsing entire JSON into memory
-    const contentMatch = responseText.match(/"content"\s*:\s*"([^"]*)"/);
-    if (!contentMatch) {
-      throw new Error('Could not extract content from GitHub blob response');
-    }
-    
-    // Remove newlines from base64 content (GitHub formats with line breaks)
-    const base64Content = contentMatch[1].replace(/\\n/g, '');
-    
-    // Clear the large string immediately
-    // @ts-ignore - intentional memory optimization
-    responseText = null;
+    // For binary files: get raw bytes and encode to base64
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    const base64Content = encodeBase64(bytes);
     
     return {
       path: file.path,
@@ -129,30 +119,12 @@ async function fetchAndProcessFile(
       is_binary: true,
     };
   } else {
-    // For text files: parse JSON and decode
-    const blobData = await blobResponse.json();
+    // For text files: just get the text directly
+    const textContent = await response.text();
     
-    let content = blobData.content;
-    if (blobData.encoding === 'base64') {
-      try {
-        const base64Clean = blobData.content.replace(/\n/g, '');
-        const bytes = Uint8Array.from(atob(base64Clean), c => c.charCodeAt(0));
-        content = new TextDecoder('utf-8').decode(bytes);
-      } catch (e) {
-        // If decode fails, treat as binary and store as-is
-        console.log(`Treating ${file.path} as binary due to decode error`);
-        return {
-          path: file.path,
-          content: blobData.content.replace(/\n/g, ''),
-          commit_sha: targetSha,
-          is_binary: true,
-        };
-      }
-    }
-
     return {
       path: file.path,
-      content: content,
+      content: textContent,
       commit_sha: targetSha,
       is_binary: false,
     };
@@ -172,7 +144,7 @@ async function processLargeFileSafely(
   try {
     console.log(`[Large File] Processing: ${file.path} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
     
-    const fileData = await fetchAndProcessFile(file, repo, pat, targetSha);
+    const fileData = await fetchFileViaRawApi(file, repo, pat, targetSha);
     
     if (!fileData) {
       return { success: false, error: 'Failed to fetch file content' };
@@ -367,21 +339,34 @@ Deno.serve(async (req) => {
     treeData.tree = null;
 
     // ============================================
-    // TWO-PHASE SYNC: Separate small and large files
+    // TWO-PHASE SYNC: Separate small, large, and oversized files
     // ============================================
-    const smallFiles = allFiles.filter(f => (f.size || 0) < SMALL_FILE_THRESHOLD);
-    const largeFiles = allFiles.filter(f => (f.size || 0) >= SMALL_FILE_THRESHOLD);
+    const oversizedFiles = allFiles.filter(f => (f.size || 0) >= ABSOLUTE_MAX_FILE_SIZE);
+    const syncableFiles = allFiles.filter(f => (f.size || 0) < ABSOLUTE_MAX_FILE_SIZE);
+    const smallFiles = syncableFiles.filter(f => (f.size || 0) < SMALL_FILE_THRESHOLD);
+    const largeFiles = syncableFiles.filter(f => (f.size || 0) >= SMALL_FILE_THRESHOLD);
 
     const smallFilesSize = smallFiles.reduce((sum, f) => sum + (f.size || 0), 0);
     const largeFilesSize = largeFiles.reduce((sum, f) => sum + (f.size || 0), 0);
 
-    console.log(`=== TWO-PHASE SYNC ===`);
+    console.log(`=== TWO-PHASE SYNC (Raw API) ===`);
     console.log(`Phase 1: ${smallFiles.length} small files (${(smallFilesSize / 1024 / 1024).toFixed(2)} MB)`);
     console.log(`Phase 2: ${largeFiles.length} large files (${(largeFilesSize / 1024 / 1024).toFixed(2)} MB)`);
+    console.log(`Skipped: ${oversizedFiles.length} oversized files (>${ABSOLUTE_MAX_FILE_SIZE / 1024 / 1024}MB limit)`);
 
     let totalFetched = 0;
     let totalUpdated = 0;
     const failedFiles: FailedFile[] = [];
+
+    // Add oversized files to failed list immediately
+    for (const file of oversizedFiles) {
+      console.log(`[SKIP] File too large: ${file.path} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+      failedFiles.push({
+        path: file.path,
+        size: file.size,
+        error: `File exceeds ${ABSOLUTE_MAX_FILE_SIZE / 1024 / 1024}MB limit - too large for edge function sync`
+      });
+    }
 
     // ============================================
     // PHASE 1: Process small files in batches
@@ -395,10 +380,10 @@ Deno.serve(async (req) => {
       const batchBytes = batch.reduce((sum, f) => sum + (f.size || 0), 0);
       console.log(`Batch ${batchIndex + 1}/${batches.length}: ${batch.length} files, ${(batchBytes / 1024 / 1024).toFixed(2)} MB`);
 
-      // Fetch all files in this batch concurrently
+      // Fetch all files in this batch concurrently using Raw API
       const batchContents = await Promise.all(batch.map(async (file) => {
         try {
-          return await fetchAndProcessFile(file, repo, pat, targetSha!);
+          return await fetchFileViaRawApi(file, repo, pat, targetSha!);
         } catch (err) {
           console.error(`Failed to fetch ${file.path}:`, err);
           failedFiles.push({
@@ -498,37 +483,32 @@ Deno.serve(async (req) => {
       const filesChannel = supabaseClient.channel(`repo-files-${repoId}`);
       await filesChannel.subscribe();
       await filesChannel.send({
-        type: "broadcast",
-        event: "files_refresh",
-        payload: { repoId, action: "pull", timestamp: Date.now() },
+        type: 'broadcast',
+        event: 'files_refresh',
+        payload: { repoId, totalUpdated },
       });
       await supabaseClient.removeChannel(filesChannel);
     } catch (broadcastError) {
-      console.error("Failed to broadcast files_refresh event:", broadcastError);
-      // Don't fail the operation if broadcast fails
+      console.log('Broadcast non-critical error:', broadcastError);
     }
 
     return new Response(
       JSON.stringify({
-        success: failedFiles.length === 0,
-        partialSuccess: failedFiles.length > 0 && totalFetched > 0,
+        success: true,
+        message: `Pull completed via Raw API`,
+        totalFiles: allFiles.length,
+        totalFetched,
+        totalUpdated,
         commitSha: targetSha,
-        filesCount: totalFetched,
-        filesUpdated: totalUpdated,
-        smallFilesProcessed: smallFiles.length,
-        largeFilesProcessed: largeFiles.length,
-        failedFiles: failedFiles,
+        failedFiles: failedFiles.length > 0 ? failedFiles : undefined,
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    console.error('Error in sync-repo-pull:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+  } catch (err) {
+    console.error('Pull error:', err);
+    return new Response(
+      JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 });
