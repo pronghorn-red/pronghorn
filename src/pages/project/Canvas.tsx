@@ -1447,9 +1447,13 @@ function CanvasFlow() {
   const handleExportCanvas = useCallback(() => {
     const exportData = {
       _meta: {
-        version: "1.0.0",
+        version: "1.1.0",
         exportedAt: new Date().toISOString(),
         projectId: projectId || "",
+        canvasId: activeCanvasId || null,
+        canvasName: activeCanvas?.name || "Canvas 1",
+        canvasDescription: activeCanvas?.description || null,
+        canvasTags: activeCanvas?.tags || [],
         description: "Pronghorn.RED Canvas Export - contains architecture diagram nodes, edges, and layers. This file can be imported back to recreate the canvas."
       },
       
@@ -1535,15 +1539,16 @@ function CanvasFlow() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `canvas-export-${new Date().toISOString().split('T')[0]}.json`;
+    const canvasSlug = (activeCanvas?.name || 'canvas').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    a.download = `${canvasSlug}-export-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
     
     toast({ 
       title: "Canvas Exported", 
-      description: `Exported ${nodes.length} nodes, ${edges.length} edges, ${layers.length} layers` 
+      description: `Exported "${activeCanvas?.name || 'Canvas 1'}" with ${nodes.length} nodes, ${edges.length} edges, ${layers.length} layers` 
     });
-  }, [nodes, edges, layers, allNodeTypes, projectId, toast]);
+  }, [nodes, edges, layers, allNodeTypes, projectId, activeCanvasId, activeCanvas, toast]);
 
   // Handle file selection for import
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2103,6 +2108,25 @@ function CanvasFlow() {
                     <div>
                       {pendingImport && (
                         <>
+                          {/* Show source canvas metadata if available */}
+                          {pendingImport._meta?.canvasName && (
+                            <div className="mb-3 p-2 bg-muted rounded-md text-sm">
+                              <p className="font-medium">Source: {pendingImport._meta.canvasName}</p>
+                              {pendingImport._meta.canvasDescription && (
+                                <p className="text-muted-foreground text-xs mt-1">{pendingImport._meta.canvasDescription}</p>
+                              )}
+                              {pendingImport._meta.canvasTags?.length > 0 && (
+                                <div className="flex gap-1 mt-1 flex-wrap">
+                                  {pendingImport._meta.canvasTags.map((tag: string, i: number) => (
+                                    <span key={i} className="text-xs bg-background px-1.5 py-0.5 rounded">{tag}</span>
+                                  ))}
+                                </div>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Exported: {new Date(pendingImport._meta.exportedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          )}
                           <p className="mb-2">
                             Found <strong>{pendingImport.nodes?.length || 0}</strong> nodes, <strong>{pendingImport.edges?.length || 0}</strong> edges, 
                             and <strong>{pendingImport.layers?.length || 0}</strong> layers.

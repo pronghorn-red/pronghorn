@@ -171,6 +171,7 @@ export function CanvasNavigator({
           className="h-7 w-7 flex-shrink-0"
           onClick={onPrevious}
           disabled={totalCanvases <= 1}
+          title="Previous Canvas"
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
@@ -207,29 +208,6 @@ export function CanvasNavigator({
                 </DropdownMenuItem>
               ))
             )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setIsNewDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Canvas
-            </DropdownMenuItem>
-            {onDuplicateCanvas && activeCanvasId && !isLegacyMode && (
-              <DropdownMenuItem onClick={handleOpenDuplicateDialog}>
-                <Copy className="h-4 w-4 mr-2" />
-                Duplicate Canvas
-              </DropdownMenuItem>
-            )}
-            {onMergeCanvases && canvases.length >= 2 && (
-              <DropdownMenuItem onClick={handleOpenMergeDialog}>
-                <Merge className="h-4 w-4 mr-2" />
-                Merge Into Another
-              </DropdownMenuItem>
-            )}
-            {onSplitToNewCanvas && selectedNodeIds.length > 0 && (
-              <DropdownMenuItem onClick={handleOpenSplitDialog}>
-                <Scissors className="h-4 w-4 mr-2" />
-                Split Selection to New Canvas
-              </DropdownMenuItem>
-            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -240,6 +218,7 @@ export function CanvasNavigator({
           className="h-7 w-7 flex-shrink-0"
           onClick={onNext}
           disabled={totalCanvases <= 1}
+          title="Next Canvas"
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -250,6 +229,7 @@ export function CanvasNavigator({
           size="icon"
           className="h-7 w-7 flex-shrink-0"
           onClick={handleOpenEditDialog}
+          title="Edit Canvas"
         >
           <Settings className="h-4 w-4" />
         </Button>
@@ -260,9 +240,55 @@ export function CanvasNavigator({
           size="icon"
           className="h-7 w-7 flex-shrink-0"
           onClick={() => setIsNewDialogOpen(true)}
+          title="New Canvas"
         >
           <Plus className="h-4 w-4" />
         </Button>
+      </div>
+
+      {/* Canvas Actions Row - visible buttons for management */}
+      <div className="px-2 pb-2 flex items-center gap-1 flex-wrap">
+        {/* Duplicate Button */}
+        {onDuplicateCanvas && activeCanvasId && !isLegacyMode && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={handleOpenDuplicateDialog}
+            title="Duplicate this canvas with all nodes, edges, and layers"
+          >
+            <Copy className="h-3 w-3" />
+            Duplicate
+          </Button>
+        )}
+        
+        {/* Merge Button */}
+        {onMergeCanvases && canvases.length >= 2 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={handleOpenMergeDialog}
+            title="Merge this canvas into another"
+          >
+            <Merge className="h-3 w-3" />
+            Merge
+          </Button>
+        )}
+        
+        {/* Split Selection Button */}
+        {onSplitToNewCanvas && selectedNodeIds.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={handleOpenSplitDialog}
+            title={`Move ${selectedNodeIds.length} selected node(s) to a new canvas`}
+          >
+            <Scissors className="h-3 w-3" />
+            Split ({selectedNodeIds.length})
+          </Button>
+        )}
       </div>
 
       {/* Collapsible Details Section */}
