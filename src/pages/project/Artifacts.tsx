@@ -1227,8 +1227,8 @@ ${artifact.content}`;
                       className="rounded-r-none border-r"
                       onClick={() => setEditViewMode("raw")}
                     >
-                      <Edit2 className="h-3 w-3 mr-1" />
-                      Raw
+                      <Edit2 className="h-3 w-3 md:mr-1" />
+                      <span className="hidden md:inline">Raw</span>
                     </Button>
                     <Button
                       variant={editViewMode === "markdown" ? "secondary" : "ghost"}
@@ -1236,8 +1236,8 @@ ${artifact.content}`;
                       className="rounded-none border-r"
                       onClick={() => setEditViewMode("markdown")}
                     >
-                      <Eye className="h-3 w-3 mr-1" />
-                      Markdown
+                      <Eye className="h-3 w-3 md:mr-1" />
+                      <span className="hidden md:inline">Markdown</span>
                     </Button>
                     <Button
                       variant={editViewMode === "source" ? "secondary" : "ghost"}
@@ -1245,8 +1245,8 @@ ${artifact.content}`;
                       className="rounded-none border-r"
                       onClick={() => setEditViewMode("source")}
                     >
-                      <Code className="h-3 w-3 mr-1" />
-                      Source
+                      <Code className="h-3 w-3 md:mr-1" />
+                      <span className="hidden md:inline">Source</span>
                     </Button>
                     <Button
                       variant={editViewMode === "html" ? "secondary" : "ghost"}
@@ -1254,8 +1254,8 @@ ${artifact.content}`;
                       className="rounded-l-none"
                       onClick={() => setEditViewMode("html")}
                     >
-                      <Globe className="h-3 w-3 mr-1" />
-                      HTML
+                      <Globe className="h-3 w-3 md:mr-1" />
+                      <span className="hidden md:inline">HTML</span>
                     </Button>
                   </div>
                 </div>
