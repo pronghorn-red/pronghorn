@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Code, Save, Loader2, GitCompare, AlertTriangle, Globe, Maximize2, X, RotateCcw } from 'lucide-react';
+import { Eye, Code, Save, Loader2, GitCompare, AlertTriangle, Globe, Maximize2, X } from 'lucide-react';
 import Editor, { DiffEditor, Monaco } from '@monaco-editor/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -14,6 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { HtmlPreview } from '@/components/chat/HtmlPreview';
 
 interface CollaborationEditorProps {
   content: string;
@@ -26,72 +27,6 @@ interface CollaborationEditorProps {
   hasConflict?: boolean;
   readOnly?: boolean;
   currentVersion: number;
-}
-
-interface HtmlPreviewProps {
-  content: string;
-  className?: string;
-}
-
-function HtmlPreview({ content, className }: HtmlPreviewProps) {
-  const [key, setKey] = useState(0);
-
-  // Force iframe refresh when content changes significantly
-  useEffect(() => {
-    setKey(prev => prev + 1);
-  }, [content]);
-
-  // Wrap content in full HTML structure if needed
-  const wrappedContent = useMemo(() => {
-    const trimmed = content.trim().toLowerCase();
-    
-    // If content already has full HTML structure, use as-is
-    if (trimmed.startsWith('<!doctype') || trimmed.startsWith('<html')) {
-      return content;
-    }
-    
-    // Otherwise, wrap in basic HTML structure
-    return `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-      body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 16px; }
-    </style>
-  </head>
-  <body>
-    ${content}
-  </body>
-</html>`;
-  }, [content]);
-
-  const handleRefresh = useCallback(() => {
-    setKey(prev => prev + 1);
-  }, []);
-
-  return (
-    <div className={cn("relative w-full h-full flex flex-col", className)}>
-      <div className="absolute top-2 right-2 z-10">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={handleRefresh}
-          className="h-7 bg-background/80 backdrop-blur"
-        >
-          <RotateCcw className="h-3 w-3 mr-1" />
-          Refresh
-        </Button>
-      </div>
-      <iframe
-        key={key}
-        srcDoc={wrappedContent}
-        sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
-        className="w-full flex-1 border-0 bg-white rounded"
-        title="HTML Preview"
-      />
-    </div>
-  );
 }
 
 export function CollaborationEditor({
