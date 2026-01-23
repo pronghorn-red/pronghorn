@@ -11,7 +11,8 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeArtifacts, buildArtifactHierarchy } from "@/hooks/useRealtimeArtifacts";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X, ScanEye, Wand2, Copy, FolderPlus, TreePine, Folder, ChevronRight, PanelLeftClose, PanelLeft, Eye, Globe, ExternalLink, Check, Share2 } from "lucide-react";
+import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X, ScanEye, Wand2, Copy, FolderPlus, TreePine, Folder, ChevronRight, PanelLeftClose, PanelLeft, Eye, Globe, ExternalLink, Check, Share2, Code } from "lucide-react";
+import Editor from "@monaco-editor/react";
 import { ShareArtifactDialog } from "@/components/artifacts/ShareArtifactDialog";
 import { CreateFolderDialog } from "@/components/artifacts/CreateFolderDialog";
 import { MoveArtifactDialog } from "@/components/artifacts/MoveArtifactDialog";
@@ -105,7 +106,7 @@ export default function Artifacts() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [showFolderSidebar, setShowFolderSidebar] = useState(true);
   const [viewingArtifact, setViewingArtifact] = useState<Artifact | null>(null);
-  const [editViewMode, setEditViewMode] = useState<"raw" | "markdown">("raw");
+  const [editViewMode, setEditViewMode] = useState<"raw" | "markdown" | "source" | "html">("raw");
   const [sharingArtifact, setSharingArtifact] = useState<Artifact | null>(null);
 
   // Fetch project settings for model configuration
@@ -1216,25 +1217,45 @@ ${artifact.content}`;
         }}>
           <DialogContent className="w-[calc(100vw-50px)] max-w-none h-[calc(100vh-50px)] flex flex-col p-0">
             <DialogHeader className="px-6 py-4 border-b shrink-0">
-              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center justify-between gap-4">
                 <DialogTitle className="text-lg">Edit Artifact</DialogTitle>
                 <div className="flex items-center gap-2">
                   <div className="flex rounded-md border">
                     <Button
                       variant={editViewMode === "raw" ? "secondary" : "ghost"}
                       size="sm"
-                      className="rounded-r-none"
+                      className="rounded-r-none border-r"
                       onClick={() => setEditViewMode("raw")}
                     >
+                      <Edit2 className="h-3 w-3 mr-1" />
                       Raw
                     </Button>
                     <Button
                       variant={editViewMode === "markdown" ? "secondary" : "ghost"}
                       size="sm"
-                      className="rounded-l-none"
+                      className="rounded-none border-r"
                       onClick={() => setEditViewMode("markdown")}
                     >
+                      <Eye className="h-3 w-3 mr-1" />
                       Markdown
+                    </Button>
+                    <Button
+                      variant={editViewMode === "source" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="rounded-none border-r"
+                      onClick={() => setEditViewMode("source")}
+                    >
+                      <Code className="h-3 w-3 mr-1" />
+                      Source
+                    </Button>
+                    <Button
+                      variant={editViewMode === "html" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="rounded-l-none"
+                      onClick={() => setEditViewMode("html")}
+                    >
+                      <Globe className="h-3 w-3 mr-1" />
+                      HTML
                     </Button>
                   </div>
                 </div>
@@ -1314,7 +1335,7 @@ ${artifact.content}`;
               
               <div className="flex-1 flex flex-col min-h-0">
                 <Label htmlFor="artifact-content" className="mb-2">Content</Label>
-                {editViewMode === "raw" ? (
+                {editViewMode === "raw" && (
                   <Textarea
                     id="artifact-content"
                     value={editingArtifact.content}
@@ -1323,7 +1344,8 @@ ${artifact.content}`;
                     }
                     className="flex-1 resize-none font-mono text-sm"
                   />
-                ) : (
+                )}
+                {editViewMode === "markdown" && (
                   <ScrollArea className="flex-1 border rounded-md p-4 bg-muted/30">
                     <div className="prose prose-sm dark:prose-invert max-w-none">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -1331,6 +1353,56 @@ ${artifact.content}`;
                       </ReactMarkdown>
                     </div>
                   </ScrollArea>
+                )}
+                {editViewMode === "source" && (
+                  <div className="flex-1 border rounded-md overflow-hidden">
+                    <Editor
+                      height="100%"
+                      language="markdown"
+                      value={editingArtifact.content}
+                      onChange={(value) =>
+                        setEditingArtifact({ ...editingArtifact, content: value || "" })
+                      }
+                      options={{
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                        lineNumbers: 'on',
+                        folding: true,
+                        wordWrap: 'on',
+                        fontSize: 13,
+                      }}
+                      theme="vs-dark"
+                    />
+                  </div>
+                )}
+                {editViewMode === "html" && (
+                  <div className="flex-1 border rounded-md overflow-hidden bg-white">
+                    <iframe
+                      srcDoc={(() => {
+                        const content = editingArtifact.content;
+                        const trimmed = content.trim().toLowerCase();
+                        if (trimmed.startsWith('<!doctype') || trimmed.startsWith('<html')) {
+                          return content;
+                        }
+                        return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 16px; }
+    </style>
+  </head>
+  <body>
+    ${content}
+  </body>
+</html>`;
+                      })()}
+                      sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
+                      className="w-full h-full border-0"
+                      title="HTML Preview"
+                    />
+                  </div>
                 )}
               </div>
             </div>
