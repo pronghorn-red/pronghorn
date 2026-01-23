@@ -11,7 +11,8 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeArtifacts, buildArtifactHierarchy } from "@/hooks/useRealtimeArtifacts";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X, ScanEye, Wand2, Copy, FolderPlus, TreePine, Folder, ChevronRight, PanelLeftClose, PanelLeft, Eye, Globe, ExternalLink, Check } from "lucide-react";
+import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X, ScanEye, Wand2, Copy, FolderPlus, TreePine, Folder, ChevronRight, PanelLeftClose, PanelLeft, Eye, Globe, ExternalLink, Check, Share2 } from "lucide-react";
+import { ShareArtifactDialog } from "@/components/artifacts/ShareArtifactDialog";
 import { CreateFolderDialog } from "@/components/artifacts/CreateFolderDialog";
 import { MoveArtifactDialog } from "@/components/artifacts/MoveArtifactDialog";
 import { ArtifactTreeManager } from "@/components/artifacts/ArtifactTreeManager";
@@ -105,6 +106,7 @@ export default function Artifacts() {
   const [showFolderSidebar, setShowFolderSidebar] = useState(true);
   const [viewingArtifact, setViewingArtifact] = useState<Artifact | null>(null);
   const [editViewMode, setEditViewMode] = useState<"raw" | "markdown">("raw");
+  const [sharingArtifact, setSharingArtifact] = useState<Artifact | null>(null);
 
   // Fetch project settings for model configuration
   const { data: project } = useQuery({
@@ -688,6 +690,15 @@ ${artifact.content}`;
                             <Button 
                               variant="ghost" 
                               size="icon"
+                              className="h-8 w-8"
+                              title="Share"
+                              onClick={() => { setSharingArtifact(viewingArtifact); setViewingArtifact(null); }}
+                            >
+                              <Share2 className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive"
                               title="Delete"
                               onClick={() => { setDeletingArtifact({ id: viewingArtifact.id, title: viewingArtifact.ai_title || "Untitled" }); setViewingArtifact(null); }}
@@ -925,6 +936,18 @@ ${artifact.content}`;
                                   <Button
                                     variant="ghost"
                                     size="icon"
+                                    onClick={() => setSharingArtifact(artifact)}
+                                  >
+                                    <Share2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Share Artifact</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     onClick={() => setDeletingArtifact({ id: artifact.id, title: artifact.ai_title || "Untitled" })}
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -1133,6 +1156,19 @@ ${artifact.content}`;
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>Clone Artifact</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => setSharingArtifact(artifact)}
+                                    >
+                                      <Share2 className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Share Artifact</TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
@@ -1369,6 +1405,16 @@ ${artifact.content}`;
           await moveArtifact(artifactId, newParentId);
         }}
       />
+
+      {/* Share Artifact Dialog */}
+      {sharingArtifact && (
+        <ShareArtifactDialog
+          open={!!sharingArtifact}
+          onOpenChange={(open) => !open && setSharingArtifact(null)}
+          artifact={sharingArtifact}
+          onUpdatePublished={updatePublishedStatus}
+        />
+      )}
     </div>
   );
 }
