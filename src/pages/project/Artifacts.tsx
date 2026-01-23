@@ -11,7 +11,7 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeArtifacts, buildArtifactHierarchy } from "@/hooks/useRealtimeArtifacts";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X, ScanEye, Wand2, Copy, FolderPlus, TreePine, Folder, ChevronRight, PanelLeftClose, PanelLeft, Eye } from "lucide-react";
+import { Plus, Search, Trash2, Edit2, Sparkles, LayoutGrid, List, ArrowUpDown, Users, Download, Grid3X3, Link2, X, ScanEye, Wand2, Copy, FolderPlus, TreePine, Folder, ChevronRight, PanelLeftClose, PanelLeft, Eye, Globe, ExternalLink, Check } from "lucide-react";
 import { CreateFolderDialog } from "@/components/artifacts/CreateFolderDialog";
 import { MoveArtifactDialog } from "@/components/artifacts/MoveArtifactDialog";
 import { ArtifactTreeManager } from "@/components/artifacts/ArtifactTreeManager";
@@ -68,6 +68,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 export default function Artifacts() {
@@ -75,7 +76,7 @@ export default function Artifacts() {
   const { token: shareToken, isTokenSet, tokenMissing } = useShareToken(projectId);
   const { user } = useAuth();
   const hasAccessToken = !!shareToken || !!user;
-  const { artifacts, artifactTree, isLoading, addArtifact, addFolder, moveArtifact, renameFolder, updateArtifact, deleteArtifact, deleteFolder, refresh, broadcastRefresh } = useRealtimeArtifacts(
+  const { artifacts, artifactTree, isLoading, addArtifact, addFolder, moveArtifact, renameFolder, updateArtifact, updatePublishedStatus, deleteArtifact, deleteFolder, refresh, broadcastRefresh } = useRealtimeArtifacts(
     projectId,
     shareToken,
     hasAccessToken && isTokenSet
@@ -1204,6 +1205,68 @@ ${artifact.content}`;
                   placeholder="Artifact title..."
                 />
               </div>
+              
+              {/* Publishing Section */}
+              <div className="shrink-0 p-4 border rounded-lg bg-muted/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-muted-foreground" />
+                    <Label htmlFor="publish-toggle" className="text-sm font-medium">
+                      Publish publicly
+                    </Label>
+                  </div>
+                  <Switch
+                    id="publish-toggle"
+                    checked={editingArtifact.is_published || false}
+                    onCheckedChange={(checked) => {
+                      setEditingArtifact({ ...editingArtifact, is_published: checked });
+                      updatePublishedStatus(editingArtifact.id, checked);
+                    }}
+                  />
+                </div>
+                {editingArtifact.is_published && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">Public URL:</span>
+                    <code className="bg-background px-2 py-1 rounded text-xs font-mono flex-1 truncate">
+                      https://pronghorn.red/viewer/{editingArtifact.id}
+                    </code>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`https://pronghorn.red/viewer/${editingArtifact.id}`);
+                              toast.success("URL copied to clipboard");
+                            }}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Copy URL</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => {
+                              window.open(`https://pronghorn.red/viewer/${editingArtifact.id}`, '_blank');
+                            }}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Open in new tab</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
+              </div>
+              
               <div className="flex-1 flex flex-col min-h-0">
                 <Label htmlFor="artifact-content" className="mb-2">Content</Label>
                 {editViewMode === "raw" ? (

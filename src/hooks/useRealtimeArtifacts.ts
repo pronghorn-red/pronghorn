@@ -22,6 +22,8 @@ export interface Artifact {
   // Folder fields
   parent_id: string | null;
   is_folder: boolean;
+  // Publishing
+  is_published: boolean;
   // For tree structure
   children?: Artifact[];
 }
@@ -228,6 +230,7 @@ export const useRealtimeArtifacts = (
       provenance_total_pages: options?.provenanceTotalPages || null,
       parent_id: parentId || null,
       is_folder: false,
+      is_published: false,
     };
 
     setArtifacts((prev) => [...prev, optimisticArtifact]);
@@ -296,6 +299,7 @@ export const useRealtimeArtifacts = (
       provenance_total_pages: null,
       parent_id: parentId || null,
       is_folder: true,
+      is_published: false,
     };
 
     setArtifacts((prev) => [...prev, optimisticFolder]);
@@ -570,6 +574,46 @@ export const useRealtimeArtifacts = (
     }
   }, []);
 
+  const updatePublishedStatus = async (id: string, isPublished: boolean) => {
+    const originalArtifacts = artifacts;
+
+    try {
+      // Optimistic update
+      setArtifacts(prev =>
+        prev.map(artifact =>
+          artifact.id === id
+            ? { ...artifact, is_published: isPublished, updated_at: new Date().toISOString() }
+            : artifact
+        )
+      );
+
+      const { data, error } = await supabase.rpc("update_artifact_published_with_token", {
+        p_id: id,
+        p_token: shareToken || null,
+        p_is_published: isPublished,
+      });
+
+      if (error) throw error;
+
+      // Broadcast update
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'artifact_refresh',
+          payload: { action: 'publish', id }
+        });
+      }
+
+      toast.success(isPublished ? "Artifact published" : "Artifact unpublished");
+      return data;
+    } catch (error) {
+      setArtifacts(originalArtifacts);
+      console.error("Error updating publish status:", error);
+      toast.error("Failed to update publish status");
+      throw error;
+    }
+  };
+
   return {
     artifacts,
     artifactTree,
@@ -579,6 +623,7 @@ export const useRealtimeArtifacts = (
     moveArtifact,
     renameFolder,
     updateArtifact,
+    updatePublishedStatus,
     deleteArtifact,
     deleteFolder,
     refresh: loadArtifacts,

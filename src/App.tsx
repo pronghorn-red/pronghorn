@@ -45,6 +45,9 @@ const Artifacts = lazy(() => import("./pages/project/Artifacts"));
 const Chat = lazy(() => import("./pages/project/Chat"));
 const Present = lazy(() => import("./pages/project/Present"));
 
+// Public viewer page (no auth required)
+const Viewer = lazy(() => import("./pages/Viewer"));
+
 const App = () => (
   <>
     <ScrollToTop />
@@ -57,6 +60,11 @@ const App = () => (
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/license" element={<License />} />
+        
+        {/* Public viewer routes - no authentication required */}
+        <Route path="/viewer/:artifactId" element={<Viewer />} />
+        <Route path="/viewer/:artifactId/raw" element={<Viewer />} />
+        <Route path="/viewer/:artifactId/binary" element={<Viewer />} />
         
         {/* Protected routes - require signup validation */}
         <Route path="/dashboard" element={withValidation(Dashboard)} />

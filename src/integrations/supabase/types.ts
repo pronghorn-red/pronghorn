@@ -513,6 +513,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_folder: boolean
+          is_published: boolean
           parent_id: string | null
           project_id: string
           provenance_id: string | null
@@ -532,6 +533,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_folder?: boolean
+          is_published?: boolean
           parent_id?: string | null
           project_id: string
           provenance_id?: string | null
@@ -551,6 +553,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_folder?: boolean
+          is_published?: boolean
           parent_id?: string | null
           project_id?: string
           provenance_id?: string | null
@@ -3886,6 +3889,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_folder: boolean
+          is_published: boolean
           parent_id: string | null
           project_id: string
           provenance_id: string | null
@@ -5029,6 +5033,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_published_artifact: {
+        Args: { p_artifact_id: string }
+        Returns: {
+          ai_summary: string
+          ai_title: string
+          content: string
+          created_at: string
+          id: string
+          image_url: string
+          is_folder: boolean
+          project_id: string
+          source_type: string
+          updated_at: string
+        }[]
+      }
       get_published_project_content_summary: {
         Args: { p_published_id: string }
         Returns: Json
@@ -5473,6 +5492,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_folder: boolean
+          is_published: boolean
           parent_id: string | null
           project_id: string
           provenance_id: string | null
@@ -5513,6 +5533,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_folder: boolean
+          is_published: boolean
           parent_id: string | null
           project_id: string
           provenance_id: string | null
@@ -6335,6 +6356,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_folder: boolean
+          is_published: boolean
           parent_id: string | null
           project_id: string
           provenance_id: string | null
@@ -6397,6 +6419,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_folder: boolean
+          is_published: boolean
           parent_id: string | null
           project_id: string
           provenance_id: string | null
@@ -6854,6 +6877,35 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_artifact_published_with_token: {
+        Args: { p_id: string; p_is_published: boolean; p_token: string }
+        Returns: {
+          ai_summary: string | null
+          ai_title: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          image_url: string | null
+          is_folder: boolean
+          is_published: boolean
+          parent_id: string | null
+          project_id: string
+          provenance_id: string | null
+          provenance_page: number | null
+          provenance_path: string | null
+          provenance_total_pages: number | null
+          source_id: string | null
+          source_type: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "artifacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_artifact_with_token: {
         Args: {
           p_ai_summary?: string
@@ -6872,6 +6924,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_folder: boolean
+          is_published: boolean
           parent_id: string | null
           project_id: string
           provenance_id: string | null
