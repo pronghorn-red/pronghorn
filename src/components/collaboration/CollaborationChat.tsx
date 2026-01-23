@@ -34,6 +34,8 @@ interface CollaborationChatProps {
   attachedCount?: number;
   onAttach?: () => void;
   onClearContext?: () => void;
+  inputValue?: string;
+  onInputChange?: (value: string) => void;
 }
 
 export function CollaborationChat({
@@ -47,8 +49,13 @@ export function CollaborationChat({
   attachedCount = 0,
   onAttach,
   onClearContext,
+  inputValue,
+  onInputChange,
 }: CollaborationChatProps) {
-  const [input, setInput] = useState('');
+  // Use controlled state if provided, otherwise use local state as fallback
+  const [localInput, setLocalInput] = useState('');
+  const input = inputValue !== undefined ? inputValue : localInput;
+  const setInput = onInputChange || setLocalInput;
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);

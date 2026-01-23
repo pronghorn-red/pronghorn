@@ -101,6 +101,9 @@ export function ArtifactCollaborator({
   // ProjectSelector state for attaching context
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
   const [attachedContext, setAttachedContext] = useState<ProjectSelectionResult | null>(null);
+  
+  // Persistent chat input state - survives tab switches and navigation
+  const [chatInputValue, setChatInputValue] = useState('');
 
   const {
     collaboration,
@@ -858,6 +861,8 @@ export function ArtifactCollaborator({
               attachedCount={totalAttachments}
               onAttach={() => setIsProjectSelectorOpen(true)}
               onClearContext={() => setAttachedContext(null)}
+              inputValue={chatInputValue}
+              onInputChange={setChatInputValue}
             />
           </TabsContent>
 
@@ -1017,6 +1022,8 @@ export function ArtifactCollaborator({
               attachedCount={totalAttachments}
               onAttach={() => setIsProjectSelectorOpen(true)}
               onClearContext={() => setAttachedContext(null)}
+              inputValue={chatInputValue}
+              onInputChange={setChatInputValue}
             />
           </div>
         </ResizablePanel>
