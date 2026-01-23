@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Settings, ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Settings, ChevronDown, ChevronUp, Copy, Merge, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ProjectCanvas } from "@/hooks/useProjectCanvases";
 
 interface CanvasNavigatorProps {
@@ -21,6 +22,10 @@ interface CanvasNavigatorProps {
   onCreateCanvas: (name: string, description?: string, tags?: string[]) => void;
   onUpdateCanvas: (canvas: Partial<ProjectCanvas> & { id: string }) => void;
   onDeleteCanvas: (canvasId: string) => void;
+  onDuplicateCanvas?: (canvasId: string, newName: string) => void;
+  onMergeCanvases?: (sourceCanvasId: string, targetCanvasId: string) => void;
+  onSplitToNewCanvas?: (nodeIds: string[], newCanvasName: string) => void;
+  selectedNodeIds?: string[];
 }
 
 export function CanvasNavigator({
@@ -34,10 +39,17 @@ export function CanvasNavigator({
   onCreateCanvas,
   onUpdateCanvas,
   onDeleteCanvas,
+  onDuplicateCanvas,
+  onMergeCanvases,
+  onSplitToNewCanvas,
+  selectedNodeIds = [],
 }: CanvasNavigatorProps) {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
+  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
+  const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
+  const [isSplitDialogOpen, setIsSplitDialogOpen] = useState(false);
   
   // Edit form state
   const [editName, setEditName] = useState("");
@@ -48,6 +60,15 @@ export function CanvasNavigator({
   const [newName, setNewName] = useState("New Canvas");
   const [newDescription, setNewDescription] = useState("");
   const [newTags, setNewTags] = useState("");
+
+  // Duplicate form state
+  const [duplicateName, setDuplicateName] = useState("");
+  
+  // Merge form state
+  const [mergeTargetId, setMergeTargetId] = useState<string>("");
+  
+  // Split form state
+  const [splitCanvasName, setSplitCanvasName] = useState("Split Canvas");
 
   const displayName = isLegacyMode ? "Canvas 1" : (activeCanvas?.name || "Canvas 1");
   const displayDescription = activeCanvas?.description || "";
@@ -92,6 +113,51 @@ export function CanvasNavigator({
     setNewName("New Canvas");
     setNewDescription("");
     setNewTags("");
+  };
+
+  const handleOpenDuplicateDialog = () => {
+    if (activeCanvas) {
+      setDuplicateName(`${activeCanvas.name} (Copy)`);
+    } else {
+      setDuplicateName("Canvas 1 (Copy)");
+    }
+    setIsDuplicateDialogOpen(true);
+  };
+
+  const handleDuplicate = () => {
+    if (activeCanvasId && onDuplicateCanvas) {
+      onDuplicateCanvas(activeCanvasId, duplicateName);
+    }
+    setIsDuplicateDialogOpen(false);
+    setDuplicateName("");
+  };
+
+  const handleOpenMergeDialog = () => {
+    // Default to first canvas that isn't the current one
+    const otherCanvas = canvases.find(c => c.id !== activeCanvasId);
+    setMergeTargetId(otherCanvas?.id || "");
+    setIsMergeDialogOpen(true);
+  };
+
+  const handleMerge = () => {
+    if (activeCanvasId && mergeTargetId && onMergeCanvases) {
+      onMergeCanvases(activeCanvasId, mergeTargetId);
+    }
+    setIsMergeDialogOpen(false);
+    setMergeTargetId("");
+  };
+
+  const handleOpenSplitDialog = () => {
+    setSplitCanvasName("Split Canvas");
+    setIsSplitDialogOpen(true);
+  };
+
+  const handleSplit = () => {
+    if (selectedNodeIds.length > 0 && onSplitToNewCanvas) {
+      onSplitToNewCanvas(selectedNodeIds, splitCanvasName);
+    }
+    setIsSplitDialogOpen(false);
+    setSplitCanvasName("Split Canvas");
   };
 
   return (
@@ -146,6 +212,24 @@ export function CanvasNavigator({
               <Plus className="h-4 w-4 mr-2" />
               New Canvas
             </DropdownMenuItem>
+            {onDuplicateCanvas && activeCanvasId && !isLegacyMode && (
+              <DropdownMenuItem onClick={handleOpenDuplicateDialog}>
+                <Copy className="h-4 w-4 mr-2" />
+                Duplicate Canvas
+              </DropdownMenuItem>
+            )}
+            {onMergeCanvases && canvases.length >= 2 && (
+              <DropdownMenuItem onClick={handleOpenMergeDialog}>
+                <Merge className="h-4 w-4 mr-2" />
+                Merge Into Another
+              </DropdownMenuItem>
+            )}
+            {onSplitToNewCanvas && selectedNodeIds.length > 0 && (
+              <DropdownMenuItem onClick={handleOpenSplitDialog}>
+                <Scissors className="h-4 w-4 mr-2" />
+                Split Selection to New Canvas
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -316,6 +400,111 @@ export function CanvasNavigator({
               Cancel
             </Button>
             <Button onClick={handleCreateNew}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate Canvas Dialog */}
+      <Dialog open={isDuplicateDialogOpen} onOpenChange={setIsDuplicateDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Duplicate Canvas</DialogTitle>
+            <DialogDescription>
+              Create a copy of the current canvas with all nodes, edges, and layers.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="duplicate-canvas-name">New Canvas Name</Label>
+              <Input
+                id="duplicate-canvas-name"
+                value={duplicateName}
+                onChange={(e) => setDuplicateName(e.target.value)}
+                placeholder="Canvas name"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDuplicateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleDuplicate} disabled={!duplicateName.trim()}>
+              <Copy className="h-4 w-4 mr-2" />
+              Duplicate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Merge Canvas Dialog */}
+      <Dialog open={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Merge Canvas</DialogTitle>
+            <DialogDescription>
+              Move all nodes, edges, and layers from "{activeCanvas?.name || 'Current Canvas'}" into another canvas.
+              The current canvas will be deleted after merging.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Merge Into</Label>
+              <Select value={mergeTargetId} onValueChange={setMergeTargetId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select target canvas" />
+                </SelectTrigger>
+                <SelectContent>
+                  {canvases
+                    .filter(c => c.id !== activeCanvasId)
+                    .map((canvas) => (
+                      <SelectItem key={canvas.id} value={canvas.id}>
+                        {canvas.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsMergeDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleMerge} disabled={!mergeTargetId}>
+              <Merge className="h-4 w-4 mr-2" />
+              Merge & Delete Current
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Split to New Canvas Dialog */}
+      <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Split to New Canvas</DialogTitle>
+            <DialogDescription>
+              Move {selectedNodeIds.length} selected node{selectedNodeIds.length !== 1 ? 's' : ''} and their connected edges to a new canvas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="split-canvas-name">New Canvas Name</Label>
+              <Input
+                id="split-canvas-name"
+                value={splitCanvasName}
+                onChange={(e) => setSplitCanvasName(e.target.value)}
+                placeholder="Canvas name"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSplitDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSplit} disabled={!splitCanvasName.trim() || selectedNodeIds.length === 0}>
+              <Scissors className="h-4 w-4 mr-2" />
+              Split to New Canvas
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

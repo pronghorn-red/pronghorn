@@ -3733,6 +3733,14 @@ export type Database = {
         Args: { p_repo_id: string; p_token: string }
         Returns: number
       }
+      duplicate_project_canvas_with_token: {
+        Args: {
+          p_new_name: string
+          p_source_canvas_id: string
+          p_token?: string
+        }
+        Returns: string
+      }
       generate_requirement_code: {
         Args: { p_parent_id: string; p_project_id: string; p_type: string }
         Returns: string
@@ -6440,6 +6448,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      merge_project_canvases_with_token: {
+        Args: {
+          p_source_canvas_id: string
+          p_target_canvas_id: string
+          p_token?: string
+        }
+        Returns: undefined
+      }
       migrate_legacy_canvas_data: {
         Args: { p_canvas_id: string; p_project_id: string; p_token?: string }
         Returns: undefined
@@ -6499,6 +6515,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      move_nodes_to_canvas_with_token: {
+        Args: {
+          p_node_ids: string[]
+          p_target_canvas_id: string
+          p_token?: string
+        }
+        Returns: undefined
       }
       publish_project_to_gallery: {
         Args: {

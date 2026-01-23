@@ -34,6 +34,9 @@ interface CanvasPaletteProps {
   onCreateCanvas: (name: string, description?: string, tags?: string[]) => void;
   onUpdateCanvas: (canvas: Partial<ProjectCanvas> & { id: string }) => void;
   onDeleteCanvas: (canvasId: string) => void;
+  onDuplicateCanvas?: (canvasId: string, newName: string) => void;
+  onMergeCanvases?: (sourceCanvasId: string, targetCanvasId: string) => void;
+  onSplitToNewCanvas?: (nodeIds: string[], newCanvasName: string) => void;
 }
 
 export function CanvasPalette({
@@ -59,6 +62,9 @@ export function CanvasPalette({
   onCreateCanvas,
   onUpdateCanvas,
   onDeleteCanvas,
+  onDuplicateCanvas,
+  onMergeCanvases,
+  onSplitToNewCanvas,
 }: CanvasPaletteProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   
@@ -145,6 +151,10 @@ export function CanvasPalette({
             onCreateCanvas={onCreateCanvas}
             onUpdateCanvas={onUpdateCanvas}
             onDeleteCanvas={onDeleteCanvas}
+            onDuplicateCanvas={onDuplicateCanvas}
+            onMergeCanvases={onMergeCanvases}
+            onSplitToNewCanvas={onSplitToNewCanvas}
+            selectedNodeIds={selectedNodes.map(n => n.id)}
           />
 
           <ScrollArea className="flex-1 overflow-y-auto">

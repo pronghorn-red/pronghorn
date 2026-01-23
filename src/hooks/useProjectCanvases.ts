@@ -192,6 +192,105 @@ export function useProjectCanvases(projectId: string, token: string | null) {
     }
   };
 
+  // Duplicate a canvas
+  const duplicateCanvas = async (sourceCanvasId: string, newName: string) => {
+    const { data, error } = await supabase.rpc("duplicate_project_canvas_with_token", {
+      p_source_canvas_id: sourceCanvasId,
+      p_new_name: newName,
+      p_token: token || null,
+    });
+
+    if (error) {
+      console.error("Error duplicating canvas:", error);
+      throw error;
+    }
+
+    // Reload to get the new canvas
+    await loadCanvases();
+    
+    // Switch to the new canvas
+    if (data) {
+      setActiveCanvasId(data);
+    }
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "canvases_refresh",
+        payload: { projectId },
+      });
+    }
+
+    return data;
+  };
+
+  // Merge one canvas into another
+  const mergeCanvases = async (sourceCanvasId: string, targetCanvasId: string) => {
+    const { error } = await supabase.rpc("merge_project_canvases_with_token", {
+      p_source_canvas_id: sourceCanvasId,
+      p_target_canvas_id: targetCanvasId,
+      p_token: token || null,
+    });
+
+    if (error) {
+      console.error("Error merging canvases:", error);
+      throw error;
+    }
+
+    // Switch to target canvas
+    setActiveCanvasId(targetCanvasId);
+    
+    // Reload to reflect deletion of source
+    await loadCanvases();
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "canvases_refresh",
+        payload: { projectId },
+      });
+    }
+  };
+
+  // Split selected nodes to a new canvas
+  const splitToNewCanvas = async (nodeIds: string[], newCanvasName: string) => {
+    const newCanvasId = crypto.randomUUID();
+    
+    // Create the new canvas first
+    await saveCanvas({
+      id: newCanvasId,
+      name: newCanvasName,
+      description: `Split from ${activeCanvas?.name || 'Canvas'}`,
+      tags: [],
+      is_default: false,
+    });
+
+    // Move nodes to new canvas
+    const { error } = await supabase.rpc("move_nodes_to_canvas_with_token", {
+      p_node_ids: nodeIds,
+      p_target_canvas_id: newCanvasId,
+      p_token: token || null,
+    });
+
+    if (error) {
+      console.error("Error moving nodes to new canvas:", error);
+      throw error;
+    }
+
+    // Switch to the new canvas
+    setActiveCanvasId(newCanvasId);
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "canvases_refresh",
+        payload: { projectId },
+      });
+    }
+
+    return newCanvasId;
+  };
+
   // Navigate to previous canvas
   const goToPreviousCanvas = useCallback(() => {
     if (canvases.length === 0) return;
@@ -225,6 +324,9 @@ export function useProjectCanvases(projectId: string, token: string | null) {
     isLegacyMode,
     saveCanvas,
     deleteCanvas,
+    duplicateCanvas,
+    mergeCanvases,
+    splitToNewCanvas,
     migrateLegacyData,
     goToPreviousCanvas,
     goToNextCanvas,
