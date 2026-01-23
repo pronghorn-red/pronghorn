@@ -11,6 +11,8 @@ import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
 interface CollaborationEditorProps {
@@ -104,6 +106,7 @@ export function CollaborationEditor({
   readOnly = false,
   currentVersion,
 }: CollaborationEditorProps) {
+  const isMobile = useIsMobile();
   const [viewMode, setViewMode] = useState<'rendered' | 'source' | 'diff' | 'html'>(isMarkdown ? 'rendered' : 'source');
   const [isHtmlFullscreen, setIsHtmlFullscreen] = useState(false);
   const editorRef = useRef<any>(null);
@@ -170,43 +173,68 @@ export function CollaborationEditor({
         <div className="flex items-center gap-2">
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'rendered' | 'source' | 'diff' | 'html')}>
             <TabsList className="h-8">
-              <TabsTrigger value="rendered" className="text-xs h-6 px-2">
-                <Eye className="h-3 w-3 mr-1" />
-                Preview
-              </TabsTrigger>
-              <TabsTrigger value="source" className="text-xs h-6 px-2">
-                <Code className="h-3 w-3 mr-1" />
-                Source
-              </TabsTrigger>
-              <TabsTrigger 
-                value="diff" 
-                className="text-xs h-6 px-2"
-                disabled={!hasDiffContent}
-              >
-                <GitCompare className="h-3 w-3 mr-1" />
-                Diff
-              </TabsTrigger>
-              <TabsTrigger value="html" className="text-xs h-6 px-2">
-                <Globe className="h-3 w-3 mr-1" />
-                HTML
-              </TabsTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger value="rendered" className="text-xs h-6 px-2">
+                    <Eye className="h-3 w-3" />
+                    {!isMobile && <span className="ml-1">Preview</span>}
+                  </TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Preview</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger value="source" className="text-xs h-6 px-2">
+                    <Code className="h-3 w-3" />
+                    {!isMobile && <span className="ml-1">Source</span>}
+                  </TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Source</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger 
+                    value="diff" 
+                    className="text-xs h-6 px-2"
+                    disabled={!hasDiffContent}
+                  >
+                    <GitCompare className="h-3 w-3" />
+                    {!isMobile && <span className="ml-1">Diff</span>}
+                  </TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Diff</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TabsTrigger value="html" className="text-xs h-6 px-2">
+                    <Globe className="h-3 w-3" />
+                    {!isMobile && <span className="ml-1">HTML</span>}
+                  </TabsTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">HTML</TooltipContent>
+              </Tooltip>
             </TabsList>
           </Tabs>
           {currentVersion > 0 && (
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-xs hidden sm:flex">
               v{currentVersion}
             </Badge>
           )}
           {viewMode === 'html' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsHtmlFullscreen(true)}
-              className="h-7"
-            >
-              <Maximize2 className="h-3 w-3 mr-1" />
-              Fullscreen
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsHtmlFullscreen(true)}
+                  className="h-7 px-2"
+                >
+                  <Maximize2 className="h-3 w-3" />
+                  {!isMobile && <span className="ml-1">Fullscreen</span>}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Fullscreen</TooltipContent>
+            </Tooltip>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -221,21 +249,26 @@ export function CollaborationEditor({
               Unsaved
             </Badge>
           )}
-          <Button
-            variant={hasConflict ? "destructive" : "outline"}
-            size="sm"
-            onClick={onSave}
-            disabled={isSaving || !hasUnsavedChanges}
-            className="h-7"
-            title={hasConflict ? "Save to overwrite remote changes" : undefined}
-          >
-            {isSaving ? (
-              <Loader2 className="h-3 w-3 animate-spin mr-1" />
-            ) : (
-              <Save className="h-3 w-3 mr-1" />
-            )}
-            {hasConflict ? 'Overwrite' : 'Save'}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={hasConflict ? "destructive" : "outline"}
+                size="sm"
+                onClick={onSave}
+                disabled={isSaving || !hasUnsavedChanges}
+                className="h-7 px-2"
+                title={hasConflict ? "Save to overwrite remote changes" : undefined}
+              >
+                {isSaving ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Save className="h-3 w-3" />
+                )}
+                {!isMobile && <span className="ml-1">{hasConflict ? 'Overwrite' : 'Save'}</span>}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{hasConflict ? 'Overwrite' : 'Save'}</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
