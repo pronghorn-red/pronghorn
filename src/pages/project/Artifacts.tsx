@@ -1272,67 +1272,6 @@ ${artifact.content}`;
                 />
               </div>
               
-              {/* Publishing Section */}
-              <div className="shrink-0 p-4 border rounded-lg bg-muted/30 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Globe className="h-4 w-4 text-muted-foreground" />
-                    <Label htmlFor="publish-toggle" className="text-sm font-medium">
-                      Publish publicly
-                    </Label>
-                  </div>
-                  <Switch
-                    id="publish-toggle"
-                    checked={editingArtifact.is_published || false}
-                    onCheckedChange={(checked) => {
-                      setEditingArtifact({ ...editingArtifact, is_published: checked });
-                      updatePublishedStatus(editingArtifact.id, checked);
-                    }}
-                  />
-                </div>
-                {editingArtifact.is_published && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">Public URL:</span>
-                    <code className="bg-background px-2 py-1 rounded text-xs font-mono flex-1 truncate">
-                      https://pronghorn.red/viewer/{editingArtifact.id}
-                    </code>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            className="h-7 w-7 shrink-0"
-                            onClick={() => {
-                              navigator.clipboard.writeText(`https://pronghorn.red/viewer/${editingArtifact.id}`);
-                              toast.success("URL copied to clipboard");
-                            }}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Copy URL</TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            className="h-7 w-7 shrink-0"
-                            onClick={() => {
-                              window.open(`https://pronghorn.red/viewer/${editingArtifact.id}`, '_blank');
-                            }}
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Open in new tab</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                )}
-              </div>
-              
               <div className="flex-1 flex flex-col min-h-0">
                 <Label htmlFor="artifact-content" className="mb-2">Content</Label>
                 {editViewMode === "raw" && (
