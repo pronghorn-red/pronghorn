@@ -104,8 +104,11 @@ serve(async (req) => {
       drawEdges = true,
       attachedContext,
       projectId,
-      shareToken
+      shareToken,
+      canvasId
     } = body;
+    
+    console.log('[ai-architect] canvasId:', canvasId || 'default');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;

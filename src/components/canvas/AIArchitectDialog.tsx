@@ -19,6 +19,7 @@ interface AIArchitectDialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   onCanvasRefresh?: () => void;
+  canvasId?: string | null;
 }
 
 export function AIArchitectDialog({ 
@@ -29,6 +30,7 @@ export function AIArchitectDialog({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
   onCanvasRefresh,
+  canvasId,
 }: AIArchitectDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -105,6 +107,9 @@ export function AIArchitectDialog({
           data: e.data 
         })),
         attachedContext: selectedContext || undefined,
+        projectId,
+        shareToken,
+        canvasId: canvasId || null,
       };
 
       const { data, error } = await supabase.functions.invoke('ai-architect', {

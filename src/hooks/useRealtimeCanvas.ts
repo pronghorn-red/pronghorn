@@ -59,7 +59,8 @@ export function useRealtimeCanvas(
   shareToken: string | null,
   isTokenSet: boolean,
   initialNodes: Node[],
-  initialEdges: Edge[]
+  initialEdges: Edge[],
+  canvasId?: string | null
 ) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -67,17 +68,19 @@ export function useRealtimeCanvas(
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const syncChannelRef = useRef<any>(null);
 
-  // Wrap loadCanvasData in useCallback with shareToken in dependencies
+  // Wrap loadCanvasData in useCallback with shareToken and canvasId in dependencies
   const loadCanvasData = useCallback(async () => {
     try {
       const [nodesResult, edgesResult] = await Promise.all([
         supabase.rpc("get_canvas_nodes_with_token", {
           p_project_id: projectId,
           p_token: shareToken,
+          p_canvas_id: canvasId || null,
         }),
         supabase.rpc("get_canvas_edges_with_token", {
           p_project_id: projectId,
           p_token: shareToken,
+          p_canvas_id: canvasId || null,
         }),
       ]);
 
@@ -123,7 +126,7 @@ export function useRealtimeCanvas(
     } catch (error) {
       console.error("Error loading canvas data:", error);
     }
-  }, [projectId, shareToken, setNodes, setEdges]);
+  }, [projectId, shareToken, canvasId, setNodes, setEdges]);
   
   useEffect(() => {
     // Wait for token to be ready before making RPC calls
@@ -340,7 +343,8 @@ export function useRealtimeCanvas(
               return styleWithoutZIndex;
             })(),
             nodeType: node.type, // Save React Flow node type
-          } as any
+          } as any,
+          p_canvas_id: canvasId || null,
         });
         if (error) throw error;
         
@@ -370,7 +374,7 @@ export function useRealtimeCanvas(
       console.error("Error saving node:", error);
       draggedNodeRef.current = null;
     }
-  }, [projectId, shareToken]);
+  }, [projectId, shareToken, canvasId]);
 
   const saveEdge = async (edge: Edge) => {
     try {
@@ -384,7 +388,8 @@ export function useRealtimeCanvas(
         p_target_id: edge.target,
         p_label: (edge.label as string) || null,
         p_edge_type: edge.type || 'default',
-        p_style: JSON.parse(JSON.stringify(edge.style || {}))
+        p_style: JSON.parse(JSON.stringify(edge.style || {})),
+        p_canvas_id: canvasId || null,
       });
 
       if (error) {

@@ -11,18 +11,19 @@ export interface Layer {
   updated_at: string;
 }
 
-export function useRealtimeLayers(projectId: string, token: string | null) {
+export function useRealtimeLayers(projectId: string, token: string | null, canvasId?: string | null) {
   const [layers, setLayers] = useState<Layer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const channelRef = useRef<any>(null);
 
-  // Wrap loadLayers in useCallback with token in dependencies
+  // Wrap loadLayers in useCallback with token and canvasId in dependencies
   const loadLayers = useCallback(async () => {
     if (!projectId) return;
 
     const { data, error } = await supabase.rpc("get_canvas_layers_with_token", {
       p_project_id: projectId,
       p_token: token || null,
+      p_canvas_id: canvasId || null,
     });
 
     if (error) {
@@ -31,19 +32,23 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
       setLayers(data || []);
     }
     setIsLoading(false);
-  }, [projectId, token]);
+  }, [projectId, token, canvasId]);
 
   // Fetch initial layers
   useEffect(() => {
     loadLayers();
   }, [loadLayers]);
 
-  // Subscribe to real-time updates - include token in dependencies
+  // Subscribe to real-time updates - include token and canvasId in dependencies
   useEffect(() => {
     if (!projectId) return;
 
+    const channelName = canvasId 
+      ? `canvas-layers-${projectId}-${canvasId}` 
+      : `canvas-layers-${projectId}`;
+
     const channel = supabase
-      .channel(`canvas-layers-${projectId}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -53,6 +58,12 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
           filter: `project_id=eq.${projectId}`,
         },
         (payload) => {
+          // Filter by canvasId on client side if specified
+          const payloadCanvasId = (payload.new as any)?.canvas_id || (payload.old as any)?.canvas_id;
+          if (canvasId && payloadCanvasId && payloadCanvasId !== canvasId) {
+            return; // Ignore changes for other canvases
+          }
+          
           console.log("Canvas layers change:", payload);
           
           if (payload.eventType === "INSERT") {
@@ -105,7 +116,7 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [projectId, token, loadLayers]);
+  }, [projectId, token, canvasId, loadLayers]);
 
   const saveLayer = async (layer: Partial<Layer> & { id: string }) => {
     // Optimistic update: Update UI immediately
@@ -129,6 +140,7 @@ export function useRealtimeLayers(projectId: string, token: string | null) {
       p_name: layer.name || "Untitled Layer",
       p_node_ids: layer.node_ids || [],
       p_visible: layer.visible ?? true,
+      p_canvas_id: canvasId || null,
     });
 
     if (error) {

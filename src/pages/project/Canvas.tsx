@@ -220,8 +220,8 @@ function CanvasFlow() {
     goToNextCanvas,
   } = useProjectCanvases(projectId!, token);
 
-  // Layers management
-  const { layers, saveLayer, deleteLayer } = useRealtimeLayers(projectId!, token);
+  // Layers management - pass canvasId for multi-canvas support
+  const { layers, saveLayer, deleteLayer } = useRealtimeLayers(projectId!, token, activeCanvasId);
 
   const {
     nodes,
@@ -233,7 +233,7 @@ function CanvasFlow() {
     saveNode,
     saveEdge,
     loadCanvasData,
-  } = useRealtimeCanvas(projectId!, token, isTokenSet, initialNodes, initialEdges);
+  } = useRealtimeCanvas(projectId!, token, isTokenSet, initialNodes, initialEdges, activeCanvasId);
 
   // Handle canvas creation
   const handleCreateCanvas = useCallback(async (name: string, description?: string, tags?: string[]) => {
@@ -1708,6 +1708,7 @@ function CanvasFlow() {
                   }
                 }}
                 onCanvasRefresh={refreshCanvas}
+                canvasId={activeCanvasId}
               />
               
               <InfographicDialog

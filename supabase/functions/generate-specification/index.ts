@@ -12,8 +12,8 @@ serve(async (req) => {
   }
 
   try {
-    const { projectId, shareToken } = await req.json();
-    console.log('Generating specification for project:', projectId);
+    const { projectId, shareToken, canvasId } = await req.json();
+    console.log('Generating specification for project:', projectId, 'canvasId:', canvasId || 'default');
 
     if (!projectId) {
       throw new Error('Project ID is required');
@@ -73,7 +73,8 @@ serve(async (req) => {
     // Fetch canvas nodes
     const { data: canvasNodes, error: nodesError } = await supabase.rpc('get_canvas_nodes_with_token', {
       p_project_id: projectId,
-      p_token: shareToken
+      p_token: shareToken,
+      p_canvas_id: canvasId || null
     });
 
     if (nodesError) {
@@ -83,7 +84,8 @@ serve(async (req) => {
     // Fetch canvas edges
     const { data: canvasEdges, error: edgesError } = await supabase.rpc('get_canvas_edges_with_token', {
       p_project_id: projectId,
-      p_token: shareToken
+      p_token: shareToken,
+      p_canvas_id: canvasId || null
     });
 
     if (edgesError) {

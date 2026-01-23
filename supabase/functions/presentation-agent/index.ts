@@ -13,6 +13,7 @@ interface PresentationRequest {
   mode: "concise" | "detailed";
   targetSlides: number;
   initialPrompt?: string;
+  canvasId?: string;
 }
 
 // Slide content JSON schema for structured output enforcement
@@ -1015,9 +1016,9 @@ serve(async (req) => {
         });
 
         const requestData: PresentationRequest = await req.json();
-        const { projectId, presentationId, shareToken, mode, targetSlides, initialPrompt } = requestData;
+        const { projectId, presentationId, shareToken, mode, targetSlides, initialPrompt, canvasId } = requestData;
 
-        console.log("Starting presentation generation:", { projectId, presentationId, mode, targetSlides });
+        console.log("Starting presentation generation:", { projectId, presentationId, mode, targetSlides, canvasId: canvasId || 'default' });
 
         controller.enqueue(encoder.encode(sseMessage("status", { phase: "starting", message: "Initializing presentation agent..." })));
 
@@ -1317,11 +1318,13 @@ serve(async (req) => {
             const { data: nodes, error: nodesError } = await supabase.rpc("get_canvas_nodes_with_token", {
               p_project_id: projectId,
               p_token: shareToken,
+              p_canvas_id: canvasId || null,
             });
 
             const { data: edges, error: edgesError } = await supabase.rpc("get_canvas_edges_with_token", {
               p_project_id: projectId,
               p_token: shareToken,
+              p_canvas_id: canvasId || null,
             });
 
             if (nodesError) throw nodesError;
