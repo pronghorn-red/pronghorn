@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +35,12 @@ export function ShareArtifactDialog({
 }: ShareArtifactDialogProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [isPublished, setIsPublished] = useState(artifact.is_published || false);
+
+  // Sync local state when artifact prop changes (e.g., dialog reopens with different artifact)
+  useEffect(() => {
+    setIsPublished(artifact.is_published || false);
+  }, [artifact.id, artifact.is_published]);
 
   const baseUrl = "https://pronghorn.red";
   const viewerUrl = `${baseUrl}/viewer/${artifact.id}`;
@@ -48,10 +54,11 @@ export function ShareArtifactDialog({
 
   const handleTogglePublished = async (checked: boolean) => {
     setIsUpdating(true);
+    setIsPublished(checked); // Optimistic update
     try {
       await onUpdatePublished(artifact.id, checked);
     } catch (error) {
-      // Error handled in parent
+      setIsPublished(!checked); // Revert on error
     } finally {
       setIsUpdating(false);
     }
@@ -117,14 +124,14 @@ export function ShareArtifactDialog({
                 Publish publicly
               </Label>
               <p className="text-sm text-muted-foreground">
-                {artifact.is_published 
+                {isPublished 
                   ? "This artifact is publicly accessible" 
                   : "Make this artifact accessible via URL"}
               </p>
             </div>
             <Switch
               id="publish-toggle"
-              checked={artifact.is_published || false}
+              checked={isPublished}
               onCheckedChange={handleTogglePublished}
               disabled={isUpdating}
             />
@@ -133,7 +140,7 @@ export function ShareArtifactDialog({
           {/* URL List */}
           <div className={cn(
             "space-y-3 transition-opacity",
-            !artifact.is_published && "opacity-50 pointer-events-none"
+            !isPublished && "opacity-50 pointer-events-none"
           )}>
             <Label className="text-sm font-medium text-muted-foreground">
               Public URLs
@@ -162,7 +169,7 @@ export function ShareArtifactDialog({
                     size="icon"
                     className="h-9 w-9 shrink-0"
                     onClick={() => handleCopyUrl(item.url, item.label)}
-                    disabled={!artifact.is_published}
+                    disabled={!isPublished}
                   >
                     {copiedUrl === item.url ? (
                       <Check className="h-4 w-4 text-green-500" />
@@ -175,7 +182,7 @@ export function ShareArtifactDialog({
                     size="icon"
                     className="h-9 w-9 shrink-0"
                     onClick={() => handleOpenUrl(item.url)}
-                    disabled={!artifact.is_published}
+                    disabled={!isPublished}
                   >
                     <ExternalLink className="h-4 w-4" />
                   </Button>
@@ -184,7 +191,7 @@ export function ShareArtifactDialog({
             ))}
           </div>
 
-          {!artifact.is_published && (
+          {!isPublished && (
             <p className="text-sm text-muted-foreground text-center">
               Enable publishing to access public URLs
             </p>
