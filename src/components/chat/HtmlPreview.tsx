@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { RotateCcw, AlertTriangle, ChevronUp, Copy, Trash2 } from 'lucide-react';
+import { RotateCcw, AlertTriangle, ChevronUp, Copy, Trash2, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -17,13 +17,28 @@ interface CapturedError {
 interface HtmlPreviewProps {
   content: string;
   className?: string;
+  onAskAI?: (errorMessage: string) => void;
 }
 
-export function HtmlPreview({ content, className }: HtmlPreviewProps) {
+export function HtmlPreview({ content, className, onAskAI }: HtmlPreviewProps) {
   const [key, setKey] = useState(0);
   const [errors, setErrors] = useState<CapturedError[]>([]);
   const [showErrors, setShowErrors] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Format error for AI assistant
+  const formatErrorForAI = (err: CapturedError): string => {
+    const location = err.lineno ? ` at line ${err.lineno}${err.colno ? `:${err.colno}` : ''}` : '';
+    return `I'm getting this JavaScript error${location} in my HTML:\n\n\`\`\`\n[${err.type}] ${err.message}\n\`\`\`\n\nCan you help me fix it?`;
+  };
+
+  const formatAllErrorsForAI = (): string => {
+    const errorList = errors.map((err, i) => {
+      const location = err.lineno ? ` (line ${err.lineno})` : '';
+      return `${i + 1}. [${err.type}] ${err.message}${location}`;
+    }).join('\n');
+    return `I'm getting multiple JavaScript errors in my HTML:\n\n\`\`\`\n${errorList}\n\`\`\`\n\nCan you help me fix these issues?`;
+  };
 
   // Error capture script to inject into iframe
   const errorCaptureScript = `
@@ -224,14 +239,28 @@ export function HtmlPreview({ content, className }: HtmlPreviewProps) {
                       )}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5 shrink-0 hover:bg-destructive/10"
-                    onClick={() => copyError(err)}
-                  >
-                    <Copy className="h-3 w-3" />
-                  </Button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 hover:bg-destructive/10"
+                      onClick={() => copyError(err)}
+                      title="Copy error"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                    {onAskAI && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 hover:bg-primary/10 text-primary"
+                        onClick={() => onAskAI(formatErrorForAI(err))}
+                        title="Ask AI to fix this error"
+                      >
+                        <Bot className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
               
@@ -255,6 +284,17 @@ export function HtmlPreview({ content, className }: HtmlPreviewProps) {
                   <Copy className="h-3 w-3 mr-1" />
                   Copy All
                 </Button>
+                {onAskAI && (
+                  <Button 
+                    variant="default" 
+                    size="sm" 
+                    onClick={() => onAskAI(errors.length === 1 ? formatErrorForAI(errors[0]) : formatAllErrorsForAI())}
+                    className="h-7 text-xs"
+                  >
+                    <Bot className="h-3 w-3 mr-1" />
+                    Ask AI {errors.length > 1 ? 'All' : ''}
+                  </Button>
+                )}
               </div>
             </div>
           )}

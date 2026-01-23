@@ -27,6 +27,7 @@ interface CollaborationEditorProps {
   hasConflict?: boolean;
   readOnly?: boolean;
   currentVersion: number;
+  onAskAI?: (message: string) => void;
 }
 
 export function CollaborationEditor({
@@ -40,6 +41,7 @@ export function CollaborationEditor({
   hasConflict = false,
   readOnly = false,
   currentVersion,
+  onAskAI,
 }: CollaborationEditorProps) {
   const isMobile = useIsMobile();
   const [viewMode, setViewMode] = useState<'rendered' | 'source' | 'diff' | 'html'>(isMarkdown ? 'rendered' : 'source');
@@ -211,7 +213,7 @@ export function CollaborationEditor({
       {/* Editor Content */}
       <div className="flex-1 min-h-0">
         {viewMode === 'html' ? (
-          <HtmlPreview content={content} className="h-full p-2" />
+          <HtmlPreview content={content} className="h-full p-2" onAskAI={onAskAI} />
         ) : viewMode === 'rendered' ? (
           <ScrollArea className="h-full">
             <div 
@@ -304,7 +306,7 @@ export function CollaborationEditor({
             </Button>
           </div>
           <div className="w-full h-full pt-12">
-            <HtmlPreview content={content} className="h-full" />
+            <HtmlPreview content={content} className="h-full" onAskAI={onAskAI} />
           </div>
         </DialogContent>
       </Dialog>

@@ -837,6 +837,11 @@ export function ArtifactCollaborator({
                 hasConflict={hasConflict}
                 readOnly={viewingVersion !== null && viewingVersion < latestVersion}
                 currentVersion={latestVersion}
+                onAskAI={(message) => {
+                  setChatInputValue(message);
+                  handleSendMessage(message);
+                  setMobileTab('chat');
+                }}
               />
               {history.length > 0 && (
                 <CollaborationTimeline
@@ -994,6 +999,10 @@ export function ArtifactCollaborator({
               hasConflict={hasConflict}
               readOnly={viewingVersion !== null && viewingVersion < latestVersion}
               currentVersion={latestVersion}
+              onAskAI={(message) => {
+                setChatInputValue(message);
+                handleSendMessage(message);
+              }}
             />
             {history.length > 0 && (
               <CollaborationTimeline
