@@ -11,7 +11,7 @@ import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
@@ -167,6 +167,7 @@ export function CollaborationEditor({
   const hasDiffContent = previousContent !== null && previousContent !== undefined;
 
   return (
+    <TooltipProvider>
     <div className="flex flex-col flex-1 min-h-0" onKeyDown={handleKeyDown}>
       {/* Toolbar */}
       <div className="flex items-center justify-between p-2 border-b bg-muted/30">
@@ -373,5 +374,6 @@ export function CollaborationEditor({
         </DialogContent>
       </Dialog>
     </div>
+    </TooltipProvider>
   );
 }
