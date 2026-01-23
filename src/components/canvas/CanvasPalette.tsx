@@ -2,7 +2,9 @@ import { Eye, EyeOff, ChevronLeft, ChevronRight, Menu, Loader2 } from "lucide-re
 import { useState, useMemo } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { LayersManager } from "./LayersManager";
+import { CanvasNavigator } from "./CanvasNavigator";
 import { Layer } from "@/hooks/useRealtimeLayers";
+import { ProjectCanvas } from "@/hooks/useProjectCanvases";
 import { Node } from "reactflow";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,6 +23,17 @@ interface CanvasPaletteProps {
   activeLayerId: string | null;
   onSetActiveLayer: (layerId: string | null) => void;
   onMenuClick: () => void;
+  // Multi-canvas props
+  canvases: ProjectCanvas[];
+  activeCanvas: ProjectCanvas | null;
+  activeCanvasId: string | null;
+  isLegacyMode: boolean;
+  onSelectCanvas: (canvasId: string) => void;
+  onPreviousCanvas: () => void;
+  onNextCanvas: () => void;
+  onCreateCanvas: (name: string, description?: string, tags?: string[]) => void;
+  onUpdateCanvas: (canvas: Partial<ProjectCanvas> & { id: string }) => void;
+  onDeleteCanvas: (canvasId: string) => void;
 }
 
 export function CanvasPalette({
@@ -35,6 +48,17 @@ export function CanvasPalette({
   activeLayerId,
   onSetActiveLayer,
   onMenuClick,
+  // Multi-canvas props
+  canvases,
+  activeCanvas,
+  activeCanvasId,
+  isLegacyMode,
+  onSelectCanvas,
+  onPreviousCanvas,
+  onNextCanvas,
+  onCreateCanvas,
+  onUpdateCanvas,
+  onDeleteCanvas,
 }: CanvasPaletteProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   
@@ -108,6 +132,20 @@ export function CanvasPalette({
               <ChevronLeft className="h-4 w-4" />
             </Button>
           </div>
+
+          {/* Canvas Navigator */}
+          <CanvasNavigator
+            canvases={canvases}
+            activeCanvas={activeCanvas}
+            activeCanvasId={activeCanvasId}
+            isLegacyMode={isLegacyMode}
+            onSelectCanvas={onSelectCanvas}
+            onPrevious={onPreviousCanvas}
+            onNext={onNextCanvas}
+            onCreateCanvas={onCreateCanvas}
+            onUpdateCanvas={onUpdateCanvas}
+            onDeleteCanvas={onDeleteCanvas}
+          />
 
           <ScrollArea className="flex-1 overflow-y-auto">
             <div className="p-4">

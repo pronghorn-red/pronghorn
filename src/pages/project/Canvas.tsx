@@ -14,6 +14,7 @@ import { useShareToken } from "@/hooks/useShareToken";
 import { TokenRecoveryMessage } from "@/components/project/TokenRecoveryMessage";
 import { useRealtimeCanvas } from "@/hooks/useRealtimeCanvas";
 import { useRealtimeLayers } from "@/hooks/useRealtimeLayers";
+import { useProjectCanvases, ProjectCanvas } from "@/hooks/useProjectCanvases";
 import { useNodeTypes } from "@/hooks/useNodeTypes";
 import { connectionLogic, getXPosition } from "@/lib/connectionLogic";
 import ReactFlow, {
@@ -205,6 +206,20 @@ function CanvasFlow() {
     }
   }, [allNodeTypes]);
 
+  // Multi-canvas management
+  const {
+    canvases,
+    activeCanvasId,
+    activeCanvas,
+    setActiveCanvasId,
+    isLegacyMode,
+    saveCanvas,
+    deleteCanvas: deleteProjectCanvas,
+    migrateLegacyData,
+    goToPreviousCanvas,
+    goToNextCanvas,
+  } = useProjectCanvases(projectId!, token);
+
   // Layers management
   const { layers, saveLayer, deleteLayer } = useRealtimeLayers(projectId!, token);
 
@@ -219,6 +234,43 @@ function CanvasFlow() {
     saveEdge,
     loadCanvasData,
   } = useRealtimeCanvas(projectId!, token, isTokenSet, initialNodes, initialEdges);
+
+  // Handle canvas creation
+  const handleCreateCanvas = useCallback(async (name: string, description?: string, tags?: string[]) => {
+    const newId = crypto.randomUUID();
+    
+    // If this is the first canvas (legacy mode), migrate existing data
+    if (isLegacyMode) {
+      await saveCanvas({
+        id: newId,
+        name,
+        description: description || null,
+        tags: tags || [],
+        is_default: true,
+      });
+      await migrateLegacyData(newId);
+    } else {
+      await saveCanvas({
+        id: newId,
+        name,
+        description: description || null,
+        tags: tags || [],
+        is_default: false,
+      });
+    }
+    
+    setActiveCanvasId(newId);
+  }, [isLegacyMode, saveCanvas, migrateLegacyData, setActiveCanvasId]);
+
+  // Handle canvas update
+  const handleUpdateCanvas = useCallback((canvas: Partial<ProjectCanvas> & { id: string }) => {
+    saveCanvas(canvas);
+  }, [saveCanvas]);
+
+  // Handle canvas deletion
+  const handleDeleteCanvas = useCallback((canvasId: string) => {
+    deleteProjectCanvas(canvasId);
+  }, [deleteProjectCanvas]);
 
   // Wrap onNodesChange to handle resize events
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -1624,6 +1676,17 @@ function CanvasFlow() {
             activeLayerId={activeLayerId}
             onSetActiveLayer={setActiveLayerId}
             onMenuClick={() => setIsSidebarOpen(true)}
+            // Multi-canvas props
+            canvases={canvases}
+            activeCanvas={activeCanvas}
+            activeCanvasId={activeCanvasId}
+            isLegacyMode={isLegacyMode}
+            onSelectCanvas={setActiveCanvasId}
+            onPreviousCanvas={goToPreviousCanvas}
+            onNextCanvas={goToNextCanvas}
+            onCreateCanvas={handleCreateCanvas}
+            onUpdateCanvas={handleUpdateCanvas}
+            onDeleteCanvas={handleDeleteCanvas}
           />
           
           <div

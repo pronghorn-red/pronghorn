@@ -1106,6 +1106,7 @@ export type Database = {
       }
       canvas_edges: {
         Row: {
+          canvas_id: string | null
           created_at: string
           edge_type: string | null
           id: string
@@ -1116,6 +1117,7 @@ export type Database = {
           target_id: string
         }
         Insert: {
+          canvas_id?: string | null
           created_at?: string
           edge_type?: string | null
           id?: string
@@ -1126,6 +1128,7 @@ export type Database = {
           target_id: string
         }
         Update: {
+          canvas_id?: string | null
           created_at?: string
           edge_type?: string | null
           id?: string
@@ -1136,6 +1139,13 @@ export type Database = {
           target_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "canvas_edges_canvas_id_fkey"
+            columns: ["canvas_id"]
+            isOneToOne: false
+            referencedRelation: "project_canvases"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "canvas_edges_project_id_fkey"
             columns: ["project_id"]
@@ -1161,6 +1171,7 @@ export type Database = {
       }
       canvas_layers: {
         Row: {
+          canvas_id: string | null
           created_at: string
           id: string
           name: string
@@ -1170,6 +1181,7 @@ export type Database = {
           visible: boolean
         }
         Insert: {
+          canvas_id?: string | null
           created_at?: string
           id?: string
           name: string
@@ -1179,6 +1191,7 @@ export type Database = {
           visible?: boolean
         }
         Update: {
+          canvas_id?: string | null
           created_at?: string
           id?: string
           name?: string
@@ -1188,6 +1201,13 @@ export type Database = {
           visible?: boolean
         }
         Relationships: [
+          {
+            foreignKeyName: "canvas_layers_canvas_id_fkey"
+            columns: ["canvas_id"]
+            isOneToOne: false
+            referencedRelation: "project_canvases"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "canvas_layers_project_id_fkey"
             columns: ["project_id"]
@@ -1247,6 +1267,7 @@ export type Database = {
       }
       canvas_nodes: {
         Row: {
+          canvas_id: string | null
           created_at: string
           data: Json
           id: string
@@ -1256,6 +1277,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          canvas_id?: string | null
           created_at?: string
           data?: Json
           id?: string
@@ -1265,6 +1287,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          canvas_id?: string | null
           created_at?: string
           data?: Json
           id?: string
@@ -1274,6 +1297,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "canvas_nodes_canvas_id_fkey"
+            columns: ["canvas_id"]
+            isOneToOne: false
+            referencedRelation: "project_canvases"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "canvas_nodes_project_id_fkey"
             columns: ["project_id"]
@@ -1600,6 +1630,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "project_agents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_canvases: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          project_id: string
+          tags: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          project_id: string
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          project_id?: string
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_canvases_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -3610,6 +3684,10 @@ export type Database = {
         Args: { p_agent_type?: string; p_project_id: string; p_token: string }
         Returns: boolean
       }
+      delete_project_canvas_with_token: {
+        Args: { p_id: string; p_token?: string }
+        Returns: undefined
+      }
       delete_project_repo_with_token: {
         Args: { p_repo_id: string; p_token: string }
         Returns: undefined
@@ -4151,8 +4229,9 @@ export type Database = {
         }
       }
       get_canvas_edges_with_token: {
-        Args: { p_project_id: string; p_token: string }
+        Args: { p_canvas_id?: string; p_project_id: string; p_token?: string }
         Returns: {
+          canvas_id: string | null
           created_at: string
           edge_type: string | null
           id: string
@@ -4170,8 +4249,9 @@ export type Database = {
         }
       }
       get_canvas_layers_with_token: {
-        Args: { p_project_id: string; p_token?: string }
+        Args: { p_canvas_id?: string; p_project_id: string; p_token?: string }
         Returns: {
+          canvas_id: string | null
           created_at: string
           id: string
           name: string
@@ -4212,8 +4292,9 @@ export type Database = {
         }
       }
       get_canvas_nodes_with_token: {
-        Args: { p_project_id: string; p_token: string }
+        Args: { p_canvas_id?: string; p_project_id: string; p_token?: string }
         Returns: {
+          canvas_id: string | null
           created_at: string
           data: Json
           id: string
@@ -4230,14 +4311,8 @@ export type Database = {
         }
       }
       get_canvas_summary_with_token: {
-        Args: { p_project_id: string; p_token?: string }
-        Returns: {
-          edges: Json
-          node_types: Json
-          nodes: Json
-          total_edges: number
-          total_nodes: number
-        }[]
+        Args: { p_canvas_id?: string; p_project_id: string; p_token?: string }
+        Returns: Json
       }
       get_chat_messages_with_token: {
         Args: { p_chat_session_id: string; p_token: string }
@@ -4676,6 +4751,10 @@ export type Database = {
           path: string
         }[]
       }
+      get_or_create_default_canvas: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: string
+      }
       get_presentation_with_token: {
         Args: { p_presentation_id: string; p_token?: string }
         Returns: {
@@ -4738,6 +4817,26 @@ export type Database = {
           updated_at: string
           version: string
         }[]
+      }
+      get_project_canvases_with_token: {
+        Args: { p_project_id: string; p_token?: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          project_id: string
+          tags: string[] | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_canvases"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_project_category_with_token: {
         Args: { p_category: string; p_project_id: string; p_token?: string }
@@ -6341,6 +6440,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      migrate_legacy_canvas_data: {
+        Args: { p_canvas_id: string; p_project_id: string; p_token?: string }
+        Returns: undefined
+      }
       move_artifact_with_token: {
         Args: {
           p_artifact_id: string
@@ -7491,16 +7594,18 @@ export type Database = {
       }
       upsert_canvas_edge_with_token: {
         Args: {
+          p_canvas_id?: string
           p_edge_type?: string
           p_id: string
-          p_label: string
+          p_label?: string
           p_project_id: string
-          p_source_id: string
+          p_source_id?: string
           p_style?: Json
-          p_target_id: string
-          p_token: string
+          p_target_id?: string
+          p_token?: string
         }
         Returns: {
+          canvas_id: string | null
           created_at: string
           edge_type: string | null
           id: string
@@ -7519,6 +7624,7 @@ export type Database = {
       }
       upsert_canvas_layer_with_token: {
         Args: {
+          p_canvas_id?: string
           p_id: string
           p_name?: string
           p_node_ids?: string[]
@@ -7527,6 +7633,7 @@ export type Database = {
           p_visible?: boolean
         }
         Returns: {
+          canvas_id: string | null
           created_at: string
           id: string
           name: string
@@ -7544,14 +7651,16 @@ export type Database = {
       }
       upsert_canvas_node_with_token: {
         Args: {
-          p_data: Json
+          p_canvas_id?: string
+          p_data?: Json
           p_id: string
-          p_position: Json
+          p_position?: Json
           p_project_id: string
-          p_token: string
-          p_type: Database["public"]["Enums"]["node_type"]
+          p_token?: string
+          p_type?: Database["public"]["Enums"]["node_type"]
         }
         Returns: {
+          canvas_id: string | null
           created_at: string
           data: Json
           id: string
@@ -7613,6 +7722,34 @@ export type Database = {
           p_version?: string
         }
         Returns: string
+      }
+      upsert_project_canvas_with_token: {
+        Args: {
+          p_description?: string
+          p_id: string
+          p_is_default?: boolean
+          p_name?: string
+          p_project_id: string
+          p_tags?: string[]
+          p_token?: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          project_id: string
+          tags: string[] | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_canvases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       validate_file_access: {
         Args: { p_file_id: string; p_token: string }
