@@ -690,7 +690,10 @@ ${artifact.content}`;
                             <Button 
                               variant="ghost" 
                               size="icon"
-                              className="h-8 w-8"
+                              className={cn(
+                                "h-8 w-8",
+                                viewingArtifact.is_published && "bg-green-500/20 text-green-600 hover:bg-green-500/30 hover:text-green-600"
+                              )}
                               title="Share"
                               onClick={() => { setSharingArtifact(viewingArtifact); setViewingArtifact(null); }}
                             >
@@ -936,6 +939,9 @@ ${artifact.content}`;
                                   <Button
                                     variant="ghost"
                                     size="icon"
+                                    className={cn(
+                                      artifact.is_published && "bg-green-500/20 text-green-600 hover:bg-green-500/30 hover:text-green-600"
+                                    )}
                                     onClick={() => setSharingArtifact(artifact)}
                                   >
                                     <Share2 className="h-4 w-4" />
@@ -1162,7 +1168,10 @@ ${artifact.content}`;
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-8 w-8"
+                                      className={cn(
+                                        "h-8 w-8",
+                                        artifact.is_published && "bg-green-500/20 text-green-600 hover:bg-green-500/30 hover:text-green-600"
+                                      )}
                                       onClick={() => setSharingArtifact(artifact)}
                                     >
                                       <Share2 className="h-3 w-3" />
