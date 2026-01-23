@@ -68,10 +68,17 @@ export default function Viewer() {
         return;
       }
 
-      setArtifact(data[0]);
+      const fetchedArtifact = data[0];
+      setArtifact(fetchedArtifact);
       
-      // Set initial view mode based on content
-      if (isHtmlContent) {
+      // Set initial view mode based on content - detect HTML inline
+      const content = fetchedArtifact.content?.trim().toLowerCase() || "";
+      const hasHtmlContent = 
+        content.startsWith("<!doctype html") ||
+        content.startsWith("<html") ||
+        (content.includes("<head") && content.includes("<body"));
+      
+      if (hasHtmlContent) {
         setViewMode("html");
       }
     } catch (err: any) {
