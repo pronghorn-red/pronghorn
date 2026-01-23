@@ -215,6 +215,9 @@ function CanvasFlow() {
     isLegacyMode,
     saveCanvas,
     deleteCanvas: deleteProjectCanvas,
+    duplicateCanvas,
+    mergeCanvases,
+    splitToNewCanvas,
     migrateLegacyData,
     goToPreviousCanvas,
     goToNextCanvas,
@@ -271,6 +274,36 @@ function CanvasFlow() {
   const handleDeleteCanvas = useCallback((canvasId: string) => {
     deleteProjectCanvas(canvasId);
   }, [deleteProjectCanvas]);
+
+  // Handle canvas duplication
+  const handleDuplicateCanvas = useCallback(async (canvasId: string, newName: string) => {
+    try {
+      await duplicateCanvas(canvasId, newName);
+      toast({ title: "Canvas duplicated", description: `Created "${newName}"` });
+    } catch (error) {
+      toast({ title: "Duplication failed", description: String(error), variant: "destructive" });
+    }
+  }, [duplicateCanvas, toast]);
+
+  // Handle canvas merge
+  const handleMergeCanvases = useCallback(async (sourceId: string, targetId: string) => {
+    try {
+      await mergeCanvases(sourceId, targetId);
+      toast({ title: "Canvases merged", description: "Source canvas deleted" });
+    } catch (error) {
+      toast({ title: "Merge failed", description: String(error), variant: "destructive" });
+    }
+  }, [mergeCanvases, toast]);
+
+  // Handle split to new canvas
+  const handleSplitToNewCanvas = useCallback(async (nodeIds: string[], newName: string) => {
+    try {
+      await splitToNewCanvas(nodeIds, newName);
+      toast({ title: "Split complete", description: `Moved ${nodeIds.length} nodes to "${newName}"` });
+    } catch (error) {
+      toast({ title: "Split failed", description: String(error), variant: "destructive" });
+    }
+  }, [splitToNewCanvas, toast]);
 
   // Wrap onNodesChange to handle resize events
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -1687,6 +1720,9 @@ function CanvasFlow() {
             onCreateCanvas={handleCreateCanvas}
             onUpdateCanvas={handleUpdateCanvas}
             onDeleteCanvas={handleDeleteCanvas}
+            onDuplicateCanvas={handleDuplicateCanvas}
+            onMergeCanvases={handleMergeCanvases}
+            onSplitToNewCanvas={handleSplitToNewCanvas}
           />
           
           <div
@@ -1709,6 +1745,9 @@ function CanvasFlow() {
                 }}
                 onCanvasRefresh={refreshCanvas}
                 canvasId={activeCanvasId}
+                canvases={canvases}
+                onCreateCanvas={handleCreateCanvas}
+                onSelectCanvas={setActiveCanvasId}
               />
               
               <InfographicDialog
