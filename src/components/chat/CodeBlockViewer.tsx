@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { Copy, Archive, Eye, Code, Globe } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Copy, Archive, Eye, Code, Globe, Maximize2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -18,6 +19,7 @@ interface CodeBlockViewerProps {
 
 export function CodeBlockViewer({ code, language, onAddArtifact }: CodeBlockViewerProps) {
   const [viewMode, setViewMode] = useState<'preview' | 'source' | 'html'>('preview');
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const isMobile = useIsMobile();
 
   // Detect if content is HTML-like
@@ -73,91 +75,14 @@ export function CodeBlockViewer({ code, language, onAddArtifact }: CodeBlockView
     return languageMap[language] || language || 'plaintext';
   }, [language]);
 
-  return (
-    <div className="my-4 border rounded-lg overflow-hidden bg-muted/30">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between p-2 border-b bg-muted/50">
-        {/* Left: View mode tabs */}
-        <div className="flex items-center gap-2">
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'preview' | 'source' | 'html')}>
-            <TabsList className="h-7">
-              {isMobile ? (
-                <>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <TabsTrigger value="preview" className="h-6 px-2">
-                          <Eye className="h-3 w-3" />
-                        </TabsTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent>Preview</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <TabsTrigger value="source" className="h-6 px-2">
-                          <Code className="h-3 w-3" />
-                        </TabsTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent>Source</TooltipContent>
-                    </Tooltip>
-                    {isHtmlContent && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <TabsTrigger value="html" className="h-6 px-2">
-                            <Globe className="h-3 w-3" />
-                          </TabsTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent>HTML</TooltipContent>
-                      </Tooltip>
-                    )}
-                  </TooltipProvider>
-                </>
-              ) : (
-                <>
-                  <TabsTrigger value="preview" className="h-6 text-xs px-2">Preview</TabsTrigger>
-                  <TabsTrigger value="source" className="h-6 text-xs px-2">Source</TabsTrigger>
-                  {isHtmlContent && (
-                    <TabsTrigger value="html" className="h-6 text-xs px-2">HTML</TabsTrigger>
-                  )}
-                </>
-              )}
-            </TabsList>
-          </Tabs>
-          
-          {language && (
-            <Badge variant="outline" className="text-xs h-5">
-              {language}
-            </Badge>
-          )}
-        </div>
-        
-        {/* Right: Action buttons */}
-        <TooltipProvider>
-          <div className="flex gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopy}>
-                  <Copy className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Copy code</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleAddArtifact}>
-                  <Archive className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Save as artifact</TooltipContent>
-            </Tooltip>
-          </div>
-        </TooltipProvider>
-      </div>
-      
-      {/* Content based on view mode */}
-      <div className="max-h-[400px] overflow-auto">
+  // Render content based on view mode
+  const renderContent = (fullscreen = false) => {
+    const height = fullscreen ? 'h-full' : 'max-h-[400px]';
+    
+    return (
+      <div className={cn(height, "overflow-auto")}>
         {viewMode === 'preview' && (
-          <pre className="p-4 text-sm overflow-x-auto bg-muted/20">
+          <pre className="p-4 text-sm overflow-x-auto bg-muted/20 h-full">
             <code className={cn(
               "block whitespace-pre-wrap break-words",
               language && `language-${language}`
@@ -168,7 +93,7 @@ export function CodeBlockViewer({ code, language, onAddArtifact }: CodeBlockView
         )}
         {viewMode === 'source' && (
           <Editor
-            height="300px"
+            height={fullscreen ? "100%" : "300px"}
             language={monacoLanguage}
             value={code}
             options={{
@@ -184,9 +109,129 @@ export function CodeBlockViewer({ code, language, onAddArtifact }: CodeBlockView
           />
         )}
         {viewMode === 'html' && isHtmlContent && (
-          <HtmlPreview content={code} className="h-[300px]" />
+          <HtmlPreview content={code} className={fullscreen ? "h-full" : "h-[300px]"} />
         )}
       </div>
+    );
+  };
+
+  // Render toolbar
+  const renderToolbar = (inFullscreen = false) => (
+    <div className="flex items-center justify-between p-2 border-b bg-muted/50">
+      {/* Left: View mode tabs */}
+      <div className="flex items-center gap-2">
+        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'preview' | 'source' | 'html')}>
+          <TabsList className="h-7">
+            {isMobile ? (
+              <>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="preview" className="h-6 px-2">
+                        <Eye className="h-3 w-3" />
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>Preview</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="source" className="h-6 px-2">
+                        <Code className="h-3 w-3" />
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>Source</TooltipContent>
+                  </Tooltip>
+                  {isHtmlContent && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <TabsTrigger value="html" className="h-6 px-2">
+                          <Globe className="h-3 w-3" />
+                        </TabsTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent>HTML</TooltipContent>
+                    </Tooltip>
+                  )}
+                </TooltipProvider>
+              </>
+            ) : (
+              <>
+                <TabsTrigger value="preview" className="h-6 text-xs px-2">Preview</TabsTrigger>
+                <TabsTrigger value="source" className="h-6 text-xs px-2">Source</TabsTrigger>
+                {isHtmlContent && (
+                  <TabsTrigger value="html" className="h-6 text-xs px-2">HTML</TabsTrigger>
+                )}
+              </>
+            )}
+          </TabsList>
+        </Tabs>
+        
+        {language && (
+          <Badge variant="outline" className="text-xs h-5">
+            {language}
+          </Badge>
+        )}
+      </div>
+      
+      {/* Right: Action buttons */}
+      <TooltipProvider>
+        <div className="flex gap-1">
+          {!inFullscreen && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsFullscreen(true)}>
+                  <Maximize2 className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Fullscreen</TooltipContent>
+            </Tooltip>
+          )}
+          {inFullscreen && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsFullscreen(false)}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Close</TooltipContent>
+            </Tooltip>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopy}>
+                <Copy className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Copy code</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleAddArtifact}>
+                <Archive className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Save as artifact</TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
     </div>
+  );
+
+  return (
+    <>
+      <div className="my-4 border rounded-lg overflow-hidden bg-muted/30">
+        {renderToolbar(false)}
+        {renderContent(false)}
+      </div>
+
+      {/* Fullscreen Modal */}
+      <Dialog open={isFullscreen} onOpenChange={setIsFullscreen}>
+        <DialogContent className="max-w-[95vw] w-[95vw] max-h-[95vh] h-[95vh] p-0 gap-0 flex flex-col">
+          {renderToolbar(true)}
+          <div className="flex-1 min-h-0">
+            {renderContent(true)}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
