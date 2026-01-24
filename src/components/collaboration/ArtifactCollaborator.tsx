@@ -604,6 +604,7 @@ export function ArtifactCollaborator({
       content: `Document to collaborate on:\n${addLineNumbers(localContent)}\n\nUser request: ${content}`
     }];
     pendingOperationResultsRef.current = [];
+    batchContentRef.current = null;  // Reset only at task start, not between iterations
     
     let currentIteration = 1;
     let status = 'in_progress';
@@ -723,14 +724,13 @@ export function ArtifactCollaborator({
         // Execute operations locally
         setStreamProgress(p => ({ ...p, status: 'processing' }));
         pendingOperationResultsRef.current = [];
-        batchContentRef.current = null;  // Reset batch tracking for this iteration
+        // NOTE: Do NOT reset batchContentRef here - it must persist across iterations
+        // so that read_artifact sees the latest edited content
         
         for (const op of iterationResult.operations || []) {
           const result = await executeOperationLocally(op);
           pendingOperationResultsRef.current.push(result);
         }
-        
-        batchContentRef.current = null;  // Clear after batch
         
         // Handle blackboard entry
         if (iterationResult.blackboardEntry) {
