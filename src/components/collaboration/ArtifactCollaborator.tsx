@@ -748,14 +748,18 @@ export function ArtifactCollaborator({
         
         // Add reasoning as optimistic message immediately so it appears in timeline
         if (iterationResult.reasoning) {
+          const reasoningMetadata = { iteration: currentIteration };
           const reasoningOptimistic = {
             id: `optimistic-reason-${currentIteration}-${Date.now()}`,
             role: 'assistant' as const,
             content: iterationResult.reasoning,
             created_at: new Date().toISOString(),
-            metadata: { iteration: currentIteration },
+            metadata: reasoningMetadata,
           };
           setOptimisticMessages(prev => [...prev, reasoningOptimistic]);
+          
+          // Also persist to database (will merge via realtime deduplication)
+          await sendMessage('assistant', iterationResult.reasoning, reasoningMetadata);
         }
         
         // Clear streaming content so accumulated history is visible
