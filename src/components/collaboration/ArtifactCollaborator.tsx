@@ -135,7 +135,8 @@ export function ArtifactCollaborator({
     role: 'user' | 'assistant' | 'tool';
     content: string;
     created_at: string;
-  }>>([]);
+    metadata?: Record<string, unknown>;
+  }>>([])
   
   // View version state
   const [viewingVersion, setViewingVersion] = useState<number | null>(null);
@@ -745,6 +746,21 @@ export function ArtifactCollaborator({
           throw new Error('No iteration result received');
         }
         
+        // Add reasoning as optimistic message immediately so it appears in timeline
+        if (iterationResult.reasoning) {
+          const reasoningOptimistic = {
+            id: `optimistic-reason-${currentIteration}-${Date.now()}`,
+            role: 'assistant' as const,
+            content: iterationResult.reasoning,
+            created_at: new Date().toISOString(),
+            metadata: { iteration: currentIteration },
+          };
+          setOptimisticMessages(prev => [...prev, reasoningOptimistic]);
+        }
+        
+        // Clear streaming content so accumulated history is visible
+        setStreamingContent('');
+        
         // Execute operations locally and log each tool execution
         setStreamProgress(p => ({ ...p, status: 'processing' }));
         pendingOperationResultsRef.current = [];
@@ -757,12 +773,25 @@ export function ArtifactCollaborator({
           
           // Log tool execution as a yellow message in chat
           const toolMessage = formatToolMessage(op, result);
-          await sendMessage('tool', toolMessage, {
+          const toolMetadata = {
             operation_type: op.type,
             params: op.params,
             success: result.success,
             iteration: currentIteration,
-          });
+          };
+          
+          // Add to optimistic messages immediately for instant display
+          const toolOptimistic = {
+            id: `optimistic-tool-${currentIteration}-${op.type}-${Date.now()}`,
+            role: 'tool' as const,
+            content: toolMessage,
+            created_at: new Date().toISOString(),
+            metadata: toolMetadata,
+          };
+          setOptimisticMessages(prev => [...prev, toolOptimistic]);
+          
+          // Also persist to database (will merge via realtime)
+          await sendMessage('tool', toolMessage, toolMetadata);
         }
         
         // Handle blackboard entry
@@ -772,9 +801,6 @@ export function ArtifactCollaborator({
             iterationResult.blackboardEntry.content
           );
         }
-        
-        // Refresh messages after each iteration so reasoning appears in chat immediately
-        await refreshMessages();
         
         // Update conversation history for next iteration
         conversationHistoryRef.current = iterationResult.conversationHistory || [];

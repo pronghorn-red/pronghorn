@@ -142,6 +142,15 @@ export function useRealtimeCollaboration(
 
       if (error) throw error;
 
+      // Immediately add to local messages state for instant UI update
+      if (data) {
+        setMessages(prev => {
+          // Avoid duplicates
+          if (prev.some(m => m.id === data.id)) return prev;
+          return [...prev, data];
+        });
+      }
+
       // Broadcast message event
       if (channelRef.current) {
         channelRef.current.send({
