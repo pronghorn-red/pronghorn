@@ -759,7 +759,8 @@ export function ArtifactCollaborator({
           setOptimisticMessages(prev => [...prev, reasoningOptimistic]);
           
           // Also persist to database (will merge via realtime deduplication)
-          await sendMessage('assistant', iterationResult.reasoning, reasoningMetadata);
+          const persistedMsg = await sendMessage('assistant', iterationResult.reasoning, reasoningMetadata);
+          console.log('[Collab] Persisted reasoning message:', persistedMsg?.id, 'iteration:', currentIteration);
         }
         
         // Clear streaming content so accumulated history is visible
@@ -795,7 +796,8 @@ export function ArtifactCollaborator({
           setOptimisticMessages(prev => [...prev, toolOptimistic]);
           
           // Also persist to database (will merge via realtime)
-          await sendMessage('tool', toolMessage, toolMetadata);
+          const persistedTool = await sendMessage('tool', toolMessage, toolMetadata);
+          console.log('[Collab] Persisted tool message:', persistedTool?.id, 'op:', op.type);
         }
         
         // Handle blackboard entry
@@ -812,9 +814,10 @@ export function ArtifactCollaborator({
         currentIteration++;
       }
       
-      // Task complete
+      // Task complete - refresh from DB and clear optimistic (DB now has all messages)
       await refreshMessages();
       await refreshHistory();
+      setOptimisticMessages([]); // Safe to clear now - all messages are in DB
       setViewingVersion(null);
       setHasUnsavedChanges(false);
       toast.success('AI changes complete');
@@ -911,10 +914,24 @@ export function ArtifactCollaborator({
       metadata: m.metadata,
     }));
     
-    // Add optimistic messages that aren't yet in the database
-    const optimisticToShow = optimisticMessages.filter(
-      opt => !dbMessages.some(db => db.content === opt.content && db.role === opt.role)
-    );
+    // Create set of db message IDs for fast lookup
+    const dbIds = new Set(dbMessages.map(m => m.id));
+    
+    // Show optimistic messages that don't have a matching db ID
+    // For optimistic messages (which have different ID format like 'optimistic-*'),
+    // check if there's a db message with matching content+role created around the same time
+    const optimisticToShow = optimisticMessages.filter(opt => {
+      // If optimistic ID somehow matches a db ID, skip it
+      if (dbIds.has(opt.id)) return false;
+      
+      // Check if any db message has the same content and role
+      // This indicates the optimistic message was persisted
+      const matchingDb = dbMessages.find(db => 
+        db.role === opt.role && db.content === opt.content
+      );
+      
+      return !matchingDb;
+    });
     
     return [...dbMessages, ...optimisticToShow].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
