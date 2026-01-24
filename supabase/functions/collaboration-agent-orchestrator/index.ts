@@ -573,28 +573,68 @@ Start your response with { and end with }.`;
             conversationHistory: updatedConversationHistory,
           });
 
-          // Persist the reasoning/message for EVERY iteration so it appears in chat history
-          // This ensures the user and agent can both see the full progression of thought
-          const iterationMessage = parsed.message || parsed.reasoning || `[Iteration ${iteration}] Processing...`;
+          // Extract narratives from operations (per-edit explanations)
+          const narratives = (parsed.operations || [])
+            .map((op: any) => op.params?.narrative)
+            .filter(Boolean);
+
+          // Build comprehensive message content with all LLM output
+          const messageParts: string[] = [];
+
+          // 1. Reasoning (main thought process)
+          if (parsed.reasoning) {
+            messageParts.push(parsed.reasoning);
+          }
+
+          // 2. Narratives (per-edit explanations)
+          if (narratives.length > 0) {
+            messageParts.push('\n\n**Actions:**');
+            narratives.forEach((n: string) => messageParts.push(`- ${n}`));
+          }
+
+          // 3. Blackboard decision (if any)
+          if (parsed.blackboard_entry?.content) {
+            const entryType = parsed.blackboard_entry.type || 'Note';
+            const capitalizedType = entryType.charAt(0).toUpperCase() + entryType.slice(1);
+            messageParts.push(`\n\n**${capitalizedType}:** ${parsed.blackboard_entry.content}`);
+          }
+
+          const messageContent = messageParts.join('\n') || `[Iteration ${iteration}] Processing...`;
           
+          // Persist with rich metadata for UI rendering
           await supabase.rpc("insert_collaboration_message_with_token", {
             p_collaboration_id: collaborationId,
             p_token: shareToken,
             p_role: "assistant",
-            p_content: iterationMessage,
+            p_content: messageContent,
             p_metadata: { 
               iteration,
               status: parsed.status,
               hasOperations: (parsed.operations?.length || 0) > 0,
+              narratives,
+              blackboardType: parsed.blackboard_entry?.type || null,
+              blackboardContent: parsed.blackboard_entry?.content || null,
             },
           });
 
           // Broadcast assistant message for multi-user real-time sync
+          const assistantMsg = {
+            id: `iter-${iteration}-${Date.now()}`,
+            role: 'assistant',
+            content: messageContent,
+            created_at: new Date().toISOString(),
+            metadata: { 
+              iteration, 
+              status: parsed.status,
+              hasOperations: (parsed.operations?.length || 0) > 0,
+            }
+          };
+
           try {
             await supabase.channel(`collaboration-${collaborationId}`).send({
               type: 'broadcast',
               event: 'collaboration_message',
-              payload: { message: { role: 'assistant', content: iterationMessage, metadata: { iteration } } }
+              payload: { message: assistantMsg }
             });
           } catch (broadcastError) {
             console.warn('Failed to broadcast message:', broadcastError);

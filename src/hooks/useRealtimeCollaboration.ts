@@ -433,9 +433,13 @@ export function useRealtimeCollaboration(
           const msg = payload.payload?.message;
           if (msg) {
             setMessages(prev => {
-              // Avoid duplicates by checking ID or content+role
+              // Time-window deduplication: check content + role within 5 seconds
+              // This handles temporary broadcast IDs vs database IDs
+              const msgTime = new Date(msg.created_at).getTime();
               const isDuplicate = prev.some(m => 
-                m.id === msg.id || (m.content === msg.content && m.role === msg.role)
+                m.role === msg.role && 
+                m.content === msg.content &&
+                Math.abs(new Date(m.created_at).getTime() - msgTime) < 5000
               );
               if (isDuplicate) return prev;
               
