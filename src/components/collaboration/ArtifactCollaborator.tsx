@@ -827,7 +827,8 @@ export function ArtifactCollaborator({
       setIsStreaming(false);
       setStreamingContent('');
       setStreamProgress(p => ({ ...p, status: 'complete' }));
-      setOptimisticMessages([]);
+      // DON'T clear optimisticMessages here - let the deduplication in useMemo
+      // naturally filter them out as db messages arrive via realtime sync
       isAgentEditingRef.current = false;
       abortControllerRef.current = null;
     }
