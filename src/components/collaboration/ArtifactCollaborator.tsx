@@ -48,6 +48,30 @@ function addLineNumbers(content: string): string {
   return lines.map((line, i) => `<<${i + 1}>> ${line}`).join("\n");
 }
 
+// Format tool execution message for display in chat
+function formatToolMessage(op: any, result: any): string {
+  const opType = op.type || 'unknown';
+  
+  switch (opType) {
+    case 'read_artifact': {
+      const lineCount = result.content?.split('\n').length || 0;
+      return `Read artifact content (${lineCount} lines)`;
+    }
+    case 'edit_lines': {
+      const startLine = op.params?.start_line || '?';
+      const endLine = op.params?.end_line || '?';
+      const narrative = op.params?.narrative || 'Applied edit';
+      // Truncate narrative if too long
+      const truncatedNarrative = narrative.length > 60 
+        ? narrative.slice(0, 57) + '...' 
+        : narrative;
+      return `edit_lines [${startLine}-${endLine}]: ${truncatedNarrative}`;
+    }
+    default:
+      return `${opType}: ${result.success ? 'completed' : 'failed'}`;
+  }
+}
+
 interface ArtifactCollaboratorProps {
   projectId: string;
   artifact: {
@@ -721,7 +745,7 @@ export function ArtifactCollaborator({
           throw new Error('No iteration result received');
         }
         
-        // Execute operations locally
+        // Execute operations locally and log each tool execution
         setStreamProgress(p => ({ ...p, status: 'processing' }));
         pendingOperationResultsRef.current = [];
         // NOTE: Do NOT reset batchContentRef here - it must persist across iterations
@@ -730,6 +754,15 @@ export function ArtifactCollaborator({
         for (const op of iterationResult.operations || []) {
           const result = await executeOperationLocally(op);
           pendingOperationResultsRef.current.push(result);
+          
+          // Log tool execution as a yellow message in chat
+          const toolMessage = formatToolMessage(op, result);
+          await sendMessage('tool', toolMessage, {
+            operation_type: op.type,
+            params: op.params,
+            success: result.success,
+            iteration: currentIteration,
+          });
         }
         
         // Handle blackboard entry

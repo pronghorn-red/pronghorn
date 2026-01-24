@@ -125,7 +125,7 @@ export function useRealtimeCollaboration(
 
   // Send a message
   const sendMessage = useCallback(async (
-    role: "user" | "assistant",
+    role: "user" | "assistant" | "tool",
     content: string,
     metadata?: Record<string, unknown>
   ) => {

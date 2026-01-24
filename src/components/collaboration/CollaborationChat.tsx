@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User, Loader2, Brain, Lightbulb, CheckCircle, Paperclip, X, Square } from 'lucide-react';
+import { Send, Bot, User, Loader2, Brain, Lightbulb, CheckCircle, Paperclip, X, Square, Wrench } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 
 export interface CollaborationMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   content: string;
   created_at: string;
   metadata?: any;
@@ -172,6 +172,34 @@ export function CollaborationChat({
 
             const message = item as CollaborationMessage & { _type: 'message' };
             const isUser = message.role === 'user';
+            const isTool = message.role === 'tool';
+            
+            // Tool execution messages - yellow styling
+            if (isTool) {
+              const isSuccess = message.metadata?.success !== false;
+              return (
+                <div 
+                  key={message.id} 
+                  className="px-2 py-1.5 rounded-md border bg-yellow-500/10 border-yellow-500/30 text-yellow-700 dark:text-yellow-300"
+                >
+                  <div className="flex items-center gap-2 text-xs">
+                    <Wrench className="h-3 w-3 flex-shrink-0" />
+                    <Badge 
+                      variant="outline" 
+                      className="text-[10px] px-1 py-0 bg-yellow-500/20 border-yellow-500/40"
+                    >
+                      {message.metadata?.operation_type || 'tool'}
+                    </Badge>
+                    <span className="flex-1 truncate">
+                      {isSuccess ? '✓' : '✗'} {message.content}
+                    </span>
+                    <span className="text-[10px] opacity-60 flex-shrink-0">
+                      {new Date(message.created_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                </div>
+              );
+            }
             
             return (
               <div key={message.id}>
