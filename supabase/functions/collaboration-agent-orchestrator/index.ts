@@ -583,28 +583,31 @@ Start your response with { and end with }.`;
             conversationHistory: updatedConversationHistory,
           });
 
-          // If this is the final iteration (completed), insert assistant message to DB
-          if (parsed.status === "completed") {
-            const finalMessage = parsed.message || "I've made the requested changes to the document.";
-            
-            await supabase.rpc("insert_collaboration_message_with_token", {
-              p_collaboration_id: collaborationId,
-              p_token: shareToken,
-              p_role: "assistant",
-              p_content: finalMessage,
-              p_metadata: { iterations: iteration },
-            });
+          // Persist the reasoning/message for EVERY iteration so it appears in chat history
+          // This ensures the user and agent can both see the full progression of thought
+          const iterationMessage = parsed.message || parsed.reasoning || `[Iteration ${iteration}] Processing...`;
+          
+          await supabase.rpc("insert_collaboration_message_with_token", {
+            p_collaboration_id: collaborationId,
+            p_token: shareToken,
+            p_role: "assistant",
+            p_content: iterationMessage,
+            p_metadata: { 
+              iteration,
+              status: parsed.status,
+              hasOperations: (parsed.operations?.length || 0) > 0,
+            },
+          });
 
-            // Broadcast assistant message for multi-user real-time sync
-            try {
-              await supabase.channel(`collaboration-${collaborationId}`).send({
-                type: 'broadcast',
-                event: 'collaboration_message',
-                payload: { message: { role: 'assistant', content: finalMessage } }
-              });
-            } catch (broadcastError) {
-              console.warn('Failed to broadcast message:', broadcastError);
-            }
+          // Broadcast assistant message for multi-user real-time sync
+          try {
+            await supabase.channel(`collaboration-${collaborationId}`).send({
+              type: 'broadcast',
+              event: 'collaboration_message',
+              payload: { message: { role: 'assistant', content: iterationMessage, metadata: { iteration } } }
+            });
+          } catch (broadcastError) {
+            console.warn('Failed to broadcast message:', broadcastError);
           }
 
           clearInterval(heartbeatInterval);

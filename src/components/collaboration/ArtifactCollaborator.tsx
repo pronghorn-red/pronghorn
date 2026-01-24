@@ -740,6 +740,9 @@ export function ArtifactCollaborator({
           );
         }
         
+        // Refresh messages after each iteration so reasoning appears in chat immediately
+        await refreshMessages();
+        
         // Update conversation history for next iteration
         conversationHistoryRef.current = iterationResult.conversationHistory || [];
         
