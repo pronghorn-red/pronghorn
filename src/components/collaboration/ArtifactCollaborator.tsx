@@ -559,6 +559,8 @@ export function ArtifactCollaborator({
         success: true,
         lines_affected: `${start_line}-${end_line}`,
         narrative,
+        updatedDocumentContent: newContentStr, // Include for backend to auto-attach
+        total_lines: newContentStr.split('\n').length,
       };
     }
     
@@ -742,9 +744,34 @@ export function ArtifactCollaborator({
         setStreamProgress(p => ({ ...p, status: 'processing' }));
         pendingOperationResultsRef.current = [];
         // NOTE: Do NOT reset batchContentRef here - it must persist across iterations
-        // so that read_artifact sees the latest edited content
+        // so that subsequent edits see the latest content
         
-        for (const op of iterationResult.operations || []) {
+        // Separate edit operations from non-edit operations
+        const allOperations = iterationResult.operations || [];
+        const editOps = allOperations.filter((op: any) => op.type === 'edit_lines');
+        const nonEditOps = allOperations.filter((op: any) => op.type !== 'edit_lines');
+        
+        // Sort edit operations by start_line DESCENDING (highest line first)
+        // This prevents line number drift when applying multiple edits
+        editOps.sort((a: any, b: any) => b.params.start_line - a.params.start_line);
+        
+        // Skip overlapping edits (where one edit's end_line >= next edit's start_line)
+        const filteredEdits: any[] = [];
+        let lastStartLine = Infinity;
+        for (const edit of editOps) {
+          if (edit.params.end_line >= lastStartLine) {
+            console.warn('[Collab] Skipping overlapping edit:', edit.params.start_line, '-', edit.params.end_line, 'vs lastStart:', lastStartLine);
+            continue;
+          }
+          lastStartLine = edit.params.start_line;
+          filteredEdits.push(edit);
+        }
+        
+        // Execute non-edit ops first (like read_artifact), then sorted edits
+        const sortedOperations = [...nonEditOps, ...filteredEdits];
+        console.log('[Collab] Executing', sortedOperations.length, 'ops (', editOps.length, 'edits,', filteredEdits.length, 'after overlap filter)');
+        
+        for (const op of sortedOperations) {
           const result = await executeOperationLocally(op);
           pendingOperationResultsRef.current.push(result);
           

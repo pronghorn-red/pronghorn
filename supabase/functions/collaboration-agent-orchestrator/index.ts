@@ -253,23 +253,31 @@ serve(async (req) => {
         .join("\n");
     }
 
-    // Build system prompt
+    // Build system prompt - document is ALWAYS auto-attached, no read_artifact needed
     const systemPrompt = `You are CollaborationAgent, a collaborative document editing assistant.
 
 CRITICAL: Respond with ONLY valid JSON. No prose outside the JSON structure.
 
-You can perform these operations:
-1. read_artifact - Read the current document content with line numbers
-2. edit_lines - Edit specific lines in the document
+AVAILABLE OPERATION:
+- edit_lines: Edit specific lines in the document
+  Parameters: { start_line, end_line, new_content, narrative }
 
-RULES:
-- ALWAYS call read_artifact first to see current document state
-- Use edit_lines for targeted, surgical edits
-- NEVER replace entire document - make focused changes
+THE DOCUMENT IS ALWAYS PROVIDED TO YOU with line numbers in <<N>> format.
+You do NOT need to call read_artifact - the current document state is included automatically.
+
+LINE EDITING RULES:
+- Line numbers reference the <<N>> prefix shown in the document
+- Your new_content should NOT include <<N>> prefixes - just raw content
+- You CAN make multiple edit_lines in one response
+- Edits are applied from bottom-to-top automatically, so line numbers won't shift
+- NEVER make overlapping edits (edit1.end_line must be < edit2.start_line)
+- Use targeted, surgical edits - never replace the entire document
+
+SYNTAX SAFETY (CRITICAL):
+- Before editing code, verify your new_content has balanced brackets/braces
+- Count opening { [ ( and ensure matching closing } ] )
+- When inserting into the middle of code, include necessary closing elements
 - ALWAYS provide a narrative explaining each edit
-- Make ONE focused edit per operation when possible
-
-Current document content will be provided with line numbers as <<N>>.
 
 PERSISTENCE RULES (CRITICAL - FOLLOW STRICTLY):
 - Do NOT set status to 'completed' until ALL user requirements are FULLY satisfied
@@ -280,9 +288,9 @@ PERSISTENCE RULES (CRITICAL - FOLLOW STRICTLY):
 - NEVER give up - if the task requires many iterations, keep going
 
 SELF-REFLECTION (REQUIRED before marking completed):
-1. Re-read the entire document using read_artifact
+1. Review the document provided in each iteration
 2. COUNT and verify ALL requested elements are present (e.g., "I count 10 chapters: 1, 2, 3...")
-3. Check quality of each addition/change
+3. Check quality and syntax of each addition/change
 4. Only THEN set status to 'completed' if EVERYTHING is verified
 5. If count doesn't match request, set status to 'in_progress' and continue
 
@@ -307,8 +315,6 @@ RESPONSE FORMAT:
 {
   "reasoning": "Your thinking about what to do",
   "operations": [
-    { "type": "read_artifact", "params": {} }
-    // OR
     { "type": "edit_lines", "params": { "start_line": 1, "end_line": 3, "new_content": "...", "narrative": "..." } }
   ],
   "blackboard_entry": { "type": "planning|progress|decision|reasoning", "content": "..." },
@@ -318,7 +324,7 @@ RESPONSE FORMAT:
 
 Start your response with { and end with }.`;
 
-    // Build conversation history
+    // Build conversation history - ALWAYS include current document content
     let conversationHistory: Array<{ role: string; content: string }> = [];
     
     if (isFirstIteration) {
@@ -326,19 +332,25 @@ Start your response with { and end with }.`;
       // NOTE: User message is already persisted by frontend - don't duplicate here
       conversationHistory.push({ 
         role: "user", 
-        content: `Document to collaborate on:\n${addLineNumbers(initialDocumentContent)}\n\nUser request: ${userMessage}` 
+        content: `CURRENT DOCUMENT:\n${addLineNumbers(initialDocumentContent)}\n\nUser request: ${userMessage}` 
       });
     } else {
       // Subsequent iterations: use client-provided conversation history
       conversationHistory = clientConversationHistory || [];
       
-      // Add pending operation results if any
-      if (pendingOperationResults && pendingOperationResults.length > 0) {
-        conversationHistory.push({
-          role: "user",
-          content: `Operation results:\n${JSON.stringify(pendingOperationResults, null, 2)}`
-        });
-      }
+      // ALWAYS inject current document state - extract from pending results or use initial
+      const latestContent = pendingOperationResults?.find((r: any) => r.updatedDocumentContent)?.updatedDocumentContent 
+        || initialDocumentContent;
+      
+      // Build iteration context with document + operation results
+      const iterationContext = pendingOperationResults && pendingOperationResults.length > 0
+        ? `CURRENT DOCUMENT:\n${addLineNumbers(latestContent)}\n\nOperation results from last iteration:\n${JSON.stringify(pendingOperationResults.map((r: any) => ({ type: r.type, success: r.success, lines_affected: r.lines_affected, narrative: r.narrative })), null, 2)}`
+        : `CURRENT DOCUMENT:\n${addLineNumbers(latestContent)}\n\nNo operations in previous iteration.`;
+      
+      conversationHistory.push({
+        role: "user",
+        content: iterationContext
+      });
     }
 
     // Stream encoder for SSE
