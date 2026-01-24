@@ -64,7 +64,7 @@ export function useRealtimeCollaboration(
       const { data, error } = await supabase.rpc("get_collaboration_messages_with_token", {
         p_collaboration_id: collaborationId,
         p_token: shareToken,
-        p_limit: 1000,
+        p_limit: 100000,
       });
 
       if (error) {
