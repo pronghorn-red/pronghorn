@@ -32,6 +32,15 @@ export function ConnectionStringDialog({
 
   const maskValue = (value: string) => '••••••••••••••••';
 
+  const ensureSslMode = (connectionString: string): string => {
+    if (!connectionString) return connectionString;
+    if (connectionString.includes('sslmode=')) {
+      return connectionString;
+    }
+    const separator = connectionString.includes('?') ? '&' : '?';
+    return `${connectionString}${separator}sslmode=require`;
+  };
+
   const handleCopy = async (value: string, fieldName: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -157,7 +166,7 @@ export function ConnectionStringDialog({
                   >
                     {showExternalConn ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
-                  <CopyButton value={externalConnectionString} fieldName="External Connection String" />
+                  <CopyButton value={ensureSslMode(externalConnectionString)} fieldName="External Connection String" />
                 </div>
               </div>
             )}
