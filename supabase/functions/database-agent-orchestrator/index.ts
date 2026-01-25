@@ -1405,22 +1405,7 @@ ${blackboardContent}`;
             }
 
             operationResults.push({ type: op.type, success: true, data: result?.data || result });
-            
-            // For execute_sql, include full results in SSE event so frontend can display them
-            if (op.type === 'execute_sql' && result?.data) {
-              sendSSE('operation_complete', { 
-                iteration, 
-                operation: op.type, 
-                success: true,
-                sql: op.params.sql,
-                columns: result.data.columns || [],
-                rows: result.data.rows || [],
-                rowCount: result.data.rowCount || 0,
-                executionTime: result.data.executionTime
-              });
-            } else {
-              sendSSE('operation_complete', { iteration, operation: op.type, success: true });
-            }
+            sendSSE('operation_complete', { iteration, operation: op.type, success: true });
           } catch (error) {
             console.error("Operation failed:", error);
             const errorMessage = error instanceof Error ? error.message : String(error);

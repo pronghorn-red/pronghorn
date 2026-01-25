@@ -795,36 +795,6 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   // Memoized callback handlers for agent panel to prevent remounting
   const handleSchemaRefresh = useCallback(() => loadSchema(true), [loadSchema]);
 
-  // Handle SQL executed by database agent - update query results and SQL editor
-  const handleAgentSqlExecuted = useCallback((sql: string, results: { columns: string[]; rows: any[]; rowCount: number; executionTime?: number }) => {
-    // Append executed SQL to editor with a comment header
-    setCurrentQuery(prev => {
-      const trimmed = prev.trim();
-      const separator = trimmed ? '\n\n-- Agent executed:\n' : '-- Agent executed:\n';
-      return trimmed + separator + sql + ';';
-    });
-    
-    // Update query results to show the agent's execution
-    setQueryResults({
-      isMultiResult: false,
-      single: {
-        columns: results.columns,
-        rows: results.rows,
-        executionTime: results.executionTime,
-        totalRows: results.rowCount
-      }
-    });
-    
-    // Switch to query tab to show results
-    setActiveTab('query');
-    
-    toast.success(`Agent executed SQL: ${results.rowCount} rows`);
-    
-    // Refresh schema silently in case DDL was executed
-    silentRefresh();
-    loadMigrations();
-  }, [silentRefresh, loadMigrations]);
-
   // Agent panel props (memoized to prevent remounting)
   const agentPanelProps = useMemo(() => ({
     projectId: database?.project_id || externalConnection?.project_id || '',
@@ -834,8 +804,7 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
     schemas,
     onSchemaRefresh: handleSchemaRefresh,
     onMigrationRefresh: loadMigrations,
-    onSqlExecuted: handleAgentSqlExecuted,
-  }), [database?.project_id, externalConnection?.project_id, databaseId, connectionId, shareToken, schemas, handleSchemaRefresh, loadMigrations, handleAgentSqlExecuted]);
+  }), [database?.project_id, externalConnection?.project_id, databaseId, connectionId, shareToken, schemas, handleSchemaRefresh, loadMigrations]);
 
   if (isMobile) {
     return (
