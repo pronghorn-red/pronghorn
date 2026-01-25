@@ -175,6 +175,67 @@ export default function DatabaseImportWizard({
     setTableDefsMap(prev => new Map(prev).set(tableName, def));
   }, []);
   
+  // Handle table name change for multi-table JSON import
+  const handleMultiTableNameChange = useCallback((oldName: string, newName: string) => {
+    if (!newName.trim() || oldName === newName) return;
+    
+    // Sanitize the new name
+    const sanitizedName = newName.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+    if (!sanitizedName) return;
+    
+    // Update jsonData tables array
+    setJsonData(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        tables: prev.tables.map(t => 
+          t.name === oldName ? { ...t, name: sanitizedName } : t
+        ),
+        relationships: prev.relationships.map(r => ({
+          ...r,
+          parentTable: r.parentTable === oldName ? sanitizedName : r.parentTable,
+          childTable: r.childTable === oldName ? sanitizedName : r.childTable
+        }))
+      };
+    });
+    
+    // Update selectedJsonTable
+    setSelectedJsonTable(sanitizedName);
+    
+    // Update selectedRowsByTable
+    setSelectedRowsByTable(prev => {
+      const newMap = new Map(prev);
+      if (newMap.has(oldName)) {
+        const rows = newMap.get(oldName);
+        newMap.delete(oldName);
+        if (rows) newMap.set(sanitizedName, rows);
+      }
+      return newMap;
+    });
+    
+    // Update tableDefsMap
+    setTableDefsMap(prev => {
+      const newMap = new Map(prev);
+      if (newMap.has(oldName)) {
+        const def = newMap.get(oldName);
+        newMap.delete(oldName);
+        if (def) newMap.set(sanitizedName, { ...def, name: sanitizedName });
+      }
+      return newMap;
+    });
+    
+    // Update multiTableColumns
+    setMultiTableColumns(prev => {
+      const newMap = new Map(prev);
+      if (newMap.has(oldName)) {
+        const cols = newMap.get(oldName);
+        newMap.delete(oldName);
+        if (cols) newMap.set(sanitizedName, cols);
+      }
+      return newMap;
+    });
+  }, []);
+  
   // Handle table match resolution changes
   const handleTableResolutionChange = useCallback((tableName: string, newStatus: 'new' | 'insert' | 'augment' | 'skip') => {
     setTableMatches(prev => updateMatchResolution(prev, tableName, newStatus));
@@ -1210,7 +1271,7 @@ export default function DatabaseImportWizard({
                         headers={headers.filter(h => h !== '_row_id')}
                         sampleData={memoizedSampleData}
                         tableName={selectedJsonTable}
-                        onTableNameChange={() => {}}
+                        onTableNameChange={(newName) => handleMultiTableNameChange(selectedJsonTable, newName)}
                         onTableDefChange={(def) => handleMultiTableDefChange(selectedJsonTable, def)}
                         schema={schema}
                         initialColumns={multiTableColumns.get(selectedJsonTable) || undefined}
