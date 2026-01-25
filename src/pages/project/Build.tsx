@@ -17,7 +17,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useRealtimeRepos } from "@/hooks/useRealtimeRepos";
 import { useFileBuffer } from "@/hooks/useFileBuffer";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff, Upload, Trash2, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Menu, FilePlus, FolderPlus, Eye, EyeOff, Upload, Trash2, AlertTriangle, Download, Loader2 } from "lucide-react";
+import JSZip from "jszip";
 import { CreateFileDialog } from "@/components/repository/CreateFileDialog";
 import { RenameDialog } from "@/components/repository/RenameDialog";
 import { stageFile } from "@/lib/stagingOperations";
@@ -76,6 +77,7 @@ export default function Build() {
   const [autoCommit, setAutoCommit] = useState(false);
   const [desktopActiveTab, setDesktopActiveTab] = useState("chat");
   const [stagingRefreshTrigger, setStagingRefreshTrigger] = useState(0);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // File buffer system for instant file switching and background saves
   const {
@@ -425,6 +427,105 @@ export default function Build() {
       if (isMobile) {
         setMobileActiveTab("editor");
       }
+    }
+  };
+
+  // Handle download entire repo as ZIP
+  const handleDownloadZip = async () => {
+    if (!defaultRepo || !projectId) {
+      toast.error("No repository available");
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      // 1. Fetch all committed files with content
+      const { data: committedFiles, error: filesError } = await supabase.rpc(
+        "get_repo_files_with_token",
+        {
+          p_repo_id: defaultRepo.id,
+          p_token: shareToken || null,
+        }
+      );
+      if (filesError) throw filesError;
+
+      // 2. Fetch all staged changes with content
+      const { data: stagedChangesData, error: stagedError } = await supabase.rpc(
+        "get_staged_changes_with_token",
+        {
+          p_repo_id: defaultRepo.id,
+          p_token: shareToken || null,
+        }
+      );
+      if (stagedError) throw stagedError;
+
+      // 3. Build merged file map (staged overrides committed)
+      const fileMap = new Map<string, { content: string; isBinary: boolean }>();
+
+      // Add committed files
+      for (const file of committedFiles || []) {
+        fileMap.set(file.path, {
+          content: file.content || "",
+          isBinary: file.is_binary || false,
+        });
+      }
+
+      // Apply staged changes
+      for (const change of stagedChangesData || []) {
+        if (change.operation_type === "delete") {
+          fileMap.delete(change.file_path);
+        } else if (change.operation_type === "rename" && change.old_path) {
+          fileMap.delete(change.old_path);
+          if (change.new_content !== null) {
+            fileMap.set(change.file_path, {
+              content: change.new_content || "",
+              isBinary: change.is_binary || false,
+            });
+          }
+        } else {
+          // add or edit
+          fileMap.set(change.file_path, {
+            content: change.new_content || "",
+            isBinary: change.is_binary || false,
+          });
+        }
+      }
+
+      // 4. Create ZIP with folder structure
+      const zip = new JSZip();
+
+      for (const [path, { content, isBinary }] of fileMap) {
+        if (isBinary && content) {
+          // Decode base64 for binary files
+          try {
+            const binaryData = Uint8Array.from(atob(content), (c) => c.charCodeAt(0));
+            zip.file(path, binaryData);
+          } catch {
+            // If base64 decode fails, store as text
+            zip.file(path, content);
+          }
+        } else {
+          zip.file(path, content || "");
+        }
+      }
+
+      // 5. Generate and download
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${defaultRepo.repo || "repository"}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Downloaded ${fileMap.size} files as ZIP`);
+    } catch (error: any) {
+      console.error("Error downloading repository:", error);
+      toast.error(error.message || "Failed to download repository");
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -832,6 +933,20 @@ export default function Build() {
                                 <EyeOff className="h-3.5 w-3.5" />
                               )}
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={handleDownloadZip}
+                              disabled={isDownloading || files.length === 0}
+                              className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc] disabled:opacity-50"
+                              title="Download as ZIP"
+                            >
+                              {isDownloading ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Download className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
                           </div>
                         </div>
                         {selectedFolderPath && selectedFolderPath !== '/' && (
@@ -1053,6 +1168,20 @@ export default function Build() {
                                 <Eye className="h-3.5 w-3.5" />
                               ) : (
                                 <EyeOff className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={handleDownloadZip}
+                              disabled={isDownloading || files.length === 0}
+                              className="h-6 w-6 hover:bg-[#2a2d2e] text-[#cccccc] disabled:opacity-50"
+                              title="Download as ZIP"
+                            >
+                              {isDownloading ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Download className="h-3.5 w-3.5" />
                               )}
                             </Button>
                           </div>
