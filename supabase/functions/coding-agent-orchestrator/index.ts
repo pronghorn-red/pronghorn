@@ -1375,6 +1375,31 @@ serve(async (req) => {
                   p_search_term: op.params.keyword,
                   p_token: shareToken,
                 });
+                
+                // Enhance search results with line numbers for each match
+                if (result.data && Array.isArray(result.data)) {
+                  const keyword = (op.params.keyword || "").toLowerCase();
+                  result.data = result.data.map((file: any) => {
+                    const lines = (file.content || "").split('\n');
+                    const matches: Array<{line: number, content: string}> = [];
+                    
+                    lines.forEach((line: string, idx: number) => {
+                      if (line.toLowerCase().includes(keyword)) {
+                        matches.push({ 
+                          line: idx + 1, 
+                          content: line.trim().slice(0, 200) 
+                        });
+                      }
+                    });
+                    
+                    return {
+                      id: file.id,
+                      path: file.path,
+                      match_count: matches.length,
+                      matches: matches.slice(0, 20), // Limit to 20 matches per file
+                    };
+                  });
+                }
                 break;
 
               case "wildcard_search":
@@ -1383,6 +1408,34 @@ serve(async (req) => {
                   p_query: op.params.query || "",
                   p_token: shareToken,
                 });
+                
+                // Enhance wildcard search results with line numbers for each match
+                if (result.data && Array.isArray(result.data)) {
+                  const queryTerms = (op.params.query || "").toLowerCase().split(/[,\s]+/).filter(Boolean);
+                  result.data = result.data.map((file: any) => {
+                    const lines = (file.content || "").split('\n');
+                    const matches: Array<{line: number, content: string, terms: string[]}> = [];
+                    
+                    lines.forEach((line: string, idx: number) => {
+                      const lineLower = line.toLowerCase();
+                      const matchedTerms = queryTerms.filter((term: string) => lineLower.includes(term));
+                      if (matchedTerms.length > 0) {
+                        matches.push({ 
+                          line: idx + 1, 
+                          content: line.trim().slice(0, 200),
+                          terms: matchedTerms
+                        });
+                      }
+                    });
+                    
+                    return {
+                      id: file.id,
+                      path: file.path,
+                      match_count: file.match_count || matches.length,
+                      matches: matches.slice(0, 20), // Limit to 20 matches per file
+                    };
+                  });
+                }
                 break;
 
               case "read_file": {
@@ -1537,7 +1590,28 @@ serve(async (req) => {
                     content: newContent,
                     created_at: new Date(),
                   });
-                  result.data[0].total_lines = newContent.split("\n").length;
+                  
+                  // Add verification details for the agent to confirm edit worked
+                  const newLines = newContent.split("\n");
+                  const oldLines = baseContent.split("\n");
+                  const lineDelta = newLines.length - oldLines.length;
+                  const startIdx = op.params.start_line - 1;
+                  
+                  result.data[0].verification = {
+                    start_line: op.params.start_line,
+                    end_line: op.params.end_line,
+                    lines_replaced: startIdx <= endIdx ? (endIdx - startIdx + 1) : 0,
+                    lines_inserted: newContentLines.length,
+                    line_delta: lineDelta,
+                    before_context: startIdx > 0 ? `<<${startIdx}>>${newLines[startIdx - 1] || ''}` : null,
+                    edited_preview: newContentLines.slice(0, 3).map((l: string, i: number) => 
+                      `<<${op.params.start_line + i}>>${l}`
+                    ),
+                    after_context: newLines[startIdx + newContentLines.length] ? 
+                      `<<${op.params.start_line + newContentLines.length}>>${newLines[startIdx + newContentLines.length]}` : null,
+                    total_lines: newLines.length,
+                  };
+                  result.data[0].total_lines = newLines.length;
                 }
                 filesChanged = true;
                 break;
@@ -1909,13 +1983,14 @@ serve(async (req) => {
                 }
                 break;
               case "search":
-                summary.summary = `Found ${Array.isArray(r.data) ? r.data.length : 0} results`;
-                // Include search results with snippets
+                summary.summary = `Found ${Array.isArray(r.data) ? r.data.length : 0} files with matches`;
+                // Include search results with line numbers
                 if (Array.isArray(r.data)) {
                   summary.results = r.data.map((f: any) => ({ 
                     id: f.id, 
-                    path: f.path, 
-                    snippet: f.snippet || f.content?.slice(0, 500) 
+                    path: f.path,
+                    match_count: f.match_count,
+                    matches: f.matches, // Line numbers + content
                   }));
                 }
                 break;
@@ -1934,7 +2009,15 @@ serve(async (req) => {
                 if (Array.isArray(r.data)) summary.files = r.data;
                 break;
               case "edit_lines":
-                summary.summary = `Edited file, now ${r.data?.total_lines || 'unknown'} lines`;
+                if (r.data?.[0]?.verification) {
+                  const v = r.data[0].verification;
+                  summary.verification = v;
+                  summary.summary = `Edited lines ${v.start_line}-${v.end_line}, ` +
+                    `replaced ${v.lines_replaced} with ${v.lines_inserted} lines, ` +
+                    `file now ${v.total_lines} lines`;
+                } else {
+                  summary.summary = `Edited file, now ${r.data?.[0]?.total_lines || 'unknown'} lines`;
+                }
                 break;
               case "create_file":
                 summary.summary = `Created file`;

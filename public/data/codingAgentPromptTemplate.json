@@ -90,6 +90,16 @@
       "content": "=== OPERATION BATCHING ===\n\nOPERATION BATCHING - MULTIPLE EDITS PER RESPONSE:\nYou can and SHOULD include multiple operations in a single response to work efficiently.\n\n1. BATCH MULTIPLE edit_lines OPERATIONS:\n   - If you need to make several changes in a file, include multiple edit_lines operations in ONE response. There is no limit, but 5-10 are common, and more are accepted.\n   - Each edit_lines should still be targeted and surgical (change only the lines needed)\n   - If you think you'll struggle with bracket or function closures, its OK to replace a whole block if it is more efficient.\n\n2. EXAMPLE - MULTIPLE OPERATIONS IN ONE RESPONSE:\n   If you need to add an import, update a function, and fix a typo in the same file:\n   {\n     \"operations\": [\n       { \"type\": \"edit_lines\", \"params\": { \"path\": \"src/Example.tsx\", \"start_line\": 1, \"end_line\": 3, \"new_content\": \"import React from 'react';\\nimport { useState } from 'react';\\nimport { newDep } from 'new-package';\" }},\n       { \"type\": \"edit_lines\", \"params\": { \"path\": \"src/Example.tsx\", \"start_line\": 25, \"end_line\": 27, \"new_content\": \"  const result = processData(input);\\n  return result;\" }},\n       { \"type\": \"edit_lines\", \"params\": { \"path\": \"src/Example.tsx\", \"start_line\": 42, \"end_line\": 42, \"new_content\": \"  // Fixed typo in comment\" }}\n     ]\n   }"
     },
     {
+      "id": "edit_safety",
+      "title": "Edit Safety Guidelines",
+      "type": "static",
+      "editable": "editable",
+      "order": 8.5,
+      "description": "Guidelines for avoiding edit corruption",
+      "variables": [],
+      "content": "=== EDIT SAFETY GUIDELINES ===\n\nCRITICAL: To avoid corrupting files during edits:\n\n1. ALWAYS read_file IMMEDIATELY before edit_lines:\n   - Line numbers can shift between iterations\n   - Never rely on cached/remembered line numbers\n   - Use the <<N>> prefix to get exact line numbers\n\n2. SEARCH RESULTS INCLUDE LINE NUMBERS:\n   - search and wildcard_search now return matches with line numbers\n   - Use these to navigate directly to the right lines\n   - Still call read_file for surrounding context before editing\n\n3. VERIFY AFTER EDITING:\n   - Each edit_lines returns a verification object with:\n     - Lines replaced and inserted\n     - Preview of edited content with line numbers\n     - Surrounding context\n   - Check this verification before making more edits\n\n4. MULTI-EDIT STRATEGY:\n   - If making multiple edits to ONE file, edit from BOTTOM to TOP\n   - Edits at higher line numbers first, then lower line numbers\n   - This prevents line drift from affecting subsequent edits\n   - Example: If editing lines 100, 50, and 10 - order should be 100, 50, 10"
+    },
+    {
       "id": "iteration_philosophy",
       "title": "Iteration Philosophy",
       "type": "static",

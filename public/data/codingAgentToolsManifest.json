@@ -19,7 +19,7 @@
       }
     },
     "wildcard_search": {
-      "description": "Multi-term search across all files. Returns ranked results by match count. Use for finding files by concept.",
+      "description": "Multi-term search across all files. Returns ranked results WITH LINE NUMBERS showing where matches occur. Use the line numbers to find exact locations to edit.",
       "category": "discovery",
       "enabled": true,
       "params": {
@@ -31,7 +31,7 @@
       }
     },
     "search": {
-      "description": "Search file paths and content by single keyword.",
+      "description": "Search file paths and content by single keyword. Returns files WITH LINE NUMBERS of matching content. Use the line numbers to navigate with read_file before editing.",
       "category": "discovery",
       "enabled": true,
       "params": {
@@ -60,7 +60,7 @@
       }
     },
     "edit_lines": {
-      "description": "This is one of the most important tools. Use this tool with specific line range in a file and stage the change. Use line numbers from <<N>> prefix in read_file output. Can use file_id OR path parameter (preferred).",
+      "description": "Edit specific line range in a file. Returns VERIFICATION object showing lines replaced/inserted, preview of changes, and surrounding context. Use line numbers from <<N>> prefix in read_file. IMPORTANT: When making multiple edits to same file, edit from BOTTOM to TOP (highest line numbers first) to prevent line drift.",
       "category": "write",
       "enabled": true,
       "params": {
