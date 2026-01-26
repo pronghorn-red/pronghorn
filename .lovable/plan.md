@@ -1,152 +1,44 @@
 
 
-## Plan: Fix Coding Agent Edit Corruption Issues
+## Plan: Auto-Inject Fresh File Content After Edits + Fix Grouping Bug
 
 ### Problem Summary
 
-After analyzing the agent's task log, I've identified **three root causes** of the repeated edit corruption:
+The agent keeps corrupting files because:
 
-| Issue | Description | Evidence from Logs |
-|-------|-------------|-------------------|
-| **Search results lack line numbers** | `search` and `wildcard_search` return full file content but no line numbers, forcing the agent to manually count lines | Agent said "search found the files but didn't show the specific line numbers" |
-| **Multi-edit line drift** | When making multiple `edit_lines` in one iteration, subsequent edits target wrong lines because line numbers shift after each edit | Agent hit line 176 when it should have hit line 194 |
-| **No edit verification feedback** | Agent doesn't see what actually changed, so it can't detect corruption early | Agent had to discard and retry multiple times |
+| Issue | Root Cause |
+|-------|------------|
+| **Stale file content in history** | `read_file` results with full file content are persisted to DB and loaded on every iteration. After `edit_lines`, the agent still sees the OLD content from a previous `read_file`. |
+| **Agent skips re-reading** | Agent assumes the file content from history is current, so it uses stale line numbers. |
+| **Grouping bug** | Edits using `path` instead of `file_id` all group under `undefined`, causing incorrect sort/overlap detection. |
 
----
+### Solution
 
-### Solution Architecture
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                     ENHANCED SEARCH                              │
-│   search/wildcard_search now returns:                           │
-│   - File path, id                                               │
-│   - Line numbers with matching content                          │
-│   - Context (lines before/after)                                │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                ENHANCED EDIT_LINES VERIFICATION                  │
-│   After each edit, agent receives:                              │
-│   - Original lines replaced (with numbers)                      │
-│   - New lines inserted (with numbers)                           │
-│   - 2 lines of surrounding context                              │
-│   - Total line count change                                     │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼  
-┌─────────────────────────────────────────────────────────────────┐
-│                PROMPT REINFORCEMENT                              │
-│   Add critical rules to prompt template:                        │
-│   - "Always read_file before editing to get current line #s"    │
-│   - "One edit per file per iteration when unsure of lines"      │
-│   - "Verify edit context before marking complete"               │
-└─────────────────────────────────────────────────────────────────┘
-```
+**After every `edit_lines`, automatically include the fresh file content in the operation result** so it overwrites any stale content in the agent's context.
 
 ---
 
 ### Implementation Details
 
-#### 1. Enhance Search Results with Line Numbers
+#### Fix 1: Auto-Inject Fresh Content After edit_lines
 
 **File: `supabase/functions/coding-agent-orchestrator/index.ts`**
 
-Post-process search results to extract line numbers:
+In the `edit_lines` success block (around line 1586-1615), the `newContent` already exists. We just need to attach it to the result AND include it in the operation summary.
 
+**Current edit_lines summary (lines 2011-2020):**
 ```typescript
-case "search":
-  result = await supabase.rpc("search_file_content_with_token", {
-    p_repo_id: repoId,
-    p_search_term: op.params.keyword,
-    p_token: shareToken,
-  });
-  
-  // Enhance results with line numbers
-  if (result.data && Array.isArray(result.data)) {
-    result.data = result.data.map((file: any) => {
-      const lines = file.content.split('\n');
-      const matches: Array<{line: number, content: string}> = [];
-      const keyword = op.params.keyword.toLowerCase();
-      
-      lines.forEach((line: string, idx: number) => {
-        if (line.toLowerCase().includes(keyword)) {
-          matches.push({ 
-            line: idx + 1, 
-            content: line.trim().slice(0, 200) 
-          });
-        }
-      });
-      
-      return {
-        id: file.id,
-        path: file.path,
-        match_count: file.match_count,
-        matches: matches.slice(0, 20), // Limit to 20 matches per file
-      };
-    });
+case "edit_lines":
+  if (r.data?.[0]?.verification) {
+    const v = r.data[0].verification;
+    summary.verification = v;
+    summary.summary = `Edited lines ${v.start_line}-${v.end_line}, ...`;
   }
   break;
 ```
 
-Do the same for `wildcard_search`.
-
-#### 2. Enhance edit_lines Verification Response
-
-**File: `supabase/functions/coding-agent-orchestrator/index.ts`**
-
-Return detailed verification object after edit:
-
+**Updated - also include fresh file content with line numbers:**
 ```typescript
-// After successful edit_lines (around line 1541)
-if (!result.error && result.data?.[0]) {
-  sessionFileRegistry.set(fileData.path, {
-    staging_id: result.data[0].id,
-    path: fileData.path,
-    content: newContent,
-    created_at: new Date(),
-  });
-  
-  // Add verification details
-  const newLines = newContent.split('\n');
-  const oldLines = baseContent.split('\n');
-  const lineDelta = newLines.length - oldLines.length;
-  
-  result.data[0].verification = {
-    start_line: op.params.start_line,
-    end_line: op.params.end_line,
-    lines_replaced: endIdx >= startIdx ? (endIdx - startIdx + 1) : 0,
-    lines_inserted: newContentLines.length,
-    line_delta: lineDelta,
-    before_context: newLines[startIdx - 2] ? `<<${startIdx - 1}>>${newLines[startIdx - 2]}` : null,
-    edited_preview: newContentLines.slice(0, 3).map((l: string, i: number) => 
-      `<<${startIdx + i + 1}>>${l}`
-    ),
-    after_context: newLines[startIdx + newContentLines.length] ? 
-      `<<${startIdx + newContentLines.length + 1}>>${newLines[startIdx + newContentLines.length]}` : null,
-    total_lines: newLines.length,
-  };
-}
-```
-
-#### 3. Update Operation Summary for Search/Edit
-
-**File: `supabase/functions/coding-agent-orchestrator/index.ts`** (around line 1893)
-
-```typescript
-case "search":
-  summary.summary = `Found ${Array.isArray(r.data) ? r.data.length : 0} files with matches`;
-  if (Array.isArray(r.data)) {
-    summary.results = r.data.map((f: any) => ({ 
-      id: f.id, 
-      path: f.path,
-      match_count: f.match_count,
-      matches: f.matches, // Line numbers + content
-    }));
-  }
-  break;
-
 case "edit_lines":
   if (r.data?.[0]?.verification) {
     const v = r.data[0].verification;
@@ -154,48 +46,96 @@ case "edit_lines":
     summary.summary = `Edited lines ${v.start_line}-${v.end_line}, ` +
       `replaced ${v.lines_replaced} with ${v.lines_inserted} lines, ` +
       `file now ${v.total_lines} lines`;
-  } else {
-    summary.summary = `Edited file`;
+  }
+  // CRITICAL: Auto-attach fresh file content so agent doesn't use stale data
+  if (r.data?.[0]?.fresh_content) {
+    summary.path = r.data[0].path;
+    summary.fresh_content = r.data[0].fresh_content;
+    summary.total_lines = r.data[0].total_lines;
+    summary.content_note = "FRESH FILE CONTENT (replaces any previous read_file for this path)";
   }
   break;
 ```
 
-#### 4. Add Prompt Guidance for Safe Editing
+**In edit_lines success block (around line 1614), add fresh_content to result:**
+```typescript
+result.data[0].verification = { ... };
+result.data[0].total_lines = newLines.length;
+result.data[0].path = fileData.path;
 
-**File: `public/data/codingAgentPromptTemplate.json`**
+// Attach fresh content with line numbers for next iteration
+const numberedContent = newLines.map((l: string, i: number) => `<<${i + 1}>>${l}`).join('\n');
+result.data[0].fresh_content = numberedContent;
+```
 
-Add a new section after "Operation Batching" (order 8.5 → 9, shift others):
+---
 
-```json
-{
-  "id": "edit_safety",
-  "title": "Edit Safety Guidelines",
-  "type": "static",
-  "editable": "editable",
-  "order": 9,
-  "description": "Guidelines for avoiding edit corruption",
-  "variables": [],
-  "content": "=== EDIT SAFETY GUIDELINES ===\n\nCRITICAL: To avoid corrupting files during edits:\n\n1. ALWAYS read_file IMMEDIATELY before edit_lines:\n   - Line numbers can shift between iterations\n   - Never rely on cached/remembered line numbers\n   - Use the <<N>> prefix to get exact line numbers\n\n2. SEARCH RESULTS INCLUDE LINE NUMBERS:\n   - search and wildcard_search now return matches with line numbers\n   - Use these to navigate directly to the right lines\n   - Still call read_file for surrounding context before editing\n\n3. VERIFY AFTER EDITING:\n   - Each edit_lines returns a verification object with:\n     - Lines replaced and inserted\n     - Preview of edited content with line numbers\n     - Surrounding context\n   - Check this verification before making more edits\n\n4. MULTI-EDIT STRATEGY:\n   - If making multiple edits to ONE file, edit from BOTTOM to TOP\n   - Edits at higher line numbers first, then lower line numbers\n   - This prevents line drift from affecting subsequent edits\n   - Example: If editing lines 100, 50, and 10 - order should be 100, 50, 10"
+#### Fix 2: Use Path for Grouping When file_id is Missing
+
+**File: `supabase/functions/coding-agent-orchestrator/index.ts`** (Lines 1296-1302)
+
+**Current (broken):**
+```typescript
+if (op.type === 'edit_lines') {
+  const fileId = op.params.file_id;
+  if (!editsByFile.has(fileId)) editsByFile.set(fileId, []);
+  editsByFile.get(fileId)!.push(op);
 }
 ```
 
-#### 5. Update Tools Manifest Descriptions
-
-**File: `public/data/codingAgentToolsManifest.json`**
-
-Update search tool descriptions:
-
-```json
-"search": {
-  "description": "Search file paths and content by single keyword. Returns files with line numbers of matching content. Use the line numbers to navigate with read_file before editing.",
-  ...
-}
-
-"wildcard_search": {
-  "description": "Multi-term search across all files. Returns ranked results with line numbers showing where matches occur. Use these line numbers to find the exact locations to edit.",
-  ...
+**Fixed:**
+```typescript
+if (op.type === 'edit_lines') {
+  // Use file_id if provided, otherwise use path as grouping key
+  const groupKey = op.params.file_id || op.params.path || 'unknown';
+  if (!editsByFile.has(groupKey)) editsByFile.set(groupKey, []);
+  editsByFile.get(groupKey)!.push(op);
 }
 ```
+
+---
+
+#### Fix 3: Add Same-File Grouping Logging
+
+Add debug logging to verify edits are being grouped and sorted correctly:
+
+```typescript
+for (const [groupKey, edits] of editsByFile) {
+  if (edits.length > 1) {
+    console.log(`[EDIT SORT] Grouping ${edits.length} edits for: ${groupKey}`);
+    console.log(`[EDIT SORT] Lines before sort: ${edits.map(e => e.params.start_line).join(', ')}`);
+  }
+  edits.sort((a, b) => b.params.start_line - a.params.start_line);
+  if (edits.length > 1) {
+    console.log(`[EDIT SORT] Lines after sort: ${edits.map(e => e.params.start_line).join(', ')}`);
+  }
+  // ... rest of overlap check
+}
+```
+
+---
+
+### Technical Details
+
+#### Why This Fixes Stale Content
+
+Before fix:
+```
+Iteration 1: Agent reads file.js → content stored in history with lines 1-200
+Iteration 2: Agent edits lines 50-60 → file now has 210 lines
+Iteration 3: Agent still sees old content (200 lines) from Iteration 1's read_file
+           → Uses stale line numbers → CORRUPTION
+```
+
+After fix:
+```
+Iteration 1: Agent reads file.js → content stored in history with lines 1-200
+Iteration 2: Agent edits lines 50-60 → edit_lines result includes FRESH content (210 lines)
+Iteration 3: Agent sees fresh content from Iteration 2's edit_lines result
+           → Uses correct line numbers → NO CORRUPTION
+```
+
+The fresh content in the `edit_lines` result effectively **supersedes** any previous `read_file` content for that path.
 
 ---
 
@@ -203,29 +143,15 @@ Update search tool descriptions:
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/coding-agent-orchestrator/index.ts` | Enhance search results with line numbers; add verification details to edit_lines; update operation summaries |
-| `public/data/codingAgentPromptTemplate.json` | Add new "Edit Safety Guidelines" section |
-| `public/data/codingAgentToolsManifest.json` | Update search/wildcard_search descriptions to mention line numbers |
+| `supabase/functions/coding-agent-orchestrator/index.ts` | 1. Add `fresh_content` with line numbers to edit_lines result (line ~1614). 2. Include fresh_content in operation summary (line ~2011). 3. Fix grouping key to use path when file_id missing (line ~1297). 4. Add logging for multi-edit sorting. |
 
 ---
 
 ### Expected Outcomes
 
-After implementation:
-
-1. **Agent can find exact line numbers from search** - No more manual counting
-2. **Agent sees verification of each edit** - Can detect corruption immediately
-3. **Prompt guides safer editing patterns** - Bottom-to-top, always read first
-4. **Clearer operation summaries** - Agent understands what changed
-
----
-
-### Testing Scenarios
-
-| Scenario | Expected Behavior |
-|----------|------------------|
-| Search for pattern | Returns file paths + line numbers with matches |
-| Edit single line | Verification shows exactly what was replaced |
-| Multiple edits same file | Edits sorted bottom-to-top, no drift |
-| Agent detects corruption | Re-reads file and adjusts line numbers |
+| Scenario | Before | After |
+|----------|--------|-------|
+| Agent edits file | Only sees old read_file content | Sees fresh content with correct line numbers |
+| Multiple edits same iteration | Wrong grouping, may corrupt | Correct per-file grouping and bottom-to-top sorting |
+| Agent lazy (skips read_file) | Uses stale content → corruption | Fresh content auto-provided → no corruption |
 
