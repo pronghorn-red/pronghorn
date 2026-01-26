@@ -976,6 +976,11 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
 
   // Handle agent-generated SQL injection into editor
   const handleWriteSql = useCallback((sql: string, description?: string) => {
+    console.log('[DatabaseExplorer] handleWriteSql called:', { 
+      sqlLength: sql?.length, 
+      description,
+      sqlPreview: sql?.substring(0, 100) 
+    });
     setCurrentQuery(sql);
     setActiveTab('query');
     if (isMobile) setMobileActiveTab("query");

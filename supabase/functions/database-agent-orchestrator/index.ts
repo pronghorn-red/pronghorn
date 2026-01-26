@@ -1363,6 +1363,11 @@ ${blackboardContent}`;
                 const sqlContent = op.params.sql;
                 const description = op.params.description || "Generated SQL";
                 
+                console.log("[DatabaseAgent] write_sql invoked:", { 
+                  sqlLength: sqlContent?.length, 
+                  description 
+                });
+                
                 result = {
                   success: true,
                   sql: sqlContent,
@@ -1376,6 +1381,8 @@ ${blackboardContent}`;
                   description: description,
                   iteration: iteration
                 });
+                
+                console.log("[DatabaseAgent] Sent sql_generated SSE event");
                 break;
               }
 

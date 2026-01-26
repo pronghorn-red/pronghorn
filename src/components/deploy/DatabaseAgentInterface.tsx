@@ -466,8 +466,16 @@ export function DatabaseAgentInterface({
                       break;
                     case 'sql_generated':
                       // Agent generated SQL for user review - inject into editor
+                      console.log('[DatabaseAgent] Received sql_generated event:', { 
+                        hasSql: !!data.sql, 
+                        sqlLength: data.sql?.length,
+                        description: data.description,
+                        hasOnWriteSql: !!onWriteSql 
+                      });
                       if (onWriteSql && data.sql) {
                         onWriteSql(data.sql, data.description);
+                      } else {
+                        console.warn('[DatabaseAgent] sql_generated: onWriteSql not available or no sql data');
                       }
                       break;
                     case 'iteration_complete':
