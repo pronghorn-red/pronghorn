@@ -150,7 +150,7 @@ const DeploymentDialog = ({
         buildFolder: deployment.build_folder,
         buildCommand: deployment.build_command || "",
         runCommand: deployment.run_command,
-        installCommand: deployment.install_command ?? "npm install",
+        installCommand: deployment.install_command ?? "",  // Empty string if null/undefined
         branch: deployment.branch || "main",
         diskEnabled: (deployment as any).disk_enabled || false,
         diskName: (deployment as any).disk_name || "",
