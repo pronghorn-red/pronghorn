@@ -228,16 +228,16 @@ async function createRenderService(
   // Add serviceDetails based on service type
   if (isStaticSite) {
     servicePayload.serviceDetails = {
-      buildCommand: deployment.build_command || 'npm run build',
-      publishPath: deployment.build_folder || 'dist',
+      buildCommand: deployment.build_command ?? 'npm run build',
+      publishPath: deployment.build_folder ?? 'dist',
     };
   } else {
     // Web service requires runtime and commands
     servicePayload.serviceDetails = {
       runtime: runtime,
       envSpecificDetails: {
-        buildCommand: deployment.build_command || 'npm install',
-        startCommand: deployment.run_command || 'npm start',
+        buildCommand: deployment.build_command ?? 'npm install',
+        startCommand: deployment.run_command ?? 'npm start',
       },
       plan: 'starter',
     };
@@ -923,14 +923,14 @@ async function updateServiceConfigRenderService(
 
   if (isStaticSite) {
     updatePayload.serviceDetails = {
-      buildCommand: deployment.build_command || 'npm run build',
-      publishPath: deployment.build_folder || 'dist',
+      buildCommand: deployment.build_command ?? 'npm run build',
+      publishPath: deployment.build_folder ?? 'dist',
     };
   } else {
     updatePayload.serviceDetails = {
       envSpecificDetails: {
-        buildCommand: deployment.build_command || 'npm install',
-        startCommand: deployment.run_command || 'npm start',
+        buildCommand: deployment.build_command ?? 'npm install',
+        startCommand: deployment.run_command ?? 'npm start',
       },
     };
 
