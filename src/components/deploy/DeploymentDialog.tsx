@@ -362,7 +362,7 @@ const DeploymentDialog = ({
           p_disk_name: form.diskEnabled ? form.diskName : null,
           p_disk_mount_path: form.diskEnabled ? form.diskMountPath : "/data",
           p_disk_size_gb: form.diskEnabled ? form.diskSizeGB : 1,
-          p_install_command: form.installCommand || null,
+          p_install_command: form.installCommand,  // Pass as-is, empty string clears it
         });
 
         if (error) throw error;
@@ -420,7 +420,7 @@ const DeploymentDialog = ({
           p_disk_name: form.diskEnabled ? form.diskName : null,
           p_disk_mount_path: form.diskEnabled ? form.diskMountPath : "/data",
           p_disk_size_gb: form.diskEnabled ? form.diskSizeGB : 1,
-          p_install_command: form.installCommand || null,
+          p_install_command: form.installCommand,  // Pass as-is, empty string clears it
         });
 
         if (error) throw error;
