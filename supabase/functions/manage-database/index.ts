@@ -1279,8 +1279,34 @@ async function getTableData(
     const safeLimit = Math.min(Math.max(1, limit), 1000);
     const safeOffset = Math.max(0, offset);
 
-    // Build query
-    let query = `SELECT * FROM "${safeSchema}"."${safeTable}"`;
+    // Step 1: Get column types to detect bytea columns (prevents OOM on large binary data)
+    const colTypesResult = await client.queryObject<{
+      column_name: string;
+      udt_name: string;
+    }>`
+      SELECT column_name, udt_name
+      FROM information_schema.columns
+      WHERE table_schema = ${schema} AND table_name = ${table}
+      ORDER BY ordinal_position
+    `;
+
+    // Step 2: Build SELECT with bytea columns replaced by size indicator
+    const byteaColumns: string[] = [];
+    const selectParts = colTypesResult.rows.map(col => {
+      const safeName = `"${col.column_name.replace(/"/g, '""')}"`;
+      if (col.udt_name === 'bytea') {
+        byteaColumns.push(col.column_name);
+        // Return size indicator instead of actual binary data to prevent memory exhaustion
+        return `CASE 
+          WHEN ${safeName} IS NULL THEN NULL
+          ELSE '[binary: ' || pg_size_pretty(octet_length(${safeName})::bigint) || ']'
+        END AS ${safeName}`;
+      }
+      return safeName;
+    });
+
+    // Build query with safe column expressions
+    let query = `SELECT ${selectParts.join(', ')} FROM "${safeSchema}"."${safeTable}"`;
     
     if (orderBy) {
       const safeOrderBy = orderBy.replace(/[^a-zA-Z0-9_]/g, '');
@@ -1305,6 +1331,7 @@ async function getTableData(
       totalRows,
       limit: safeLimit,
       offset: safeOffset,
+      byteaColumns, // Inform frontend which columns were replaced with size indicators
     };
   } finally {
     await client.end();
