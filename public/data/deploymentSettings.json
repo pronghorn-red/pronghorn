@@ -8,8 +8,8 @@
       "buildCommand": "",
       "runCommand": null,
       "installCommand": "npm install",
-      "buildFolder": ".",
-      "runFolder": ".",
+      "buildFolder": "/",
+      "runFolder": "/",
       "publishPath": ".",
       "description": "Static site deployed to Render CDN"
     },
