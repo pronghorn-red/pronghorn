@@ -8,7 +8,7 @@
       "buildCommand": "",
       "runCommand": null,
       "installCommand": "",
-      "buildFolder": "/",
+      "buildFolder": ".",
       "runFolder": "/",
       "publishPath": ".",
       "description": "Static site deployed to Render CDN"
