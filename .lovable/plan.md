@@ -1,166 +1,150 @@
 
-# Fix: Make Agents Strictly Follow Attached Standards
+
+# Fix: IP Allow List Updates for Existing Render Databases
 
 ## Problem Summary
 
-When users attach standards via the ProjectSelector, the **Chat window** correctly follows them but the **Coding Agent** and **Collaboration Agent** ignore them. Investigation revealed three root causes:
+When editing an existing Render database, changing the IP allow list (e.g., clicking "Allow Any IP") saves to the local database but **does not update Render**. This is because:
 
-1. **Collaboration Agent Truncates Standards**: Only includes `name` and `description`, ignoring the actual markdown content in `content` and `long_description` fields
-2. **No Enforcement Language**: Neither agent has instructions telling the LLM that attached standards are MANDATORY and take precedence
-3. **Context Positioning**: Standards are buried in the middle of prompts without reinforcement near the task
+1. **Frontend issue**: Only calls `render-database` edge function when the plan changes
+2. **Backend issue**: The `updateRenderDatabase` function doesn't include `ipAllowList` in the PATCH request
 
-## Solution Overview
+## Solution
 
-| Agent | Changes Required |
-|-------|-----------------|
-| Collaboration Agent | Fix truncated standards (match coding agent pattern) |
-| Coding Agent | Add enforcement section to prompt template |
-| Both | Add pre-task reminder about standards compliance |
+### Part 1: Update Edge Function to Accept and Send ipAllowList
 
----
+**File**: `supabase/functions/render-database/index.ts`
 
-## Part 1: Fix Collaboration Agent Standards Handling
+**Changes**:
+1. Add `ipAllowList` to the `RenderDatabaseRequest` interface
+2. Update `updateRenderDatabase` function to include `ipAllowList` in the PATCH payload
+3. The database record already has the updated `ip_allow_list` from the local save, so we can read it from there
 
-### File: `supabase/functions/collaboration-agent-orchestrator/index.ts`
-
-**Current Code (lines 158-161)**:
 ```typescript
-if (attachedContext.standards?.length) {
-  parts.push(`STANDARDS:\n${attachedContext.standards.map((s: any) => 
-    `- ${s.name}: ${s.description || ''}`).join('\n')}`);
+// Update interface (around line 10)
+interface RenderDatabaseRequest {
+  action: 'create' | 'status' | 'update' | 'delete' | 'suspend' | 'resume' | 'restart' | 'connectionInfo';
+  databaseId: string;
+  shareToken?: string;
+  plan?: string;
+  version?: string;
+  region?: string;
+  ipAllowList?: Array<{ cidrBlock: string; description: string }>; // ADD THIS
 }
-```
 
-**New Code** - Match the coding agent pattern with full content:
-```typescript
-if (attachedContext.standards?.length) {
-  const allStandardsContent = attachedContext.standards.map((s: any) => {
-    const code = s.code || 'STD';
-    const title = s.title || s.name || 'Untitled Standard';
-    let standardStr = `### STANDARD: ${code} - ${title}`;
-    
-    if (s.description) {
-      standardStr += `\n**Description:** ${s.description}`;
-    }
-    
-    if (s.content) {
-      standardStr += `\n\n**Content:**\n${s.content}`;
-    }
-    
-    if (s.long_description && s.long_description !== s.content) {
-      standardStr += `\n\n**Extended Documentation:**\n${s.long_description}`;
-    }
-    
-    return standardStr;
-  }).join("\n\n---\n\n");
+// Update the updateRenderDatabase function (lines 222-260)
+async function updateRenderDatabase(
+  database: any,
+  body: RenderDatabaseRequest,
+  headers: Record<string, string>,
+  supabase: any,
+  shareToken?: string
+) {
+  if (!database.render_postgres_id) {
+    throw new Error("Database not yet created on Render");
+  }
+
+  const updatePayload: any = {};
   
-  parts.push(`ATTACHED STANDARDS (MANDATORY - FULL CONTENT):\n\n${allStandardsContent}`);
-}
-```
-
-**Also fix Tech Stacks (lines 163-165)**:
-```typescript
-if (attachedContext.techStacks?.length) {
-  const allStacksContent = attachedContext.techStacks.map((t: any) => {
-    const type = t.type ? ` [${t.type}]` : "";
-    const version = t.version ? ` v${t.version}` : "";
-    let stackStr = `### TECH STACK: ${t.name}${type}${version}`;
-    
-    if (t.description) {
-      stackStr += `\n**Description:** ${t.description}`;
-    }
-    
-    if (t.long_description) {
-      stackStr += `\n\n**Documentation:**\n${t.long_description}`;
-    }
-    
-    return stackStr;
-  }).join("\n\n---\n\n");
+  // Include plan if provided
+  if (body.plan) {
+    updatePayload.plan = body.plan;
+  }
   
-  parts.push(`ATTACHED TECH STACKS (FULL CONTENT):\n\n${allStacksContent}`);
+  // Include ipAllowList - use from body if provided, otherwise from database record
+  if (body.ipAllowList !== undefined) {
+    updatePayload.ipAllowList = body.ipAllowList;
+  } else if (database.ip_allow_list && Array.isArray(database.ip_allow_list)) {
+    updatePayload.ipAllowList = database.ip_allow_list;
+  }
+
+  // Only call Render API if there's something to update
+  if (Object.keys(updatePayload).length === 0) {
+    return { message: "No changes to sync to Render" };
+  }
+
+  console.log("[render-database] Update payload:", JSON.stringify(updatePayload));
+
+  const response = await fetch(`${RENDER_API_URL}/postgres/${database.render_postgres_id}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(updatePayload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to update database: ${errorText}`);
+  }
+
+  const renderData = await response.json();
+
+  // Update local record status if plan changed
+  if (body.plan) {
+    await supabase.rpc("update_database_with_token", {
+      p_database_id: database.id,
+      p_token: shareToken || null,
+      p_plan: body.plan,
+      p_status: "updating",
+    });
+  }
+
+  return renderData;
 }
 ```
 
 ---
 
-## Part 2: Add Enforcement Language to Coding Agent Prompt Template
+### Part 2: Update Frontend to Trigger Render Sync for IP Changes
 
-### File: `public/data/codingAgentPromptTemplate.json`
+**File**: `src/components/deploy/DatabaseDialog.tsx`
 
-Add a new section after `critical_rules` (order 4.5) that explicitly instructs the agent about standards compliance:
-
-```json
-{
-  "id": "context_compliance",
-  "title": "Attached Context Compliance",
-  "type": "static",
-  "editable": "editable",
-  "order": 4.5,
-  "description": "Rules for handling user-attached standards and context",
-  "variables": [],
-  "content": "=== ATTACHED CONTEXT COMPLIANCE (MANDATORY) ===\n\nWhen the user attaches Standards, Tech Stacks, or other context via the Project Selector:\n\n1. **STANDARDS ARE MANDATORY**: If the user attached design system standards, component libraries, or coding guidelines - you MUST follow them EXACTLY. They take PRECEDENCE over your default training.\n\n2. **DO NOT USE DEFAULTS THAT CONFLICT**: If attached standards specify:\n   - Specific CSS files → use those files, not generic Tailwind classes\n   - Component structures → follow that structure, not your preferred patterns\n   - Layout systems → implement their layout, not generic flexbox/grid\n   - Asset requirements → include those assets, don't skip them\n\n3. **READ THE FULL CONTENT**: Standards include detailed markdown documentation. Read and follow ALL sections, not just the title/description.\n\n4. **ACKNOWLEDGE IN REASONING**: When making implementation decisions, explicitly reference which attached standards you are following.\n\n5. **ASK IF UNCLEAR**: If attached standards conflict with each other or the user's request, ask for clarification rather than guessing.\n\nFAILURE TO FOLLOW ATTACHED STANDARDS IS A CRITICAL ERROR."
-}
-```
-
----
-
-## Part 3: Add Pre-Task Reminder in Coding Agent Orchestrator
-
-### File: `supabase/functions/coding-agent-orchestrator/index.ts`
-
-In the context summary builder (around line 694), add a standards reminder that gets injected near the task:
-
-After building the standards content, add a reminder flag:
-```typescript
-let hasStandards = false;
-if (projectContext.standards?.length > 0) {
-  hasStandards = true;
-  // ... existing standards handling ...
-}
-```
-
-Then when building the final contextSummary, append a reminder if standards exist:
-```typescript
-if (hasStandards) {
-  parts.push(`\n⚠️ REMINDER: The user has attached ${projectContext.standards.length} MANDATORY STANDARD(S). You MUST follow them exactly. Do not use default patterns that conflict with the attached standards.`);
-}
-```
-
----
-
-## Part 4: Add Pre-Task Reminder in Collaboration Agent
-
-### File: `supabase/functions/collaboration-agent-orchestrator/index.ts`
-
-Add similar reminder logic after building the `attachedContextStr`:
+**Changes**: Modify the edit logic (around lines 234-254) to also trigger a Render sync when the IP allow list changes
 
 ```typescript
-// After line 188 where attachedContextStr is joined
-if (attachedContext?.standards?.length > 0) {
-  attachedContextStr += `\n\n⚠️ MANDATORY COMPLIANCE: The user has attached ${attachedContext.standards.length} standard(s). Your edits MUST comply with these standards. Reference them explicitly in your reasoning.`;
+// After saving to local database (line 233), check if Render sync is needed
+if (database.render_postgres_id) {
+  const planChanged = form.plan !== database.plan;
+  const ipListChanged = JSON.stringify(finalIpAllowList) !== JSON.stringify(database.ip_allow_list || []);
+  
+  if (planChanged || ipListChanged) {
+    const { error: renderError } = await supabase.functions.invoke("render-database", {
+      body: {
+        action: "update",
+        databaseId: database.id,
+        shareToken,
+        plan: planChanged ? form.plan : undefined,
+        ipAllowList: ipListChanged ? finalIpAllowList : undefined,
+      },
+    });
+
+    if (renderError) {
+      toast.warning("Saved locally, but failed to sync to Render");
+    } else {
+      toast.success("Database updated and synced to Render");
+    }
+  } else {
+    toast.success("Database configuration updated");
+  }
+} else {
+  toast.success("Database configuration updated");
 }
 ```
 
 ---
 
-## Implementation Checklist
+## Implementation Summary
 
-| Step | File | Action |
-|------|------|--------|
-| 1 | `supabase/functions/collaboration-agent-orchestrator/index.ts` | Fix truncated standards/techStacks (lines 158-166) |
-| 2 | `supabase/functions/collaboration-agent-orchestrator/index.ts` | Add reminder after attachedContextStr (after line 188) |
-| 3 | `public/data/codingAgentPromptTemplate.json` | Add new "context_compliance" section |
-| 4 | `supabase/functions/coding-agent-orchestrator/index.ts` | Add reminder near task description |
-| 5 | Deploy both edge functions |
-| 6 | Test by attaching Alberta Design System standards in Build |
+| File | Change |
+|------|--------|
+| `supabase/functions/render-database/index.ts` | Add `ipAllowList` to interface and PATCH payload |
+| `src/components/deploy/DatabaseDialog.tsx` | Trigger Render sync when IP allow list changes |
 
----
+## Expected Behavior After Fix
 
-## Expected Outcome
+1. User edits existing Render database
+2. User clicks "Allow Any IP" toggle
+3. User clicks Save
+4. **Local database** saves with new `ip_allow_list` ✓
+5. **Render API** receives PATCH with `ipAllowList` ✓
+6. Render updates the database networking rules ✓
 
-After these changes:
-- **Collaboration Agent** will receive full standards content (not just name/description)
-- **Both agents** will have explicit instructions that attached standards are MANDATORY
-- **Both agents** will have a reminder near the task that reinforces compliance
-- **Agent reasoning** will explicitly reference which standards are being followed
-- Results will match Claude Console and Pronghorn Chat behavior
