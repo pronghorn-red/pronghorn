@@ -232,21 +232,29 @@ export function DatabaseDialog({
 
         if (error) throw error;
 
-        // If plan changed and database exists on Render, sync the change
-        if (database.render_postgres_id && form.plan !== database.plan) {
-          const { error: renderError } = await supabase.functions.invoke("render-database", {
-            body: {
-              action: "update",
-              databaseId: database.id,
-              shareToken,
-              plan: form.plan,
-            },
-          });
+        // Check if we need to sync changes to Render
+        if (database.render_postgres_id) {
+          const planChanged = form.plan !== database.plan;
+          const ipListChanged = JSON.stringify(finalIpAllowList) !== JSON.stringify(database.ip_allow_list || []);
+          
+          if (planChanged || ipListChanged) {
+            const { error: renderError } = await supabase.functions.invoke("render-database", {
+              body: {
+                action: "update",
+                databaseId: database.id,
+                shareToken,
+                plan: planChanged ? form.plan : undefined,
+                ipAllowList: ipListChanged ? finalIpAllowList : undefined,
+              },
+            });
 
-          if (renderError) {
-            toast.warning("Saved locally, but failed to sync plan to Render");
+            if (renderError) {
+              toast.warning("Saved locally, but failed to sync to Render");
+            } else {
+              toast.success("Database updated and synced to Render");
+            }
           } else {
-            toast.success("Database updated and synced to Render");
+            toast.success("Database configuration updated");
           }
         } else {
           toast.success("Database configuration updated");

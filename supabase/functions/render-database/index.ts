@@ -14,6 +14,7 @@ interface RenderDatabaseRequest {
   plan?: string;
   version?: string;
   region?: string;
+  ipAllowList?: Array<{ cidrBlock: string; description: string }>;
 }
 
 Deno.serve(async (req) => {
@@ -231,7 +232,25 @@ async function updateRenderDatabase(
   }
 
   const updatePayload: any = {};
-  if (body.plan) updatePayload.plan = body.plan;
+  
+  // Include plan if provided
+  if (body.plan) {
+    updatePayload.plan = body.plan;
+  }
+  
+  // Include ipAllowList - use from body if provided, otherwise from database record
+  if (body.ipAllowList !== undefined) {
+    updatePayload.ipAllowList = body.ipAllowList;
+  } else if (database.ip_allow_list && Array.isArray(database.ip_allow_list)) {
+    updatePayload.ipAllowList = database.ip_allow_list;
+  }
+
+  // Only call Render API if there's something to update
+  if (Object.keys(updatePayload).length === 0) {
+    return { message: "No changes to sync to Render" };
+  }
+
+  console.log("[render-database] Update payload:", JSON.stringify(updatePayload));
 
   const response = await fetch(`${RENDER_API_URL}/postgres/${database.render_postgres_id}`, {
     method: "PATCH",
@@ -246,7 +265,7 @@ async function updateRenderDatabase(
 
   const renderData = await response.json();
 
-  // Update local record
+  // Update local record status if plan changed
   if (body.plan) {
     await supabase.rpc("update_database_with_token", {
       p_database_id: database.id,
