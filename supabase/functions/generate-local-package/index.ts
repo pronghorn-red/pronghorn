@@ -339,6 +339,10 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     '# PUSH_LOCAL_CHANGES: Push local file edits back to Pronghorn staging',
     'PUSH_LOCAL_CHANGES=true',
     '',
+    "# SYNC_MODE: 'auto' (realtime bidirectional) or 'manual' (press keys to sync)",
+    "# Manual mode is recommended for Claude Code sessions with rapid multi-file edits",
+    'SYNC_MODE=auto',
+    '',
     '# ===========================================',
     '# PROJECT DATA SYNC',
     '# Exports requirements, canvas, artifacts, specs to local folder',
@@ -419,6 +423,7 @@ BUILD_FOLDER=dist
 REBUILD_ON_STAGING=true
 REBUILD_ON_FILES=true
 PUSH_LOCAL_CHANGES=true
+SYNC_MODE=auto
 
 # ===========================================
 # PROJECT DATA SYNC
@@ -598,6 +603,7 @@ const CONFIG = {
   rebuildOnStaging: process.env.REBUILD_ON_STAGING !== 'false',
   rebuildOnFiles: process.env.REBUILD_ON_FILES !== 'false',
   pushLocalChanges: process.env.PUSH_LOCAL_CHANGES !== 'false',
+  syncMode: process.env.SYNC_MODE || 'auto', // 'auto' or 'manual'
   
   // Project data sync
   syncProjectData: process.env.SYNC_PROJECT_DATA === 'true',
@@ -618,6 +624,24 @@ let knownStagedFiles = new Map();
 // Debounce timer for staging sync
 let stagingSyncTimer = null;
 const STAGING_DEBOUNCE_MS = 150;
+const STAGING_BURST_DEBOUNCE_MS = 1500;
+let stagingEventCount = 0;
+let stagingBurstResetTimer = null;
+
+// ============================================
+// LAYER 1: CLOUD WRITE ORIGIN TRACKING
+// Prevents sync loops by tracking files written
+// from cloud so chokidar skips pushing them back
+// ============================================
+let cloudWrittenFiles = new Map(); // path → { hash, timestamp }
+const CLOUD_WRITE_COOLDOWN_MS = 2000;
+
+// ============================================
+// LAYER 3: MANUAL SYNC MODE
+// ============================================
+let pendingLocalChanges = [];
+let pendingCloudSyncs = 0;
+let isSyncingFromCloud = false;
 
 // .runignore patterns (loaded at startup)
 let runIgnorePatterns = [];
@@ -1072,6 +1096,8 @@ async function syncStagingToLocal() {
         }
         
         if (shouldWrite) {
+          // Layer 1: Track this write so chokidar doesn't push it back
+          cloudWrittenFiles.set(staged.file_path, { hash: newHash, timestamp: Date.now() });
           fs.writeFileSync(fullPath, newContent, 'utf8');
           console.log(\`[Pronghorn] Written (staged \${staged.operation_type}): \${staged.file_path}\`);
           
@@ -1110,6 +1136,9 @@ async function syncStagingToLocal() {
           if (!fs.existsSync(dirPath)) {
             fs.mkdirSync(dirPath, { recursive: true });
           }
+          // Layer 1: Track this revert write
+          const revertHash = hashContent(committedFile.content || '');
+          cloudWrittenFiles.set(filePath, { hash: revertHash, timestamp: Date.now() });
           fs.writeFileSync(fullPath, committedFile.content || '', 'utf8');
           console.log(\`[Pronghorn] Reverted to committed version: \${filePath}\`);
         } else {
@@ -1146,11 +1175,38 @@ async function syncStagingToLocal() {
 }
 
 function scheduleStagingSync() {
-  // Debounce to handle DELETE+INSERT pairs during updates
+  // Layer 2: Adaptive debounce - use longer delay during burst activity
+  stagingEventCount++;
   clearTimeout(stagingSyncTimer);
+  clearTimeout(stagingBurstResetTimer);
+  
+  const debounceMs = stagingEventCount > 3 
+    ? STAGING_BURST_DEBOUNCE_MS 
+    : STAGING_DEBOUNCE_MS;
+  
+  if (stagingEventCount > 3) {
+    console.log(\`[Pronghorn] Burst detected (\${stagingEventCount} events), debouncing \${debounceMs}ms\`);
+  }
+  
   stagingSyncTimer = setTimeout(async () => {
+    stagingEventCount = 0;
+    
+    // Layer 3: In manual mode, queue instead of executing
+    if (CONFIG.syncMode === 'manual') {
+      pendingCloudSyncs++;
+      console.log(\`[Pronghorn] ⏸ \${pendingCloudSyncs} cloud sync(s) pending — press Y to pull, S for full sync\`);
+      return;
+    }
+    
+    isSyncingFromCloud = true;
     await syncStagingToLocal();
-  }, STAGING_DEBOUNCE_MS);
+    isSyncingFromCloud = false;
+  }, debounceMs);
+  
+  // Reset burst counter after quiet period
+  stagingBurstResetTimer = setTimeout(() => {
+    stagingEventCount = 0;
+  }, 3000);
 }
 
 async function initializeKnownStagedFiles() {
@@ -1314,6 +1370,8 @@ async function handleRepoFileChange(payload) {
         }
       }
       
+      // Layer 1: Track this write so chokidar doesn't push it back
+      cloudWrittenFiles.set(filePath, { hash: hashContent(content || ''), timestamp: Date.now() });
       fs.writeFileSync(fullPath, content || '', 'utf8');
       console.log(\`[Pronghorn] Written to disk: \${filePath}\`);
       
@@ -1375,22 +1433,87 @@ async function setupLocalFileWatcher() {
   localFileWatcher.on('add', async (fullPath) => {
     const relativePath = path.relative(APP_DIR, fullPath).replace(/\\\\/g, '/');
     if (isBinaryFile(fullPath)) return;
-    if (isPathIgnored(relativePath)) return; // Check .runignore
+    if (isPathIgnored(relativePath)) return;
     const content = fs.readFileSync(fullPath, 'utf8');
+    
+    // Layer 1: Check if this write came from cloud sync
+    const tracked = cloudWrittenFiles.get(relativePath);
+    if (tracked) {
+      const localHash = hashContent(content);
+      const elapsed = Date.now() - tracked.timestamp;
+      if (localHash === tracked.hash || elapsed < CLOUD_WRITE_COOLDOWN_MS) {
+        cloudWrittenFiles.delete(relativePath);
+        return; // Skip - this was our own cloud write
+      }
+      cloudWrittenFiles.delete(relativePath);
+    }
+    
+    // Layer 3: In manual mode, queue instead of pushing
+    if (CONFIG.syncMode === 'manual') {
+      pendingLocalChanges.push({ path: relativePath, op: 'add', content });
+      console.log(\`[Pronghorn] ⏸ \${pendingLocalChanges.length} local change(s) pending — press P to push, S for full sync\`);
+      return;
+    }
+    
     await pushLocalChangeToCloud(relativePath, 'add', content);
   });
   
   localFileWatcher.on('change', async (fullPath) => {
     const relativePath = path.relative(APP_DIR, fullPath).replace(/\\\\/g, '/');
     if (isBinaryFile(fullPath)) return;
-    if (isPathIgnored(relativePath)) return; // Check .runignore
+    if (isPathIgnored(relativePath)) return;
     const content = fs.readFileSync(fullPath, 'utf8');
+    
+    // Layer 1: Check if this write came from cloud sync
+    const tracked = cloudWrittenFiles.get(relativePath);
+    if (tracked) {
+      const localHash = hashContent(content);
+      const elapsed = Date.now() - tracked.timestamp;
+      if (localHash === tracked.hash || elapsed < CLOUD_WRITE_COOLDOWN_MS) {
+        cloudWrittenFiles.delete(relativePath);
+        return; // Skip - this was our own cloud write
+      }
+      cloudWrittenFiles.delete(relativePath);
+    }
+    
+    // Layer 3: In manual mode, queue instead of pushing
+    if (CONFIG.syncMode === 'manual') {
+      // Deduplicate: replace existing pending change for same path
+      const existingIdx = pendingLocalChanges.findIndex(c => c.path === relativePath);
+      if (existingIdx >= 0) {
+        pendingLocalChanges[existingIdx] = { path: relativePath, op: 'edit', content };
+      } else {
+        pendingLocalChanges.push({ path: relativePath, op: 'edit', content });
+      }
+      console.log(\`[Pronghorn] ⏸ \${pendingLocalChanges.length} local change(s) pending — press P to push, S for full sync\`);
+      return;
+    }
+    
     await pushLocalChangeToCloud(relativePath, 'edit', content);
   });
   
   localFileWatcher.on('unlink', async (fullPath) => {
     const relativePath = path.relative(APP_DIR, fullPath).replace(/\\\\/g, '/');
-    if (isPathIgnored(relativePath)) return; // Check .runignore
+    if (isPathIgnored(relativePath)) return;
+    
+    // Layer 1: If cloud just deleted this, don't push back
+    const tracked = cloudWrittenFiles.get(relativePath);
+    if (tracked) {
+      const elapsed = Date.now() - tracked.timestamp;
+      if (elapsed < CLOUD_WRITE_COOLDOWN_MS) {
+        cloudWrittenFiles.delete(relativePath);
+        return;
+      }
+      cloudWrittenFiles.delete(relativePath);
+    }
+    
+    // Layer 3: In manual mode, queue
+    if (CONFIG.syncMode === 'manual') {
+      pendingLocalChanges.push({ path: relativePath, op: 'delete', content: null });
+      console.log(\`[Pronghorn] ⏸ \${pendingLocalChanges.length} local change(s) pending — press P to push, S for full sync\`);
+      return;
+    }
+    
     await pushLocalChangeToCloud(relativePath, 'delete', null);
   });
   
@@ -2164,6 +2287,99 @@ async function setupProjectDataSubscription() {
 }
 
 // ============================================
+// LAYER 3: MANUAL SYNC MODE (Keyboard Control)
+// ============================================
+
+function setupManualSyncMode() {
+  const readline = require('readline');
+  readline.emitKeypressEvents(process.stdin);
+  if (process.stdin.isTTY) process.stdin.setRawMode(true);
+  
+  console.log('[Pronghorn] ╔══════════════════════════════════════════════╗');
+  console.log('[Pronghorn] ║  MANUAL SYNC MODE ACTIVE                    ║');
+  console.log('[Pronghorn] ║  Y = Pull cloud → local                     ║');
+  console.log('[Pronghorn] ║  P = Push local → cloud                     ║');
+  console.log('[Pronghorn] ║  S = Full bidirectional sync                 ║');
+  console.log('[Pronghorn] ║  A = Toggle auto/manual mode                ║');
+  console.log('[Pronghorn] ║  Ctrl+C = Exit                              ║');
+  console.log('[Pronghorn] ╚══════════════════════════════════════════════╝');
+  
+  process.stdin.on('keypress', async (str, key) => {
+    if (!key) return;
+    
+    if (key.ctrl && key.name === 'c') {
+      console.log('\\n[Pronghorn] Shutting down...');
+      await stopDevServer();
+      process.exit(0);
+    }
+    
+    // Ctrl+M to toggle manual mode even when in auto
+    if (key.ctrl && key.name === 'm') {
+      CONFIG.syncMode = CONFIG.syncMode === 'auto' ? 'manual' : 'auto';
+      console.log(\`[Pronghorn] Sync mode switched to: \${CONFIG.syncMode.toUpperCase()}\`);
+      if (CONFIG.syncMode === 'manual') {
+        console.log('[Pronghorn] Keys: Y=pull, P=push, S=full sync, A=toggle auto');
+      }
+      return;
+    }
+    
+    if (CONFIG.syncMode !== 'manual') return;
+    
+    if (key.name === 'y') {
+      console.log('[Pronghorn] ▶ Pulling cloud → local...');
+      isSyncingFromCloud = true;
+      await syncStagingToLocal();
+      isSyncingFromCloud = false;
+      pendingCloudSyncs = 0;
+      console.log('[Pronghorn] ✓ Pull complete');
+    }
+    
+    if (key.name === 'p') {
+      if (pendingLocalChanges.length === 0) {
+        console.log('[Pronghorn] No local changes to push');
+        return;
+      }
+      console.log(\`[Pronghorn] ▶ Pushing \${pendingLocalChanges.length} local change(s) → cloud...\`);
+      for (const change of pendingLocalChanges) {
+        await pushLocalChangeToCloud(change.path, change.op, change.content);
+      }
+      console.log(\`[Pronghorn] ✓ Pushed \${pendingLocalChanges.length} change(s)\`);
+      pendingLocalChanges = [];
+    }
+    
+    if (key.name === 's') {
+      console.log('[Pronghorn] ▶ Full bidirectional sync...');
+      // Pull first
+      isSyncingFromCloud = true;
+      await syncStagingToLocal();
+      isSyncingFromCloud = false;
+      pendingCloudSyncs = 0;
+      // Then push
+      if (pendingLocalChanges.length > 0) {
+        console.log(\`[Pronghorn] ▶ Pushing \${pendingLocalChanges.length} local change(s)...\`);
+        for (const change of pendingLocalChanges) {
+          await pushLocalChangeToCloud(change.path, change.op, change.content);
+        }
+        pendingLocalChanges = [];
+      }
+      console.log('[Pronghorn] ✓ Full sync complete');
+    }
+    
+    if (key.name === 'a') {
+      CONFIG.syncMode = CONFIG.syncMode === 'auto' ? 'manual' : 'auto';
+      console.log(\`[Pronghorn] Sync mode: \${CONFIG.syncMode.toUpperCase()}\`);
+      if (CONFIG.syncMode === 'auto' && pendingLocalChanges.length > 0) {
+        console.log(\`[Pronghorn] Flushing \${pendingLocalChanges.length} pending local change(s)...\`);
+        for (const change of pendingLocalChanges) {
+          await pushLocalChangeToCloud(change.path, change.op, change.content);
+        }
+        pendingLocalChanges = [];
+      }
+    }
+  });
+}
+
+// ============================================
 // MAIN
 // ============================================
 
@@ -2180,6 +2396,7 @@ async function main() {
   console.log(\`║  Rebuild on Staging: \${CONFIG.rebuildOnStaging ? 'YES' : 'NO '}                                           ║\`);
   console.log(\`║  Rebuild on Files: \${CONFIG.rebuildOnFiles ? 'YES' : 'NO '}                                             ║\`);
   console.log(\`║  Push Local Changes: \${CONFIG.pushLocalChanges ? 'YES' : 'NO '}                                          ║\`);
+  console.log(\`║  Sync Mode: \${CONFIG.syncMode === 'manual' ? 'MANUAL (Y/P/S/A keys)' : 'AUTO              '}                                ║\`);
   console.log(\`║  Sync Project Data: \${CONFIG.syncProjectData ? 'YES' : 'NO '}                                            ║\`);
   console.log('╚══════════════════════════════════════════════════════════════════╝');
   console.log('');
@@ -2224,6 +2441,13 @@ async function main() {
       await setupLocalFileWatcher();
     } else {
       console.log('[Pronghorn] Local → Cloud sync disabled (PUSH_LOCAL_CHANGES=false)');
+    }
+    
+    // Layer 3: Setup manual sync mode if configured
+    if (CONFIG.syncMode === 'manual') {
+      setupManualSyncMode();
+    } else {
+      console.log('[Pronghorn] Sync mode: auto (press Ctrl+M to switch to manual)');
     }
     
     // Setup project data sync (Phase 3)
@@ -2302,8 +2526,21 @@ INSTALL_COMMAND=npm install
 | \`REBUILD_ON_STAGING\` | \`true\` | Sync when files are staged |
 | \`REBUILD_ON_FILES\` | \`true\` | Sync when files are committed |
 | \`PUSH_LOCAL_CHANGES\` | \`true\` | Push local edits back to cloud |
+| \`SYNC_MODE\` | \`auto\` | \`auto\` (realtime) or \`manual\` (key-controlled) |
 | \`SYNC_PROJECT_DATA\` | \`false\` | Export requirements, canvas, artifacts to ./project |
 | \`PROJECT_SYNC_FOLDER\` | \`./project\` | Folder for project data exports |
+
+### Manual Sync Mode
+
+Set \`SYNC_MODE=manual\` in your \`.run\` file for sessions with rapid multi-file edits (e.g., Claude Code).
+
+| Key | Action |
+|-----|--------|
+| \`Y\` | Pull cloud changes → local |
+| \`P\` | Push local changes → cloud |
+| \`S\` | Full bidirectional sync |
+| \`A\` | Toggle auto/manual mode |
+| \`Ctrl+M\` | Toggle mode (works in auto too) |
 
 ### Multi-Runtime Support
 
