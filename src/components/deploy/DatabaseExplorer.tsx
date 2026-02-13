@@ -737,6 +737,7 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   };
 
   const handleDownloadTableDDL = async (schema: string, tableName: string) => {
+    console.log('[DDL] handleDownloadTableDDL called:', { schema, tableName });
     try {
       toast.info(`Fetching DDL for ${schema}.${tableName}...`);
       const result = await invokeManageDatabase("get_table_definition", { schema, table: tableName });
@@ -752,9 +753,19 @@ export function DatabaseExplorer({ database, externalConnection, shareToken, onB
   };
 
   const handleDownloadSchemaDDL = async (schemaName: string, schemaInfo: any) => {
-    const tables: string[] = schemaInfo?.tables || [];
+    console.log('[DDL] handleDownloadSchemaDDL called:', { schemaName, schemaInfo });
+    
+    let tables: string[] = [];
+    if (Array.isArray(schemaInfo?.tables)) {
+      tables = schemaInfo.tables;
+    } else if (Array.isArray(schemaInfo)) {
+      tables = schemaInfo;
+    }
+    
+    console.log('[DDL] Tables to fetch:', tables);
+    
     if (tables.length === 0) {
-      toast.error("No tables in this schema");
+      toast.error("No tables found in this schema");
       return;
     }
     try {

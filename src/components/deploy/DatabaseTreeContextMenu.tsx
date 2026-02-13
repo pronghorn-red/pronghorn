@@ -409,7 +409,10 @@ export function DatabaseTreeContextMenu({
         {/* Schema context menu */}
         {type === 'schema' && (
           <>
-            <ContextMenuItem onClick={() => onDownloadSchemaDDL?.(name, extra)}>
+            <ContextMenuItem onClick={() => {
+              console.log('[DDL] Schema menu item clicked:', { name, extra });
+              onDownloadSchemaDDL?.(name, extra);
+            }}>
               <Download className="h-4 w-4 mr-2" />
               Download Schema DDL (.sql)
             </ContextMenuItem>
