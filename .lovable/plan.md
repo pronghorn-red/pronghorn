@@ -1,81 +1,87 @@
 
 
-# Download DDL Definitions from Database Explorer
+# Fix: Schema DDL Download Not Responding to Click
 
-## Overview
+## Problem
 
-Add two new right-click context menu options:
-1. **Single table**: "Download DDL (.sql)" - downloads the CREATE TABLE statement as a `.sql` file
-2. **Schema node**: "Download Schema DDL (.sql)" - downloads all table definitions in that schema as a single `.sql` file
+When right-clicking a schema node and selecting "Download Schema DDL (.sql)", nothing happens. Edge function logs confirm the `manage-database` function is never called with `get_table_definition`, meaning the click handler doesn't execute or silently fails before the network call.
 
-## Changes
+## Root Cause Investigation
 
-### 1. DatabaseTreeContextMenu.tsx
+The full code path has been traced:
 
-Add two new callback props and menu items:
+1. Schema node renders with `type="schema"`, `name={schema.name}`, `extra={schema}` (the full SchemaInfo object)
+2. `'schema'` is in the `contextMenuTypes` array, so the context menu wrapper applies
+3. The ContextMenuItem calls `onDownloadSchemaDDL?.(name, extra)` which maps to `handleDownloadSchemaDDL`
+4. The handler does `schemaInfo?.tables || []` where `schemaInfo` is the `extra` (full SchemaInfo)
+5. `SchemaInfo.tables` is `string[]` -- this is correct
 
-- **Props**: `onDownloadTableDDL` and `onDownloadSchemaDDL`
-- **Table menu**: Add a "Download DDL (.sql)" item with the Download icon, after the existing "Get CREATE TABLE" item
-- **Schema menu**: Add a "Download Schema DDL (.sql)" item with the Download icon, before the existing "Drop Schema CASCADE" item
+The code structure is sound. The most likely issue is that the `handleDownloadSchemaDDL` function throws before reaching the edge function call, possibly because `schemaInfo` is structured differently at runtime than expected, or the function simply never gets invoked due to a Radix context menu event issue.
 
-### 2. DatabaseSchemaTree.tsx
+## Fix: Add Defensive Logging and Error Handling
 
-Thread the two new props through the component tree:
+### File: `src/components/deploy/DatabaseExplorer.tsx`
 
-- Add `onDownloadTableDDL` and `onDownloadSchemaDDL` to the `DatabaseSchemaTreeProps` interface
-- Pass them into the `contextMenuProps` object
+Add `console.log` statements to both DDL handlers for debugging, and add a defensive fallback for `tables` extraction:
 
-### 3. DatabaseExplorer.tsx
-
-Implement the two handler functions:
-
-**`handleDownloadTableDDL(schema, tableName)`**:
-- Calls the existing `manage-database` edge function with action `get_table_definition`
-- Takes the returned DDL string and triggers a browser download as `{schema}.{tableName}.sql`
-- Shows a toast on success/failure
-
-**`handleDownloadSchemaDDL(schemaName, schemaInfo)`**:
-- Iterates over all tables in `schemaInfo.tables`
-- For each table, calls the `manage-database` edge function with `get_table_definition`
-- Concatenates all DDL results separated by `\n\n` with comment headers (`-- Table: tablename`)
-- Triggers a browser download as `{schemaName}_schema.sql`
-- Shows progress toast ("Fetching 1/N...") during the process
-
-Both handlers use a simple utility to trigger the download:
-
+**`handleDownloadTableDDL`** -- Add entry log:
 ```typescript
-function downloadSqlFile(filename: string, content: string) {
-  const blob = new Blob([content], { type: 'application/sql' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+const handleDownloadTableDDL = async (schema: string, tableName: string) => {
+  console.log('[DDL] handleDownloadTableDDL called:', { schema, tableName });
+  try {
+    // ... existing code
+  }
+};
 ```
 
-## Technical Details
+**`handleDownloadSchemaDDL`** -- Add entry log and more robust table extraction:
+```typescript
+const handleDownloadSchemaDDL = async (schemaName: string, schemaInfo: any) => {
+  console.log('[DDL] handleDownloadSchemaDDL called:', { schemaName, schemaInfo });
+  
+  // More robust table extraction - handle both array of strings and SchemaInfo object
+  let tables: string[] = [];
+  if (Array.isArray(schemaInfo?.tables)) {
+    tables = schemaInfo.tables;
+  } else if (Array.isArray(schemaInfo)) {
+    tables = schemaInfo;
+  }
+  
+  console.log('[DDL] Tables to fetch:', tables);
+  
+  if (tables.length === 0) {
+    toast.error("No tables found in this schema");
+    return;
+  }
+  // ... rest of existing logic
+};
+```
 
-### File Changes Summary
+### File: `src/components/deploy/DatabaseTreeContextMenu.tsx`
+
+Add a defensive log in the schema context menu onClick to confirm the handler is being called:
+
+```typescript
+{type === 'schema' && (
+  <>
+    <ContextMenuItem onClick={() => {
+      console.log('[DDL] Schema menu item clicked:', { name, extra });
+      onDownloadSchemaDDL?.(name, extra);
+    }}>
+```
+
+## Changes Summary
 
 | File | Change |
 |------|--------|
-| `src/components/deploy/DatabaseTreeContextMenu.tsx` | Add `onDownloadTableDDL` and `onDownloadSchemaDDL` props; add menu items for table and schema types |
-| `src/components/deploy/DatabaseSchemaTree.tsx` | Thread new props through to context menu |
-| `src/components/deploy/DatabaseExplorer.tsx` | Implement `handleDownloadTableDDL` and `handleDownloadSchemaDDL` handlers; pass them to the tree |
+| `src/components/deploy/DatabaseExplorer.tsx` | Add `console.log` to both DDL handlers; add defensive table extraction fallback |
+| `src/components/deploy/DatabaseTreeContextMenu.tsx` | Add `console.log` to schema DDL menu item click handler |
 
-### Context Menu Additions
+## Expected Outcome
 
-**Table node** (after "Get CREATE TABLE"):
-```
-[Download icon] Download DDL (.sql)
-```
+After these changes, right-clicking a schema and selecting "Download Schema DDL (.sql)" will either:
+1. **Work correctly** -- downloads the `.sql` file
+2. **Show visible debugging** -- console logs will reveal exactly where the chain breaks (menu click not firing, handler not receiving correct data, edge function error, etc.)
 
-**Schema node** (before "Drop Schema CASCADE"):
-```
-[Download icon] Download Schema DDL (.sql)
----
-[Trash icon] Drop Schema CASCADE
-```
+The console logs will be visible on the next attempt, allowing us to identify and fix the exact failure point.
 
