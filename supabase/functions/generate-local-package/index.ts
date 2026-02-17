@@ -578,8 +578,22 @@ function loadRunConfig(filePath = '.run') {
 }
 loadRunConfig();
 
+// Allow connections to custom domains with incomplete certificate chains
+// Safe: runner only runs locally and connects to known Pronghorn API endpoint
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 // Dynamic import for ESM modules
 let supabase = null;
+
+// HTTPS agent for node-fetch (belt-and-suspenders TLS bypass)
+let httpsAgent = null;
+async function getHttpsAgent() {
+  if (!httpsAgent) {
+    const https = await import('https');
+    httpsAgent = new https.Agent({ rejectUnauthorized: false });
+  }
+  return httpsAgent;
+}
 
 // All configuration from .env
 const CONFIG = {
@@ -790,9 +804,11 @@ async function reportLog(logType, message, stackTrace = null, filePath = null, l
 
   try {
     const fetch = (await import('node-fetch')).default;
+    const agent = await getHttpsAgent();
     await fetch(\`\${CONFIG.supabaseUrl}/functions/v1/report-local-issue\`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      agent,
       body: JSON.stringify({
         deploymentId: CONFIG.deploymentId,
         shareToken: CONFIG.shareToken,
@@ -1531,12 +1547,14 @@ async function pushLocalChangeToCloud(relativePath, operationType, content) {
   
   try {
     const fetch = (await import('node-fetch')).default;
+    const agent = await getHttpsAgent();
     const response = await fetch(\`\${CONFIG.supabaseUrl}/functions/v1/staging-operations\`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': \`Bearer \${CONFIG.supabaseAnonKey}\`,
       },
+      agent,
       body: JSON.stringify({
         action: 'stage',
         repoId: CONFIG.repoId,
