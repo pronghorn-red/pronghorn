@@ -200,11 +200,12 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
   const isMonorepo = projectType === 'vue_node_monorepo';
   
   // Determine commands based on project type
-  const runCommand = isVite ? 'npm run dev' : (deployment.run_command || 'npm run dev');
-  const buildCommand = isVite ? 'npm run build' : (deployment.build_command || '');
-  const installCommand = isMonorepo ? 'npm run install:all' : (deployment.install_command ?? 'npm install');
-  const runFolder = isVite ? '/' : (deployment.run_folder || '/');
-  const buildFolder = isVite ? 'dist' : (deployment.build_folder || 'dist');
+  const isStatic = projectType === 'static';
+  const runCommand = isStatic ? 'npx serve . -s' : (isVite ? 'npm run dev' : (deployment.run_command || 'npm run dev'));
+  const buildCommand = isStatic ? '' : (isVite ? 'npm run build' : (deployment.build_command || ''));
+  const installCommand = isMonorepo ? 'npm run install:all' : (isStatic ? 'npm install -g serve' : (deployment.install_command ?? 'npm install'));
+  const runFolder = isStatic ? '/' : (isVite ? '/' : (deployment.run_folder || '/'));
+  const buildFolder = isStatic ? '' : (isVite ? 'dist' : (deployment.build_folder || 'dist'));
 
   const lines = [
     '# =====================================================',
@@ -235,6 +236,17 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     `INSTALL_COMMAND=${installCommand}`,
     `RUN_FOLDER=${runFolder}`,
     `BUILD_FOLDER=${buildFolder}`,
+    '',
+    '# ===========================================',
+    '# STATIC WEB APP',
+    '# Uncomment these for static HTML/CSS/JS sites',
+    '# ===========================================',
+    '# PROJECT_TYPE=static',
+    '# RUN_COMMAND=npx serve . -s',
+    '# BUILD_COMMAND=',
+    '# INSTALL_COMMAND=npm install -g serve',
+    '# RUN_FOLDER=/',
+    '# BUILD_FOLDER=',
     '',
     '# ===========================================',
     '# VITE / REACT / VUE (Node.js based)',
@@ -416,6 +428,14 @@ BUILD_COMMAND=npm run build
 INSTALL_COMMAND=npm install
 RUN_FOLDER=/
 BUILD_FOLDER=dist
+
+# --- Static Web App Example ---
+# PROJECT_TYPE=static
+# RUN_COMMAND=npx serve . -s
+# BUILD_COMMAND=
+# INSTALL_COMMAND=npm install -g serve
+# RUN_FOLDER=/
+# BUILD_FOLDER=
 
 # ===========================================
 # SYNC SETTINGS
