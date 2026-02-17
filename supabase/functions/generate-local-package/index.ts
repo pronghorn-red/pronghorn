@@ -201,7 +201,7 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
   
   // Determine commands based on project type
   const isStatic = projectType === 'static';
-  const runCommand = isStatic ? 'live-server app' : (isVite ? 'npm run dev' : (deployment.run_command || 'npm run dev'));
+  const runCommand = isStatic ? 'live-server' : (isVite ? 'npm run dev' : (deployment.run_command || 'npm run dev'));
   const buildCommand = isStatic ? '' : (isVite ? 'npm run build' : (deployment.build_command || ''));
   const installCommand = isMonorepo ? 'npm run install:all' : (isStatic ? 'npm install -g live-server' : (deployment.install_command ?? 'npm install'));
   const runFolder = isStatic ? '/' : (isVite ? '/' : (deployment.run_folder || '/'));
@@ -242,7 +242,7 @@ function generateEnvFile(deployment: any, shareToken: string | undefined, repo: 
     '# Uncomment these for static HTML/CSS/JS sites',
     '# ===========================================',
     '# PROJECT_TYPE=static',
-    '# RUN_COMMAND=live-server app',
+    '# RUN_COMMAND=live-server',
     '# BUILD_COMMAND=',
     '# INSTALL_COMMAND=npm install -g live-server',
     '# RUN_FOLDER=/',
@@ -431,7 +431,7 @@ BUILD_FOLDER=dist
 
 # --- Static Web App Example ---
 # PROJECT_TYPE=static
-# RUN_COMMAND=live-server app
+# RUN_COMMAND=live-server
 # BUILD_COMMAND=
 # INSTALL_COMMAND=npm install -g live-server
 # RUN_FOLDER=/
