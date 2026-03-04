@@ -643,28 +643,25 @@ serve(async (req) => {
 
     if (projectContext.artifacts?.length > 0) {
       const artifacts = projectContext.artifacts as any[];
-      const preview = artifacts
-        .slice(0, 5)
-        .map((a, index) => {
-          const title = a.ai_title || a.title || `Artifact ${index + 1}`;
-          const summary = a.ai_summary || (a.content ? String(a.content).slice(0, 160) : "");
-          return `- ${title}: ${summary}`;
-        })
-        .join("\n");
-      parts.push(`Artifacts (${artifacts.length} total, showing up to 5):\n${preview}`);
+      const allArtifactsContent = artifacts.map((a: any, index: number) => {
+        const title = a.ai_title || a.title || `Artifact ${index + 1}`;
+        let artifactStr = `### ARTIFACT: ${title}`;
+        if (a.ai_summary) artifactStr += `\n**Summary:** ${a.ai_summary}`;
+        if (a.content) artifactStr += `\n\n${a.content}`;
+        return artifactStr;
+      }).join("\n\n---\n\n");
+      parts.push(`Artifacts (${artifacts.length} attached by user - FULL CONTENT):\n\n${allArtifactsContent}`);
     }
 
     if (projectContext.requirements?.length > 0) {
       const reqs = projectContext.requirements as any[];
-      const preview = reqs
-        .slice(0, 10)
-        .map((r) => {
-          const code = r.code ? `${r.code} - ` : "";
-          const contentSnippet = r.content ? String(r.content).slice(0, 160) : "";
-          return `- ${code}${r.title}: ${contentSnippet}`;
-        })
-        .join("\n");
-      parts.push(`Requirements (${reqs.length} total, showing up to 10):\n${preview}`);
+      const allReqsContent = reqs.map((r: any) => {
+        const code = r.code ? `${r.code} - ` : "";
+        let reqStr = `### REQ: ${code}${r.title}`;
+        if (r.content) reqStr += `\n\n${r.content}`;
+        return reqStr;
+      }).join("\n\n---\n\n");
+      parts.push(`Requirements (${reqs.length} attached by user - FULL CONTENT):\n\n${allReqsContent}`);
     }
 
     if (projectContext.standards?.length > 0) {
@@ -722,25 +719,24 @@ serve(async (req) => {
 
     if (projectContext.canvasNodes?.length > 0) {
       const nodes = projectContext.canvasNodes as any[];
-      const preview = nodes
-        .slice(0, 20)
-        .map((n) => {
-          const data = (n.data || {}) as any;
-          const type = data.type || n.type || "node";
-          const label = data.label || data.title || data.name || n.id;
-          return `- [${type}] ${label}`;
-        })
-        .join("\n");
-      parts.push(`Canvas Nodes (${nodes.length} total, showing up to 20):\n${preview}`);
+      const allNodesContent = nodes.map((n: any) => {
+        const data = (n.data || {}) as any;
+        const type = data.type || n.type || "node";
+        const label = data.label || data.title || data.name || n.id;
+        let nodeStr = `- [${type}] ${label}`;
+        if (data.description) nodeStr += `\n  Description: ${data.description}`;
+        if (data.content) nodeStr += `\n  Content: ${data.content}`;
+        return nodeStr;
+      }).join("\n");
+      parts.push(`Canvas Nodes (${nodes.length} attached by user - FULL CONTENT):\n${allNodesContent}`);
     }
 
     if (projectContext.canvasEdges?.length > 0) {
       const edges = projectContext.canvasEdges as any[];
-      const preview = edges
-        .slice(0, 20)
-        .map((e) => `- ${e.source_id} -> ${e.target_id}${e.label ? ` (${e.label})` : ""}`)
-        .join("\n");
-      parts.push(`Canvas Edges (${edges.length} total, showing up to 20):\n${preview}`);
+      const allEdgesContent = edges.map((e: any) => 
+        `- ${e.source_id} -> ${e.target_id}${e.label ? ` (${e.label})` : ""}${e.edge_type ? ` [${e.edge_type}]` : ""}`
+      ).join("\n");
+      parts.push(`Canvas Edges (${edges.length} attached by user - FULL CONTENT):\n${allEdgesContent}`);
     }
 
     if (projectContext.files?.length > 0) {
@@ -774,7 +770,7 @@ serve(async (req) => {
           itemStr += `\nIndexes:\n${idxDetails}`;
         }
         if (d.sql_content) itemStr += `\n\`\`\`sql\n${d.sql_content}\n\`\`\``;
-        if (d.sampleData?.length) itemStr += `\nSample data: ${d.sampleData.length} rows\n${JSON.stringify(d.sampleData.slice(0, 3), null, 2)}`;
+        if (d.sampleData?.length) itemStr += `\nSample data (${d.sampleData.length} rows):\n${JSON.stringify(d.sampleData, null, 2)}`;
         return itemStr;
       }).join("\n\n");
       parts.push(`DATABASE SCHEMAS (${dbs.length} items attached):\n\n${dbItems}`);

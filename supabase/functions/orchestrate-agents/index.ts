@@ -852,7 +852,7 @@ async function executeAgent(
       contextPrompt += `=== REPOSITORY FILES (${context.attachedContext.files.length}) ===\n`;
       context.attachedContext.files.forEach((file: any) => {
         contextPrompt += `--- File: ${file.path} ---\n`;
-        contextPrompt += `${file.content?.substring(0, 500)}${file.content?.length > 500 ? '...[truncated]' : ''}\n\n`;
+        contextPrompt += `${file.content || ''}\n\n`;
       });
       contextPrompt += '\n';
     }

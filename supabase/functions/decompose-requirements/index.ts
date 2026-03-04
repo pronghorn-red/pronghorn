@@ -507,7 +507,7 @@ serve(async (req) => {
         contextString += `ARTIFACTS (${attachedContext.artifacts.length}):\n`;
         attachedContext.artifacts.forEach((a: any) => {
           contextString += `--- ${a.ai_title || a.title || 'Artifact'} ---\n`;
-          contextString += `${a.content?.substring(0, 500)}${a.content?.length > 500 ? '...' : ''}\n\n`;
+          contextString += `${a.content || ''}\n\n`;
         });
       }
       
@@ -534,7 +534,7 @@ serve(async (req) => {
         contextString += `REPOSITORY FILES (${attachedContext.files.length}):\n`;
         attachedContext.files.forEach((f: any) => {
           contextString += `--- ${f.path} ---\n`;
-          contextString += `${f.content?.substring(0, 300)}${f.content?.length > 300 ? '...' : ''}\n\n`;
+          contextString += `${f.content || ''}\n\n`;
         });
       }
     }
